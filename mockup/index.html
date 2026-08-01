@@ -640,15 +640,19 @@
      Una sola cifra protagonista y el resultado debajo. Sin atajos ni rejillas
      de botones: el número se teclea y ya. */
   .cant-campo{
-    display:flex;align-items:baseline;justify-content:center;gap:8px;
-    margin:22px 0 20px;
+    display:flex;align-items:baseline;justify-content:center;gap:6px;
+    margin:18px 0 16px;
   }
+  /* Ancho FIJO y alineado a la derecha. Fijo porque calcularlo midiendo el
+     texto depende de la fuente que acabe usando cada sistema, y en el
+     teléfono salía corto y cortaba el último dígito. A la derecha para que
+     la unidad quede siempre pegada al número: centrado, el recuadro dejaba
+     un hueco entre el "121" y la "g". Con 96px caben cuatro cifras, y el JS
+     no deja pasar de 9999: nadie se come 12 kg de un mismo alimento. */
   .cant-campo input{
-    /* El ancho lo ajusta el JS midiendo el texto: con un ancho fijo el número
-       quedaba descentrado, y calculándolo en `ch` se cortaba el último dígito. */
-    width:56px;border:none;background:none;outline:none;
-    font:800 52px/1 -apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;
-    letter-spacing:-.03em;color:var(--ink);text-align:right;
+    width:96px;border:none;background:none;outline:none;
+    font:800 34px/1.1 -apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;
+    letter-spacing:-.02em;color:var(--ink);text-align:right;
     font-variant-numeric:tabular-nums;   /* que no bailen las cifras al escribir */
     -moz-appearance:textfield;
   }
@@ -656,33 +660,32 @@
   .cant-campo input::-webkit-outer-spin-button,
   .cant-campo input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
   .cant-campo span{
-    font:600 21px/1 sans-serif;color:var(--ink-faint);letter-spacing:-.01em;
+    font:600 16px/1 sans-serif;color:var(--ink-faint);
   }
 
   .cant-resumen{
-    background:var(--app-bg);border-radius:18px;padding:18px 16px 16px;margin-bottom:18px;
+    background:var(--app-bg);border-radius:16px;padding:15px 14px 13px;margin-bottom:16px;
   }
   .cant-cal{text-align:center;}
   .cant-cal b{
-    display:block;font:800 34px/1 sans-serif;color:var(--ink);
-    font-variant-numeric:tabular-nums;letter-spacing:-.02em;
-    transition:opacity .18s ease;
+    display:block;font:800 26px/1 sans-serif;color:var(--ink);
+    font-variant-numeric:tabular-nums;letter-spacing:-.01em;
   }
   .cant-cal span{
-    display:block;font:600 11.5px/1 sans-serif;color:var(--ink-faint);
-    margin-top:6px;text-transform:uppercase;letter-spacing:.07em;
+    display:block;font:600 10px/1 sans-serif;color:var(--ink-faint);
+    margin-top:5px;text-transform:uppercase;letter-spacing:.08em;
   }
   .cant-macros{
-    display:grid;grid-template-columns:repeat(3,1fr);gap:8px;
-    margin-top:16px;padding-top:15px;border-top:1px solid var(--line);
+    display:grid;grid-template-columns:repeat(3,1fr);gap:6px;
+    margin-top:13px;padding-top:12px;border-top:1px solid var(--line);
   }
   .cant-macros div{text-align:center;}
   .cant-macros b{
-    display:block;font:700 17px/1 sans-serif;color:var(--ink);
+    display:block;font:700 15px/1 sans-serif;color:var(--ink);
     font-variant-numeric:tabular-nums;
   }
   .cant-macros span{
-    display:block;font:600 10.5px/1 sans-serif;color:var(--ink-faint);margin-top:5px;
+    display:block;font:600 10px/1 sans-serif;color:var(--ink-faint);margin-top:4px;
   }
 
 
@@ -3682,23 +3685,10 @@
 
   function abreviarUnidad(u){ return u === 'Gramos' ? 'g' : u.toLowerCase(); }
 
-  // El campo crece con los dígitos, para que el número y la unidad queden
-  // centrados como un bloque.
-  //
-  // El ancho NO se calcula en `ch`: esa unidad mide el avance del cero en la
-  // fuente, y con negrita 800 y la fuente de respaldo de cada sistema no
-  // coincide con lo que ocupan de verdad los dígitos. Dando los caracteres
-  // justos, "121" salía cortado por el último 1. Se mide el texto real con
-  // un lienzo y se añade un poco de holgura.
-  var medidor = document.createElement('canvas').getContext('2d');
-  function ajustarAnchoCantidad(){
-    var cs = getComputedStyle(cantValor);
-    medidor.font = cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
-    var texto = String(cantValor.value || '0');
-    var ancho = medidor.measureText(texto).width;
-    // El mínimo evita que el campo desaparezca al borrarlo del todo
-    cantValor.style.width = Math.max(46, Math.ceil(ancho) + 6) + 'px';
-  }
+  // Aquí se calculaba el ancho del campo midiendo el texto. Fuera: esa
+  // medida depende de la fuente que acabe usando cada sistema y en el
+  // teléfono salía corta, así que cortaba el último dígito. Ahora el ancho
+  // es fijo en el CSS, con sitio de sobra, y no hay nada que pueda fallar.
 
   function pintarPreviaCantidad(){
     if(!alimentoEditando) return;
@@ -3709,7 +3699,6 @@
     document.getElementById('cantP').textContent = un(P) + ' g';
     document.getElementById('cantC').textContent = un(C) + ' g';
     document.getElementById('cantG').textContent = un(G) + ' g';
-    ajustarAnchoCantidad();
   }
 
   function abrirCantidad(a){
@@ -3723,7 +3712,12 @@
     setTimeout(function(){ cantValor.focus(); cantValor.select(); }, 80);
   }
 
-  cantValor.addEventListener('input', pintarPreviaCantidad);
+  cantValor.addEventListener('input', function(){
+    // Tope de cuatro cifras: es lo que cabe en el campo, y por encima de
+    // 9999 g de un solo alimento el dato ya no tiene sentido.
+    if(Number(cantValor.value) > 9999) cantValor.value = '9999';
+    pintarPreviaCantidad();
+  });
   cantValor.addEventListener('keydown', function(e){
     if(e.key === 'Enter') document.getElementById('cantGuardar').click();
   });
