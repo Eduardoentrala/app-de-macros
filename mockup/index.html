@@ -1609,10 +1609,11 @@
           <div class="scroller-bar">
           <button class="sc-arrow" data-scroll="dayTabs" data-dir="-1" aria-label="Ver días anteriores">‹</button>
           <div class="day-tabs" id="dayTabs">
-            <button class="day-tab" data-day="d1">Pecho y tríceps</button>
-            <button class="day-tab active" data-day="d2">Lunes</button>
-            <button class="day-tab" data-day="d3">Pierna</button>
-            <button class="day-tab" data-day="d4">Espalda y bíceps</button>
+            <!-- Un solo día vacío para empezar. Sin ninguno no habría dónde
+                 poner el primer ejercicio; con los cuatro de ejemplo, quien
+                 se registra hereda la rutina de otro. Se renombra con el
+                 botón de arriba. -->
+            <button class="day-tab active" data-day="d1">Día 1</button>
             <button class="day-tab add" id="addDayBtn">+ día</button>
           </div>
           <button class="sc-arrow" data-scroll="dayTabs" data-dir="1" aria-label="Ver más días">›</button>
@@ -1622,61 +1623,7 @@
             <button class="btn-delete-day" id="deleteDayBtn">🗑 Borrar día</button>
           </div>
 
-          <div id="exerciseList">
-            <div class="exercise-card" data-prev-vol="1792">
-              <div class="ex-head">
-                <div class="ex-top">
-                  <div><div class="ex-name">Pecho con ligas <span class="nota-badge" hidden title="Tiene notas">📝</span></div><div class="ex-delta"></div></div>
-                  <div class="ex-vol">vol<br><b class="vol-num">0</b><span class="prev"></span></div>
-                </div>
-                <div class="ex-pills">
-                  <button class="chip" data-act="grafica">📈 gráfica</button>
-                  <button class="chip" data-act="notas">notas</button>
-                  <span class="icon-mini">
-                    <button data-act="subir" title="Subir ejercicio">▲</button>
-                    <button data-act="bajar" title="Bajar ejercicio">▼</button>
-                    <button class="danger" data-act="quitar" title="Quitar ejercicio">×</button>
-                  </span>
-                </div>
-              </div>
-              <table class="sets-table">
-                <tr><th>set</th><th class="num">reps</th><th class="num">peso</th><th></th></tr>
-                <tr><td>1</td><td class="num"><input class="set-input" value="10"></td><td class="num"><input class="set-input" value="60"></td>
-                  <td><div class="set-row-actions"><div class="set-check">✓</div><button class="clock-btn">⏰</button><button class="rm-set">×</button></div></td></tr>
-                <tr><td>2</td><td class="num"><input class="set-input" value="10"></td><td class="num"><input class="set-input" value="60"></td>
-                  <td><div class="set-row-actions"><div class="set-check">✓</div><button class="clock-btn">⏰</button><button class="rm-set">×</button></div></td></tr>
-                <tr><td>3</td><td class="num"><input class="set-input" value="10"></td><td class="num"><input class="set-input" value="61"></td>
-                  <td><div class="set-row-actions"><div class="set-check done">✓</div><button class="clock-btn">⏰</button><button class="rm-set">×</button></div></td></tr>
-              </table>
-              <div class="add-set-row"><button class="add-set">+ set</button></div>
-            </div>
-
-            <div class="exercise-card" data-prev-vol="560">
-              <div class="ex-head">
-                <div class="ex-top">
-                  <div><div class="ex-name">Press plano con barra <span class="nota-badge" hidden title="Tiene notas">📝</span></div><div class="ex-delta"></div></div>
-                  <div class="ex-vol">vol<br><b class="vol-num">0</b><span class="prev"></span></div>
-                </div>
-                <div class="ex-pills">
-                  <button class="chip" data-act="grafica">📈 gráfica</button>
-                  <button class="chip" data-act="notas">notas</button>
-                  <span class="icon-mini">
-                    <button data-act="subir" title="Subir ejercicio">▲</button>
-                    <button data-act="bajar" title="Bajar ejercicio">▼</button>
-                    <button class="danger" data-act="quitar" title="Quitar ejercicio">×</button>
-                  </span>
-                </div>
-              </div>
-              <table class="sets-table">
-                <tr><th>set</th><th class="num">reps</th><th class="num">peso</th><th></th></tr>
-                <tr><td>1</td><td class="num"><input class="set-input" value="7"></td><td class="num"><input class="set-input" value="35"></td>
-                  <td><div class="set-row-actions"><div class="set-check">✓</div><button class="clock-btn">⏰</button><button class="rm-set">×</button></div></td></tr>
-                <tr><td>2</td><td class="num"><input class="set-input" value="8"></td><td class="num"><input class="set-input" value="32"></td>
-                  <td><div class="set-row-actions"><div class="set-check">✓</div><button class="clock-btn">⏰</button><button class="rm-set">×</button></div></td></tr>
-              </table>
-              <div class="add-set-row"><button class="add-set">+ set</button></div>
-            </div>
-          </div>
+          <div id="exerciseList"></div>
 
           <div class="empty-day" id="emptyDay" style="display:none;">
             <div class="ico">🏋️</div>
@@ -2536,7 +2483,8 @@
 
   // ---- Notas por ejercicio ----
   // Se guardan por nombre de ejercicio, así reaparecen la próxima vez que lo hagas.
-  var NOTAS = {'Press plano con barra': 'Banco en el hoyo 3. Bajar despacio, cuidar el hombro.'};
+  // Notas por ejercicio, las escribe cada quien. Vacío al empezar.
+  var NOTAS = {};
   var cardNotas = null, nombreNotas = '';
 
   function marcaNotas(card, nombre){
@@ -2581,10 +2529,9 @@
 
   // ---- Gráfica de progreso por ejercicio ----
   // Historial de volumen por sesión; "Guardar sesión" agrega el punto de hoy.
-  var HISTORIAL = {
-    'Pecho con ligas':      [1620, 1655, 1700, 1712, 1745, 1792],
-    'Press plano con barra':[615, 604, 588, 572, 560]
-  };
+  // Volumen de sesiones anteriores por ejercicio. Se llena al guardar
+  // sesiones; hasta entonces la gráfica avisa de que faltan datos.
+  var HISTORIAL = {};
   function abrirGrafica(card, nombre){
     var hist = (HISTORIAL[nombre] || []).slice();
     var volHoy = 0;
@@ -2944,11 +2891,10 @@
   function haceDias(n){ var d = new Date(HOY); d.setDate(d.getDate() - n); return d; }
 
   // Progreso de ejercicio (se declara aquí porque la semana lo consulta al recalcular)
-  var SESIONES = {};                     // días con sesión guardada
-  // Ejemplo: entrenamientos repartidos en el último mes
-  [2, 4, 6, 9, 11, 13, 16, 18, 20, 23, 25, 27].forEach(function(n){
-    SESIONES[isoDe(haceDias(n))] = true;
-  });
+  // Días con sesión de fuerza guardada. Vacío al empezar: enseñar doce
+  // entrenamientos de ejemplo a quien acaba de registrarse le falsea la
+  // racha y el resumen de la semana en Progreso.
+  var SESIONES = {};
   var CARDIO   = {};                     // minutos de cardio por día
   var META_CARDIO = 120;
 
