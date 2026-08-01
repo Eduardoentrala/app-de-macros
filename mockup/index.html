@@ -225,20 +225,27 @@
      superponerlos en posición absoluta, y como miden distinto la pantalla
      daría un salto de alto a mitad de la transición. */
   @keyframes paneEntra{
-    from{ opacity:0; transform:translate3d(var(--dx,26px),0,0); }
+    from{ opacity:0; transform:translate3d(var(--dx,34px),0,0); }
     to  { opacity:1; transform:translate3d(0,0,0); }
   }
-  .pane-entra{ animation:paneEntra .42s cubic-bezier(.32,.72,0,1) both; }
-  .pane-entra.desde-izq{ --dx:-26px; }
+  /* Entre Hoy y Semana: recorrido corto, porque solo cambia el contenido
+     de una tarjeta y un desplazamiento largo se vería exagerado. */
+  .pane-entra{ --dx:34px; animation:paneEntra .58s cubic-bezier(.32,.72,0,1) both; }
+  .pane-entra.desde-izq{ --dx:-34px; }
+
+  /* Entre pantallas completas: más recorrido y algo más de tiempo, para que
+     se lea de dónde viene y a dónde va. */
+  .vista-entra{ --dx:52px; animation:paneEntra .62s cubic-bezier(.32,.72,0,1) both; }
+  .vista-entra.desde-izq{ --dx:-52px; }
 
   /* El anillo barre hasta su valor en vez de saltar. Se nota sobre todo al
      cambiar de Hoy a Semana, que son dos cifras distintas. */
-  .ring-prog{ transition:stroke-dashoffset .65s cubic-bezier(.32,.72,0,1); }
-  .dots span{ transition:background .25s ease; }
+  .ring-prog{ transition:stroke-dashoffset .85s cubic-bezier(.32,.72,0,1); }
+  .dots span{ transition:background .3s ease; }
 
   /* Quien tenga activado "reducir movimiento" en su teléfono no lo ve */
   @media (prefers-reduced-motion: reduce){
-    .pane-entra{ animation-duration:.01ms; }
+    .pane-entra, .vista-entra{ animation-duration:.01ms; }
     .ring-prog{ transition:none; }
   }
 
@@ -2046,6 +2053,20 @@
     if(typeof refrescarFlechas === 'function') setTimeout(refrescarFlechas, 0);
   }
   var libView = document.querySelector('[data-view="library"]');
+  // Anima la pantalla que acaba de aparecer. 'der' = entra desde la derecha
+  // (se avanza), 'izq' = entra desde la izquierda (se vuelve). Sin dirección
+  // no se anima: es lo que se quiere al arrancar la app o al cambiar de
+  // pestaña, donde un deslizamiento no significaría nada.
+  function animarVista(dir){
+    if(!dir) return;
+    var v = document.querySelector('.app-view.active');
+    if(!v) return;
+    v.classList.remove('vista-entra', 'desde-izq');
+    void v.offsetWidth;                 // fuerza reflujo: si no, no se relanza
+    v.classList.add('vista-entra');
+    if(dir === 'izq') v.classList.add('desde-izq');
+  }
+
   function goto(id, push){
     if(push){ stack.push(id); } else { stack = [id]; }
     // La librería siempre se abre apilada, con su botón de regresar: ya no
@@ -2053,10 +2074,12 @@
     // "+ agregar ejercicio" dentro de Mi Rutina.
     if(id === 'library') renderBottom();
     show(id);
+    animarVista(push ? 'der' : null);   // solo al entrar en una subpantalla
   }
   function back(){
     if(stack.length > 1){ stack.pop(); }
     show(stack[stack.length-1]);
+    animarVista('izq');
   }
   // Vuelve a una pantalla que ya está en la pila, conservando el camino de regreso.
   // (Antes se usaba goto(id,false), que borraba la pila y dejaba "Regresar" sin destino.)
@@ -2065,7 +2088,39 @@
     if(i >= 0){ stack.length = i + 1; }
     else { stack = (base ? [base, id] : [id]); }
     show(stack[stack.length-1]);
+    animarVista('izq');                 // también es un regreso
   }
+
+  // ---- Volver arrastrando desde el borde izquierdo ----
+  // El gesto de toda la vida en un teléfono: se empieza pegado al borde y
+  // se tira hacia la derecha. Hasta ahora solo se podía con el botón
+  // "Regresar", que obliga a estirar el pulgar hasta arriba del todo.
+  (function volverArrastrando(){
+    var pantalla = document.getElementById('phoneScreen');
+    if(!pantalla) return;
+    var x0 = 0, y0 = 0, desdeBorde = false;
+
+    pantalla.addEventListener('touchstart', function(e){
+      if(e.touches.length !== 1){ desdeBorde = false; return; }
+      var t = e.touches[0];
+      x0 = t.clientX; y0 = t.clientY;
+      // Solo cuenta si arranca pegado al borde. Sin esta condición,
+      // cualquier arrastre hacia la derecha en mitad de la pantalla
+      // retrocedería, y sería imposible usar los deslizadores.
+      desdeBorde = (x0 - pantalla.getBoundingClientRect().left) <= 28;
+    }, {passive:true});
+
+    pantalla.addEventListener('touchend', function(e){
+      if(!desdeBorde) return;
+      desdeBorde = false;
+      if(stack.length <= 1) return;                     // no hay a dónde volver
+      var t = e.changedTouches[0];
+      var dx = t.clientX - x0, dy = t.clientY - y0;
+      if(dx < 70) return;                               // recorrido suficiente
+      if(Math.abs(dy) > Math.abs(dx) * 0.7) return;     // y claramente horizontal
+      back();
+    }, {passive:true});
+  })();
 
   document.getElementById('toolbar').addEventListener('click', function(e){
     var btn = e.target.closest('button[data-go]');
@@ -2136,7 +2191,12 @@
       if(e.touches.length !== 1) return;      // dos dedos = zoom, no es lo nuestro
       x0 = e.touches[0].clientX;
       y0 = e.touches[0].clientY;
-      activo = true;
+      // Si arranca pegado al borde izquierdo manda el gesto de volver, que
+      // se escucha en toda la pantalla. La tarjeta empieza a 16px, así que
+      // sin esto los dos gestos se solaparían en esa franja.
+      var pantalla = document.getElementById('phoneScreen');
+      var borde = pantalla ? pantalla.getBoundingClientRect().left : 0;
+      activo = (x0 - borde) > 30;
     }, {passive:true});
 
     anillo.addEventListener('touchend', function(e){
