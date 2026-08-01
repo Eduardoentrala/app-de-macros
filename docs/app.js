@@ -1731,20 +1731,51 @@
     var f = (Number(cantValor.value) || 0) / a.base;
     var P = a.porBase.P * f, C = a.porBase.C * f, G = a.porBase.G * f;
     document.getElementById('cantCal').textContent = mil(P*4 + C*4 + G*9);
-    document.getElementById('cantP').textContent = un(P) + ' g';
-    document.getElementById('cantC').textContent = un(C) + ' g';
-    document.getElementById('cantG').textContent = un(G) + ' g';
+    // Con un decimal siempre, como la ficha de la comida: sin él, "6 g" y
+    // "1.5 g" en la misma fila bailan de alto y se lee peor.
+    document.getElementById('cantP').textContent = un(P).toFixed(1) + ' g';
+    document.getElementById('cantC').textContent = un(C).toFixed(1) + ' g';
+    document.getElementById('cantG').textContent = un(G).toFixed(1) + ' g';
   }
 
-  function abrirCantidad(a){
+  // La misma hoja sirve para dos momentos: antes de apuntar algo que se
+  // acaba de elegir, y para corregir algo ya apuntado. Cambia el texto del
+  // botón y qué pasa al pulsarlo; todo lo demás es idéntico, y por eso no
+  // son dos hojas.
+  var confirmarCantidad = null;
+
+  function textoBase(a){
+    return a.base === 100 ? '100 ' + abreviarUnidad(a.u) : 'una ' + abreviarUnidad(a.u);
+  }
+
+  function abrirCantidad(a, opciones){
+    opciones = opciones || {};
     alimentoEditando = prepararAlimento(a);
+    confirmarCantidad = opciones.alConfirmar || guardarCantidadEditada;
     document.getElementById('cantNombre').textContent = a.n;
+    document.getElementById('cantBase').textContent = 'por ' + textoBase(alimentoEditando);
     document.getElementById('cantUnidad').textContent = abreviarUnidad(a.u);
+    document.getElementById('cantGuardar').textContent = opciones.etiqueta || 'Guardar';
     cantValor.value = a.cant;
     pintarPreviaCantidad();
     cantSheet.classList.add('open');
     // Con el número ya seleccionado: se teclea encima sin tener que borrarlo
     setTimeout(function(){ cantValor.focus(); cantValor.select(); }, 80);
+  }
+
+  // Elegir un alimento ya no lo apunta: primero se dice cuánto. Antes se
+  // agregaba una porción base de golpe y había que entrar a corregirla,
+  // que es un paso de más para algo que casi nunca es justo 100 g.
+  function elegirAlimento(a){
+    abrirCantidad(a, {
+      etiqueta: 'Agregar',
+      alConfirmar: function(){
+        var elegido = alimentoEditando;
+        aplicarCantidad(elegido, cantValor.value);
+        cerrarCantidad();
+        agregarAlimento(elegido);
+      }
+    });
   }
 
   cantValor.addEventListener('input', function(){
@@ -1813,7 +1844,10 @@
   });
 
   document.getElementById('cantGuardar').addEventListener('click', function(){
-    if(!alimentoEditando) return;
+    if(alimentoEditando && confirmarCantidad) confirmarCantidad();
+  });
+
+  function guardarCantidadEditada(){
     var a = alimentoEditando;
     var antes = { cant:a.cant, P:a.P, C:a.C, G:a.G };
 
@@ -1839,7 +1873,7 @@
         toast('toastComida', 'No se pudo guardar: ' + traducirError(e.message));
       });
     }
-  });
+  }
 
   document.getElementById('mealList').addEventListener('click', function(e){
     var ed = e.target.closest('[data-editar]');
@@ -1905,7 +1939,9 @@
       var card = e.target.closest('.food-card');
       if(!card) return;
       var a = datos.filter(function(x){ return x.n === card.dataset.alim; })[0];
-      if(a) agregarAlimento(Object.assign({}, a));
+      // Copia: la hoja va a fijarle cantidad y porción base, y no debe
+      // tocar la ficha que vive en la lista.
+      if(a) elegirAlimento(Object.assign({}, a));
     });
   }
   conectarLista('frecList', FRECUENTES);
@@ -2029,7 +2065,7 @@
     // poder distinguir el arroz crudo del cocido de un vistazo, que es
     // toda la razón de que sean registros separados.
     var nombre = (a.estado && a.estado !== 'unico') ? a.n + ' (' + a.estado + ')' : a.n;
-    agregarAlimento({ n:nombre, u:a.u, cant:a.cant || undefined, P:a.P, C:a.C, G:a.G });
+    elegirAlimento({ n:nombre, u:a.u, cant:a.cant || undefined, P:a.P, C:a.C, G:a.G });
   });
 
   // Crear alimento: las calorías salen solas de los macros

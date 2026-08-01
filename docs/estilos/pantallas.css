@@ -198,15 +198,30 @@
 /* ---- Cuánto comiste ----
    Una sola cifra protagonista y el resultado debajo. Sin atajos ni rejillas
    de botones: el número se teclea y ya. */
-.cant-campo{
-  display:flex;align-items:baseline;justify-content:center;gap:6px;
-  margin:18px 0 16px;
+/* El nombre lleva debajo a qué se refieren los macros. Sin esto, "6 g de
+   proteína" no dice si es por 100 g o por pieza, y es justo el dato que
+   hace falta para decidir cuánto poner. */
+.cant-base{
+  margin:-9px 0 0;font:600 12.5px/1 sans-serif;color:var(--ink-faint);
 }
-/* Ancho FIJO y alineado a la derecha. Fijo porque calcularlo midiendo el
-   texto depende de la fuente que acabe usando cada sistema, y en el
-   teléfono salía corto y cortaba el último dígito. A la derecha para que
-   la unidad quede siempre pegada al número: centrado, el recuadro dejaba
-   un hueco entre el "121" y la "g".
+
+/* La cifra dentro de su propia tarjeta, con la pregunta encima. Antes la
+   pregunta iba suelta arriba del todo y la unidad pegada al número; así
+   se lee de una vez qué se pide y en qué. */
+.cant-campo{
+  display:flex;flex-direction:column;align-items:center;gap:6px;
+  background:var(--app-bg);border-radius:16px;padding:14px 12px 12px;
+}
+.cant-pregunta{
+  font:600 12.5px/1 sans-serif;color:var(--ink-faint);cursor:pointer;
+}
+/* Ancho FIJO. Calcularlo midiendo el texto depende de la fuente que acabe
+   usando cada sistema, y en el teléfono salía corto y cortaba el último
+   dígito.
+
+   Va centrado. Estuvo alineado a la derecha mientras la unidad iba pegada
+   al número; ahora la unidad está en la pregunta de arriba, así que ese
+   motivo ya no existe.
 
    El ancho va en `em` y no en píxeles: así queda atado al tamaño de
    letra y no a lo ancho que dibuje los dígitos cada sistema. En iOS son
@@ -218,34 +233,24 @@
 .cant-campo input{
   width:3.8em;border:none;background:none;outline:none;
   font:800 34px/1.1 -apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;
-  letter-spacing:-.02em;color:var(--ink);text-align:right;
+  letter-spacing:-.02em;color:var(--ink);text-align:center;
   font-variant-numeric:tabular-nums;   /* que no bailen las cifras al escribir */
   -moz-appearance:textfield;
 }
 /* Fuera las flechitas del campo numérico: rompen la línea */
 .cant-campo input::-webkit-outer-spin-button,
 .cant-campo input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
-.cant-campo span{
-  font:600 16px/1 sans-serif;color:var(--ink-faint);
-}
-
 .cant-resumen{
-  background:var(--app-bg);border-radius:16px;padding:15px 14px 13px;margin-bottom:16px;
+  background:var(--app-bg);border-radius:16px;padding:10px;
 }
-.cant-cal{text-align:center;}
-.cant-cal b{
-  display:block;font:800 26px/1 sans-serif;color:var(--ink);
-  font-variant-numeric:tabular-nums;letter-spacing:-.01em;
-}
-.cant-cal span{
-  display:block;font:600 10px/1 sans-serif;color:var(--ink-faint);
-  margin-top:5px;text-transform:uppercase;letter-spacing:.08em;
-}
+/* Cada macro en su tarjeta, y el total abajo separado por una línea: lo
+   que se mira antes de decidir es el total, y así cae al final. */
 .cant-macros{
   display:grid;grid-template-columns:repeat(3,1fr);gap:6px;
-  margin-top:13px;padding-top:12px;border-top:1px solid var(--line);
 }
-.cant-macros div{text-align:center;}
+.cant-macros div{
+  background:var(--card-bg);border-radius:11px;padding:10px 4px;text-align:center;
+}
 .cant-macros b{
   display:block;font:700 15px/1 sans-serif;color:var(--ink);
   font-variant-numeric:tabular-nums;
@@ -253,6 +258,13 @@
 .cant-macros span{
   display:block;font:600 10px/1 sans-serif;color:var(--ink-faint);margin-top:4px;
 }
+.cant-total{
+  display:flex;justify-content:space-between;align-items:baseline;
+  margin-top:10px;padding:10px 6px 2px;border-top:1px solid var(--line);
+}
+.cant-total span{font:700 13.5px/1 sans-serif;color:var(--ink-soft);}
+.cant-total b{font:800 16px/1 sans-serif;color:var(--ink);}
+.cant-total i{font-style:normal;font-variant-numeric:tabular-nums;}
 
 
 /* ---- Comparador ---- */

@@ -364,30 +364,6 @@
           </div>
           <div class="totals-line"><span>Total</span><b id="tCal">0 cal</b></div>
         </div>
-        <div class="sheet-backdrop" id="cantSheet">
-          <div class="sheet">
-            <h4 id="cantNombre">Alimento</h4>
-            <p class="hint">¿Cuánto comiste?</p>
-
-            <div class="cant-campo">
-              <input id="cantValor" type="number" min="0.1" step="1" inputmode="decimal">
-              <span id="cantUnidad">g</span>
-            </div>
-
-            <div class="cant-resumen">
-              <div class="cant-cal"><b id="cantCal">0</b><span>calorías</span></div>
-              <div class="cant-macros">
-                <div><b id="cantP">0</b><span>Proteína</span></div>
-                <div><b id="cantC">0</b><span>Carbos</span></div>
-                <div><b id="cantG">0</b><span>Grasas</span></div>
-              </div>
-            </div>
-
-            <button class="btn-primary" id="cantGuardar">Guardar</button>
-            <button class="btn-ghost-text" id="cantCancelar">Cancelar</button>
-          </div>
-        </div>
-
         <div class="toast" id="toastComida">Agregado</div>
       </div>
 
@@ -1156,6 +1132,37 @@
             <button class="btn-primary" id="wcAccept">Sí, guardar y empezar semana</button>
             <button class="btn-ghost-text" id="wcCancel">Cancelar</button>
           </div>
+        </div>
+      </div>
+
+      <!-- ¿CUÁNTO CONSUMISTE?
+           Vive aquí fuera y no dentro de "agregar comida" a propósito: se
+           abre igual desde la búsqueda, desde Frecuentes, desde Guardados y
+           al tocar algo ya apuntado, y esas son cuatro vistas distintas.
+           Dentro de una de ellas, desde las otras tres no se vería.
+           El fondo se posiciona contra .phone-screen, así que se ve igual
+           que cuando estaba dentro. -->
+      <div class="sheet-backdrop" id="cantSheet">
+        <div class="sheet">
+          <h4 id="cantNombre">Alimento</h4>
+          <p class="cant-base" id="cantBase">por 100 g</p>
+
+          <div class="cant-campo">
+            <label class="cant-pregunta" for="cantValor">¿Cuánto consumiste? (<span id="cantUnidad">g</span>)</label>
+            <input id="cantValor" type="number" min="0.1" step="1" inputmode="decimal">
+          </div>
+
+          <div class="cant-resumen">
+            <div class="cant-macros">
+              <div><b id="cantP">0</b><span>Proteína</span></div>
+              <div><b id="cantC">0</b><span>Carbos</span></div>
+              <div><b id="cantG">0</b><span>Grasas</span></div>
+            </div>
+            <div class="cant-total"><span>Total</span><b><i id="cantCal">0</i> cal</b></div>
+          </div>
+
+          <button class="btn-primary" id="cantGuardar">Agregar</button>
+          <button class="btn-ghost-text" id="cantCancelar">Cancelar</button>
         </div>
       </div>
 
