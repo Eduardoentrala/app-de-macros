@@ -647,10 +647,17 @@
      texto depende de la fuente que acabe usando cada sistema, y en el
      teléfono salía corto y cortaba el último dígito. A la derecha para que
      la unidad quede siempre pegada al número: centrado, el recuadro dejaba
-     un hueco entre el "121" y la "g". Con 96px caben cuatro cifras, y el JS
-     no deja pasar de 9999: nadie se come 12 kg de un mismo alimento. */
+     un hueco entre el "121" y la "g".
+
+     El ancho va en `em` y no en píxeles: así queda atado al tamaño de
+     letra y no a lo ancho que dibuje los dígitos cada sistema. En iOS son
+     más anchos que en Windows, y con 96px fijos se cortaba el cuarto. Un
+     dígito ocupa como mucho 0.62em, así que 3.8em cubre cuatro con casi la
+     mitad de sobra. Va holgado a propósito: esto ya se cortó dos veces por
+     apurar el ancho, y el hueco de más no se nota porque el texto va a la
+     derecha. El JS no deja pasar de 9999. */
   .cant-campo input{
-    width:96px;border:none;background:none;outline:none;
+    width:3.8em;border:none;background:none;outline:none;
     font:800 34px/1.1 -apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;
     letter-spacing:-.02em;color:var(--ink);text-align:right;
     font-variant-numeric:tabular-nums;   /* que no bailen las cifras al escribir */
@@ -5736,11 +5743,21 @@
           // La base admite 'Snack', que el Diario todavía no muestra: se
           // suma al día pero no se lista, en vez de reventar.
           if(f.entry_date === hoy && COMIDAS[f.meal]){
+            var unidad = f.unit || 'Gramos';
+            var cantidad = Number(f.quantity) || null;
+
+            // COMPATIBILIDAD. Antes de que existiera la edición, todo se
+            // guardaba con quantity=1 queriendo decir "una porción", no
+            // "1 gramo". Sin esta corrección, prepararAlimento() deduce que
+            // si 1 g da 20 g de proteína, 100 g dan 2000: los macros salían
+            // multiplicados por cien.
+            if(cantidad === 1 && baseDeUnidad(unidad) === 100) cantidad = 100;
+
             // prepararAlimento() deduce la porción base a partir de la
             // cantidad y los macros consumidos, para poder volver a editarla.
             COMIDAS[f.meal].push(prepararAlimento({
-              id:f.id, n:f.food_name, u:f.unit || 'Gramos',
-              cant: Number(f.quantity) || null, P:P, C:C, G:G
+              id:f.id, n:f.food_name, u:unidad,
+              cant: cantidad, P:P, C:C, G:G
             }));
           }
         });
