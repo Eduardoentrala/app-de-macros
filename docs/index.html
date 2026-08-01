@@ -742,7 +742,54 @@
   .info-btn .v i{font-style:normal;color:var(--ink-faint);margin-left:7px;}
   .info-btn:active{opacity:.55;}
 
-  /* ---- Asistente ---- */
+  /* ---- Asistente: pantalla de conversación ---- */
+  .ia-head{
+    display:flex;align-items:center;gap:12px;padding:16px 18px 14px;
+    background:var(--card-bg);border-bottom:1px solid var(--line);flex:none;
+  }
+  .ia-head b{display:block;font:800 16px/1.2 sans-serif;color:var(--ink);}
+  .ia-head span{display:block;font:600 11.5px/1.2 sans-serif;color:var(--ink-faint);margin-top:2px;}
+  .ia-cerrar{
+    background:none;border:none;cursor:pointer;font:400 20px/1 sans-serif;
+    color:var(--ink-faint);padding:2px 4px;
+  }
+
+  #iaChat{padding:16px 0 8px;}
+  .ia-msg{margin:0 16px 10px;max-width:86%;}
+  .ia-msg .burbuja{
+    padding:13px 15px;border-radius:16px;font:500 14.5px/1.5 sans-serif;
+    white-space:pre-wrap;
+  }
+  .ia-msg.de-el .burbuja{background:var(--card-bg);color:var(--ink);box-shadow:var(--shadow);}
+  .ia-msg.de-mi{margin-left:auto;}
+  .ia-msg.de-mi .burbuja{background:var(--ink);color:var(--card-bg);}
+  .ia-msg img{width:100%;border-radius:14px;display:block;margin-bottom:6px;}
+
+  /* Los atajos de la primera pantalla */
+  .ia-atajo{
+    display:block;width:calc(100% - 32px);margin:0 16px 8px;text-align:left;
+    padding:15px 16px;border-radius:14px;border:none;cursor:pointer;
+    background:var(--card-bg);box-shadow:var(--shadow);
+    font:600 14px/1.3 sans-serif;color:var(--ink);
+  }
+  .ia-atajo:active{opacity:.6;}
+
+  /* Barra de escritura, pegada abajo */
+  .ia-barra{flex:none;padding:8px 16px 14px;background:var(--app-bg);border-top:1px solid var(--line);}
+  .ia-entrada{display:flex;align-items:flex-end;gap:8px;}
+  .ia-entrada textarea{
+    flex:1;min-height:44px;max-height:120px;resize:none;overflow-y:auto;
+    padding:12px 14px;border-radius:22px;border:none;background:var(--pill-bg);
+    font:500 14.5px/1.35 sans-serif;color:var(--ink);outline:none;
+  }
+  .ia-icono, .ia-enviar{
+    flex:0 0 auto;width:44px;height:44px;border-radius:50%;border:none;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;font-size:18px;
+  }
+  .ia-icono{background:var(--pill-bg);}
+  .ia-enviar{background:var(--ink);color:var(--card-bg);font-size:16px;}
+  .ia-enviar:disabled{opacity:.4;}
+
   .ia-momento{display:flex;gap:7px;margin:10px 0 4px;}
   .ia-momento .meta-opt{flex:1;padding:9px 4px;text-align:center;font:700 12.5px/1 sans-serif;}
   .ia-fila{
@@ -1636,42 +1683,29 @@
         <div class="toast" id="toastComida">Agregado</div>
       </div>
 
-      <!-- El aviso del asistente va FUERA de las vistas a propósito: se abre
-           desde el Diario, y los .toast de cada vista solo se ven cuando esa
-           vista está activa. -->
-      <div class="toast" id="toastIA">Listo</div>
-
-      <div class="sheet-backdrop" id="iaSheet">
-        <div class="sheet">
-          <h4>✨ Apuntar comida</h4>
-          <p class="hint">Toma una foto del plato, escríbelo, o las dos cosas.</p>
-
-          <input type="file" id="iaArchivo" accept="image/*" capture="environment" hidden>
-          <div id="iaFotoZona">
-            <button class="ia-foto-btn" id="iaTomarFoto">
-              <span>📷</span>Tomar foto del plato
-            </button>
+      <!-- ASISTENTE: una conversación, no un formulario -->
+      <div class="app-view" data-view="asistente">
+        <div class="ia-head">
+          <button class="ia-cerrar" id="iaCerrar">✕</button>
+          <div>
+            <b>Asistente</b>
+            <span id="iaQuedan">&nbsp;</span>
           </div>
-
-          <textarea class="notas-input" id="iaTexto" rows="2" maxlength="500"
-            placeholder="Dos huevos revueltos, una tortilla y café con leche"></textarea>
-
-          <div class="ia-momento" id="iaMomento">
-            <button class="meta-opt active" data-ia-momento="Desayuno">Desayuno</button>
-            <button class="meta-opt" data-ia-momento="Comida">Comida</button>
-            <button class="meta-opt" data-ia-momento="Cena">Cena</button>
-          </div>
-
-          <div id="iaResultado"></div>
-
-          <p class="calc-note" id="iaAviso" hidden>
-            Los macros son una estimación: revísalos antes de guardar.
-          </p>
-
-          <button class="btn-primary" id="iaBuscar">Calcular</button>
-          <button class="btn-primary" id="iaGuardar" hidden>Agregar al diario</button>
-          <button class="btn-ghost-text" id="iaCerrar">Cancelar</button>
         </div>
+
+        <div class="scroll" id="iaChat"></div>
+
+        <div class="ia-barra">
+          <input type="file" id="iaArchivo" accept="image/*" capture="environment" hidden>
+          <div id="iaFotoZona"></div>
+          <div class="ia-entrada">
+            <button class="ia-icono" id="iaTomarFoto" title="Tomar foto">📷</button>
+            <textarea id="iaTexto" rows="1" maxlength="500"
+              placeholder="Escribe tu mensaje…"></textarea>
+            <button class="ia-enviar" id="iaEnviar" title="Enviar">➤</button>
+          </div>
+        </div>
+        <div class="toast" id="toastIA2">Listo</div>
       </div>
 
       <!-- FRECUENTES -->
@@ -7037,28 +7071,30 @@
   pintarTemaPerfil();
 
   // ================= ASISTENTE =================
-  // La clave de Anthropic vive en una Edge Function, nunca aquí: este
-  // archivo se descarga entero en cada teléfono y el repositorio es
-  // público. Desde la app solo se llama a la función con el token del
-  // usuario, y ella decide si contesta.
-  var iaSheet = document.getElementById('iaSheet');
-  var iaMomento = 'Desayuno';
-  var iaPropuesta = [];      // lo que el asistente calculó, aún sin guardar
+  // Una conversación, no un formulario. La clave de Anthropic vive en una
+  // Edge Function, nunca aquí: este archivo se descarga entero en cada
+  // teléfono y el repositorio es público.
+  var iaChat = document.getElementById('iaChat');
+  var iaTexto = document.getElementById('iaTexto');
+  var iaFoto = null;          // { base64, tipo, vista } ya reducida
+  var IA_MSGS = [];           // { rol:'yo'|'el', texto, foto?, alimentos? }
+  var iaOcupado = false;
+
+  var IA_ATAJOS = [
+    { icono:'🛒', texto:'Hazme la lista del súper' },
+    { icono:'🍽️', texto:'¿Qué me recomiendas comer hoy?' }
+  ];
 
   function iaLlamar(cuerpo){
     return sbFetch('/functions/v1/asistente', {
-      method: 'POST',
-      body: JSON.stringify(cuerpo)
+      method: 'POST', body: JSON.stringify(cuerpo)
     });
   }
 
   // ---- La foto ----
-  var iaFoto = null;        // { base64, tipo } de la imagen ya reducida
-
-  // Una foto de teléfono son 3-6 MB y 12 megapíxeles. Mandarla tal cual
-  // costaría muchos más tokens -o sea, dinero- sin acertar mejor: para
-  // reconocer un plato sobran 1024 píxeles. Se reduce aquí, antes de que
-  // salga del teléfono, así que tampoco viaja de más por la red.
+  // Una foto de teléfono son 3-6 MB. Para reconocer un plato sobran 1024
+  // píxeles: mandarla entera costaría muchos más tokens -o sea, dinero-
+  // sin acertar mejor, y viajaría de más por la red.
   function reducirFoto(archivo){
     return new Promise(function(ok, mal){
       var lector = new FileReader();
@@ -7069,11 +7105,11 @@
         img.onload = function(){
           var MAX = 1024;
           var f = Math.min(1, MAX / Math.max(img.width, img.height));
-          var lienzo = document.createElement('canvas');
-          lienzo.width  = Math.round(img.width  * f);
-          lienzo.height = Math.round(img.height * f);
-          lienzo.getContext('2d').drawImage(img, 0, 0, lienzo.width, lienzo.height);
-          var url = lienzo.toDataURL('image/jpeg', 0.82);
+          var l = document.createElement('canvas');
+          l.width = Math.round(img.width * f);
+          l.height = Math.round(img.height * f);
+          l.getContext('2d').drawImage(img, 0, 0, l.width, l.height);
+          var url = l.toDataURL('image/jpeg', 0.82);
           ok({ base64: url.split(',')[1], tipo: 'image/jpeg', vista: url });
         };
         img.src = lector.result;
@@ -7084,115 +7120,123 @@
 
   function pintarFotoIA(){
     var z = document.getElementById('iaFotoZona');
-    if(!iaFoto){
-      z.innerHTML = '<button class="ia-foto-btn" id="iaTomarFoto">' +
-                    '<span>📷</span>Tomar foto del plato</button>';
-      return;
-    }
-    z.innerHTML = '<div class="ia-foto-previa"><img src="' + iaFoto.vista + '" alt="">' +
-                  '<button id="iaQuitarFoto" title="Quitar">✕</button></div>';
+    z.innerHTML = iaFoto
+      ? '<div class="ia-foto-previa"><img src="' + iaFoto.vista + '" alt="">' +
+        '<button id="iaQuitarFoto" title="Quitar">✕</button></div>'
+      : '';
   }
 
+  document.getElementById('iaTomarFoto').addEventListener('click', function(){
+    document.getElementById('iaArchivo').click();
+  });
   document.getElementById('iaFotoZona').addEventListener('click', function(e){
-    if(e.target.closest('#iaTomarFoto')) document.getElementById('iaArchivo').click();
     if(e.target.closest('#iaQuitarFoto')){ iaFoto = null; pintarFotoIA(); }
   });
-
   document.getElementById('iaArchivo').addEventListener('change', function(e){
     var archivo = e.target.files && e.target.files[0];
-    e.target.value = '';                  // permite volver a elegir la misma foto
+    e.target.value = '';                  // deja volver a elegir la misma
     if(!archivo) return;
     reducirFoto(archivo)
       .then(function(f){ iaFoto = f; pintarFotoIA(); })
-      ['catch'](function(err){ toast('toastIA', err.message); });
+      ['catch'](function(err){ toast('toastIA2', err.message); });
   });
 
-  function abrirAsistente(){
-    iaFoto = null;
-    pintarFotoIA();
-    document.getElementById('iaTexto').value = '';
-    document.getElementById('iaResultado').innerHTML = '';
-    document.getElementById('iaAviso').hidden = true;
-    document.getElementById('iaGuardar').hidden = true;
-    document.getElementById('iaBuscar').hidden = false;
-    document.getElementById('iaBuscar').textContent = 'Calcular';
-    iaPropuesta = [];
-    // El momento arranca en el más probable según la hora, no siempre en
-    // desayuno: a las nueve de la noche nadie va a apuntar el desayuno.
-    var h = new Date().getHours();
-    iaMomento = h < 11 ? 'Desayuno' : h < 18 ? 'Comida' : 'Cena';
-    pintarMomentoIA();
-    iaSheet.classList.add('open');
-    setTimeout(function(){ document.getElementById('iaTexto').focus(); }, 120);
-  }
-
-  function pintarMomentoIA(){
-    Array.from(document.querySelectorAll('#iaMomento [data-ia-momento]')).forEach(function(b){
-      b.classList.toggle('active', b.dataset.iaMomento === iaMomento);
-    });
-  }
-
-  document.getElementById('iaMomento').addEventListener('click', function(e){
-    var b = e.target.closest('[data-ia-momento]');
-    if(!b) return;
-    iaMomento = b.dataset.iaMomento;
-    pintarMomentoIA();
-  });
-
-  function pintarPropuestaIA(nota){
-    var cont = document.getElementById('iaResultado');
-    if(!iaPropuesta.length){
-      cont.innerHTML = '<p class="calc-note">' + escapar(nota || 'No encontré comida ahí.') + '</p>';
-      document.getElementById('iaGuardar').hidden = true;
-      document.getElementById('iaAviso').hidden = true;
+  // ---- La conversación ----
+  function pintarChat(){
+    if(!IA_MSGS.length){
+      iaChat.innerHTML =
+        '<div class="ia-msg de-el"><div class="burbuja">' +
+        'Cuéntame qué comiste y lo apunto, o mándame una foto del plato. ' +
+        'También te digo qué te conviene comer con lo que te queda del día.' +
+        '</div></div>' +
+        IA_ATAJOS.map(function(a){
+          return '<button class="ia-atajo" data-atajo="' + escapar(a.texto) + '">' +
+                 a.icono + '  ' + escapar(a.texto) + '</button>';
+        }).join('');
       return;
     }
 
-    cont.innerHTML = '<div class="calc-box">' + iaPropuesta.map(function(a, i){
-      var cal = Math.round(a.P*4 + a.C*4 + a.G*9);
-      return '<div class="ia-fila">' +
-        (a.seguridad !== 'alta'
-          ? '<span class="ia-duda ' + a.seguridad + '">' + (a.seguridad === 'baja' ? 'a ojo' : 'aprox') + '</span>'
-          : '') +
-        '<div class="txt"><b>' + escapar(a.n) + '</b>' +
-        '<span>' + un(a.cant) + ' ' + escapar(abreviarUnidad(a.u)) + ' · ' + mil(cal) + ' cal · ' +
-        'P' + un(a.P) + ' C' + un(a.C) + ' G' + un(a.G) + '</span></div>' +
-        '<button class="ia-quita" data-ia-quita="' + i + '" title="Quitar">✕</button>' +
-      '</div>';
-    }).join('') + '</div>' +
-    (nota ? '<p class="calc-note">' + escapar(nota) + '</p>' : '');
-
-    document.getElementById('iaGuardar').hidden = false;
-    document.getElementById('iaGuardar').textContent =
-      'Agregar ' + iaPropuesta.length + (iaPropuesta.length === 1 ? ' alimento a ' : ' alimentos a ') +
-      iaMomento.toLowerCase();
-    document.getElementById('iaAviso').hidden = false;
+    iaChat.innerHTML = IA_MSGS.map(function(m, i){
+      var cuerpo = (m.foto ? '<img src="' + m.foto + '" alt="">' : '') +
+        (m.texto ? '<div class="burbuja">' + escapar(m.texto) + '</div>' : '');
+      var tarjetas = (m.alimentos && m.alimentos.length)
+        ? pintarAlimentosPropuestos(m, i) : '';
+      return '<div class="ia-msg ' + (m.rol === 'yo' ? 'de-mi' : 'de-el') + '">' +
+             cuerpo + '</div>' + tarjetas;
+    }).join('');
+    iaChat.scrollTop = iaChat.scrollHeight;
   }
 
-  document.getElementById('iaResultado').addEventListener('click', function(e){
-    var b = e.target.closest('[data-ia-quita]');
-    if(!b) return;
-    iaPropuesta.splice(Number(b.dataset.iaQuita), 1);
-    pintarPropuestaIA('');
+  // Los alimentos que propone no se apuntan solos: se enseñan con sus
+  // macros y un botón. Apuntar comida en el diario de alguien sin que lo
+  // confirme sería pasarse.
+  function pintarAlimentosPropuestos(m, idx){
+    if(m.apuntados){
+      return '<p class="calc-note" style="padding:0 20px 10px;">✓ Apuntado en ' +
+             escapar(m.comida || 'tu diario') + '</p>';
+    }
+    return '<div class="calc-box" style="margin:0 16px 10px;">' +
+      m.alimentos.map(function(a){
+        var cal = Math.round(a.P*4 + a.C*4 + a.G*9);
+        return '<div class="ia-fila">' +
+          (a.seguridad !== 'alta'
+            ? '<span class="ia-duda ' + a.seguridad + '">' +
+              (a.seguridad === 'baja' ? 'a ojo' : 'aprox') + '</span>' : '') +
+          '<div class="txt"><b>' + escapar(a.n) + '</b><span>' +
+            un(a.cant) + ' ' + escapar(abreviarUnidad(a.u)) + ' · ' + mil(cal) + ' cal · ' +
+            'P' + un(a.P) + ' C' + un(a.C) + ' G' + un(a.G) + '</span></div></div>';
+      }).join('') +
+      '<div class="ia-momento" style="margin-top:10px;">' +
+        ['Desayuno','Comida','Cena'].map(function(c){
+          return '<button class="meta-opt" data-apuntar="' + idx + '" data-comida="' + c + '">' +
+                 c + '</button>';
+        }).join('') +
+      '</div>' +
+      '<p class="calc-note" style="margin-top:8px;">Elige dónde apuntarlo. ' +
+        'Los macros marcados son estimación: revísalos.</p>' +
+    '</div>';
+  }
+
+  iaChat.addEventListener('click', function(e){
+    var at = e.target.closest('[data-atajo]');
+    if(at){ enviarIA(at.dataset.atajo); return; }
+
+    var ap = e.target.closest('[data-apuntar]');
+    if(ap) apuntarPropuesta(Number(ap.dataset.apuntar), ap.dataset.comida);
   });
 
-  document.getElementById('iaBuscar').addEventListener('click', function(){
-    var texto = document.getElementById('iaTexto').value.trim();
-    if(!texto && !iaFoto){ toast('toastIA', 'Toma una foto o escribe qué comiste'); return; }
-    if(!sesion){ toast('toastIA', 'Inicia sesión para usar el asistente'); return; }
+  // ---- Mandar un mensaje ----
+  function enviarIA(textoForzado){
+    if(iaOcupado) return;
+    var texto = (textoForzado != null ? textoForzado : iaTexto.value).trim();
+    if(!texto && !iaFoto){ return; }
+    if(!sesion){ toast('toastIA2', 'Inicia sesión para usar el asistente'); return; }
 
-    var btn = document.getElementById('iaBuscar');
-    btn.disabled = true;
-    btn.textContent = iaFoto ? 'Mirando la foto…' : 'Calculando…';
+    IA_MSGS.push({ rol:'yo', texto: texto, foto: iaFoto ? iaFoto.vista : null });
+    var fotoEnvio = iaFoto;
+    iaTexto.value = '';
+    iaTexto.style.height = '';
+    iaFoto = null;
+    pintarFotoIA();
+
+    IA_MSGS.push({ rol:'el', texto:'…', pensando:true });
+    pintarChat();
+    iaOcupado = true;
+    document.getElementById('iaEnviar').disabled = true;
 
     iaLlamar({
-      accion: 'apuntar',
-      texto: texto,
-      imagen: iaFoto ? iaFoto.base64 : undefined,
-      tipo_imagen: iaFoto ? iaFoto.tipo : undefined
-    })
-      .then(function(r){
-        iaPropuesta = (r.alimentos || []).map(function(x){
+      accion: 'chat',
+      mensajes: IA_MSGS.filter(function(m){ return !m.pensando; })
+                       .map(function(m){ return { rol:m.rol, texto:m.texto }; }),
+      imagen: fotoEnvio ? fotoEnvio.base64 : undefined,
+      tipo_imagen: fotoEnvio ? fotoEnvio.tipo : undefined,
+      macros: macrosDeHoy()
+    }).then(function(r){
+      IA_MSGS.pop();                       // quitar el "pensando"
+      IA_MSGS.push({
+        rol: 'el',
+        texto: r.respuesta || '',
+        alimentos: (r.alimentos || []).map(function(x){
           return prepararAlimento({
             n: x.nombre, u: x.unidad || 'Gramos',
             cant: Number(x.cantidad) || 1,
@@ -7201,28 +7245,43 @@
             G: Number(x.grasas)   || 0,
             seguridad: x.seguridad || 'media'
           });
-        });
-        pintarPropuestaIA(r.nota || '');
-      })
-      ['catch'](function(e){
-        document.getElementById('iaResultado').innerHTML =
-          '<p class="calc-note">' + escapar(traducirError(e.message)) + '</p>';
-      })
-      .then(function(){
-        btn.disabled = false;
-        btn.textContent = 'Calcular';
+        })
       });
-  });
+      if(typeof r.quedan === 'number'){
+        document.getElementById('iaQuedan').textContent =
+          r.quedan + (r.quedan === 1 ? ' consulta hoy' : ' consultas hoy');
+      }
+      pintarChat();
+    })['catch'](function(e){
+      IA_MSGS.pop();
+      IA_MSGS.push({ rol:'el', texto: traducirError(e.message) });
+      pintarChat();
+    }).then(function(){
+      iaOcupado = false;
+      document.getElementById('iaEnviar').disabled = false;
+    });
+  }
 
-  document.getElementById('iaGuardar').addEventListener('click', function(){
-    if(!iaPropuesta.length || !sesion) return;
-    var btn = document.getElementById('iaGuardar');
-    btn.disabled = true;
+  // Lo que lleva y lo que le queda hoy. Sin esto, recomendar sería a
+  // ciegas: no es lo mismo con 1.400 calorías libres que con 200.
+  function macrosDeHoy(){
+    var r = REGISTRO[isoDe(HOY)] || {P:0, C:0, G:0};
+    var meta = leerMetas();
+    return {
+      meta_p: meta.P, meta_c: meta.C, meta_g: meta.G,
+      meta_cal: Math.round(meta.P*4 + meta.C*4 + meta.G*9),
+      hoy_p: Math.round(r.P), hoy_c: Math.round(r.C), hoy_g: Math.round(r.G),
+      hoy_cal: Math.round(r.P*4 + r.C*4 + r.G*9)
+    };
+  }
 
-    var comida = iaMomento;
-    // Se guardan uno a uno por el camino de siempre, con RLS: el asistente
-    // propone, pero quien escribe en la base es el usuario.
-    var cadena = iaPropuesta.reduce(function(prev, a){
+  function apuntarPropuesta(idx, comida){
+    var m = IA_MSGS[idx];
+    if(!m || !m.alimentos || m.apuntados || !sesion) return;
+    m.apuntados = true; m.comida = comida;
+    pintarChat();
+
+    var cadena = m.alimentos.reduce(function(prev, a){
       return prev.then(function(){
         return sbAgregarAlimento(a, comida).then(function(fila){
           if(fila) a.id = fila.id;
@@ -7233,26 +7292,34 @@
     }, Promise.resolve());
 
     cadena.then(function(){
-      var n = iaPropuesta.length;
-      iaSheet.classList.remove('open');
-      iaPropuesta = [];
-      // sumarAlRegistro ya movió el anillo; falta refrescar las filas del
-      // Diario y, si estuviera abierta, la pantalla de esa comida.
       pintarFilasComidas();
       pintarComida();
-      toast('toastIA', n + (n === 1 ? ' alimento agregado a ' : ' alimentos agregados a ') + comida.toLowerCase());
+      toast('toastIA2', m.alimentos.length + ' apuntado(s) en ' + comida.toLowerCase());
     })['catch'](function(e){
-      toast('toastIA', 'No se pudo guardar: ' + traducirError(e.message));
-    }).then(function(){ btn.disabled = false; });
-  });
+      m.apuntados = false; pintarChat();
+      toast('toastIA2', 'No se pudo guardar: ' + traducirError(e.message));
+    });
+  }
 
-  document.getElementById('iaBtn').addEventListener('click', abrirAsistente);
-  document.getElementById('iaCerrar').addEventListener('click', function(){
-    iaSheet.classList.remove('open');
+  // El campo crece con el texto, hasta el tope que fija el CSS.
+  iaTexto.addEventListener('input', function(){
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 120) + 'px';
   });
-  iaSheet.addEventListener('click', function(e){
-    if(e.target === iaSheet) iaSheet.classList.remove('open');
+  iaTexto.addEventListener('keydown', function(e){
+    // Enter manda; Shift+Enter hace salto de línea, como en cualquier chat.
+    if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); enviarIA(); }
   });
+  document.getElementById('iaEnviar').addEventListener('click', function(){ enviarIA(); });
+
+  document.getElementById('iaBtn').addEventListener('click', function(){
+    pintarChat();
+    pintarFotoIA();
+    goto('asistente', true);
+    setTimeout(function(){ iaTexto.focus(); }, 200);
+  });
+  document.getElementById('iaCerrar').addEventListener('click', function(){ back(); });
+
 
   document.getElementById('themeBtn').addEventListener('click', toggleTheme);
   // El botón del sol se quitó del Diario para dejarle el sitio al asistente.

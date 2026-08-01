@@ -2,14 +2,15 @@
 //  ASISTENTE — la única parte de la app que habla con Anthropic
 //
 //  Existe por una razón concreta: la clave de Anthropic NO puede estar en
-//  la app. mockup/index.html se descarga entero en cada teléfono y el
+//  la app. docs/index.html se descarga entero en cada teléfono y el
 //  repositorio es público; cualquiera sacaría la clave y gastaría la
 //  cuenta. Aquí vive en el servidor, en una variable de entorno que el
 //  navegador nunca ve.
 //
-//  Hace dos cosas:
-//    apuntar → "me comí dos huevos con pan" y devuelve los alimentos
-//    plan    → arma comidas sencillas que cuadren con unas calorías
+//  Hace tres cosas:
+//    chat    → conversación: apuntar, recomendar qué comer, lista del súper
+//    apuntar → la versión directa, sin conversación
+//    plan    → arma comidas de un día o de una semana
 //
 //  Lo que NO hace: escribir en la base. Devuelve una propuesta y la app
 //  la guarda por el camino de siempre, con RLS. Así esta función no
@@ -135,45 +136,103 @@ const ESQUEMA_PLAN_DIA = {
   },
 } as const;
 
+// Lo que se ve en el chat: un texto y, si viene al caso, alimentos que se
+// pueden apuntar de un toque. Los dos campos van siempre para no tener que
+// adivinar en la app si el modelo devolvió una cosa u otra.
+const ESQUEMA_CHAT = {
+  type: 'object',
+  properties: {
+    respuesta: { type: 'string' },
+    alimentos: ESQUEMA_ALIMENTOS.properties.alimentos,
+  },
+  required: ['respuesta', 'alimentos'],
+  additionalProperties: false,
+} as const;
+
 // ---------------------------------------------------------------------
 //  Instrucciones
 // ---------------------------------------------------------------------
-const SISTEMA_APUNTAR = `
-Conviertes en alimentos con sus macros lo que alguien comió, ya te lo
-cuente por escrito, con una foto del plato, o las dos cosas a la vez.
+// Las reglas de cómo se convierte comida en macros. Van aparte porque las
+// usan los dos caminos -el de apuntar y el del chat- y duplicarlas
+// garantizaría que un día se corrija una y la otra no.
+const SISTEMA_APUNTAR_REGLAS = `
 
-Escribe en español de México. Da por hecho comida mexicana salvo que se
-diga otra cosa: "tortilla" es de maíz, "pan" es bolillo, "queso" es fresco.
+CÓMO SE APUNTA LA COMIDA (cuando llenes "alimentos"):
+
+Da por hecho comida mexicana salvo que se diga otra cosa: "tortilla" es de
+maíz, "pan" es bolillo, "queso" es fresco.
 
 Reglas:
 - Los macros son de TODA la cantidad indicada, no de 100 g. Si alguien se
   comió 2 huevos, da los macros de los 2 huevos juntos.
-- Si no dicen cantidad, usa una porción normal para una persona y dilo en
-  la nota. No preguntes: es mejor una estimación razonable y avisada que
-  no apuntar nada.
+- Si no dicen cantidad, usa una porción normal para una persona y dilo.
+  No preguntes: es mejor una estimación razonable y avisada que no
+  apuntar nada.
 - Separa los ingredientes que se cuentan aparte: unos huevos con tortilla
   son dos alimentos, no uno.
 - "seguridad" es tu confianza en los macros. Un huevo es alta; un guisado
   casero del que no sabes la receta es baja.
-- Si de plano no hay comida, devuelve la lista vacía y explica en la nota
-  qué falta.
+- Si no te están contando una comida, deja la lista vacía. No hay que
+  llenarla por llenarla.
 
 CON FOTO:
 - Estima el tamaño de la porción por lo que se ve alrededor: el plato, los
-  cubiertos, una mano, la lata de al lado. Di en la nota con qué lo
-  comparaste.
+  cubiertos, una mano, la lata de al lado. Di con qué lo comparaste.
 - Lo que no puedas ver no lo inventes. El aceite del guisado, el azúcar
   del café o el relleno de algo tapado no se aprecian en una foto: si
-  crees que están, dilo en la nota y marca ese alimento con seguridad
-  "baja".
+  crees que están, dilo y marca ese alimento con seguridad "baja".
 - Una foto casi nunca da seguridad "alta". Resérvala para lo que se
   cuenta de una mirada: dos huevos enteros, una lata cerrada con su
   etiqueta, tres tortillas.
 - Si además escribieron algo, eso manda sobre lo que creas ver: quien se
   lo comió sabe mejor que tú lo que había en el plato.
 
-Sé honesto en la nota sobre lo que tuviste que suponer. Quien la lea está
-contando macros y necesita saber de qué se fía.
+Sé honesto sobre lo que tuviste que suponer. Quien lo lea está contando
+macros y necesita saber de qué se fía.
+`;
+
+const SISTEMA_APUNTAR = `
+Conviertes en alimentos con sus macros lo que alguien comió, ya te lo
+cuente por escrito, con una foto del plato, o las dos cosas a la vez.
+
+Escribe en español de México. En "nota" va lo que tuviste que suponer.
+Si de plano no hay comida, devuelve la lista vacía y explica qué falta.
+` + SISTEMA_APUNTAR_REGLAS;
+
+const SISTEMA_CHAT = `
+Eres el asistente de una app de conteo de macros. Hablas español de
+México, de tú, corto y sin rodeos. Nada de listas con viñetas para
+responder algo simple.
+
+Haces tres cosas:
+
+1. APUNTAR COMIDA. Si te cuentan lo que comieron -o te mandan foto del
+   plato- devuelves los alimentos en "alimentos", con las mismas reglas
+   de siempre: macros de toda la cantidad, crudo o cocido según toque, y
+   la confianza de cada uno. En "respuesta" pones una frase corta
+   diciendo qué entendiste. NO repitas ahí los macros: ya se ven en las
+   tarjetas.
+
+2. RECOMENDAR QUÉ COMER. Con lo que les queda del día, propones opciones
+   concretas y fáciles: qué, más o menos cuánto, y por qué encaja. Dos o
+   tres, no diez. Si ya no les queda casi nada, dilo claro en vez de
+   inventar una comida de 80 calorías.
+
+3. LISTA DEL SÚPER. Una lista corta y agrupada por pasillo, con lo que
+   necesitan para comer así una semana. Cosas de mercado y de precio
+   normal. Sin cantidades exactas al gramo: "un kilo de pollo", "una
+   docena de huevos".
+
+Si te preguntan otra cosa relacionada con comer, entrena o los macros,
+contesta normal y deja "alimentos" vacío. Si te preguntan algo que no
+tiene nada que ver, dilo en una línea y ofrece ayudar con lo tuyo.
+
+Nunca des consejo médico ni hables de enfermedades, medicamentos o
+suplementos para tratar algo. Si te lo piden, di que eso lo ve un
+profesional.
+
+Los macros que te paso son los de HOY de esa persona. Úsalos: no es lo
+mismo recomendar con 1.400 calorías libres que con 200.
 `.trim();
 
 const SISTEMA_PLAN = `
@@ -322,6 +381,73 @@ Deno.serve(async (req) => {
           format: { type: 'json_schema', schema: ESQUEMA_ALIMENTOS },
         },
         messages: [{ role: 'user', content: partes }],
+      });
+
+      const salida = leerJson(r);
+      salida.alimentos = await afinarConCatalogo(admin, salida.alimentos || []);
+      return json({ ...salida, quedan });
+    }
+
+    if (accion === 'chat') {
+      const historial = Array.isArray(cuerpo.mensajes) ? cuerpo.mensajes : [];
+      const imagen = typeof cuerpo.imagen === 'string' ? cuerpo.imagen : '';
+      const tipoImagen = String(cuerpo.tipo_imagen || 'image/jpeg');
+
+      if (!historial.length && !imagen) {
+        return json({ error: 'Escribe algo o manda una foto.' }, 400);
+      }
+      if (imagen && imagen.length > 8_000_000) {
+        return json({ error: 'La foto es demasiado grande.' }, 413);
+      }
+
+      // El contexto del día va en el sistema y no en el mensaje: así no se
+      // repite en cada turno de la conversación ni se puede confundir con
+      // algo que escribió la persona.
+      const m = (cuerpo.macros ?? {}) as Record<string, number>;
+      const contexto = m.meta_cal
+        ? `\n\nHOY, esta persona:\n` +
+          `- Meta: ${Math.round(m.meta_cal)} cal · P${Math.round(m.meta_p)} ` +
+          `C${Math.round(m.meta_c)} G${Math.round(m.meta_g)}\n` +
+          `- Lleva: ${Math.round(m.hoy_cal || 0)} cal · P${Math.round(m.hoy_p || 0)} ` +
+          `C${Math.round(m.hoy_c || 0)} G${Math.round(m.hoy_g || 0)}\n` +
+          `- Le quedan: ${Math.round((m.meta_cal || 0) - (m.hoy_cal || 0))} cal · ` +
+          `P${Math.round((m.meta_p || 0) - (m.hoy_p || 0))} ` +
+          `C${Math.round((m.meta_c || 0) - (m.hoy_c || 0))} ` +
+          `G${Math.round((m.meta_g || 0) - (m.hoy_g || 0))}`
+        : '';
+
+      // Solo los últimos turnos: una conversación larga se paga entera en
+      // cada mensaje, y para esto no hace falta recordar más atrás.
+      const mensajes = historial.slice(-12).map((x: Record<string, unknown>) => ({
+        role: x.rol === 'yo' ? 'user' : 'assistant',
+        content: String(x.texto || '').slice(0, 2000),
+      })).filter((x) => x.content);
+
+      if (imagen) {
+        const ultimo = mensajes[mensajes.length - 1];
+        const texto = ultimo && ultimo.role === 'user' ? ultimo.content : '';
+        if (ultimo && ultimo.role === 'user') mensajes.pop();
+        mensajes.push({
+          role: 'user',
+          // deno-lint-ignore no-explicit-any
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: tipoImagen, data: imagen } },
+            { type: 'text', text: texto || 'Esto es lo que me comí.' },
+          ] as any,
+        });
+      }
+      if (!mensajes.length) return json({ error: 'Escribe algo.' }, 400);
+
+      const r = await ia.messages.create({
+        model: MODELO,
+        max_tokens: imagen ? 4000 : 2000,
+        system: SISTEMA_CHAT + SISTEMA_APUNTAR_REGLAS + contexto,
+        ...(imagen ? { thinking: { type: 'adaptive' as const } } : {}),
+        output_config: {
+          effort: imagen ? 'medium' : 'low',
+          format: { type: 'json_schema', schema: ESQUEMA_CHAT },
+        },
+        messages: mensajes,
       });
 
       const salida = leerJson(r);
