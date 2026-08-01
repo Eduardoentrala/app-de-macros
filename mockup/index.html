@@ -1908,15 +1908,10 @@
 
           <div class="card">
             <div class="goal-head">
-              <div style="font:800 14.5px/1 sans-serif;">Inicio de semana</div>
-              <span class="goal-hint">tú eliges el día</span>
+              <div style="font:800 14.5px/1 sans-serif;">Tu semana</div>
+              <span class="goal-hint">arranca con tus macros</span>
             </div>
-            <p class="calc-note" style="margin:0 0 12px;">Tu semana de calorías se reinicia sola cada 7 días. Si cambias el día, tu conteo semanal vuelve a cero y arranca de nuevo.</p>
-            <div class="daypick" id="dayPick">
-              <button data-dow="1">Lun</button><button data-dow="2">Mar</button><button data-dow="3">Mié</button>
-              <button data-dow="4">Jue</button><button data-dow="5">Vie</button><button data-dow="6">Sáb</button>
-              <button data-dow="0">Dom</button>
-            </div>
+            <p class="calc-note" style="margin:0 0 12px;">Tu semana empieza el día que ajustas tus macros y dura 7 días. Cuando los cambies, el conteo vuelve a cero y ese día pasa a ser tu día 1.</p>
             <div class="calc-box" style="margin-top:12px;">
               <div class="calc-line"><span>Semana en curso</span><b id="profWeekRange" style="font-size:15px;">—</b></div>
               <div class="calc-note" id="profWeekDay">—</div>
@@ -1952,8 +1947,8 @@
 
         <div class="sheet-backdrop" id="weekConfirm">
           <div class="sheet">
-            <h4 id="wcTitle">¿Reiniciar tu semana en martes?</h4>
-            <p class="hint">Tu conteo semanal vuelve a cero y empiezas una semana nueva desde hoy.</p>
+            <h4 id="wcTitle">¿Guardar tus macros nuevos?</h4>
+            <p class="hint">Cambiar tus macros arranca una semana nueva: el conteo vuelve a cero y hoy pasa a ser tu día 1.</p>
 
             <div class="wc-compare">
               <div class="wc-side">
@@ -1972,7 +1967,7 @@
             <p class="wc-warn">⚠ Pierdes el avance de esta semana: las calorías acumuladas se ponen en cero.</p>
             <p class="wc-safe">✓ Tus comidas registradas no se borran — siguen en el historial de cada día.</p>
 
-            <button class="btn-primary" id="wcAccept">Sí, reiniciar en <span id="wcDayName">martes</span></button>
+            <button class="btn-primary" id="wcAccept">Sí, guardar y empezar semana</button>
             <button class="btn-ghost-text" id="wcCancel">Cancelar</button>
           </div>
         </div>
@@ -2990,61 +2985,66 @@
 
     refrescarFlechas();
     if(typeof pintarEjercicio === 'function') pintarEjercicio();  // el progreso sigue la misma semana
-    Array.from(document.querySelectorAll('#dayPick button')).forEach(function(b){
-      b.classList.toggle('active', Number(b.dataset.dow) === inicioSemana);
-    });
     actualizarMetas(); // recalcula anillos, barras y el resumen del Diario
   }
 
   // Cambiar el día de inicio pide confirmación, mostrando cómo quedaría el acumulado
   var weekConfirm = document.getElementById('weekConfirm');
-  var dowPendiente = null;
+  // La semana ya no se elige a mano: arranca el día en que cambias tus
+  // macros. Un plan nuevo es lo que de verdad marca un ciclo nuevo, así que
+  // el ajuste sobra y una fecha menos que configurar es una decisión menos.
+  var metasPendientes = null;   // lo tecleado, a la espera de confirmar
+  var metasVigentes = null;     // lo último confirmado, para poder revertir
 
-  document.getElementById('dayPick').addEventListener('click', function(e){
-    var b = e.target.closest('button');
-    if(!b) return;
-    var dow = Number(b.dataset.dow);
-    if(dow === inicioSemana) return;             // ya es ese día, no hay nada que confirmar
+  function leerMetas(){ return { P:num(goalP,600), C:num(goalC,900), G:num(goalG,400) }; }
+  function escribirMetas(m){ goalP.value = m.P; goalC.value = m.C; goalG.value = m.G; }
+  function mismasMetas(a, b){ return a && b && a.P === b.P && a.C === b.C && a.G === b.G; }
 
+  function cerrarConfirm(){ weekConfirm.classList.remove('open'); metasPendientes = null; }
+
+  // Se llama al salir de cualquiera de los tres campos, y solo pregunta si
+  // el número cambió de verdad.
+  function pedirConfirmacionMetas(){
+    var nuevas = leerMetas();
+    if(mismasMetas(nuevas, metasVigentes)) return;
+
+    metasPendientes = nuevas;
     var actual = sumaSemana();
-
-    // La semana arranca en la última vez que cayó el día elegido, NO hoy.
-    // Antes el ancla se ponía en HOY, así que el ajuste no hacía nada: la
-    // etiqueta decía "se reinicia el próximo miércoles" mientras el conteo
-    // seguía empezando hoy, y el rango no se movía eligieras el día que
-    // eligieras. Es la misma cuenta que usa cargarDatos() al leer el perfil,
-    // así que ahora coinciden.
-    var nuevaAncla = ultimoDia(dow);
-    var nuevo = sumaDesde(nuevaAncla);
-
-    // Si no llevas nada contado todavía, no hay nada que confirmar
-    if(actual.cal === 0){
-      inicioSemana = dow; anclaSemana = nuevaAncla; actualizarSemana();
-      sbActualizarPerfil({ week_start_dow: dow })['catch'](function(){});
-      return;
-    }
-
-    dowPendiente = dow;
-    document.getElementById('wcTitle').textContent = '¿Reiniciar tu semana en ' + DIAS[dow] + '?';
-    document.getElementById('wcDayName').textContent = DIAS[dow];
-    document.getElementById('wcNowCal').textContent = mil(actual.cal);
+    document.getElementById('wcNowCal').textContent   = mil(actual.cal);
     document.getElementById('wcNowRange').textContent = 'Empezó el ' + fmtFecha(actual.inicio);
-    document.getElementById('wcNextCal').textContent = mil(nuevo.cal);
-    document.getElementById('wcNextRange').textContent = 'Empieza el ' + fmtFecha(nuevaAncla);
+    document.getElementById('wcNextCal').textContent  = '0';
+    document.getElementById('wcNextRange').textContent = 'Empieza hoy, ' + fmtFecha(HOY);
     weekConfirm.classList.add('open');
-  });
+  }
 
-  function cerrarConfirm(){ weekConfirm.classList.remove('open'); dowPendiente = null; }
   document.getElementById('wcAccept').addEventListener('click', function(){
-    if(dowPendiente === null) return;
-    inicioSemana = dowPendiente;
-    anclaSemana = ultimoDia(dowPendiente);   // la semana empieza en ese día
+    if(!metasPendientes) return;
+    metasVigentes = metasPendientes;
+
+    // Hoy pasa a ser el día 1
+    inicioSemana = HOY.getDay();
+    anclaSemana  = new Date(HOY);
+
     cerrarConfirm();
     actualizarSemana();
-    sbActualizarPerfil({ week_start_dow: inicioSemana })['catch'](function(){});
+    sbActualizarPerfil({
+      goal_protein_g: metasVigentes.P,
+      goal_carbs_g:   metasVigentes.C,
+      goal_fat_g:     metasVigentes.G,
+      week_start_dow: inicioSemana
+    })['catch'](function(){});
+    toast('toastPeso', 'Macros guardados · empieza tu semana');
   });
-  document.getElementById('wcCancel').addEventListener('click', cerrarConfirm);
-  weekConfirm.addEventListener('click', function(e){ if(e.target === weekConfirm) cerrarConfirm(); });
+  // Cancelar devuelve los campos a como estaban: si no, quedarían con los
+  // números nuevos en pantalla y la semana con los viejos, y el usuario
+  // creería que se guardó.
+  function cancelarMetas(){
+    if(metasVigentes) escribirMetas(metasVigentes);
+    cerrarConfirm();
+    actualizarMetas();
+  }
+  document.getElementById('wcCancel').addEventListener('click', cancelarMetas);
+  weekConfirm.addEventListener('click', function(e){ if(e.target === weekConfirm) cancelarMetas(); });
 
   // ---- Metas de macros: el usuario edita gramos, las calorías se calculan solas ----
   // Proteína 4 cal/g · Carbos 4 cal/g · Grasas 9 cal/g
@@ -3134,21 +3134,18 @@
     document.getElementById('weekSummary').textContent =
       'P ' + P + ' · C ' + C + ' · G ' + G + ' · ' + mil(calDia) + ' cal/día · se reinicia cada ' + DIAS[inicioSemana];
   }
-  // Se guarda en 'change' y no en 'input': 'input' salta con cada tecla y
-  // escribir "170" mandaría tres peticiones. 'change' salta una sola vez,
-  // al salir del campo, y solo si el valor cambió de verdad.
-  function guardarMetas(){
-    sbActualizarPerfil({
-      goal_protein_g: num(goalP, 600),
-      goal_carbs_g:   num(goalC, 900),
-      goal_fat_g:     num(goalG, 400)
-    })['catch'](function(){});
-  }
+  // Se pregunta en 'change' y no en 'input': 'input' salta con cada tecla,
+  // así que escribir "170" abriría el aviso tres veces. 'change' salta una
+  // sola vez, al salir del campo, y solo si el valor cambió de verdad.
   [goalP, goalC, goalG].forEach(function(el){
     el.addEventListener('input', actualizarMetas);
     el.addEventListener('blur', function(){ el.value = num(el, 900); actualizarMetas(); });
-    el.addEventListener('change', guardarMetas);
+    el.addEventListener('change', pedirConfirmacionMetas);
   });
+  // Punto de partida: lo que hay en pantalla al arrancar. Va AQUÍ y no
+  // arriba con las demás variables porque goalP/C/G se asignan en estas
+  // líneas; leerlas antes daría error.
+  metasVigentes = leerMetas();
   actualizarSemana(); // calcula el contador de días y, dentro, las metas
 
   // ---- Foto de perfil (cada usuario la suya) ----
@@ -4805,6 +4802,9 @@
           goalP.value = p.goal_protein_g;
           goalC.value = p.goal_carbs_g;
           goalG.value = p.goal_fat_g;
+          // Punto de partida traído de la base: cargar el perfil no es un
+          // cambio del usuario y no debe abrir el aviso de reinicio.
+          metasVigentes = leerMetas();
 
           // Las semanas de Fotos se cuentan desde aquí: la del registro es la 1
           if(p.created_at) inicioPrograma = lunesDe(new Date(p.created_at));
