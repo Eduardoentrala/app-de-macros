@@ -1940,22 +1940,6 @@
             </div>
           </div>
 
-          <div class="card">
-            <div class="goal-head">
-              <div style="font:800 14.5px/1 sans-serif;">Meta semanal</div>
-              <span class="goal-hint">tu día × 7</span>
-            </div>
-            <div class="week-goal" id="weekGoal">
-              <div><b id="wkP">1,190</b><span>Proteína g</span></div>
-              <div><b id="wkC">1,680</b><span>Carbos g</span></div>
-              <div><b id="wkG">525</b><span>Grasas g</span></div>
-            </div>
-            <div class="calc-box">
-              <div class="calc-line"><span>Calorías a la semana</span><b id="calWeek">16,205</b></div>
-              <div class="calc-note">Este es tu bolsa semanal: si un día comes de menos, puedes comer de más otro sin salirte.</div>
-            </div>
-          </div>
-
           <button class="signout" id="cerrarSesion">Cerrar sesión</button>
         </div>
         <div class="bottom-tabs">
@@ -2947,10 +2931,17 @@
     if(dow === inicioSemana) return;             // ya es ese día, no hay nada que confirmar
 
     var actual = sumaSemana();
-    var nuevaAncla = new Date(HOY);              // copia: si fuera HOY compartirían el mismo objeto
+
+    // La semana arranca en la última vez que cayó el día elegido, NO hoy.
+    // Antes el ancla se ponía en HOY, así que el ajuste no hacía nada: la
+    // etiqueta decía "se reinicia el próximo miércoles" mientras el conteo
+    // seguía empezando hoy, y el rango no se movía eligieras el día que
+    // eligieras. Es la misma cuenta que usa cargarDatos() al leer el perfil,
+    // así que ahora coinciden.
+    var nuevaAncla = ultimoDia(dow);
     var nuevo = sumaDesde(nuevaAncla);
 
-    // Si no llevas nada contado todavía, no hay nada que reiniciar
+    // Si no llevas nada contado todavía, no hay nada que confirmar
     if(actual.cal === 0){
       inicioSemana = dow; anclaSemana = nuevaAncla; actualizarSemana();
       sbActualizarPerfil({ week_start_dow: dow })['catch'](function(){});
@@ -2963,7 +2954,7 @@
     document.getElementById('wcNowCal').textContent = mil(actual.cal);
     document.getElementById('wcNowRange').textContent = 'Empezó el ' + fmtFecha(actual.inicio);
     document.getElementById('wcNextCal').textContent = mil(nuevo.cal);
-    document.getElementById('wcNextRange').textContent = 'Empieza hoy, ' + fmtFecha(HOY);
+    document.getElementById('wcNextRange').textContent = 'Empieza el ' + fmtFecha(nuevaAncla);
     weekConfirm.classList.add('open');
   });
 
@@ -2971,7 +2962,7 @@
   document.getElementById('wcAccept').addEventListener('click', function(){
     if(dowPendiente === null) return;
     inicioSemana = dowPendiente;
-    anclaSemana = new Date(HOY);   // el acumulado semanal vuelve a cero desde hoy
+    anclaSemana = ultimoDia(dowPendiente);   // la semana empieza en ese día
     cerrarConfirm();
     actualizarSemana();
     sbActualizarPerfil({ week_start_dow: inicioSemana })['catch'](function(){});
@@ -2994,13 +2985,9 @@
   function actualizarMetas(){
     var P = num(goalP, 600), C = num(goalC, 900), G = num(goalG, 400);
     var calDia = P*4 + C*4 + G*9;
-    var calSem = calDia * 7;
+    var calSem = calDia * 7;   // lo sigue usando el anillo de la semana
 
-    document.getElementById('calDay').textContent  = mil(calDia);
-    document.getElementById('calWeek').textContent = mil(calSem);
-    document.getElementById('wkP').textContent = mil(P*7);
-    document.getElementById('wkC').textContent = mil(C*7);
-    document.getElementById('wkG').textContent = mil(G*7);
+    document.getElementById('calDay').textContent = mil(calDia);
 
     // ---- Balance semanal: lo que sobró o faltó se reparte entre los días que quedan ----
     // Meta de hoy = (meta de la semana − lo consumido antes de hoy) ÷ días que faltan (incluido hoy).
@@ -4035,6 +4022,7 @@
   var OBJ_MIN = 200*1024, OBJ_MAX = 500*1024;
 
   var FOTOS = {};              // clave "2026-W31" -> {frente:{src,bytes,w,h,tipo}, ...}
+  var inicioPrograma = null;   // lunes de la semana en que se registró; lo pone cargarDatos()
   var semanaFoto = new Date(HOY);
   var poseEnCurso = null;
 
@@ -4056,7 +4044,30 @@
     var ene4 = new Date(x.getFullYear(), 0, 4);
     return 1 + Math.round(((x - ene4) / 86400000 - 3 + ((ene4.getDay() + 6) % 7)) / 7);
   }
+  // La CLAVE de guardado sigue siendo la semana ISO del año ('2026-W31'):
+  // es estable, no depende de quién la mire, y es el formato que valida la
+  // base de datos. Lo que cambia es solo la ETIQUETA que se enseña.
   function claveSemana(d){ var l = lunesDe(d); return l.getFullYear() + '-W' + String(numSemana(l)).padStart(2,'0'); }
+
+  // Lunes de una semana ISO, a partir de su clave. La semana 1 es la que
+  // contiene el 4 de enero, por definición del estándar.
+  function lunesDeClave(k){
+    var p = String(k).split('-W');
+    var lunes1 = lunesDe(new Date(Number(p[0]), 0, 4));
+    var d = new Date(lunes1);
+    d.setDate(d.getDate() + (Number(p[1]) - 1) * 7);
+    return d;
+  }
+
+  // Cuántas semanas lleva la persona: la de su registro es la 1.
+  // Enseñar "Semana 31" a alguien que lleva tres semanas no significa nada;
+  // ese 31 es el número de semana del año, no el suyo.
+  function semanaDelPrograma(fecha){
+    if(!inicioPrograma) return null;                 // sin perfil cargado aún
+    var l = lunesDe(fecha);
+    var n = Math.round((l - inicioPrograma) / 604800000) + 1;
+    return n > 0 ? n : 1;
+  }
   function rangoSemana(d){
     var l = lunesDe(d), f = new Date(l); f.setDate(f.getDate() + 6);
     return fmtFecha(l) + ' – ' + fmtFecha(f) + ' ' + f.getFullYear();
@@ -4115,7 +4126,8 @@
   function pintarFotos(){
     var clave = claveSemana(semanaFoto);
     var set = FOTOS[clave] || {};
-    document.getElementById('fotoSemLabel').textContent = 'Semana ' + numSemana(lunesDe(semanaFoto));
+    document.getElementById('fotoSemLabel').textContent =
+      'Semana ' + (semanaDelPrograma(semanaFoto) || numSemana(lunesDe(semanaFoto)));
     document.getElementById('fotoSemRango').textContent = rangoSemana(semanaFoto);
     document.getElementById('fotoCuenta').textContent = POSES.filter(function(p){ return set[p.k]; }).length + ' / 4';
 
@@ -4181,8 +4193,12 @@
     return Object.keys(FOTOS).filter(function(k){ return Object.keys(FOTOS[k]).length; }).sort();
   }
   function etiquetaClave(k){
-    var partes = k.split('-W');
-    return 'Semana ' + Number(partes[1]) + ' · ' + partes[0];
+    var lunes = lunesDeClave(k);
+    var n = semanaDelPrograma(lunes);
+    // Con la fecha al lado se distinguen dos semanas con el mismo número
+    // si algún día se comparan periodos de años distintos.
+    return n ? ('Semana ' + n + ' · ' + fmtFecha(lunes))
+             : ('Semana ' + Number(k.split('-W')[1]) + ' · ' + k.split('-W')[0]);
   }
   function llenarSelectores(){
     var ks = semanasConFotos();
@@ -4714,6 +4730,9 @@
           goalC.value = p.goal_carbs_g;
           goalG.value = p.goal_fat_g;
 
+          // Las semanas de Fotos se cuentan desde aquí: la del registro es la 1
+          if(p.created_at) inicioPrograma = lunesDe(new Date(p.created_at));
+
           if(p.cardio_goal_min != null) META_CARDIO = Number(p.cardio_goal_min);
           if(p.week_start_dow != null){
             inicioSemana = Number(p.week_start_dow);
@@ -4788,6 +4807,8 @@
         pintarPeso();
         if(typeof pintarCardioPerfil === 'function') pintarCardioPerfil();
         if(typeof pintarEjercicio    === 'function') pintarEjercicio();
+        // Repintar Fotos: ya se sabe desde cuándo contar las semanas
+        if(typeof pintarFotos        === 'function') pintarFotos();
       })
       ['catch'](function(e){
         toast('toastComida', 'No se pudieron cargar tus datos: ' + traducirError(e.message));
