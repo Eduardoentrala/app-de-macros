@@ -4204,7 +4204,10 @@
             }
             var fr = new FileReader();
             fr.onload = function(){
-              listo({src: fr.result, bytes: blob.size, w: w, h: h, tipo: TIPO_SALIDA, calidad: q});
+              // `blob` va aparte del base64: es lo que se sube al bucket.
+              // El base64 solo sirve para pintarla al instante sin esperar.
+              listo({src: fr.result, blob: blob, bytes: blob.size,
+                     w: w, h: h, tipo: TIPO_SALIDA, calidad: q});
             };
             fr.readAsDataURL(blob);   // el original ya se descartó: solo vive la versión comprimida
           }, TIPO_SALIDA, q);
@@ -4214,6 +4217,93 @@
     };
     img.onerror = function(){ URL.revokeObjectURL(url); listo(null); };
     img.src = url;
+  }
+
+  // --- Fotos en Supabase Storage ---
+  // El bucket es PRIVADO. No hay URL pública: para ver una foto hay que
+  // pedir un enlace firmado que caduca, y Storage solo lo concede si las
+  // políticas dejan. La ruta empieza por el id del dueño y es justo eso lo
+  // que miran, así que nadie alcanza la carpeta de otro.
+  var BUCKET = 'progress-photos';
+
+  function sbSubirFoto(clave, pose, res){
+    if(!sesion || !sesion.user) return Promise.resolve(null);
+    var ext = res.tipo === 'image/webp' ? 'webp' : 'jpg';
+    // Con marca de tiempo: si se reemplaza la foto de un hueco, la anterior
+    // queda archivada CON su archivo intacto. Reutilizar la ruta la pisaría,
+    // y además chocaría con el índice único de storage_path.
+    var ruta = sesion.user.id + '/' + clave + '/' + pose + '-' + Date.now() + '.' + ext;
+
+    return fetch(SB_URL + '/storage/v1/object/' + BUCKET + '/' + ruta, {
+      method: 'POST',
+      headers: {
+        'apikey': SB_KEY,
+        'Authorization': 'Bearer ' + sesion.access_token,
+        'Content-Type': res.tipo
+      },
+      body: res.blob
+    }).then(function(r){
+      if(!r.ok) return r.text().then(function(t){ throw new Error(t.slice(0,140)); });
+
+      // Archiva la que hubiera en ese hueco: el índice único de
+      // (user_id, week_key, pose) solo cuenta las no archivadas, así que hay
+      // que apartarla antes de meter la nueva.
+      return sbFetch('/rest/v1/progress_photos?user_id=eq.' + sesion.user.id +
+                     '&week_key=eq.' + clave + '&pose=eq.' + pose, { method:'DELETE' });
+    }).then(function(){
+      return sbFetch('/rest/v1/progress_photos', {
+        method:'POST', headers:{ 'Prefer':'return=representation' },
+        body: JSON.stringify({
+          user_id: sesion.user.id, week_key: clave, pose: pose,
+          storage_path: ruta, bytes: res.bytes, width: res.w, height: res.h
+        })
+      });
+    });
+  }
+
+  // Los enlaces firmados se piden en bloque, no uno por uno: son decenas de
+  // fotos y una petición por cada una tardaría una eternidad.
+  function sbFirmar(rutas){
+    if(!rutas.length || !sesion) return Promise.resolve({});
+    return fetch(SB_URL + '/storage/v1/object/sign/' + BUCKET, {
+      method:'POST',
+      headers:{ 'apikey': SB_KEY, 'Authorization':'Bearer ' + sesion.access_token,
+                'Content-Type':'application/json' },
+      body: JSON.stringify({ expiresIn: 3600, paths: rutas })
+    }).then(function(r){ return r.ok ? r.json() : []; })
+      .then(function(arr){
+        var m = {};
+        (arr || []).forEach(function(x){
+          if(x.signedURL) m[x.path] = SB_URL + '/storage/v1' + x.signedURL;
+        });
+        return m;
+      })['catch'](function(){ return {}; });
+  }
+
+  // Carga las fichas y las convierte en lo que la pantalla ya sabe pintar.
+  // `deQuien` permite al super admin mirar las de otra persona; si se omite,
+  // son las propias. Quien no tenga permiso recibe una lista vacía de la
+  // base, no un error: no hay nada que ocultar porque no llega nada.
+  function sbCargarFotos(deQuien){
+    if(!sesion || !sesion.user) return Promise.resolve({});
+    var quien = deQuien || sesion.user.id;
+    return sbFetch('/rest/v1/progress_photos' +
+        '?select=week_key,pose,storage_path,bytes,width,height' +
+        '&user_id=eq.' + quien + '&order=week_key.desc')
+      .then(function(fs){
+        fs = fs || [];
+        return sbFirmar(fs.map(function(f){ return f.storage_path; })).then(function(urls){
+          var out = {};
+          fs.forEach(function(f){
+            if(!urls[f.storage_path]) return;
+            (out[f.week_key] = out[f.week_key] || {})[f.pose] = {
+              src: urls[f.storage_path], bytes: Number(f.bytes) || 0,
+              w: f.width || 0, h: f.height || 0, tipo: 'image/webp'
+            };
+          });
+          return out;
+        });
+      });
   }
 
   // --- Pantalla de fotos ---
@@ -4260,13 +4350,28 @@
     if(!file || !poseEnCurso) return;
     var pesoOriginal = file.size;
     toast('toastFotos', 'Comprimiendo…');
+    var pose = poseEnCurso;
     comprimir(file, function(res){
       if(!res){ toast('toastFotos', 'No se pudo leer la imagen'); return; }
       var c = claveSemana(semanaFoto);
+      var antes = (FOTOS[c] || {})[pose];
+
+      // Se pinta ya, con el base64, para no tener a nadie esperando a que
+      // suba. La subida va detrás.
       if(!FOTOS[c]) FOTOS[c] = {};
-      FOTOS[c][poseEnCurso] = res;
+      FOTOS[c][pose] = res;
       pintarFotos(); llenarSelectores();
-      toast('toastFotos', kb(pesoOriginal) + ' → ' + kb(res.bytes) + ' · ' + res.w + '×' + res.h);
+      toast('toastFotos', kb(pesoOriginal) + ' → ' + kb(res.bytes) + ' · guardando…');
+
+      sbSubirFoto(c, pose, res).then(function(){
+        toast('toastFotos', kb(pesoOriginal) + ' → ' + kb(res.bytes) + ' · ' + res.w + '×' + res.h);
+      })['catch'](function(e){
+        // Si no subió, se quita: una foto que solo existe en este teléfono
+        // y desaparece al recargar es peor que no haberla puesto.
+        if(antes) FOTOS[c][pose] = antes; else delete FOTOS[c][pose];
+        pintarFotos(); llenarSelectores();
+        toast('toastFotos', 'No se pudo subir: ' + traducirError(e.message));
+      });
     });
   });
 
@@ -5087,6 +5192,18 @@
         if(typeof pintarEjercicio    === 'function') pintarEjercicio();
         // Repintar Fotos: ya se sabe desde cuándo contar las semanas
         if(typeof pintarFotos        === 'function') pintarFotos();
+
+        // Y traer las fotos del bucket. Va aparte del Promise.all de arriba
+        // porque son dos saltos (fichas y luego enlaces firmados) y no debe
+        // retrasar al Diario, que es lo que se ve primero.
+        if(typeof sbCargarFotos === 'function'){
+          sbCargarFotos().then(function(mapa){
+            Object.keys(FOTOS).forEach(function(k){ delete FOTOS[k]; });
+            Object.keys(mapa).forEach(function(k){ FOTOS[k] = mapa[k]; });
+            pintarFotos();
+            if(typeof llenarSelectores === 'function') llenarSelectores();
+          })['catch'](function(){});
+        }
       })
       ['catch'](function(e){
         toast('toastComida', 'No se pudieron cargar tus datos: ' + traducirError(e.message));
