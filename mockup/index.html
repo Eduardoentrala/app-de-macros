@@ -1158,7 +1158,7 @@
                 <div class="macro-row"><div class="macro-top"><span class="name">Carbos</span><span class="val" data-macro="C" >—</span></div><div class="bar-track"><div class="bar-fill"></div></div></div>
                 <div class="macro-row"><div class="macro-top"><span class="name">Grasas</span><span class="val" data-macro="G" >—</span></div><div class="bar-track"><div class="bar-fill"></div></div></div>
               </div>
-              <div class="dots" style="margin-top:14px;"><span class="on"></span><span></span></div>
+              <div class="dots" style="margin-top:14px;"><span></span><span class="on"></span></div>
             </div>
             <div class="week-summary" id="weekSummary">P 170 · C 240 · G 75 · 2,315 cal/día · se reinicia cada lunes</div>
           </div>
@@ -1893,7 +1893,6 @@
             </div>
             <div class="day-actions" style="margin:12px 0 0;">
               <button class="btn-rename" id="perfCardioMetaBtn">Cambiar meta</button>
-              <button class="btn-rename" id="perfCardioAddBtn">+ Registrar cardio</button>
             </div>
           </div>
           <div class="card">
@@ -2088,14 +2087,51 @@
   var tabSemana = document.querySelector('.tab-semana');
   var paneHoy = document.getElementById('pane-hoy');
   var paneSemana = document.getElementById('pane-semana');
-  tabHoy.addEventListener('click', function(){
+  function mostrarHoy(){
     tabHoy.classList.add('active'); tabSemana.classList.remove('active');
     paneHoy.style.display=''; paneSemana.style.display='none';
-  });
-  tabSemana.addEventListener('click', function(){
+  }
+  function mostrarSemana(){
     tabSemana.classList.add('active'); tabHoy.classList.remove('active');
     paneSemana.style.display=''; paneHoy.style.display='none';
-  });
+  }
+  tabHoy.addEventListener('click', mostrarHoy);
+  tabSemana.addEventListener('click', mostrarSemana);
+
+  // Deslizar sobre el anillo cambia de Hoy a Semana y de vuelta. Los dos
+  // puntitos bajo el anillo ya insinuaban que había dos páginas; ahora se
+  // pueden pasar con el dedo, además de con las pestañas de arriba.
+  function deslizar(anillo, haciaIzquierda, haciaDerecha){
+    if(!anillo) return;
+    var x0 = 0, y0 = 0, activo = false;
+
+    anillo.addEventListener('touchstart', function(e){
+      if(e.touches.length !== 1) return;      // dos dedos = zoom, no es lo nuestro
+      x0 = e.touches[0].clientX;
+      y0 = e.touches[0].clientY;
+      activo = true;
+    }, {passive:true});
+
+    anillo.addEventListener('touchend', function(e){
+      if(!activo) return;
+      activo = false;
+      var t = e.changedTouches[0];
+      var dx = t.clientX - x0, dy = t.clientY - y0;
+
+      // Dos filtros, y los dos hacen falta:
+      //  - recorrido mínimo, para que un toque no cuente como deslizamiento
+      //  - claramente más horizontal que vertical, o desplazar la pantalla
+      //    hacia abajo cambiaría de pestaña sin querer
+      if(Math.abs(dx) < 45) return;
+      if(Math.abs(dx) < Math.abs(dy) * 1.5) return;
+
+      if(dx < 0) haciaIzquierda(); else haciaDerecha();
+    }, {passive:true});
+  }
+
+  var nada = function(){};
+  deslizar(document.getElementById('cardHoy'),    mostrarSemana, nada);
+  deslizar(document.getElementById('cardSemana'), nada,          mostrarHoy);
 
   // ---- Días de rutina: seleccionar, renombrar, agregar, quitar ----
   // Los días son plantillas con nombre libre (Push, Pierna, Lunes...), no fechas.
@@ -3399,13 +3435,8 @@
   });
   metaCardioSheet.addEventListener('click', function(e){ if(e.target===this) this.classList.remove('open'); });
 
-  // Registrar cardio de hoy desde Perfil (usa el mismo panel que Progreso)
-  document.getElementById('perfCardioAddBtn').addEventListener('click', function(){
-    fechaCardio = isoDe(HOY);
-    document.getElementById('csDia').textContent = fmtFecha(HOY);
-    csMin.value = CARDIO[fechaCardio] || 30;
-    cardioSheet.classList.add('open');
-  });
+  // El cardio se registra desde Progreso, que es donde está el calendario
+  // de la semana. En Perfil solo se ve el avance y se cambia la meta.
 
   pintarEjercicio();
   pintarCardioPerfil();
