@@ -707,6 +707,24 @@
   }
   .ia-duda.media{background:var(--amber-soft);color:var(--amber);}
   .ia-duda.baja{background:var(--red-soft);color:var(--red);}
+  .ia-foto-btn{
+    width:100%;display:flex;align-items:center;justify-content:center;gap:9px;
+    padding:15px;border-radius:14px;border:1.5px dashed var(--line);
+    background:var(--app-bg);color:var(--ink-faint);cursor:pointer;
+    font:700 13.5px/1 sans-serif;margin-bottom:10px;
+  }
+  .ia-foto-btn span{font-size:19px;}
+  .ia-foto-btn:active{opacity:.6;}
+  /* La foto elegida, con su botón para quitarla encima */
+  .ia-foto-previa{position:relative;margin-bottom:10px;}
+  .ia-foto-previa img{
+    width:100%;max-height:190px;object-fit:cover;border-radius:14px;display:block;
+  }
+  .ia-foto-previa button{
+    position:absolute;top:8px;right:8px;width:30px;height:30px;border-radius:50%;
+    border:none;background:rgba(0,0,0,.62);color:#fff;cursor:pointer;
+    font:700 15px/1 sans-serif;
+  }
   .ia-quita{
     flex:0 0 auto;background:none;border:none;cursor:pointer;padding:2px 4px;
     font:700 15px/1 sans-serif;color:var(--ink-faint);
@@ -1572,9 +1590,16 @@
       <div class="sheet-backdrop" id="iaSheet">
         <div class="sheet">
           <h4>✨ Apuntar comida</h4>
-          <p class="hint">Escribe lo que comiste como lo dirías en voz alta.</p>
+          <p class="hint">Toma una foto del plato, escríbelo, o las dos cosas.</p>
 
-          <textarea class="notas-input" id="iaTexto" rows="3" maxlength="500"
+          <input type="file" id="iaArchivo" accept="image/*" capture="environment" hidden>
+          <div id="iaFotoZona">
+            <button class="ia-foto-btn" id="iaTomarFoto">
+              <span>📷</span>Tomar foto del plato
+            </button>
+          </div>
+
+          <textarea class="notas-input" id="iaTexto" rows="2" maxlength="500"
             placeholder="Dos huevos revueltos, una tortilla y café con leche"></textarea>
 
           <div class="ia-momento" id="iaMomento">
@@ -6449,7 +6474,64 @@
     });
   }
 
+  // ---- La foto ----
+  var iaFoto = null;        // { base64, tipo } de la imagen ya reducida
+
+  // Una foto de teléfono son 3-6 MB y 12 megapíxeles. Mandarla tal cual
+  // costaría muchos más tokens -o sea, dinero- sin acertar mejor: para
+  // reconocer un plato sobran 1024 píxeles. Se reduce aquí, antes de que
+  // salga del teléfono, así que tampoco viaja de más por la red.
+  function reducirFoto(archivo){
+    return new Promise(function(ok, mal){
+      var lector = new FileReader();
+      lector.onerror = function(){ mal(new Error('No se pudo leer la foto')); };
+      lector.onload = function(){
+        var img = new Image();
+        img.onerror = function(){ mal(new Error('Ese archivo no es una imagen')); };
+        img.onload = function(){
+          var MAX = 1024;
+          var f = Math.min(1, MAX / Math.max(img.width, img.height));
+          var lienzo = document.createElement('canvas');
+          lienzo.width  = Math.round(img.width  * f);
+          lienzo.height = Math.round(img.height * f);
+          lienzo.getContext('2d').drawImage(img, 0, 0, lienzo.width, lienzo.height);
+          var url = lienzo.toDataURL('image/jpeg', 0.82);
+          ok({ base64: url.split(',')[1], tipo: 'image/jpeg', vista: url });
+        };
+        img.src = lector.result;
+      };
+      lector.readAsDataURL(archivo);
+    });
+  }
+
+  function pintarFotoIA(){
+    var z = document.getElementById('iaFotoZona');
+    if(!iaFoto){
+      z.innerHTML = '<button class="ia-foto-btn" id="iaTomarFoto">' +
+                    '<span>📷</span>Tomar foto del plato</button>';
+      return;
+    }
+    z.innerHTML = '<div class="ia-foto-previa"><img src="' + iaFoto.vista + '" alt="">' +
+                  '<button id="iaQuitarFoto" title="Quitar">✕</button></div>';
+  }
+
+  document.getElementById('iaFotoZona').addEventListener('click', function(e){
+    if(e.target.closest('#iaTomarFoto')) document.getElementById('iaArchivo').click();
+    if(e.target.closest('#iaQuitarFoto')){ iaFoto = null; pintarFotoIA(); }
+  });
+
+  document.getElementById('iaArchivo').addEventListener('change', function(e){
+    var archivo = e.target.files && e.target.files[0];
+    e.target.value = '';                  // permite volver a elegir la misma foto
+    if(!archivo) return;
+    reducirFoto(archivo)
+      .then(function(f){ iaFoto = f; pintarFotoIA(); })
+      ['catch'](function(err){ toast('toastIA', err.message); });
+  });
+
   function abrirAsistente(){
+    iaFoto = null;
+    pintarFotoIA();
     document.getElementById('iaTexto').value = '';
     document.getElementById('iaResultado').innerHTML = '';
     document.getElementById('iaAviso').hidden = true;
@@ -6518,14 +6600,19 @@
 
   document.getElementById('iaBuscar').addEventListener('click', function(){
     var texto = document.getElementById('iaTexto').value.trim();
-    if(!texto){ toast('toastIA', 'Escribe qué comiste'); return; }
+    if(!texto && !iaFoto){ toast('toastIA', 'Toma una foto o escribe qué comiste'); return; }
     if(!sesion){ toast('toastIA', 'Inicia sesión para usar el asistente'); return; }
 
     var btn = document.getElementById('iaBuscar');
     btn.disabled = true;
-    btn.textContent = 'Calculando…';
+    btn.textContent = iaFoto ? 'Mirando la foto…' : 'Calculando…';
 
-    iaLlamar({ accion:'apuntar', texto: texto })
+    iaLlamar({
+      accion: 'apuntar',
+      texto: texto,
+      imagen: iaFoto ? iaFoto.base64 : undefined,
+      tipo_imagen: iaFoto ? iaFoto.tipo : undefined
+    })
       .then(function(r){
         iaPropuesta = (r.alimentos || []).map(function(x){
           return prepararAlimento({

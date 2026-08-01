@@ -103,7 +103,8 @@ const ESQUEMA_PLAN = {
 //  Instrucciones
 // ---------------------------------------------------------------------
 const SISTEMA_APUNTAR = `
-Conviertes lo que alguien dice que comió en alimentos con sus macros.
+Conviertes en alimentos con sus macros lo que alguien comió, ya te lo
+cuente por escrito, con una foto del plato, o las dos cosas a la vez.
 
 Escribe en español de México. Da por hecho comida mexicana salvo que se
 diga otra cosa: "tortilla" es de maíz, "pan" es bolillo, "queso" es fresco.
@@ -118,8 +119,22 @@ Reglas:
   son dos alimentos, no uno.
 - "seguridad" es tu confianza en los macros. Un huevo es alta; un guisado
   casero del que no sabes la receta es baja.
-- Si de plano no describen comida, devuelve la lista vacía y explica en la
-  nota qué falta.
+- Si de plano no hay comida, devuelve la lista vacía y explica en la nota
+  qué falta.
+
+CON FOTO:
+- Estima el tamaño de la porción por lo que se ve alrededor: el plato, los
+  cubiertos, una mano, la lata de al lado. Di en la nota con qué lo
+  comparaste.
+- Lo que no puedas ver no lo inventes. El aceite del guisado, el azúcar
+  del café o el relleno de algo tapado no se aprecian en una foto: si
+  crees que están, dilo en la nota y marca ese alimento con seguridad
+  "baja".
+- Una foto casi nunca da seguridad "alta". Resérvala para lo que se
+  cuenta de una mirada: dos huevos enteros, una lata cerrada con su
+  etiqueta, tres tortillas.
+- Si además escribieron algo, eso manda sobre lo que creas ver: quien se
+  lo comió sabe mejor que tú lo que había en el plato.
 
 Sé honesto en la nota sobre lo que tuviste que suponer. Quien la lea está
 contando macros y necesita saber de qué se fía.
@@ -197,17 +212,46 @@ Deno.serve(async (req) => {
 
     if (accion === 'apuntar') {
       const texto = String(cuerpo.texto || '').trim().slice(0, 500);
-      if (!texto) return json({ error: 'Escribe qué comiste.' }, 400);
+      const imagen = typeof cuerpo.imagen === 'string' ? cuerpo.imagen : '';
+      const tipoImagen = String(cuerpo.tipo_imagen || 'image/jpeg');
+
+      if (!texto && !imagen) {
+        return json({ error: 'Escribe qué comiste o toma una foto.' }, 400);
+      }
+      // La app ya reduce la foto antes de mandarla. Este tope es por si
+      // alguien llama a la función por su cuenta: una imagen enorme se
+      // traduce en muchos tokens, y los tokens son dinero.
+      if (imagen && imagen.length > 8_000_000) {
+        return json({ error: 'La foto es demasiado grande.' }, 413);
+      }
+      if (imagen && !['image/jpeg', 'image/png', 'image/webp'].includes(tipoImagen)) {
+        return json({ error: 'Ese formato de imagen no sirve.' }, 400);
+      }
+
+      const partes: unknown[] = [];
+      if (imagen) {
+        partes.push({
+          type: 'image',
+          source: { type: 'base64', media_type: tipoImagen, data: imagen },
+        });
+      }
+      partes.push({
+        type: 'text',
+        text: texto || 'Esto es lo que me comí. Dime qué lleva y sus macros.',
+      });
 
       const r = await ia.messages.create({
         model: MODELO,
         max_tokens: 4000,
         system: SISTEMA_APUNTAR,
+        // Con foto hay que mirar, calcular porciones y dudar de lo que no
+        // se ve: ahí sí conviene que piense. El texto solo es extracción.
+        ...(imagen ? { thinking: { type: 'adaptive' as const } } : {}),
         output_config: {
-          effort: 'low',                       // es extracción, no razonamiento
+          effort: imagen ? 'medium' : 'low',
           format: { type: 'json_schema', schema: ESQUEMA_ALIMENTOS },
         },
-        messages: [{ role: 'user', content: texto }],
+        messages: [{ role: 'user', content: partes }],
       });
 
       return json({ ...leerJson(r), quedan });
