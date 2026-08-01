@@ -2223,6 +2223,9 @@
   function saveCurrentDay(){
     var t = activeTab();
     if(t) dayContent[t.dataset.day] = exList.innerHTML;
+    // Se vuelca YA, sin esperar al retardo: en cuanto se cambie de día la
+    // pantalla tendrá otro contenido y ya no se podría leer el anterior.
+    if(typeof volcarRutina === 'function') volcarRutina();
   }
   function loadDay(tab){
     exList.innerHTML = dayContent[tab.dataset.day] || '';
@@ -2301,6 +2304,11 @@
     nameSheet.classList.remove('open');
     syncEmptyState();
     toast('toastRutina', 'Día: ' + val);
+    // Crear o renombrar un día no pasa por la lista de ejercicios, así que
+    // hay que pedir el guardado a mano.
+    if(t && typeof guardarDia === 'function'){
+      guardarDia(t)['catch'](function(){});
+    }
   });
   dayNameInput.addEventListener('keydown', function(e){
     if(e.key === 'Enter') document.getElementById('nameSave').click();
@@ -2315,6 +2323,7 @@
     var active = activeTab();
     if(!active) return;
     var i = tabs.indexOf(active);
+    var idBorrado = active.dataset.id;
     delete dayContent[active.dataset.day];
     active.remove();
     var rest = Array.from(dayTabs.querySelectorAll('.day-tab:not(.add)'));
@@ -2322,6 +2331,13 @@
     next.classList.add('active');
     loadDay(next);
     toast('toastRutina', 'Día borrado');
+
+    // En la base esto no borra: la 0007 lo archiva, con sus ejercicios y
+    // series. Se puede recuperar si hiciera falta.
+    if(idBorrado && sesion){
+      sbFetch('/rest/v1/routine_days?id=eq.' + idBorrado, { method:'DELETE' })
+        ['catch'](function(e){ toast('toastRutina', 'No se pudo borrar: ' + traducirError(e.message)); });
+    }
   });
 
   // ---- Volumen y carga progresiva (se calcula solo) ----
@@ -2555,6 +2571,266 @@
     if(e.target === this) this.classList.remove('open');
   });
 
+  // ================= RUTINA GUARDADA EN LA BASE =================
+  // La rutina vive en el DOM: los días son pestañas y el contenido de cada
+  // uno se guarda como HTML en dayContent. Para llevarla a la base hay que
+  // leer ese DOM y convertirlo en filas de tres tablas encadenadas:
+  // routine_days → routine_exercises → exercise_sets.
+  //
+  // Cada elemento lleva su `data-id` con el uuid de su fila. Eso permite
+  // ACTUALIZAR lo que ya existe en vez de borrar todo y volver a insertar:
+  // como la 0007 archiva en lugar de borrar, un reemplazo completo en cada
+  // guardado dejaría cientos de filas archivadas por rutina.
+
+  function leerEjerciciosDelDOM(){
+    return Array.from(exList.querySelectorAll('.exercise-card')).map(function(card, i){
+      var series = [];
+      Array.from(card.querySelectorAll('.sets-table tr')).forEach(function(tr){
+        var ins = tr.querySelectorAll('.set-input');
+        if(ins.length < 2) return;                     // la fila de encabezados
+        series.push({
+          id: tr.dataset.id || null,
+          orden: series.length + 1,
+          reps: Math.max(0, Number(ins[0].value) || 0),
+          peso: Math.max(0, Number(ins[1].value) || 0),
+          hecho: !!tr.querySelector('.set-check.done')
+        });
+      });
+      return {
+        id: card.dataset.id || null,
+        // childNodes[0] y no textContent: el nombre convive con la insignia
+        // de notas dentro del mismo elemento.
+        nombre: card.querySelector('.ex-name').childNodes[0].textContent.trim(),
+        orden: i,
+        series: series
+      };
+    });
+  }
+
+  function htmlSerie(s, n){
+    return '<tr' + (s.id ? ' data-id="' + s.id + '"' : '') + '>' +
+      '<td>' + n + '</td>' +
+      '<td class="num"><input class="set-input" value="' + s.reps + '"></td>' +
+      '<td class="num"><input class="set-input" value="' + s.peso + '"></td>' +
+      '<td><div class="set-row-actions"><div class="set-check' + (s.hecho ? ' done' : '') + '">✓</div>' +
+      '<button class="clock-btn">⏰</button><button class="rm-set">×</button></div></td></tr>';
+  }
+
+  function htmlEjercicio(ej){
+    var filas = ej.series.length
+      ? ej.series.map(function(s, i){ return htmlSerie(s, i + 1); }).join('')
+      : htmlSerie({reps:10, peso:0, hecho:false}, 1);
+    return '<div class="exercise-card" data-id="' + ej.id + '">' +
+      '<div class="ex-head"><div class="ex-top">' +
+      '<div><div class="ex-name">' + ej.nombre +
+        ' <span class="nota-badge" hidden title="Tiene notas">📝</span></div><div class="ex-delta"></div></div>' +
+      '<div class="ex-vol">vol<br><b class="vol-num">0</b><span class="prev"></span></div></div>' +
+      '<div class="ex-pills">' +
+      '<button class="chip" data-act="grafica">📈 gráfica</button>' +
+      '<button class="chip" data-act="notas">notas</button>' +
+      '<span class="icon-mini">' +
+      '<button data-act="subir" title="Subir ejercicio">▲</button>' +
+      '<button data-act="bajar" title="Bajar ejercicio">▼</button>' +
+      '<button class="danger" data-act="quitar" title="Quitar ejercicio">×</button></span></div></div>' +
+      '<table class="sets-table"><tr><th>set</th><th class="num">reps</th><th class="num">peso</th><th></th></tr>' +
+      filas + '</table>' +
+      '<div class="add-set-row"><button class="add-set">+ set</button></div></div>';
+  }
+
+  // ---- Guardar un día completo ----
+  // Se lee lo que hay en la base para ese día y se compara con el DOM: lo
+  // nuevo se inserta, lo que cambió se actualiza y lo que desapareció se
+  // borra (que en estas tablas significa archivar).
+  function guardarDia(tab){
+    if(!sesion || !sesion.user || !tab) return Promise.resolve();
+
+    var nombre = tab.textContent.trim();
+    var orden = Array.from(dayTabs.querySelectorAll('.day-tab:not(.add)')).indexOf(tab);
+    var ejercicios = leerEjerciciosDelDOM();
+
+    var pDia = tab.dataset.id
+      ? sbFetch('/rest/v1/routine_days?id=eq.' + tab.dataset.id, {
+          method:'PATCH', headers:{ 'Prefer':'return=minimal' },
+          body: JSON.stringify({ name: nombre, sort_order: orden })
+        }).then(function(){ return tab.dataset.id; })
+      : sbFetch('/rest/v1/routine_days', {
+          method:'POST', headers:{ 'Prefer':'return=representation' },
+          body: JSON.stringify({ user_id: sesion.user.id, name: nombre, sort_order: orden })
+        }).then(function(r){ tab.dataset.id = r[0].id; return r[0].id; });
+
+    return pDia.then(function(diaId){
+      // Lo que la base cree que hay ahora mismo en este día
+      return sbFetch('/rest/v1/routine_exercises?select=id&routine_day_id=eq.' + diaId)
+        .then(function(previos){
+          var vivos = {};
+          ejercicios.forEach(function(ej){ if(ej.id) vivos[ej.id] = true; });
+
+          // Los que ya no están en pantalla: fuera (se archivan)
+          var borrados = (previos || [])
+            .filter(function(p){ return !vivos[p.id]; })
+            .map(function(p){
+              return sbFetch('/rest/v1/routine_exercises?id=eq.' + p.id, { method:'DELETE' });
+            });
+
+          // Y los que están, en orden
+          var guardados = ejercicios.map(function(ej){
+            return guardarEjercicio(diaId, ej);
+          });
+
+          return Promise.all(borrados.concat(guardados));
+        });
+    });
+  }
+
+  function guardarEjercicio(diaId, ej){
+    var cuerpo = {
+      user_id: sesion.user.id, routine_day_id: diaId,
+      name: ej.nombre, sort_order: ej.orden
+    };
+    var p = ej.id
+      ? sbFetch('/rest/v1/routine_exercises?id=eq.' + ej.id, {
+          method:'PATCH', headers:{ 'Prefer':'return=minimal' }, body: JSON.stringify(cuerpo)
+        }).then(function(){ return ej.id; })
+      : sbFetch('/rest/v1/routine_exercises', {
+          method:'POST', headers:{ 'Prefer':'return=representation' }, body: JSON.stringify(cuerpo)
+        }).then(function(r){
+          var id = r[0].id;
+          // Se apunta en la tarjeta para que el próximo guardado actualice
+          var card = exList.querySelectorAll('.exercise-card')[ej.orden];
+          if(card) card.dataset.id = id;
+          return id;
+        });
+
+    return p.then(function(ejId){
+      return sbFetch('/rest/v1/exercise_sets?select=id&routine_exercise_id=eq.' + ejId)
+        .then(function(previas){
+          var vivas = {};
+          ej.series.forEach(function(s){ if(s.id) vivas[s.id] = true; });
+
+          var borradas = (previas || [])
+            .filter(function(p){ return !vivas[p.id]; })
+            .map(function(p){
+              return sbFetch('/rest/v1/exercise_sets?id=eq.' + p.id, { method:'DELETE' });
+            });
+
+          var guardadas = ej.series.map(function(s){
+            var c = {
+              user_id: sesion.user.id, routine_exercise_id: ejId,
+              sort_order: s.orden, reps: s.reps, weight_kg: s.peso, done: s.hecho
+            };
+            return s.id
+              ? sbFetch('/rest/v1/exercise_sets?id=eq.' + s.id, {
+                  method:'PATCH', headers:{ 'Prefer':'return=minimal' }, body: JSON.stringify(c) })
+              : sbFetch('/rest/v1/exercise_sets', {
+                  method:'POST', headers:{ 'Prefer':'return=representation' }, body: JSON.stringify(c)
+                }).then(function(r){
+                  // Igual que arriba: la fila se queda con su id
+                  var card = exList.querySelectorAll('.exercise-card')[ej.orden];
+                  var trs = card ? card.querySelectorAll('.sets-table tr') : [];
+                  var tr = trs[s.orden];        // +1 por el encabezado, y orden empieza en 1
+                  if(tr && !tr.dataset.id) tr.dataset.id = r[0].id;
+                });
+          });
+
+          return Promise.all(borradas.concat(guardadas));
+        });
+    });
+  }
+
+  // ---- Cuándo se guarda ----
+  // Con retardo: escribir un peso dispara un evento por tecla, y no tiene
+  // sentido mandar una petición por cada dígito.
+  var relojGuardado = null, tabPendiente = null;
+  function programarGuardado(){
+    var t = activeTab();
+    if(!t || !sesion) return;
+    tabPendiente = t;
+    clearTimeout(relojGuardado);
+    relojGuardado = setTimeout(volcarRutina, 900);
+  }
+  function volcarRutina(){
+    clearTimeout(relojGuardado); relojGuardado = null;
+    var t = tabPendiente; tabPendiente = null;
+    if(!t) return;
+    guardarDia(t)['catch'](function(e){
+      toast('toastRutina', 'No se pudo guardar: ' + traducirError(e.message));
+    });
+  }
+
+  // Estos van DESPUÉS de los manejadores que ya existían, así que leen el
+  // DOM ya modificado. El de dayTabs no sirve para el cambio de día -para
+  // entonces la pantalla ya cambió-; eso lo cubre saveCurrentDay().
+  exList.addEventListener('input', programarGuardado);
+  exList.addEventListener('click', programarGuardado);
+
+  // ---- Cargar la rutina al entrar ----
+  // Las sesiones guardadas alimentan la racha de fuerza y las gráficas de
+  // progresión. Son historial: se leen, no se editan.
+  function sbCargarSesiones(){
+    if(!sesion || !sesion.user) return Promise.resolve();
+    return sbFetch('/rest/v1/workout_sessions?select=session_date,exercises,total_volume' +
+                   '&order=session_date.asc')
+      .then(function(ss){
+        Object.keys(SESIONES).forEach(function(k){ delete SESIONES[k]; });
+        Object.keys(HISTORIAL).forEach(function(k){ delete HISTORIAL[k]; });
+
+        (ss || []).forEach(function(s){
+          SESIONES[s.session_date] = true;
+          (s.exercises || []).forEach(function(e){
+            if(!e || !e.nombre || !(Number(e.volumen) > 0)) return;
+            (HISTORIAL[e.nombre] = HISTORIAL[e.nombre] || []).push(Number(e.volumen));
+          });
+        });
+        pintarEjercicio();
+      });
+  }
+
+  function sbCargarRutina(){
+    if(!sesion || !sesion.user) return Promise.resolve();
+    return Promise.all([
+      sbFetch('/rest/v1/routine_days?select=id,name,sort_order&order=sort_order.asc,created_at.asc'),
+      sbFetch('/rest/v1/routine_exercises?select=id,routine_day_id,name,sort_order&order=sort_order.asc,created_at.asc'),
+      sbFetch('/rest/v1/exercise_sets?select=id,routine_exercise_id,sort_order,reps,weight_kg,done&order=sort_order.asc')
+    ]).then(function(r){
+      var dias = r[0] || [], ejs = r[1] || [], sets = r[2] || [];
+      if(!dias.length) return;    // sin rutina guardada: se queda el "Día 1" de arranque
+
+      // Agrupar de abajo hacia arriba
+      var porEjercicio = {};
+      sets.forEach(function(s){
+        (porEjercicio[s.routine_exercise_id] = porEjercicio[s.routine_exercise_id] || []).push({
+          id: s.id, orden: s.sort_order,
+          reps: Number(s.reps) || 0, peso: Number(s.weight_kg) || 0, hecho: !!s.done
+        });
+      });
+      var porDia = {};
+      ejs.forEach(function(e){
+        (porDia[e.routine_day_id] = porDia[e.routine_day_id] || []).push({
+          id: e.id, nombre: e.name, orden: e.sort_order,
+          series: porEjercicio[e.id] || []
+        });
+      });
+
+      // Reconstruir las pestañas
+      Array.from(dayTabs.querySelectorAll('.day-tab:not(.add)')).forEach(function(t){ t.remove(); });
+      Object.keys(dayContent).forEach(function(k){ delete dayContent[k]; });
+
+      dias.forEach(function(d, i){
+        var t = document.createElement('button');
+        t.className = 'day-tab' + (i === 0 ? ' active' : '');
+        t.dataset.day = 'd' + (++daySeq);
+        t.dataset.id = d.id;
+        t.textContent = d.name;
+        dayTabs.insertBefore(t, addDayBtn);
+        dayContent[t.dataset.day] = (porDia[d.id] || []).map(htmlEjercicio).join('');
+      });
+
+      var primera = dayTabs.querySelector('.day-tab:not(.add)');
+      if(primera) loadDay(primera);
+      refrescarFlechas();
+    });
+  }
+
   // ---- Gráfica de progreso por ejercicio ----
   // Historial de volumen por sesión; "Guardar sesión" agrega el punto de hoy.
   // Volumen de sesiones anteriores por ejercicio. Se llena al guardar
@@ -2759,8 +3035,9 @@
     el.classList.add('show');
     setTimeout(function(){ el.classList.remove('show'); }, 1600);
   }
-  document.getElementById('saveSessionBtn').addEventListener('click', function(){ toast('toastRutina', 'Sesión guardada'); });
-  document.getElementById('saveWeightBtn').addEventListener('click', function(){ toast('toastPeso', 'Peso guardado'); });
+  // Aquí había dos manejadores de relleno, uno para "Guardar sesión" y otro
+  // para "Guardar peso", que solo mostraban un aviso. Los de verdad están
+  // más abajo, y con estos delante el aviso salía dos veces.
 
   // ---- Ejercicios recomendados (library) ----
   var groups = [
@@ -3438,22 +3715,58 @@
   // Guardar sesión = queda registrado el día de hoy como día de fuerza
   document.getElementById('saveSessionBtn').addEventListener('click', function(){
     SESIONES[iso(HOY)] = true;
-    // Cada ejercicio guarda su volumen del día: es lo que alimenta su gráfica
+
+    // La rutina es la PLANTILLA, que se sigue editando. Esto es el
+    // HISTORIAL: una foto de lo que se hizo hoy, que ya no cambia aunque
+    // mañana se reordene la rutina. De aquí salen las gráficas.
+    var detalle = [], total = 0;
     Array.from(exList.querySelectorAll('.exercise-card')).forEach(function(c){
       var nombre = c.querySelector('.ex-name').childNodes[0].textContent.trim();
-      var vol = 0;
+      var vol = 0, series = [];
       Array.from(c.querySelectorAll('.sets-table tr')).forEach(function(tr){
         var ins = tr.querySelectorAll('.set-input');
-        if(ins.length >= 2) vol += (Number(ins[0].value)||0) * (Number(ins[1].value)||0);
+        if(ins.length < 2) return;
+        var reps = Number(ins[0].value) || 0, peso = Number(ins[1].value) || 0;
+        vol += reps * peso;
+        series.push({ reps: reps, peso: peso, hecho: !!tr.querySelector('.set-check.done') });
       });
       if(vol > 0){
         if(!HISTORIAL[nombre]) HISTORIAL[nombre] = [];
         HISTORIAL[nombre].push(vol);
         c.setAttribute('data-prev-vol', vol);   // la próxima sesión compara contra esta
+        detalle.push({ nombre: nombre, volumen: vol, series: series });
+        total += vol;
       }
     });
     saveCurrentDay();
     pintarEjercicio();
+
+    if(!sesion || !sesion.user){ toast('toastRutina', 'Sesión guardada'); return; }
+    if(!detalle.length){ toast('toastRutina', 'No hay series con peso que guardar'); return; }
+
+    var tab = activeTab();
+    sbFetch('/rest/v1/workout_sessions', {
+      method:'POST', headers:{ 'Prefer':'return=minimal' },
+      body: JSON.stringify({
+        user_id: sesion.user.id,
+        session_date: iso(HOY),
+        routine_day_id: (tab && tab.dataset.id) || null,
+        day_name: tab ? tab.textContent.trim() : null,
+        exercises: detalle,
+        total_volume: total
+      })
+    }).then(function(){
+      toast('toastRutina', 'Sesión guardada · ' + mil(total) + ' kg de volumen');
+    })['catch'](function(e){
+      // Se deshace lo local: si no se guardó, la racha y las gráficas no
+      // deben contarla.
+      delete SESIONES[iso(HOY)];
+      detalle.forEach(function(d){
+        if(HISTORIAL[d.nombre]) HISTORIAL[d.nombre].pop();
+      });
+      pintarEjercicio();
+      toast('toastRutina', 'No se pudo guardar: ' + traducirError(e.message));
+    });
   });
 
   // Cardio por día
@@ -5217,6 +5530,11 @@
         if(typeof pintarEjercicio    === 'function') pintarEjercicio();
         // Repintar Fotos: ya se sabe desde cuándo contar las semanas
         if(typeof pintarFotos        === 'function') pintarFotos();
+
+        // Rutina y sesiones. Aparte del Promise.all de arriba porque son
+        // tres tablas encadenadas y no deben retrasar al Diario.
+        if(typeof sbCargarRutina === 'function') sbCargarRutina()['catch'](function(){});
+        if(typeof sbCargarSesiones === 'function') sbCargarSesiones()['catch'](function(){});
 
         // Y traer las fotos del bucket. Va aparte del Promise.all de arriba
         // porque son dos saltos (fichas y luego enlaces firmados) y no debe
