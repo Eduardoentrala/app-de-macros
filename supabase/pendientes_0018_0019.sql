@@ -1,0 +1,735 @@
+-- Catalogo de alimentos: estructura (0018) + los 164 datos (0019).
+-- Se puede ejecutar entero de una vez, y repetirlo no rompe nada.
+
+-- =====================================================================
+--  CATÁLOGO DE ALIMENTOS (base USDA SR Legacy, en español de México)
+--
+--  Un catálogo curado: alimentos base, sin marcas, con nombres de aquí.
+--  Los datos nutricionales vienen de USDA SR Legacy, que son 7.793
+--  alimentos GENÉRICOS -ni una sola marca- y ya trae crudo y cocido como
+--  registros distintos. De ahí se selecciona lo que de verdad se come.
+--
+--  DOS COSAS QUE NO SE HACEN, A PROPÓSITO:
+--
+--  1. Crudo y cocido NO se convierten. Son filas independientes con sus
+--     propios valores. 100 g de arroz crudo y 100 g de arroz cocido no
+--     tienen nada que ver -uno absorbió agua- y calcular uno desde el
+--     otro es la fuente de error más común en las apps de conteo.
+--
+--  2. No se guarda "por porción" como dato aparte. Todo va por 100 g,
+--     que es como lo publica USDA, y la porción casera se guarda como
+--     cuántos gramos pesa. Así solo hay una fuente de verdad y la app
+--     multiplica; guardar las dos cosas invita a que se contradigan.
+--
+--  QUIÉN LO VE:
+--     El catálogo entero, solo el super admin. Todos los demás no pueden
+--     ni listarlo: lo usan a través de buscar_catalogo(), que devuelve
+--     resultados pero no deja descargarse la tabla. Es trabajo de
+--     curación y no tiene por qué ser público.
+--
+--  Depende de 0017.
+-- =====================================================================
+
+-- pg_trgm acelera las búsquedas por "contiene" (ver el índice más abajo).
+-- Va en un bloque que traga el error a propósito: Supabase la tiene, pero
+-- el Postgres en WASM con el que corren las pruebas no. Sin ella todo
+-- funciona igual — con mil alimentos, recorrer la tabla entera tarda
+-- décimas de milisegundo — así que no vale la pena bloquear por esto.
+do $$ begin
+  create extension if not exists pg_trgm;
+exception when others then
+  raise notice 'pg_trgm no disponible; se seguirá sin índice de similitud';
+end $$;
+
+do $$ begin
+  create type public.estado_alimento as enum ('crudo', 'cocido', 'unico');
+exception when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create type public.categoria_alimento as enum (
+    'carnes', 'aves', 'pescados', 'mariscos', 'huevos', 'lacteos',
+    'verduras', 'frutas', 'legumbres', 'cereales', 'pastas', 'arroces',
+    'tuberculos', 'semillas', 'frutos_secos', 'aceites', 'grasas',
+    'condimentos', 'bebidas', 'harinas', 'panes', 'azucares', 'otros');
+exception when duplicate_object then null;
+end $$;
+
+
+create table if not exists public.alimentos_catalogo (
+  id            bigint generated always as identity primary key,
+
+  nombre        text not null,
+  categoria     public.categoria_alimento not null,
+  -- 'unico' para lo que no cambia al cocinarse (un aceite, una manzana).
+  -- Obliga a decidirlo en vez de dejarlo en blanco y que la app adivine.
+  estado        public.estado_alimento not null default 'unico',
+
+  -- Siempre por 100 g. Ver la nota de arriba sobre por qué solo esto.
+  kcal          numeric(6,1) not null check (kcal >= 0),
+  proteina      numeric(5,1) not null check (proteina >= 0),
+  carbos        numeric(5,1) not null check (carbos  >= 0),
+  grasas        numeric(5,1) not null check (grasas  >= 0),
+
+  -- La medida de casa: "1 pieza mediana", "1 taza". Lo que pesa va aparte.
+  porcion       text,
+  porcion_g     integer check (porcion_g is null or porcion_g > 0),
+
+  -- De dónde salió el dato, para poder auditarlo contra la fuente.
+  fdc_id        integer,
+  nombre_usda   text,
+
+  activo        boolean not null default true,
+  creado_en     timestamptz not null default now(),
+
+  -- El mismo alimento en el mismo estado no se repite.
+  unique (nombre, estado)
+);
+
+comment on table public.alimentos_catalogo is
+  'Catálogo curado de alimentos base. Valores por 100 g, de USDA SR Legacy. '
+  'Crudo y cocido son filas independientes: nunca se convierte de uno a otro.';
+
+
+-- ---------------------------------------------------------------------
+--  Búsqueda
+--
+--  normalizar_texto() viene de la 0012: quita acentos y baja a
+--  minúsculas, para que "platano" encuentre "plátano". La columna es
+--  generada y va indexada, así que normalizar no cuesta en cada consulta.
+--
+--  El índice es trigram (pg_trgm) y no de prefijo: quien escribe "pechuga"
+--  espera encontrar "Pechuga de pollo", pero quien escribe "pollo"
+--  también. Un índice de prefijo solo sirve para lo primero.
+-- ---------------------------------------------------------------------
+alter table public.alimentos_catalogo
+  add column if not exists nombre_norm text
+  generated always as (public.normalizar_texto(nombre)) stored;
+
+-- El índice trigram solo si la extensión está. Donde no esté, la búsqueda
+-- funciona igual recorriendo la tabla.
+do $$ begin
+  if exists (select 1 from pg_extension where extname = 'pg_trgm') then
+    create index if not exists idx_catalogo_norm
+      on public.alimentos_catalogo using gin (nombre_norm gin_trgm_ops);
+  end if;
+end $$;
+
+create index if not exists idx_catalogo_cat
+  on public.alimentos_catalogo(categoria) where activo;
+
+
+-- ---------------------------------------------------------------------
+--  Sinónimos
+--
+--  Tabla aparte y no una columna con lista dentro: así cada sinónimo se
+--  indexa y buscar por él cuesta lo mismo que buscar por el nombre.
+--  "papa"→"patata", "elote"→"maíz", "jitomate"→"tomate".
+-- ---------------------------------------------------------------------
+create table if not exists public.alimentos_sinonimos (
+  id          bigint generated always as identity primary key,
+  alimento_id bigint not null references public.alimentos_catalogo(id) on delete cascade,
+  termino     text not null,
+  termino_norm text generated always as (public.normalizar_texto(termino)) stored,
+  unique (alimento_id, termino)
+);
+
+do $$ begin
+  if exists (select 1 from pg_extension where extname = 'pg_trgm') then
+    create index if not exists idx_sinonimos_norm
+      on public.alimentos_sinonimos using gin (termino_norm gin_trgm_ops);
+  end if;
+end $$;
+
+
+-- ---------------------------------------------------------------------
+--  buscar_catalogo(texto)
+--
+--  La única puerta de entrada para todo el que no sea super admin.
+--  Devuelve filas, pero no permite listar la tabla entera: con texto
+--  vacío no devuelve nada, y el límite está acotado.
+--
+--  Ordena por: coincidencia exacta primero, luego los que empiezan por
+--  el texto, luego el resto por parecido. Sin eso, buscar "pollo"
+--  devolvía antes "Ensalada de pollo" que "Pollo".
+-- ---------------------------------------------------------------------
+create or replace function public.buscar_catalogo(
+  p_texto  text,
+  p_limite integer default 25
+)
+returns table (
+  id bigint, nombre text, categoria public.categoria_alimento,
+  estado public.estado_alimento, kcal numeric, proteina numeric,
+  carbos numeric, grasas numeric, porcion text, porcion_g integer
+)
+language sql stable security definer set search_path = public, pg_temp
+as $$
+  with q as (select public.normalizar_texto(coalesce(p_texto, '')) t)
+  select distinct on (a.id)
+         a.id, a.nombre, a.categoria, a.estado,
+         a.kcal, a.proteina, a.carbos, a.grasas, a.porcion, a.porcion_g
+    from public.alimentos_catalogo a
+    left join public.alimentos_sinonimos s on s.alimento_id = a.id
+   cross join q
+   where a.activo
+     and length(q.t) >= 2
+     and (a.nombre_norm like '%' || q.t || '%' or s.termino_norm like '%' || q.t || '%')
+   order by a.id,
+            (a.nombre_norm = q.t) desc,
+            (a.nombre_norm like q.t || '%') desc,
+            length(a.nombre)
+   limit least(greatest(p_limite, 1), 50);
+$$;
+
+revoke execute on function public.buscar_catalogo(text, integer) from public, anon;
+grant  execute on function public.buscar_catalogo(text, integer) to authenticated;
+
+
+-- ---------------------------------------------------------------------
+--  Quién ve la tabla
+--
+--  Solo el super admin. Los demás no tienen política de SELECT, así que
+--  para ellos la tabla no existe: solo llegan a los datos por la función
+--  de arriba, que devuelve resultados sueltos y nunca el catálogo entero.
+-- ---------------------------------------------------------------------
+alter table public.alimentos_catalogo  enable row level security;
+alter table public.alimentos_sinonimos enable row level security;
+
+drop policy if exists "catalogo: solo super admin" on public.alimentos_catalogo;
+create policy "catalogo: solo super admin" on public.alimentos_catalogo
+  for all using ( public.es_super_admin() ) with check ( public.es_super_admin() );
+
+drop policy if exists "sinonimos: solo super admin" on public.alimentos_sinonimos;
+create policy "sinonimos: solo super admin" on public.alimentos_sinonimos
+  for all using ( public.es_super_admin() ) with check ( public.es_super_admin() );
+
+grant select, insert, update, delete on public.alimentos_catalogo  to authenticated;
+grant select, insert, update, delete on public.alimentos_sinonimos to authenticated;
+grant usage, select on sequence public.alimentos_catalogo_id_seq  to authenticated;
+grant usage, select on sequence public.alimentos_sinonimos_id_seq to authenticated;
+
+
+-- ---------------------------------------------------------------------
+--  Comprobaciones
+-- ---------------------------------------------------------------------
+-- Un usuario normal NO puede listar el catálogo (debe dar 0 filas):
+--   select count(*) from public.alimentos_catalogo;
+--
+-- Pero sí buscar:
+--   select nombre, kcal from public.buscar_catalogo('pollo');
+--
+-- Y con texto vacío no se descarga nada (debe dar 0):
+--   select count(*) from public.buscar_catalogo('');
+
+
+-- =====================================================================
+--  DATOS DEL CATÁLOGO DE ALIMENTOS
+--
+--  Generado por supabase/alimentos/resolver.mjs el 2026-08-01.
+--  NO editar a mano: se regenera desde curado.mjs + USDA SR Legacy.
+--
+--  164 alimentos. Los macros son de USDA, por 100 g, sin tocar.
+--  Cada fila lleva su fdc_id y la descripción original para poder
+--  auditarla contra la fuente.
+--
+--  Depende de 0018.
+-- =====================================================================
+
+insert into public.alimentos_catalogo
+  (nombre, categoria, estado, kcal, proteina, carbos, grasas,
+   porcion, porcion_g, fdc_id, nombre_usda)
+values
+  ('Pechuga de pollo', 'aves', 'crudo', 120, 22.5, 0, 2.6, 'oz', 113, 171077, 'Chicken, broiler or fryers, breast, skinless, boneless, meat only, raw'),
+  ('Pechuga de pollo', 'aves', 'cocido', 165, 31, 0, 3.6, 'cup, chopped or diced', 140, 171477, 'Chicken, broilers or fryers, breast, meat only, cooked, roasted'),
+  ('Pierna de pollo', 'aves', 'cocido', 174, 24.2, 0, 7.8, 'oz', 85, 172380, 'Chicken, broilers or fryers, leg, meat only, cooked, roasted'),
+  ('Muslo de pollo', 'aves', 'cocido', 179, 24.8, 0, 8.2, 'oz', 85, 172388, 'Chicken, broilers or fryers, thigh, meat only, cooked, roasted'),
+  ('Pollo entero con piel', 'aves', 'cocido', 239, 27.3, 0, 13.6, 'oz', 85, 171450, 'Chicken, broilers or fryers, meat and skin, cooked, roasted'),
+  ('Pechuga de pavo', 'aves', 'cocido', 127, 27, 0, 2.1, 'oz', 85, 174519, 'Turkey, breast, from whole bird, meat only, with added solution, roasted'),
+  ('Pavo molido', 'aves', 'cocido', 203, 27.4, 0, 10.4, 'oz', 85, 171506, 'Turkey, Ground, cooked'),
+  ('Carne molida de res 90%', 'carnes', 'crudo', 176, 20, 0, 10, 'oz', 113, 174030, 'Beef, ground, 90% lean meat / 10% fat, raw'),
+  ('Carne molida de res 90%', 'carnes', 'cocido', 204, 25.2, 0, 10.7, 'oz', 85, 171793, 'Beef, ground, 90% lean meat / 10% fat, patty, cooked, pan-broiled'),
+  ('Carne molida de res 80%', 'carnes', 'cocido', 246, 24, 0, 15.9, 'oz', 85, 171798, 'Beef, ground, 80% lean meat / 20% fat, patty, cooked, pan-broiled'),
+  ('Bistec de res', 'carnes', 'cocido', 187, 29.5, 0, 6.7, 'oz', 85, 173118, 'Beef, top sirloin, steak, separable lean only, trimmed to 1/8" fat, choice, cooked, broiled'),
+  ('Arrachera', 'carnes', 'cocido', 194, 27.8, 0, 8.3, 'oz', 85, 168611, 'Beef, flank, steak, separable lean only, trimmed to 0" fat, choice, cooked, broiled'),
+  ('Filete de res', 'carnes', 'cocido', 206, 29, 0, 9.1, 'oz', 85, 173117, 'Beef, tenderloin, steak, separable lean only, trimmed to 1/8" fat, choice, cooked, broiled'),
+  ('Lomo de cerdo', 'carnes', 'crudo', 109, 21, 0, 2.2, 'oz', 113, 168249, 'Pork, fresh, loin, tenderloin, separable lean only, raw'),
+  ('Lomo de cerdo', 'carnes', 'cocido', 143, 26.2, 0, 3.5, 'oz', 85, 168250, 'Pork, fresh, loin, tenderloin, separable lean only, cooked, roasted'),
+  ('Chuleta de cerdo', 'carnes', 'cocido', 180, 26.8, 0, 7.3, 'chop without refuse (Yield from 1 cooked chop, with refuse, weighing 209g)', 146, 168240, 'Pork, fresh, loin, center loin (chops), bone-in, separable lean only, cooked, broiled'),
+  ('Tocino', 'carnes', 'cocido', 548, 35.7, 1.4, 43.3, 'oz', 85, 167914, 'Pork, cured, bacon, cooked, baked'),
+  ('Jamón de pierna', 'carnes', 'unico', 107, 16.9, 0.7, 4, 'slice', 13, 173863, 'Ham, sliced, pre-packaged, deli meat (96%fat free, water added)'),
+  ('Carne seca', 'carnes', 'unico', 153, 31.1, 2.8, 1.9, 'slices', 28, 170604, 'Beef, cured, dried'),
+  ('Salmón', 'pescados', 'crudo', 208, 20.4, 0, 13.4, 'oz', 85, 175167, 'Fish, salmon, Atlantic, farmed, raw'),
+  ('Salmón', 'pescados', 'cocido', 206, 22.1, 0, 12.4, 'oz', 85, 175168, 'Fish, salmon, Atlantic, farmed, cooked, dry heat'),
+  ('Atún en agua', 'pescados', 'unico', 116, 25.5, 0, 0.8, 'oz', 85, 171986, 'Fish, tuna, light, canned in water, without salt, drained solids'),
+  ('Atún en aceite', 'pescados', 'unico', 198, 29.1, 0, 8.2, 'oz', 85, 174227, 'Fish, tuna, light, canned in oil, without salt, drained solids'),
+  ('Tilapia', 'pescados', 'cocido', 128, 26.2, 0, 2.7, 'fillet', 87, 175177, 'Fish, tilapia, cooked, dry heat'),
+  ('Mojarra', 'pescados', 'crudo', 96, 20.1, 0, 1.7, 'fillet', 116, 175176, 'Fish, tilapia, raw'),
+  ('Bacalao', 'pescados', 'cocido', 105, 22.8, 0, 0.9, 'oz', 85, 171956, 'Fish, cod, Atlantic, cooked, dry heat'),
+  ('Huachinango', 'pescados', 'cocido', 128, 26.3, 0, 1.7, 'oz', 85, 173699, 'Fish, snapper, mixed species, cooked, dry heat'),
+  ('Sardina en aceite', 'pescados', 'unico', 208, 24.6, 0, 11.5, 'cup, drained', 149, 175139, 'Fish, sardine, Atlantic, canned in oil, drained solids with bone'),
+  ('Camarón', 'mariscos', 'crudo', 85, 20.1, 0, 0.5, 'oz', 85, 175179, 'Crustaceans, shrimp, raw'),
+  ('Camarón', 'mariscos', 'cocido', 119, 22.8, 1.5, 1.7, 'oz', 85, 171971, 'Crustaceans, shrimp, mixed species, cooked, moist heat (may contain additives to retain moisture)'),
+  ('Pulpo', 'mariscos', 'cocido', 164, 29.8, 4.4, 2.1, 'oz', 85, 174249, 'Mollusks, octopus, common, cooked, moist heat'),
+  ('Callo de hacha', 'mariscos', 'cocido', 216, 18.1, 10.1, 10.9, 'large', 31, 174221, 'Mollusks, scallop, mixed species, cooked, breaded and fried'),
+  ('Huevo entero', 'huevos', 'crudo', 143, 12.6, 0.7, 9.5, 'large', 50, 171287, 'Egg, whole, raw, fresh'),
+  ('Huevo cocido', 'huevos', 'cocido', 155, 12.6, 1.1, 10.6, 'cup, chopped', 136, 173424, 'Egg, whole, cooked, hard-boiled'),
+  ('Huevo estrellado', 'huevos', 'cocido', 196, 13.6, 0.8, 14.8, 'large', 46, 173423, 'Egg, whole, cooked, fried'),
+  ('Huevo revuelto', 'huevos', 'cocido', 149, 10, 1.6, 11, 'large', 61, 172187, 'Egg, whole, cooked, scrambled'),
+  ('Clara de huevo', 'huevos', 'crudo', 52, 10.9, 0.7, 0.2, 'large', 33, 172183, 'Egg, white, raw, fresh'),
+  ('Yema de huevo', 'huevos', 'crudo', 322, 15.9, 3.6, 26.5, 'large', 17, 172184, 'Egg, yolk, raw, fresh'),
+  ('Leche entera', 'lacteos', 'unico', 61, 3.2, 4.8, 3.3, 'cup', 244, 171265, 'Milk, whole, 3.25% milkfat, with added vitamin D'),
+  ('Leche light', 'lacteos', 'unico', 42, 3.4, 5, 1, 'cup', 244, 170872, 'Milk, lowfat, fluid, 1% milkfat, with added vitamin A and vitamin D'),
+  ('Leche descremada', 'lacteos', 'unico', 34, 3.4, 5, 0.1, 'cup', 245, 171269, 'Milk, nonfat, fluid, with added vitamin A and vitamin D (fat free or skim)'),
+  ('Yogur griego natural', 'lacteos', 'unico', 59, 10.2, 3.6, 0.4, 'container', 170, 170894, 'Yogurt, Greek, plain, nonfat (Includes foods for USDA''s Food Distribution Program)'),
+  ('Yogur natural', 'lacteos', 'unico', 63, 5.3, 7, 1.6, 'container (6 oz)', 170, 170886, 'Yogurt, plain, low fat'),
+  ('Queso panela', 'lacteos', 'unico', 299, 18.1, 3, 23.8, 'cup, crumbled', 122, 172223, 'Cheese, fresh, queso fresco'),
+  ('Queso Oaxaca', 'lacteos', 'unico', 254, 24.3, 2.8, 15.9, 'oz', 28, 170847, 'Cheese, mozzarella, part skim milk'),
+  ('Queso Chihuahua', 'lacteos', 'unico', 374, 21.6, 5.6, 29.7, 'cup, diced', 132, 173438, 'Cheese, mexican, queso chihuahua'),
+  ('Queso cotija', 'lacteos', 'unico', 366, 20, 4, 30, 'tsp', 5, 170898, 'Cheese, mexican, queso cotija'),
+  ('Queso cottage', 'lacteos', 'unico', 72, 12.4, 2.7, 1, 'oz', 113, 173417, 'Cheese, cottage, lowfat, 1% milkfat'),
+  ('Queso crema', 'lacteos', 'unico', 350, 6.2, 5.5, 34.4, 'tbsp', 15, 173418, 'Cheese, cream'),
+  ('Crema', 'lacteos', 'unico', 292, 2.2, 3, 30.9, 'cup, whipped', 120, 170858, 'Cream, fluid, light whipping'),
+  ('Mantequilla', 'grasas', 'unico', 717, 0.9, 0.1, 81.1, 'pat (1" sq, 1/3" high)', 5, 173410, 'Butter, salted'),
+  ('Brócoli', 'verduras', 'crudo', 34, 2.8, 6.6, 0.4, 'cup chopped', 91, 170379, 'Broccoli, raw'),
+  ('Brócoli', 'verduras', 'cocido', 35, 2.4, 7.2, 0.4, 'cup, chopped', 78, 169967, 'Broccoli, cooked, boiled, drained, without salt'),
+  ('Espinaca', 'verduras', 'crudo', 23, 2.9, 3.6, 0.4, 'cup', 30, 168462, 'Spinach, raw'),
+  ('Espinaca', 'verduras', 'cocido', 23, 3, 3.8, 0.3, 'cup', 180, 168463, 'Spinach, cooked, boiled, drained, without salt'),
+  ('Jitomate', 'verduras', 'crudo', 18, 0.9, 3.9, 0.2, 'cup cherry tomatoes', 149, 170457, 'Tomatoes, red, ripe, raw, year round average'),
+  ('Tomate verde', 'verduras', 'crudo', 32, 1, 5.8, 1, 'medium', 34, 168566, 'Tomatillos, raw'),
+  ('Cebolla', 'verduras', 'crudo', 40, 1.1, 9.3, 0.1, 'cup, chopped', 160, 170000, 'Onions, raw'),
+  ('Chile poblano', 'verduras', 'crudo', 345, 12.4, 51.1, 15.9, 'pepper', 7, 168579, 'Peppers, pasilla, dried'),
+  ('Chile jalapeño', 'verduras', 'crudo', 29, 0.9, 6.5, 0.4, 'cup, sliced', 90, 168576, 'Peppers, jalapeno, raw'),
+  ('Pimiento morrón', 'verduras', 'crudo', 26, 1, 6, 0.3, 'cup, chopped', 149, 170108, 'Peppers, sweet, red, raw'),
+  ('Calabacita', 'verduras', 'crudo', 17, 1.2, 3.1, 0.3, 'cup, chopped', 124, 169291, 'Squash, summer, zucchini, includes skin, raw'),
+  ('Zanahoria', 'verduras', 'crudo', 41, 0.9, 9.6, 0.2, 'cup chopped', 128, 170393, 'Carrots, raw'),
+  ('Lechuga romana', 'verduras', 'crudo', 17, 1.2, 3.3, 0.3, 'cup shredded', 47, 169247, 'Lettuce, cos or romaine, raw'),
+  ('Pepino', 'verduras', 'crudo', 15, 0.7, 3.6, 0.1, 'cup slices', 52, 168409, 'Cucumber, with peel, raw'),
+  ('Nopal', 'verduras', 'crudo', 16, 1.3, 3.3, 0.1, 'cup, sliced', 86, 168571, 'Nopales, raw'),
+  ('Nopal', 'verduras', 'cocido', 15, 1.4, 3.3, 0.1, 'cup', 149, 169388, 'Nopales, cooked, without salt'),
+  ('Chayote', 'verduras', 'crudo', 19, 0.8, 4.5, 0.1, 'cup (1" pieces)', 132, 170402, 'Chayote, fruit, raw'),
+  ('Champiñón', 'verduras', 'crudo', 22, 3.1, 3.3, 0.3, 'cup, pieces or slices', 70, 169251, 'Mushrooms, white, raw'),
+  ('Ejote', 'verduras', 'cocido', 35, 1.9, 7.9, 0.3, 'cup', 125, 169141, 'Beans, snap, green, cooked, boiled, drained, without salt'),
+  ('Elote', 'verduras', 'cocido', 96, 3.4, 21, 1.5, 'ear small (5-1/2" to 6-1/2" long)', 89, 169999, 'Corn, sweet, yellow, cooked, boiled, drained, without salt'),
+  ('Coliflor', 'verduras', 'crudo', 25, 1.9, 5, 0.3, 'cup chopped (1/2" pieces)', 107, 169986, 'Cauliflower, raw'),
+  ('Apio', 'verduras', 'crudo', 14, 0.7, 3, 0.2, 'cup chopped', 101, 169988, 'Celery, raw'),
+  ('Betabel', 'verduras', 'cocido', 44, 1.7, 10, 0.2, 'cup slices', 85, 169146, 'Beets, cooked, boiled, drained'),
+  ('Col', 'verduras', 'crudo', 25, 1.3, 5.8, 0.1, 'cup, chopped', 89, 169975, 'Cabbage, raw'),
+  ('Plátano', 'frutas', 'unico', 89, 1.1, 22.8, 0.3, 'cup, mashed', 225, 173944, 'Bananas, raw'),
+  ('Manzana', 'frutas', 'unico', 57, 0.3, 13.7, 0.1, 'cup, sliced', 109, 168204, 'Apples, raw, gala, with skin (Includes foods for USDA''s Food Distribution Program)'),
+  ('Naranja', 'frutas', 'unico', 47, 0.9, 11.8, 0.1, 'cup, sections', 180, 169097, 'Oranges, raw, all commercial varieties'),
+  ('Fresa', 'frutas', 'unico', 32, 0.7, 7.7, 0.3, 'cup, halves', 152, 167762, 'Strawberries, raw'),
+  ('Papaya', 'frutas', 'unico', 43, 0.5, 10.8, 0.3, 'cup 1" pieces', 145, 169926, 'Papayas, raw'),
+  ('Piña', 'frutas', 'unico', 50, 0.5, 13.1, 0.1, 'cup, chunks', 165, 169124, 'Pineapple, raw, all varieties'),
+  ('Mango', 'frutas', 'unico', 60, 0.8, 15, 0.4, 'cup pieces', 165, 169910, 'Mangos, raw'),
+  ('Sandía', 'frutas', 'unico', 30, 0.6, 7.6, 0.2, 'cup, balls', 154, 167765, 'Watermelon, raw'),
+  ('Melón', 'frutas', 'unico', 34, 0.8, 8.2, 0.2, 'cup, balls', 177, 169092, 'Melons, cantaloupe, raw'),
+  ('Uva', 'frutas', 'unico', 69, 0.7, 18.1, 0.2, 'cup', 151, 174683, 'Grapes, red or green (European type, such as Thompson seedless), raw'),
+  ('Aguacate', 'frutas', 'unico', 160, 2, 8.5, 14.7, 'cup, cubes', 150, 171705, 'Avocados, raw, all commercial varieties'),
+  ('Limón', 'frutas', 'unico', 29, 1.1, 9.3, 0.3, 'cup, sections', 212, 167746, 'Lemons, raw, without peel'),
+  ('Guayaba', 'frutas', 'unico', 68, 2.6, 14.3, 1, 'cup', 165, 173044, 'Guavas, common, raw'),
+  ('Toronja', 'frutas', 'unico', 32, 0.6, 8.1, 0.1, 'cup sections, with juice', 230, 173033, 'Grapefruit, raw, pink and red and white, all areas'),
+  ('Durazno en jugo', 'frutas', 'unico', 44, 0.6, 11.6, 0, 'cup', 250, 169930, 'Peaches, canned, juice pack, solids and liquids'),
+  ('Pera', 'frutas', 'unico', 57, 0.4, 15.2, 0.1, 'cup, slices', 140, 169118, 'Pears, raw'),
+  ('Arándano', 'frutas', 'unico', 57, 0.7, 14.5, 0.3, 'cup', 148, 171711, 'Blueberries, raw'),
+  ('Ciruela', 'frutas', 'unico', 46, 0.7, 11.4, 0.3, 'cup, sliced', 165, 169949, 'Plums, raw'),
+  ('Kiwi', 'frutas', 'unico', 61, 1.1, 14.7, 0.5, 'cup, sliced', 180, 168153, 'Kiwifruit, green, raw'),
+  ('Mandarina', 'frutas', 'unico', 53, 0.8, 13.3, 0.3, 'cup, sections', 195, 169105, 'Tangerines, (mandarin oranges), raw'),
+  ('Frijol negro', 'legumbres', 'crudo', 341, 21.6, 62.4, 1.4, 'cup', 194, 173734, 'Beans, black, mature seeds, raw'),
+  ('Frijol negro', 'legumbres', 'cocido', 132, 8.9, 23.7, 0.5, 'cup', 172, 173735, 'Beans, black, mature seeds, cooked, boiled, without salt'),
+  ('Frijol pinto', 'legumbres', 'cocido', 143, 9, 26.2, 0.7, 'cup', 171, 175200, 'Beans, pinto, mature seeds, cooked, boiled, without salt'),
+  ('Lenteja', 'legumbres', 'crudo', 352, 24.6, 63.4, 1.1, 'cup', 192, 172420, 'Lentils, raw'),
+  ('Lenteja', 'legumbres', 'cocido', 116, 9, 20.1, 0.4, 'cup', 198, 172421, 'Lentils, mature seeds, cooked, boiled, without salt'),
+  ('Garbanzo', 'legumbres', 'cocido', 164, 8.9, 27.4, 2.6, 'cup', 164, 173757, 'Chickpeas (garbanzo beans, bengal gram), mature seeds, cooked, boiled, without salt'),
+  ('Haba', 'legumbres', 'cocido', 110, 7.6, 19.7, 0.4, 'cup', 170, 173753, 'Broadbeans (fava beans), mature seeds, cooked, boiled, without salt'),
+  ('Soya', 'legumbres', 'cocido', 172, 18.2, 8.4, 9, 'cup', 172, 174299, 'Soybeans, mature seeds, cooked, boiled, with salt'),
+  ('Avena', 'cereales', 'crudo', 379, 13.2, 67.7, 6.5, 'cup', 81, 173904, 'Cereals, oats, regular and quick, not fortified, dry'),
+  ('Avena cocida', 'cereales', 'cocido', 71, 2.5, 12, 1.5, 'cup', 234, 173905, 'Cereals, oats, regular and quick, unenriched, cooked with water (includes boiling and microwaving), without salt'),
+  ('Quinoa', 'cereales', 'crudo', 368, 14.1, 64.2, 6.1, 'cup', 170, 168874, 'Quinoa, uncooked'),
+  ('Quinoa', 'cereales', 'cocido', 120, 4.4, 21.3, 1.9, 'cup', 185, 168917, 'Quinoa, cooked'),
+  ('Amaranto', 'cereales', 'crudo', 371, 13.6, 65.3, 7, 'cup', 193, 170682, 'Amaranth grain, uncooked'),
+  ('Arroz blanco', 'arroces', 'crudo', 365, 7.1, 80, 0.7, 'cup', 185, 169756, 'Rice, white, long-grain, regular, raw, unenriched'),
+  ('Arroz blanco', 'arroces', 'cocido', 130, 2.7, 28.2, 0.3, 'cup', 158, 168935, 'Rice, white, long-grain, regular, cooked, unenriched, with salt'),
+  ('Arroz integral', 'arroces', 'crudo', 367, 7.5, 76.3, 3.2, 'cup', 185, 169703, 'Rice, brown, long-grain, raw (Includes foods for USDA''s Food Distribution Program)'),
+  ('Arroz integral', 'arroces', 'cocido', 123, 2.7, 25.6, 1, 'cup', 202, 169704, 'Rice, brown, long-grain, cooked (Includes foods for USDA''s Food Distribution Program)'),
+  ('Pasta', 'pastas', 'crudo', 371, 13, 74.7, 1.5, 'cup spaghetti', 91, 168927, 'Pasta, dry, unenriched'),
+  ('Pasta', 'pastas', 'cocido', 158, 5.8, 30.9, 0.9, 'cup spaghetti not packed', 124, 168928, 'Pasta, cooked, unenriched, without added salt'),
+  ('Pasta integral', 'pastas', 'cocido', 149, 6, 30.1, 1.7, 'cup spaghetti not packed', 117, 168910, 'Pasta, whole-wheat, cooked (Includes foods for USDA''s Food Distribution Program)'),
+  ('Papa', 'tuberculos', 'crudo', 77, 2.1, 17.5, 0.1, 'cup, diced', 75, 170026, 'Potatoes, flesh and skin, raw'),
+  ('Papa cocida', 'tuberculos', 'cocido', 86, 1.7, 20, 0.1, 'cup', 78, 170440, 'Potatoes, boiled, cooked without skin, flesh, without salt'),
+  ('Camote', 'tuberculos', 'crudo', 86, 1.6, 20.1, 0.1, 'cup, cubes', 133, 168482, 'Sweet potato, raw, unprepared (Includes foods for USDA''s Food Distribution Program)'),
+  ('Camote cocido', 'tuberculos', 'cocido', 76, 1.4, 17.7, 0.1, 'cup, mashed', 328, 168484, 'Sweet potato, cooked, boiled, without skin'),
+  ('Yuca', 'tuberculos', 'crudo', 160, 1.4, 38.1, 0.3, 'cup', 206, 169985, 'Cassava, raw'),
+  ('Almendra', 'frutos_secos', 'unico', 579, 21.2, 21.6, 49.9, 'cup, whole', 143, 170567, 'Nuts, almonds'),
+  ('Nuez', 'frutos_secos', 'unico', 654, 15.2, 13.7, 65.2, 'cup, chopped', 117, 170187, 'Nuts, walnuts, english'),
+  ('Cacahuate', 'frutos_secos', 'unico', 567, 25.8, 16.1, 49.2, 'oz', 28, 172430, 'Peanuts, all types, raw'),
+  ('Pistache', 'frutos_secos', 'unico', 560, 20.2, 27.2, 45.3, 'cup', 123, 170184, 'Nuts, pistachio nuts, raw'),
+  ('Nuez de la India', 'frutos_secos', 'unico', 553, 18.2, 30.2, 43.9, 'oz', 28, 170162, 'Nuts, cashew nuts, raw'),
+  ('Crema de cacahuate', 'frutos_secos', 'unico', 598, 22.2, 22.3, 51.4, 'tbsp', 32, 172470, 'Peanut butter, smooth style, without salt'),
+  ('Chía', 'semillas', 'unico', 486, 16.5, 42.1, 30.7, 'oz', 28, 170554, 'Seeds, chia seeds, dried'),
+  ('Linaza', 'semillas', 'unico', 534, 18.3, 28.9, 42.2, 'tbsp, whole', 10, 169414, 'Seeds, flaxseed'),
+  ('Pepita de calabaza', 'semillas', 'unico', 559, 30.2, 10.7, 49.1, 'cup', 129, 170556, 'Seeds, pumpkin and squash seed kernels, dried'),
+  ('Ajonjolí', 'semillas', 'unico', 573, 17.7, 23.5, 49.7, 'cup', 144, 170150, 'Seeds, sesame seeds, whole, dried'),
+  ('Semilla de girasol', 'semillas', 'unico', 584, 20.8, 20, 51.5, 'cup, with hulls, edible yield', 46, 170562, 'Seeds, sunflower seed kernels, dried'),
+  ('Aceite de oliva', 'aceites', 'unico', 884, 0, 0, 100, 'tablespoon', 14, 171413, 'Oil, olive, salad or cooking'),
+  ('Aceite de aguacate', 'aceites', 'unico', 884, 0, 0, 100, 'tbsp', 14, 173573, 'Oil, avocado'),
+  ('Aceite de coco', 'aceites', 'unico', 892, 0, 0, 99.1, 'tbsp', 14, 171412, 'Oil, coconut'),
+  ('Aceite vegetal', 'aceites', 'unico', 884, 0, 0, 100, 'tbsp', 14, 172336, 'Oil, canola'),
+  ('Manteca de cerdo', 'grasas', 'unico', 902, 0, 0, 100, 'tbsp', 13, 171401, 'Lard'),
+  ('Harina de trigo', 'harinas', 'crudo', 364, 10.3, 76.3, 1, 'cup', 125, 169761, 'Wheat flour, white, all-purpose, unenriched'),
+  ('Harina de maíz', 'harinas', 'crudo', 363, 8.5, 76.6, 3.7, 'cup', 114, 169696, 'Corn flour, masa, unenriched, white'),
+  ('Harina de avena', 'harinas', 'crudo', 379, 11.4, 77.8, 4.8, 'cup (1 NLEA serving)', 56, 174622, 'Cereals ready-to-eat, QUAKER, Oatmeal Squares'),
+  ('Tortilla de maíz', 'panes', 'unico', 222, 5.7, 46.6, 2.5, 'oz', 28, 173241, 'Tortillas, ready-to-bake or -fry, corn, without added salt'),
+  ('Tortilla de harina', 'panes', 'unico', 306, 8.2, 49.4, 8, 'tortilla', 48, 175037, 'Tortillas, ready-to-bake or -fry, flour, refrigerated'),
+  ('Pan blanco', 'panes', 'unico', 266, 8.9, 49.4, 3.3, 'slice', 29, 174924, 'Bread, white, commercially prepared (includes soft bread crumbs)'),
+  ('Pan integral', 'panes', 'unico', 252, 12.5, 42.7, 3.5, 'slice', 32, 172688, 'Bread, whole-wheat, commercially prepared'),
+  ('Bolillo', 'panes', 'unico', 293, 9.9, 52.7, 4.3, 'oz', 28, 175031, 'Rolls, hard (includes kaiser)'),
+  ('Azúcar', 'azucares', 'unico', 387, 0, 100, 0, 'serving packet', 3, 169655, 'Sugars, granulated'),
+  ('Miel', 'azucares', 'unico', 304, 0.3, 82.4, 0, 'cup', 339, 169640, 'Honey'),
+  ('Piloncillo', 'azucares', 'unico', 380, 0.1, 98.1, 0, 'tsp unpacked', 3, 168833, 'Sugars, brown'),
+  ('Chocolate amargo', 'azucares', 'unico', 642, 14.3, 28.4, 52.3, 'oz square Bakers', 29, 167568, 'Baking chocolate, unsweetened, squares'),
+  ('Sal', 'condimentos', 'unico', 0, 0, 0, 0, 'tsp', 6, 173468, 'Salt, table'),
+  ('Salsa de soya', 'condimentos', 'unico', 53, 8.1, 4.9, 0.6, 'tbsp', 16, 174277, 'Soy sauce made from soy and wheat (shoyu)'),
+  ('Vinagre', 'condimentos', 'unico', 18, 0, 0, 0, 'tbsp', 15, 172237, 'Vinegar, distilled'),
+  ('Mayonesa', 'condimentos', 'unico', 680, 1, 0.6, 74.9, 'tbsp', 14, 171009, 'Salad dressing, mayonnaise, regular'),
+  ('Mostaza', 'condimentos', 'unico', 60, 3.7, 5.8, 3.3, 'tsp or 1 packet', 5, 172234, 'Mustard, prepared, yellow'),
+  ('Catsup', 'condimentos', 'unico', 101, 1, 27.4, 0.1, 'tbsp', 17, 168556, 'Catsup'),
+  ('Ajo', 'condimentos', 'crudo', 149, 6.4, 33.1, 0.5, 'cup', 136, 169230, 'Garlic, raw'),
+  ('Café negro', 'bebidas', 'unico', 1, 0.1, 0, 0, 'fl oz', 30, 171890, 'Beverages, coffee, brewed, prepared with tap water'),
+  ('Té negro', 'bebidas', 'unico', 1, 0, 0.3, 0, 'fl oz', 30, 173227, 'Beverages, tea, black, brewed, prepared with tap water'),
+  ('Cerveza', 'bebidas', 'unico', 43, 0.5, 3.6, 0, 'fl oz', 30, 168746, 'Alcoholic beverage, beer, regular, all'),
+  ('Refresco de cola', 'bebidas', 'unico', 42, 0, 10.4, 0.3, 'fl oz', 31, 174852, 'Beverages, carbonated, cola, regular'),
+  ('Jugo de naranja', 'bebidas', 'unico', 47, 0.7, 11, 0.2, 'cup', 249, 169099, 'Orange juice, canned, unsweetened'),
+  ('Agua mineral', 'bebidas', 'unico', 0, 0, 0, 0, 'fl oz', 30, 171922, 'Beverages, water, bottled, non-carbonated, EVIAN'),
+  ('Proteína de suero', 'otros', 'unico', 359, 58.1, 29.1, 1.2, 'scoop', 86, 173177, 'Beverages, Whey protein powder isolate'),
+  ('Tofu', 'otros', 'unico', 144, 17.3, 2.8, 8.7, 'cup', 126, 172475, 'Tofu, raw, firm, prepared with calcium sulfate'),
+  ('Gelatina', 'otros', 'unico', 335, 85.6, 0, 0.1, 'envelope (1 tbsp)', 7, 169599, 'Gelatins, dry powder, unsweetened')
+on conflict (nombre, estado) do update set
+  kcal = excluded.kcal, proteina = excluded.proteina,
+  carbos = excluded.carbos, grasas = excluded.grasas,
+  porcion = excluded.porcion, porcion_g = excluded.porcion_g,
+  fdc_id = excluded.fdc_id, nombre_usda = excluded.nombre_usda;
+
+
+-- Sinónimos. Se resuelven por nombre+estado para no depender de los id,
+-- que los asigna la base al insertar.
+insert into public.alimentos_sinonimos (alimento_id, termino)
+select a.id, v.termino
+  from (values
+    ('Pechuga de pollo', 'crudo', 'pollo'),
+    ('Pechuga de pollo', 'crudo', 'pechuga'),
+    ('Pechuga de pollo', 'cocido', 'pollo'),
+    ('Pechuga de pollo', 'cocido', 'pechuga'),
+    ('Pierna de pollo', 'cocido', 'pollo'),
+    ('Muslo de pollo', 'cocido', 'pollo'),
+    ('Pollo entero con piel', 'cocido', 'pollo'),
+    ('Pechuga de pavo', 'cocido', 'pavo'),
+    ('Pavo molido', 'cocido', 'pavo'),
+    ('Carne molida de res 90%', 'crudo', 'res'),
+    ('Carne molida de res 90%', 'crudo', 'molida'),
+    ('Carne molida de res 90%', 'crudo', 'carne molida'),
+    ('Carne molida de res 90%', 'cocido', 'res'),
+    ('Carne molida de res 90%', 'cocido', 'molida'),
+    ('Carne molida de res 80%', 'cocido', 'res'),
+    ('Carne molida de res 80%', 'cocido', 'molida'),
+    ('Bistec de res', 'cocido', 'res'),
+    ('Bistec de res', 'cocido', 'bistec'),
+    ('Bistec de res', 'cocido', 'sirloin'),
+    ('Arrachera', 'cocido', 'res'),
+    ('Arrachera', 'cocido', 'flank'),
+    ('Arrachera', 'cocido', 'arrachera'),
+    ('Filete de res', 'cocido', 'res'),
+    ('Filete de res', 'cocido', 'filete'),
+    ('Lomo de cerdo', 'crudo', 'cerdo'),
+    ('Lomo de cerdo', 'crudo', 'puerco'),
+    ('Lomo de cerdo', 'crudo', 'lomo'),
+    ('Lomo de cerdo', 'cocido', 'cerdo'),
+    ('Lomo de cerdo', 'cocido', 'puerco'),
+    ('Lomo de cerdo', 'cocido', 'lomo'),
+    ('Chuleta de cerdo', 'cocido', 'cerdo'),
+    ('Chuleta de cerdo', 'cocido', 'puerco'),
+    ('Chuleta de cerdo', 'cocido', 'chuleta'),
+    ('Tocino', 'cocido', 'tocino'),
+    ('Tocino', 'cocido', 'bacon'),
+    ('Jamón de pierna', 'unico', 'jamon'),
+    ('Carne seca', 'unico', 'machaca'),
+    ('Carne seca', 'unico', 'cecina'),
+    ('Carne seca', 'unico', 'carne seca'),
+    ('Salmón', 'crudo', 'salmon'),
+    ('Salmón', 'cocido', 'salmon'),
+    ('Atún en agua', 'unico', 'atun'),
+    ('Atún en agua', 'unico', 'lata'),
+    ('Atún en aceite', 'unico', 'atun'),
+    ('Atún en aceite', 'unico', 'lata'),
+    ('Tilapia', 'cocido', 'tilapia'),
+    ('Tilapia', 'cocido', 'mojarra'),
+    ('Mojarra', 'crudo', 'tilapia'),
+    ('Mojarra', 'crudo', 'mojarra'),
+    ('Bacalao', 'cocido', 'bacalao'),
+    ('Huachinango', 'cocido', 'huachinango'),
+    ('Huachinango', 'cocido', 'pargo'),
+    ('Sardina en aceite', 'unico', 'sardina'),
+    ('Camarón', 'crudo', 'camaron'),
+    ('Camarón', 'cocido', 'camaron'),
+    ('Pulpo', 'cocido', 'pulpo'),
+    ('Callo de hacha', 'cocido', 'callo'),
+    ('Callo de hacha', 'cocido', 'scallop'),
+    ('Huevo entero', 'crudo', 'huevo'),
+    ('Huevo entero', 'crudo', 'blanquillo'),
+    ('Huevo cocido', 'cocido', 'huevo'),
+    ('Huevo cocido', 'cocido', 'duro'),
+    ('Huevo estrellado', 'cocido', 'huevo'),
+    ('Huevo estrellado', 'cocido', 'frito'),
+    ('Huevo revuelto', 'cocido', 'huevo'),
+    ('Huevo revuelto', 'cocido', 'revuelto'),
+    ('Clara de huevo', 'crudo', 'clara'),
+    ('Yema de huevo', 'crudo', 'yema'),
+    ('Leche entera', 'unico', 'leche'),
+    ('Leche light', 'unico', 'leche'),
+    ('Leche light', 'unico', 'descremada'),
+    ('Leche descremada', 'unico', 'leche'),
+    ('Yogur griego natural', 'unico', 'yogur'),
+    ('Yogur griego natural', 'unico', 'yoghurt'),
+    ('Yogur griego natural', 'unico', 'griego'),
+    ('Yogur natural', 'unico', 'yogur'),
+    ('Yogur natural', 'unico', 'yoghurt'),
+    ('Queso panela', 'unico', 'queso'),
+    ('Queso panela', 'unico', 'panela'),
+    ('Queso panela', 'unico', 'fresco'),
+    ('Queso Oaxaca', 'unico', 'queso'),
+    ('Queso Oaxaca', 'unico', 'oaxaca'),
+    ('Queso Oaxaca', 'unico', 'quesillo'),
+    ('Queso Chihuahua', 'unico', 'queso'),
+    ('Queso Chihuahua', 'unico', 'chihuahua'),
+    ('Queso Chihuahua', 'unico', 'menonita'),
+    ('Queso cotija', 'unico', 'queso'),
+    ('Queso cotija', 'unico', 'cotija'),
+    ('Queso cotija', 'unico', 'anejo'),
+    ('Queso cottage', 'unico', 'queso'),
+    ('Queso cottage', 'unico', 'cottage'),
+    ('Queso cottage', 'unico', 'requeson'),
+    ('Queso crema', 'unico', 'queso'),
+    ('Queso crema', 'unico', 'philadelphia'),
+    ('Crema', 'unico', 'crema'),
+    ('Mantequilla', 'unico', 'mantequilla'),
+    ('Brócoli', 'crudo', 'brocoli'),
+    ('Brócoli', 'cocido', 'brocoli'),
+    ('Espinaca', 'crudo', 'espinaca'),
+    ('Espinaca', 'cocido', 'espinaca'),
+    ('Jitomate', 'crudo', 'tomate'),
+    ('Jitomate', 'crudo', 'jitomate'),
+    ('Tomate verde', 'crudo', 'tomatillo'),
+    ('Tomate verde', 'crudo', 'tomate verde'),
+    ('Cebolla', 'crudo', 'cebolla'),
+    ('Chile poblano', 'crudo', 'chile'),
+    ('Chile poblano', 'crudo', 'poblano'),
+    ('Chile jalapeño', 'crudo', 'chile'),
+    ('Chile jalapeño', 'crudo', 'jalapeno'),
+    ('Pimiento morrón', 'crudo', 'pimiento'),
+    ('Pimiento morrón', 'crudo', 'morron'),
+    ('Calabacita', 'crudo', 'calabacita'),
+    ('Calabacita', 'crudo', 'calabaza'),
+    ('Calabacita', 'crudo', 'zucchini'),
+    ('Zanahoria', 'crudo', 'zanahoria'),
+    ('Lechuga romana', 'crudo', 'lechuga'),
+    ('Lechuga romana', 'crudo', 'romana'),
+    ('Pepino', 'crudo', 'pepino'),
+    ('Nopal', 'crudo', 'nopal'),
+    ('Nopal', 'crudo', 'nopales'),
+    ('Nopal', 'cocido', 'nopal'),
+    ('Nopal', 'cocido', 'nopales'),
+    ('Chayote', 'crudo', 'chayote'),
+    ('Champiñón', 'crudo', 'champinon'),
+    ('Champiñón', 'crudo', 'hongo'),
+    ('Champiñón', 'crudo', 'seta'),
+    ('Ejote', 'cocido', 'ejote'),
+    ('Ejote', 'cocido', 'judia'),
+    ('Elote', 'cocido', 'elote'),
+    ('Elote', 'cocido', 'maiz'),
+    ('Elote', 'cocido', 'choclo'),
+    ('Coliflor', 'crudo', 'coliflor'),
+    ('Apio', 'crudo', 'apio'),
+    ('Betabel', 'cocido', 'betabel'),
+    ('Betabel', 'cocido', 'remolacha'),
+    ('Col', 'crudo', 'col'),
+    ('Col', 'crudo', 'repollo'),
+    ('Plátano', 'unico', 'platano'),
+    ('Plátano', 'unico', 'banana'),
+    ('Plátano', 'unico', 'banano'),
+    ('Manzana', 'unico', 'manzana'),
+    ('Naranja', 'unico', 'naranja'),
+    ('Fresa', 'unico', 'fresa'),
+    ('Fresa', 'unico', 'frutilla'),
+    ('Papaya', 'unico', 'papaya'),
+    ('Piña', 'unico', 'pina'),
+    ('Piña', 'unico', 'ananas'),
+    ('Mango', 'unico', 'mango'),
+    ('Sandía', 'unico', 'sandia'),
+    ('Melón', 'unico', 'melon'),
+    ('Uva', 'unico', 'uva'),
+    ('Aguacate', 'unico', 'aguacate'),
+    ('Aguacate', 'unico', 'palta'),
+    ('Limón', 'unico', 'limon'),
+    ('Limón', 'unico', 'lima'),
+    ('Guayaba', 'unico', 'guayaba'),
+    ('Toronja', 'unico', 'toronja'),
+    ('Toronja', 'unico', 'pomelo'),
+    ('Durazno en jugo', 'unico', 'durazno'),
+    ('Durazno en jugo', 'unico', 'melocoton'),
+    ('Pera', 'unico', 'pera'),
+    ('Arándano', 'unico', 'arandano'),
+    ('Arándano', 'unico', 'blueberry'),
+    ('Ciruela', 'unico', 'ciruela'),
+    ('Kiwi', 'unico', 'kiwi'),
+    ('Mandarina', 'unico', 'mandarina'),
+    ('Frijol negro', 'crudo', 'frijol'),
+    ('Frijol negro', 'crudo', 'frijoles'),
+    ('Frijol negro', 'cocido', 'frijol'),
+    ('Frijol negro', 'cocido', 'frijoles'),
+    ('Frijol pinto', 'cocido', 'frijol'),
+    ('Frijol pinto', 'cocido', 'frijoles'),
+    ('Frijol pinto', 'cocido', 'bayo'),
+    ('Lenteja', 'crudo', 'lenteja'),
+    ('Lenteja', 'cocido', 'lenteja'),
+    ('Garbanzo', 'cocido', 'garbanzo'),
+    ('Haba', 'cocido', 'haba'),
+    ('Haba', 'cocido', 'fava'),
+    ('Soya', 'cocido', 'soya'),
+    ('Soya', 'cocido', 'soja'),
+    ('Avena', 'crudo', 'avena'),
+    ('Avena', 'crudo', 'hojuelas'),
+    ('Avena cocida', 'cocido', 'avena'),
+    ('Avena cocida', 'cocido', 'atole'),
+    ('Quinoa', 'crudo', 'quinoa'),
+    ('Quinoa', 'crudo', 'quinua'),
+    ('Quinoa', 'cocido', 'quinoa'),
+    ('Quinoa', 'cocido', 'quinua'),
+    ('Amaranto', 'crudo', 'amaranto'),
+    ('Amaranto', 'crudo', 'alegria'),
+    ('Arroz blanco', 'crudo', 'arroz'),
+    ('Arroz blanco', 'cocido', 'arroz'),
+    ('Arroz integral', 'crudo', 'arroz'),
+    ('Arroz integral', 'crudo', 'integral'),
+    ('Arroz integral', 'cocido', 'arroz'),
+    ('Arroz integral', 'cocido', 'integral'),
+    ('Pasta', 'crudo', 'pasta'),
+    ('Pasta', 'crudo', 'espagueti'),
+    ('Pasta', 'crudo', 'spaghetti'),
+    ('Pasta', 'crudo', 'fideo'),
+    ('Pasta', 'cocido', 'pasta'),
+    ('Pasta', 'cocido', 'espagueti'),
+    ('Pasta', 'cocido', 'spaghetti'),
+    ('Pasta', 'cocido', 'fideo'),
+    ('Pasta integral', 'cocido', 'pasta'),
+    ('Pasta integral', 'cocido', 'integral'),
+    ('Papa', 'crudo', 'papa'),
+    ('Papa', 'crudo', 'patata'),
+    ('Papa cocida', 'cocido', 'papa'),
+    ('Papa cocida', 'cocido', 'patata'),
+    ('Camote', 'crudo', 'camote'),
+    ('Camote', 'crudo', 'batata'),
+    ('Camote', 'crudo', 'boniato'),
+    ('Camote cocido', 'cocido', 'camote'),
+    ('Camote cocido', 'cocido', 'batata'),
+    ('Yuca', 'crudo', 'yuca'),
+    ('Yuca', 'crudo', 'mandioca'),
+    ('Almendra', 'unico', 'almendra'),
+    ('Nuez', 'unico', 'nuez'),
+    ('Nuez', 'unico', 'nogal'),
+    ('Cacahuate', 'unico', 'cacahuate'),
+    ('Cacahuate', 'unico', 'mani'),
+    ('Pistache', 'unico', 'pistache'),
+    ('Pistache', 'unico', 'pistacho'),
+    ('Nuez de la India', 'unico', 'nuez de la india'),
+    ('Nuez de la India', 'unico', 'cashew'),
+    ('Nuez de la India', 'unico', 'maranon'),
+    ('Crema de cacahuate', 'unico', 'crema de cacahuate'),
+    ('Crema de cacahuate', 'unico', 'mantequilla de mani'),
+    ('Chía', 'unico', 'chia'),
+    ('Linaza', 'unico', 'linaza'),
+    ('Linaza', 'unico', 'lino'),
+    ('Pepita de calabaza', 'unico', 'pepita'),
+    ('Pepita de calabaza', 'unico', 'calabaza'),
+    ('Ajonjolí', 'unico', 'ajonjoli'),
+    ('Ajonjolí', 'unico', 'sesamo'),
+    ('Semilla de girasol', 'unico', 'girasol'),
+    ('Semilla de girasol', 'unico', 'pipa'),
+    ('Aceite de oliva', 'unico', 'aceite'),
+    ('Aceite de oliva', 'unico', 'oliva'),
+    ('Aceite de aguacate', 'unico', 'aceite'),
+    ('Aceite de aguacate', 'unico', 'aguacate'),
+    ('Aceite de coco', 'unico', 'aceite'),
+    ('Aceite de coco', 'unico', 'coco'),
+    ('Aceite vegetal', 'unico', 'aceite'),
+    ('Aceite vegetal', 'unico', 'canola'),
+    ('Aceite vegetal', 'unico', 'vegetal'),
+    ('Manteca de cerdo', 'unico', 'manteca'),
+    ('Harina de trigo', 'crudo', 'harina'),
+    ('Harina de trigo', 'crudo', 'trigo'),
+    ('Harina de maíz', 'crudo', 'harina'),
+    ('Harina de maíz', 'crudo', 'maiz'),
+    ('Harina de maíz', 'crudo', 'masa'),
+    ('Harina de maíz', 'crudo', 'maseca'),
+    ('Harina de avena', 'crudo', 'harina'),
+    ('Harina de avena', 'crudo', 'avena'),
+    ('Tortilla de maíz', 'unico', 'tortilla'),
+    ('Tortilla de maíz', 'unico', 'maiz'),
+    ('Tortilla de harina', 'unico', 'tortilla'),
+    ('Tortilla de harina', 'unico', 'harina'),
+    ('Pan blanco', 'unico', 'pan'),
+    ('Pan blanco', 'unico', 'bolillo'),
+    ('Pan integral', 'unico', 'pan'),
+    ('Pan integral', 'unico', 'integral'),
+    ('Bolillo', 'unico', 'bolillo'),
+    ('Bolillo', 'unico', 'telera'),
+    ('Bolillo', 'unico', 'pan'),
+    ('Azúcar', 'unico', 'azucar'),
+    ('Miel', 'unico', 'miel'),
+    ('Piloncillo', 'unico', 'piloncillo'),
+    ('Piloncillo', 'unico', 'panela'),
+    ('Piloncillo', 'unico', 'azucar morena'),
+    ('Chocolate amargo', 'unico', 'chocolate'),
+    ('Chocolate amargo', 'unico', 'cacao'),
+    ('Sal', 'unico', 'sal'),
+    ('Salsa de soya', 'unico', 'soya'),
+    ('Salsa de soya', 'unico', 'soja'),
+    ('Salsa de soya', 'unico', 'salsa'),
+    ('Vinagre', 'unico', 'vinagre'),
+    ('Mayonesa', 'unico', 'mayonesa'),
+    ('Mostaza', 'unico', 'mostaza'),
+    ('Catsup', 'unico', 'catsup'),
+    ('Catsup', 'unico', 'ketchup'),
+    ('Catsup', 'unico', 'salsa de tomate'),
+    ('Ajo', 'crudo', 'ajo'),
+    ('Café negro', 'unico', 'cafe'),
+    ('Té negro', 'unico', 'te'),
+    ('Cerveza', 'unico', 'cerveza'),
+    ('Refresco de cola', 'unico', 'refresco'),
+    ('Refresco de cola', 'unico', 'coca'),
+    ('Refresco de cola', 'unico', 'soda'),
+    ('Jugo de naranja', 'unico', 'jugo'),
+    ('Jugo de naranja', 'unico', 'naranja'),
+    ('Agua mineral', 'unico', 'agua'),
+    ('Proteína de suero', 'unico', 'proteina'),
+    ('Proteína de suero', 'unico', 'whey'),
+    ('Proteína de suero', 'unico', 'suero'),
+    ('Tofu', 'unico', 'tofu'),
+    ('Gelatina', 'unico', 'gelatina'),
+    ('Gelatina', 'unico', 'grenetina')
+       ) as v(nombre, estado, termino)
+  join public.alimentos_catalogo a
+    on a.nombre = v.nombre and a.estado::text = v.estado
+on conflict (alimento_id, termino) do nothing;
+
+
+-- ---------------------------------------------------------------------
+--  Comprobaciones
+-- ---------------------------------------------------------------------
+-- Cuántos quedaron y de qué tipo:
+--   select categoria, estado, count(*) from public.alimentos_catalogo
+--    group by 1,2 order by 1,2;
+--
+-- Que ninguno tenga macros imposibles (debe dar 0 filas):
+--   select nombre, kcal, proteina, carbos, grasas
+--     from public.alimentos_catalogo
+--    where kcal > 900 or proteina > 100 or carbos > 100 or grasas > 100;
+

@@ -603,6 +603,16 @@
   .usr-acc button{border:none;border-radius:9px;padding:7px 9px;font:700 10.5px/1 sans-serif;cursor:pointer;}
   .usr-acc .b-on{background:var(--green-soft);color:var(--green);}
   .usr-susp{color:var(--red);font-weight:800;}
+
+  /* La estrella de guardar. Sin fondo ni borde: es un gesto, no un botón
+     que compita con Editar y Quitar. */
+  .btn-estrella{
+    background:none;border:none;cursor:pointer;padding:2px 5px;
+    font:400 19px/1 sans-serif;color:var(--ink-faint);
+    transition:transform .18s cubic-bezier(.32,.72,0,1), color .18s ease;
+  }
+  .btn-estrella.on{color:var(--amber);}
+  .btn-estrella:active{transform:scale(1.35);}
   .usr-acc .b-off{background:var(--red-soft);color:var(--red);}
   .usr-acc .b-key{background:var(--pill-bg);color:var(--pill-ink);}
   .apagado{opacity:.5;}
@@ -679,6 +689,28 @@
   .plan-cliente .info{flex:1;min-width:0;}
   .plan-cliente b{display:block;font:700 14px/1.2 sans-serif;color:var(--ink);}
   .plan-cliente span{display:block;font:600 11.5px/1.2 sans-serif;color:var(--ink-faint);margin-top:4px;}
+
+  /* Los siete días. Se desplazan en horizontal en vez de apretarse: en un
+     teléfono, siete botones legibles no caben en 375 px. */
+  .plan-dias{
+    display:flex;gap:6px;overflow-x:auto;padding:0 16px 4px;margin-bottom:8px;
+    -webkit-overflow-scrolling:touch;scrollbar-width:none;
+  }
+  .plan-dias::-webkit-scrollbar{display:none;}
+  .plan-dias-ver{padding-top:2px;}
+  .plan-dia{
+    flex:0 0 auto;padding:9px 14px;border-radius:11px;border:none;cursor:pointer;
+    background:var(--pill-bg);color:var(--ink-faint);
+    font:700 12.5px/1 sans-serif;
+    transition:background .18s ease, color .18s ease;
+  }
+  .plan-dia.active{background:var(--ink);color:var(--card-bg);}
+  /* Un punto en los días que ya tienen algo escrito: al armar la semana a
+     mano, dice de un vistazo qué falta. */
+  .plan-dia.lleno:not(.active)::after{
+    content:'';display:block;width:4px;height:4px;border-radius:50%;
+    background:var(--green);margin:4px auto 0;
+  }
 
   /* Una fila de datos que además se puede tocar. Hereda de .info-row para
      que no desentone con las de al lado, que son solo texto. */
@@ -1825,7 +1857,8 @@
         </div>
         <div class="bottom-bar">
           <button class="btn-primary" id="peGuardar">Guardar plan</button>
-          <button class="btn-rename" id="peGenerar" style="width:100%;margin-top:8px;">✨ Que lo arme el asistente</button>
+          <button class="btn-rename" id="peGenerar" style="width:100%;margin-top:8px;">✨ Armar un día</button>
+          <button class="btn-rename" id="peGenerarSemana" style="width:100%;margin-top:6px;">✨ Armar la semana completa</button>
           <button class="btn-ghost-text" id="peQuitar">Quitar el plan</button>
         </div>
       </div>
@@ -3938,6 +3971,11 @@
       return '<div class="food-card"><div class="fc-main"><div class="fc-name">'+a.n+'</div>'+
         '<div class="fc-sub">'+lineaComida(a)+'</div></div>'+
         '<div class="fc-actions">'+
+          // La estrella va primero y sin texto: es la acción que se repite
+          // a diario, y las otras dos ya tienen su palabra.
+          '<button class="btn-estrella'+(a.guardado?' on':'')+'" data-guardar="'+i+'" '+
+            'title="'+(a.guardado?'Ya está en Guardados':'Guardar para encontrarlo rápido')+'">'+
+            (a.guardado?'★':'☆')+'</button>'+
           '<button class="btn-mini edit" data-editar="'+i+'">Editar</button>'+
           '<button class="btn-mini del" data-quitar="'+i+'">Quitar</button>'+
         '</div></div>';
@@ -4027,6 +4065,57 @@
   function cerrarCantidad(){ cantSheet.classList.remove('open'); alimentoEditando = null; }
   document.getElementById('cantCancelar').addEventListener('click', cerrarCantidad);
   cantSheet.addEventListener('click', function(e){ if(e.target === cantSheet) cerrarCantidad(); });
+
+  // ---- La estrella: mandar un alimento a Guardados ----
+  // Va a saved_foods, la misma tabla que alimenta la pestaña Guardados, y
+  // se guarda por 100 g (base_qty) y no por lo que se comió hoy: si mañana
+  // come otra cantidad, la ficha guardada tiene que seguir sirviendo.
+  document.getElementById('mealList').addEventListener('click', function(e){
+    var b = e.target.closest('[data-guardar]');
+    if(!b) return;
+    var a = COMIDAS[comidaActual][Number(b.dataset.guardar)];
+    if(!a || a.guardado) { toast('toastComida', a && a.guardado ? 'Ya está en Guardados' : ''); return; }
+    if(!sesion){ toast('toastComida', 'Inicia sesión para guardar'); return; }
+
+    a.guardado = true;
+    pintarComida();
+
+    sbFetch('/rest/v1/saved_foods', {
+      method: 'POST',
+      headers: { 'Prefer': 'return=representation' },
+      body: JSON.stringify({
+        user_id: sesion.user.id,
+        name: a.n,
+        unit: a.u || 'Gramos',
+        base_qty: a.base || 100,
+        // Los macros de UNA porción base, no los de hoy. prepararAlimento
+        // ya los tiene calculados en porBase justamente para esto.
+        protein_g: Math.round((a.porBase ? a.porBase.P : a.P) * 10) / 10,
+        carbs_g:   Math.round((a.porBase ? a.porBase.C : a.C) * 10) / 10,
+        fat_g:     Math.round((a.porBase ? a.porBase.G : a.G) * 10) / 10
+      })
+    }).then(function(f){
+      var fila = f && f[0];
+      if(fila) a.id_guardado = fila.id;
+      // Se mete en la lista que ya está en memoria en vez de recargarlo
+      // todo: aparece en Guardados al instante y sin ir a la red.
+      MIS_ALIMENTOS.push({
+        id: fila ? fila.id : null, n: a.n, u: a.u || 'Gramos',
+        P: a.porBase ? a.porBase.P : a.P,
+        C: a.porBase ? a.porBase.C : a.C,
+        G: a.porBase ? a.porBase.G : a.G,
+        veces: 0
+      });
+      if(typeof pintarListas === 'function') pintarListas();
+      toast('toastComida', a.n + ' guardado ★');
+    })['catch'](function(err){
+      a.guardado = false; pintarComida();
+      var m = err.message || '';
+      toast('toastComida', /duplicate|unique/.test(m)
+        ? 'Ese ya estaba en Guardados'
+        : 'No se pudo guardar: ' + traducirError(m));
+    });
+  });
 
   document.getElementById('cantGuardar').addEventListener('click', function(){
     if(!alimentoEditando) return;
@@ -5798,6 +5887,12 @@
   // ================= PLAN DE COMIDA =================
   // Para quien no quiere contar nada: abre la app y ve qué le toca comer.
   // Lo escribe su entrenador; el cliente solo lo lee.
+  // Va aquí arriba y no junto al editor: lo usan tanto la vista del
+  // cliente como el editor, y la primera está antes en el archivo. Con
+  // `var` funcionaría igual por hoisting, pero leer una variable cien
+  // líneas antes de su declaración es una trampa esperando a alguien.
+  var DIAS_SEMANA = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
+
   var MOMENTOS = [
     { k:'Desayuno', emoji:'🌅' },
     { k:'Comida',   emoji:'🍽️' },
@@ -5827,7 +5922,29 @@
     }
 
     document.getElementById('planSub').textContent = MI_PLAN.nombre || 'Qué comer hoy';
-    cont.innerHTML = (MI_PLAN.comidas || []).map(function(c){
+
+    var comidas = MI_PLAN.comidas || [];
+    var semanal = comidas.some(function(c){ return !!c.dia; });
+
+    // Con plan semanal se abre en el día de HOY, no en lunes: quien lo
+    // consulta a media semana quiere ver lo de hoy, no buscarlo.
+    if(semanal && !MI_PLAN.diaVisto){
+      var hoyN = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'][new Date().getDay()];
+      MI_PLAN.diaVisto = comidas.some(function(c){ return c.dia === hoyN; }) ? hoyN : 'Lunes';
+    }
+
+    var tabs = semanal
+      ? '<div class="plan-dias plan-dias-ver">' + DIAS_SEMANA.map(function(d){
+          return '<button class="plan-dia' + (d === MI_PLAN.diaVisto ? ' active' : '') +
+                 '" data-verdia="' + d + '">' + d.slice(0,3) + '</button>';
+        }).join('') + '</div>'
+      : '';
+
+    var delDia = semanal
+      ? comidas.filter(function(c){ return c.dia === MI_PLAN.diaVisto; })
+      : comidas;
+
+    cont.innerHTML = tabs + delDia.map(function(c){
       var m = MOMENTOS.filter(function(x){ return x.k === c.momento; })[0];
       return '<div class="plan-comida">' +
         '<div class="plan-momento"><span>' + (m ? m.emoji : '•') + '</span>' + c.momento + '</div>' +
@@ -5903,6 +6020,13 @@
     });
   }
 
+  document.getElementById('planMio').addEventListener('click', function(e){
+    var b = e.target.closest('[data-verdia]');
+    if(!b || !MI_PLAN) return;
+    MI_PLAN.diaVisto = b.dataset.verdia;
+    pintarMiPlan();
+  });
+
   document.getElementById('planClientes').addEventListener('click', function(e){
     var f = e.target.closest('[data-plan-cli]');
     if(!f) return;
@@ -5910,15 +6034,69 @@
   });
 
   // ---- Editor ----
-  function abrirEditorPlan(cliente){
-    if(!cliente) return;
-    document.getElementById('peTitulo').textContent = 'Plan de ' + cliente.nombre;
-    document.getElementById('peComidas').innerHTML = MOMENTOS.map(function(m){
+  // planComidas guarda TODO el plan (un día o los siete). El editor pinta
+  // solo el día activo; sin esto, siete días serían 28 campos a la vez.
+  var planComidas = [];
+  var planDia = null;          // null = plan de un solo día
+
+  function esSemanal(){ return planComidas.some(function(c){ return !!c.dia; }); }
+
+  function pintarEditorComidas(){
+    var cont = document.getElementById('peComidas');
+    var semanal = esSemanal();
+    if(semanal && !planDia) planDia = DIAS_SEMANA[0];
+    if(!semanal) planDia = null;
+
+    var tabs = semanal
+      ? '<div class="plan-dias">' + DIAS_SEMANA.map(function(d){
+          var lleno = planComidas.some(function(c){ return c.dia === d && c.texto; });
+          return '<button class="plan-dia' + (d === planDia ? ' active' : '') +
+                 (lleno ? ' lleno' : '') + '" data-dia="' + d + '">' + d.slice(0,3) + '</button>';
+        }).join('') + '</div>'
+      : '';
+
+    cont.innerHTML = tabs + MOMENTOS.map(function(m){
+      var c = planComidas.filter(function(x){
+        return x.momento === m.k && (!semanal || x.dia === planDia); })[0];
       return '<div class="card">' +
         '<div class="field-label" style="margin-top:0;">' + m.emoji + ' ' + m.k + '</div>' +
         '<textarea class="notas-input" rows="3" maxlength="400" data-momento="' + m.k + '" ' +
-        'placeholder="Ej. 2 huevos, pan integral y café"></textarea></div>';
+        'placeholder="Ej. 2 huevos, pan integral y café">' +
+        escapar(c ? c.texto : '') + '</textarea></div>';
     }).join('');
+  }
+
+  // Lo escrito se guarda en planComidas al cambiar de día o al guardar: si
+  // solo se leyera al final, cambiar de pestaña perdería lo tecleado.
+  function volcarDiaActual(){
+    var semanal = esSemanal();
+    Array.from(document.querySelectorAll('#peComidas [data-momento]')).forEach(function(t){
+      var txt = t.value.trim();
+      var i = planComidas.findIndex(function(x){
+        return x.momento === t.dataset.momento && (!semanal || x.dia === planDia); });
+      if(txt){
+        if(i >= 0) planComidas[i].texto = txt;
+        else planComidas.push(semanal
+          ? { dia: planDia, momento: t.dataset.momento, texto: txt }
+          : { momento: t.dataset.momento, texto: txt });
+      } else if(i >= 0) planComidas.splice(i, 1);
+    });
+  }
+
+  document.getElementById('peComidas').addEventListener('click', function(e){
+    var b = e.target.closest('[data-dia]');
+    if(!b) return;
+    volcarDiaActual();
+    planDia = b.dataset.dia;
+    pintarEditorComidas();
+  });
+
+  function abrirEditorPlan(cliente){
+    if(!cliente) return;
+    document.getElementById('peTitulo').textContent = 'Plan de ' + cliente.nombre;
+    planComidas = [];
+    planDia = null;
+    pintarEditorComidas();
     document.getElementById('peNombre').value = '';
     document.getElementById('peNota').value = '';
     planEditando = { userId: cliente.id, nombre: cliente.nombre, plan: null };
@@ -5929,22 +6107,17 @@
       planEditando.plan = p;
       document.getElementById('peNombre').value = (p && p.nombre) || ('Plan de ' + cliente.nombre);
       document.getElementById('peNota').value = (p && p.nota) || '';
-      ((p && p.comidas) || []).forEach(function(c){
-        var t = document.querySelector('#peComidas [data-momento="' + c.momento + '"]');
-        if(t) t.value = c.texto || '';
-      });
+      planComidas = ((p && p.comidas) || []).slice();
+      planDia = null;
+      pintarEditorComidas();
     })['catch'](function(){});
   }
 
   function leerEditorPlan(){
-    var comidas = [];
-    Array.from(document.querySelectorAll('#peComidas [data-momento]')).forEach(function(t){
-      var txt = t.value.trim();
-      // Solo se guardan los momentos con algo escrito: un plan de dos
-      // comidas no debe enseñar dos tarjetas vacías.
-      if(txt) comidas.push({ momento: t.dataset.momento, texto: txt });
-    });
-    return comidas;
+    volcarDiaActual();
+    // Solo lo que tiene texto: un plan de dos comidas no debe enseñar dos
+    // tarjetas vacías.
+    return planComidas.filter(function(c){ return c.texto && c.texto.trim(); });
   }
 
   document.getElementById('peGuardar').addEventListener('click', function(){
@@ -5978,11 +6151,12 @@
   // ---- Que el asistente arme el plan ----
   // Necesita las calorías de esa persona; sin ellas el plan no cuadraría
   // con nada. Salen de sus macros, que es lo que la app ya calcula.
-  document.getElementById('peGenerar').addEventListener('click', function(){
+  function generarPlan(semana){
     if(!planEditando || !sesion) return;
-    var btn = document.getElementById('peGenerar');
+    var btn = document.getElementById(semana ? 'peGenerarSemana' : 'peGenerar');
+    var textoOriginal = btn.textContent;
     btn.disabled = true;
-    btn.textContent = 'Pensando…';
+    btn.textContent = semana ? 'Armando la semana…' : 'Pensando…';
 
     sbFetch('/rest/v1/profiles?select=goal_protein_g,goal_carbs_g,goal_fat_g' +
             '&id=eq.' + planEditando.userId + '&limit=1')
@@ -5994,6 +6168,7 @@
         var cal = Math.round(p.goal_protein_g*4 + p.goal_carbs_g*4 + p.goal_fat_g*9);
         return iaLlamar({
           accion: 'plan',
+          semana: semana,
           nombre: planEditando.nombre,
           calorias: cal,
           proteina: p.goal_protein_g,
@@ -6005,20 +6180,23 @@
         // el entrenador, y tiene que poder corregirlo antes.
         if(r.nombre) document.getElementById('peNombre').value = r.nombre;
         if(r.nota)   document.getElementById('peNota').value = r.nota;
-        (r.comidas || []).forEach(function(c){
-          var t = document.querySelector('#peComidas [data-momento="' + c.momento + '"]');
-          if(t) t.value = c.texto || '';
-        });
-        toast('toastPlan', 'Listo — revísalo y guarda');
+        planComidas = (r.comidas || []).slice();
+        pintarEditorComidas();
+        toast('toastPlan', semana
+          ? 'Semana lista — revísala día por día y guarda'
+          : 'Listo — revísalo y guarda');
       })
       ['catch'](function(e){
         toast('toastPlan', traducirError(e.message));
       })
       .then(function(){
         btn.disabled = false;
-        btn.textContent = '✨ Que lo arme el asistente';
+        btn.textContent = textoOriginal;
       });
-  });
+  }
+
+  document.getElementById('peGenerar').addEventListener('click', function(){ generarPlan(false); });
+  document.getElementById('peGenerarSemana').addEventListener('click', function(){ generarPlan(true); });
 
   document.getElementById('peQuitar').addEventListener('click', function(){
     if(!planEditando || !planEditando.plan){ back(); return; }

@@ -77,10 +77,38 @@ const ESQUEMA_ALIMENTOS = {
   additionalProperties: false,
 } as const;
 
+const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'] as const;
+
 const ESQUEMA_PLAN = {
   type: 'object',
   properties: {
     nombre: { type: 'string' },
+    comidas: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          // Sin día = plan de un día, que es como estaba. Con día = semana.
+          // Así la app vieja y la nueva leen la misma columna.
+          dia:     { type: 'string', enum: DIAS as unknown as string[] },
+          momento: { type: 'string', enum: ['Desayuno', 'Comida', 'Cena', 'Snack'] },
+          texto:   { type: 'string' },
+        },
+        required: ['dia', 'momento', 'texto'],
+        additionalProperties: false,
+      },
+    },
+    nota: { type: 'string' },
+  },
+  required: ['nombre', 'comidas', 'nota'],
+  additionalProperties: false,
+} as const;
+
+// Para el plan de un solo día se reutiliza el mismo esquema sin el día.
+const ESQUEMA_PLAN_DIA = {
+  ...ESQUEMA_PLAN,
+  properties: {
+    ...ESQUEMA_PLAN.properties,
     comidas: {
       type: 'array',
       items: {
@@ -93,10 +121,7 @@ const ESQUEMA_PLAN = {
         additionalProperties: false,
       },
     },
-    nota: { type: 'string' },
   },
-  required: ['nombre', 'comidas', 'nota'],
-  additionalProperties: false,
 } as const;
 
 // ---------------------------------------------------------------------
@@ -158,6 +183,24 @@ Reglas:
 - Varía: que no salgan tres comidas de pollo con arroz.
 - En la nota va un consejo corto y práctico, si hace falta. No hables de
   macros ni de calorías: quien lo lee no quiere saber de eso.
+
+BARATO Y FÁCIL. Es un requisito, no un adorno:
+- Ingredientes de mercado o de la tienda de la esquina: huevo, pollo,
+  atún, frijol, avena, tortilla, verdura de temporada. Nada de salmón a
+  diario ni de cosas que solo hay en tienda grande.
+- Que se prepare en veinte minutos y con una sola sartén u olla. Quien
+  usa esto no quiere cocinar, quiere comer.
+- Repite ingredientes entre días a propósito: una bolsa de zanahoria
+  usada tres veces sale más barata que siete verduras distintas, y sobra
+  menos comida.
+
+SI ES PARA UNA SEMANA:
+- Los siete días, cada uno con su nombre. No escribas "igual que el
+  lunes": repite la comida entera, porque quien lo lee ve un día a la vez.
+- Varía dentro de lo razonable. Ni siete cenas de pollo, ni siete recetas
+  distintas que obliguen a comprar de todo.
+- Cada día cuadra con las calorías POR SÍ SOLO, no de promedio: nadie se
+  come el promedio de la semana.
 
 Nunca escribas un número de calorías dentro del texto de una comida.
 `.trim();
@@ -270,7 +313,9 @@ Deno.serve(async (req) => {
         messages: [{ role: 'user', content: partes }],
       });
 
-      return json({ ...leerJson(r), quedan });
+      const salida = leerJson(r);
+      salida.alimentos = await afinarConCatalogo(admin, salida.alimentos || []);
+      return json({ ...salida, quedan });
     }
 
     if (accion === 'plan') {
@@ -280,23 +325,33 @@ Deno.serve(async (req) => {
       }
       const nombre = String(cuerpo.nombre || '').trim().slice(0, 60);
       const gustos = String(cuerpo.gustos || '').trim().slice(0, 300);
+      const semana = cuerpo.semana === true;
 
       const r = await ia.messages.create({
         model: MODELO,
-        max_tokens: 8000,
+        // Siete días son siete veces más texto. Con el tope de un día se
+        // cortaría a mitad del jueves.
+        max_tokens: semana ? 32000 : 8000,
         system: SISTEMA_PLAN,
         // Cuadrar las comidas con las calorías es aritmética con criterio:
         // aquí sí conviene que piense antes de contestar.
         thinking: { type: 'adaptive' },
         output_config: {
-          effort: 'medium',
-          format: { type: 'json_schema', schema: ESQUEMA_PLAN },
+          // Cuadrar siete días distintos con las mismas calorías cada uno
+          // es bastante más trabajo que cuadrar uno.
+          effort: semana ? 'high' : 'medium',
+          format: {
+            type: 'json_schema',
+            schema: semana ? ESQUEMA_PLAN : ESQUEMA_PLAN_DIA,
+          },
         },
         messages: [{
           role: 'user',
           content:
-            `Arma un plan de un día para ${nombre || 'esta persona'}.\n` +
-            `Objetivo: unas ${cal} calorías en total, con ` +
+            (semana
+              ? `Arma un plan de UNA SEMANA COMPLETA (lunes a domingo) para ${nombre || 'esta persona'}.\n`
+              : `Arma un plan de un día para ${nombre || 'esta persona'}.\n`) +
+            `Objetivo: unas ${cal} calorías ${semana ? 'AL DÍA' : 'en total'}, con ` +
             `${Math.round(Number(cuerpo.proteina) || 0)} g de proteína.\n` +
             (gustos ? `Ten en cuenta: ${gustos}\n` : '') +
             `Desayuno, comida y cena. Añade un snack solo si hace falta ` +
@@ -316,6 +371,68 @@ Deno.serve(async (req) => {
     return json({ error: 'El asistente no pudo responder. Inténtalo de nuevo.' }, 502);
   }
 });
+
+// ---------------------------------------------------------------------
+//  Cambiar la estimación del modelo por el dato del catálogo
+//
+//  El modelo es bueno reconociendo QUÉ hay y CUÁNTO hay; para los macros
+//  exactos hay una tabla de USDA, y un dato medido siempre gana a uno
+//  recordado. Así que se le respeta la cantidad y se le corrigen las
+//  cifras.
+//
+//  Solo cuando el nombre coincide de verdad: si alguien apuntó "guisado
+//  de la abuela", no hay entrada de catálogo que valga y se queda la
+//  estimación, marcada como tal.
+// ---------------------------------------------------------------------
+async function afinarConCatalogo(
+  admin: { rpc: (f: string, p: Record<string, unknown>) => Promise<{ data: unknown }> },
+  alimentos: Array<Record<string, unknown>>,
+) {
+  for (const a of alimentos) {
+    const nombre = String(a.nombre || '').trim();
+    if (nombre.length < 3) continue;
+
+    let filas: Array<Record<string, unknown>> = [];
+    try {
+      const { data } = await admin.rpc('buscar_catalogo', { p_texto: nombre, p_limite: 8 });
+      filas = Array.isArray(data) ? data as Array<Record<string, unknown>> : [];
+    } catch { continue; }
+    if (!filas.length) continue;
+
+    // El modelo ya dijo si estaba crudo o cocido dentro del nombre; se
+    // usa para elegir la fila correcta. Sin esto, "arroz cocido" podría
+    // acabar con los macros del crudo, que son casi el triple.
+    const n = nombre.toLowerCase();
+    const quiereCocido = /cocid|hervid|asad|frit|guisad|a la plancha|al horno/.test(n);
+    const quiereCrudo  = /crud|fresc/.test(n);
+
+    const mejor = filas.find((f) =>
+        (quiereCocido && f.estado === 'cocido') ||
+        (quiereCrudo  && f.estado === 'crudo')  ||
+        (!quiereCocido && !quiereCrudo && f.estado === 'unico'))
+      ?? filas[0];
+
+    // Los macros del catálogo son por 100 g. Se llevan a la cantidad que
+    // dijo el modelo, traduciendo su unidad a gramos. Para piezas y tazas
+    // se usa el peso de la porción que trae el propio catálogo; si no lo
+    // tiene, no hay forma honesta de convertir y se deja la estimación.
+    const cant = Number(a.cantidad) || 1;
+    const porG = Number(mejor.porcion_g) || 0;
+    const gramos = a.unidad === 'Gramos' ? cant
+                 : a.unidad === 'Onzas'  ? cant * 28.35
+                 : porG ? cant * porG
+                 : 0;
+    if (!gramos) continue;
+    const k = gramos / 100;
+
+    a.proteina = Math.round(Number(mejor.proteina) * k * 10) / 10;
+    a.carbos   = Math.round(Number(mejor.carbos)   * k * 10) / 10;
+    a.grasas   = Math.round(Number(mejor.grasas)   * k * 10) / 10;
+    a.seguridad = 'alta';                 // ya no es estimación: es tabla
+    a.catalogo  = mejor.nombre;           // para que la app lo pueda decir
+  }
+  return alimentos;
+}
 
 // Con el pensamiento activado el primer bloque no es el texto, así que se
 // busca por tipo en vez de dar por hecho que es content[0].
