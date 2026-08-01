@@ -1,13 +1,13 @@
 # Conectar el asistente
 
 El asistente usa la API de Anthropic. La clave **no puede estar en la app**:
-`mockup/index.html` se descarga entero en cada teléfono y el repositorio es
+`docs/index.html` se descarga entero en cada teléfono y el repositorio es
 público, así que cualquiera la sacaría y gastaría la cuenta. Vive en una Edge
 Function, en el servidor.
 
 ## 1. Sacar la clave
 
-En [console.anthropic.com](https://console.anthropic.com) → **API Keys** →
+En [platform.claude.com](https://platform.claude.com) → **API Keys** →
 *Create Key*. Empieza por `sk-ant-`.
 
 Se ve **una sola vez**. Cópiala antes de cerrar.

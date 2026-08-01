@@ -11,7 +11,7 @@ pero añadir la segunda no pide ningún cambio de estructura.
 
 | Carpeta | Qué es |
 |---|---|
-| `mockup/index.html` | La app entera. Un solo archivo: HTML, CSS y JavaScript sin librerías ni compilación. |
+| `docs/index.html` | La app entera. Un solo archivo: HTML, CSS y JavaScript sin librerías ni compilación. |
 | `supabase/migrations/` | El esquema y toda la seguridad, en nueve migraciones. |
 | `supabase/tests/` | Pruebas que corren PostgreSQL de verdad en el propio Node. |
 | `supabase/README.md` | El modelo de datos y las decisiones de diseño. |
@@ -44,4 +44,4 @@ suspendidas y cupos. No hace falta Docker ni conexión a internet.
 ## Publicar
 
 El sitio se despliega solo en Netlify con cada cambio en `main`.
-`netlify.toml` indica que la carpeta a publicar es `mockup/`.
+`netlify.toml` indica que la carpeta a publicar es `docs/`.

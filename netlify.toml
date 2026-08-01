@@ -1,11 +1,11 @@
 # Qué publicar cuando el sitio se construye desde GitHub.
 #
 # Sin esto Netlify serviría la raíz del repositorio, donde no hay ningún
-# index.html, y el sitio saldría en blanco. La app vive en mockup/.
+# index.html, y el sitio saldría en blanco. La app vive en docs/.
 #
 # No hay paso de compilación: es un solo archivo HTML sin dependencias.
 [build]
-  publish = "mockup"
+  publish = "docs"
   command = ""
 
 # El HTML no se guarda en caché: así, en cuanto se publica un cambio, el
