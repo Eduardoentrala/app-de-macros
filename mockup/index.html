@@ -210,8 +210,37 @@
 
   .app-view{flex:1;display:none;flex-direction:column;min-height:0;}
   .app-view.active{display:flex;}
-  .scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+  /* overflow-x oculto: durante el deslizamiento entre Hoy y Semana el panel
+     entra desplazado unos píxeles, y sin esto asomaría una barra horizontal */
+  .scroll{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;}
   .scroll::-webkit-scrollbar{display:none;}
+
+  /* ---- Cambio entre Hoy y Semana ----
+     El panel entra deslizándose desde el lado contrario al gesto, con un
+     punto de desvanecido. La curva no es un `ease` cualquiera: arranca
+     rápido y frena muy largo, que es lo que hace que se sienta suave en vez
+     de mecánico.
+
+     Solo se anima el que ENTRA. Animar los dos a la vez obligaría a
+     superponerlos en posición absoluta, y como miden distinto la pantalla
+     daría un salto de alto a mitad de la transición. */
+  @keyframes paneEntra{
+    from{ opacity:0; transform:translate3d(var(--dx,26px),0,0); }
+    to  { opacity:1; transform:translate3d(0,0,0); }
+  }
+  .pane-entra{ animation:paneEntra .42s cubic-bezier(.32,.72,0,1) both; }
+  .pane-entra.desde-izq{ --dx:-26px; }
+
+  /* El anillo barre hasta su valor en vez de saltar. Se nota sobre todo al
+     cambiar de Hoy a Semana, que son dos cifras distintas. */
+  .ring-prog{ transition:stroke-dashoffset .65s cubic-bezier(.32,.72,0,1); }
+  .dots span{ transition:background .25s ease; }
+
+  /* Quien tenga activado "reducir movimiento" en su teléfono no lo ve */
+  @media (prefers-reduced-motion: reduce){
+    .pane-entra{ animation-duration:.01ms; }
+    .ring-prog{ transition:none; }
+  }
 
   .header{
     background:var(--card-bg);
@@ -2071,16 +2100,30 @@
   var tabSemana = document.querySelector('.tab-semana');
   var paneHoy = document.getElementById('pane-hoy');
   var paneSemana = document.getElementById('pane-semana');
-  function mostrarHoy(){
+  // Reinicia la animación aunque se repita el gesto muy rápido: sin forzar
+  // un reflujo entre quitar y poner la clase, el navegador no vuelve a
+  // lanzarla y el segundo deslizamiento saldría seco.
+  function animarEntrada(pane, desdeIzquierda){
+    pane.classList.remove('pane-entra', 'desde-izq');
+    void pane.offsetWidth;
+    pane.classList.add('pane-entra');
+    if(desdeIzquierda) pane.classList.add('desde-izq');
+  }
+
+  function mostrarHoy(animar){
     tabHoy.classList.add('active'); tabSemana.classList.remove('active');
     paneHoy.style.display=''; paneSemana.style.display='none';
+    // Se retrocede: el panel entra por la izquierda, siguiendo al dedo
+    if(animar) animarEntrada(paneHoy, true);
   }
-  function mostrarSemana(){
+  function mostrarSemana(animar){
     tabSemana.classList.add('active'); tabHoy.classList.remove('active');
     paneSemana.style.display=''; paneHoy.style.display='none';
+    // Se avanza: entra por la derecha
+    if(animar) animarEntrada(paneSemana, false);
   }
-  tabHoy.addEventListener('click', mostrarHoy);
-  tabSemana.addEventListener('click', mostrarSemana);
+  tabHoy.addEventListener('click',    function(){ mostrarHoy(true); });
+  tabSemana.addEventListener('click', function(){ mostrarSemana(true); });
 
   // Deslizar sobre el anillo cambia de Hoy a Semana y de vuelta. Los dos
   // puntitos bajo el anillo ya insinuaban que había dos páginas; ahora se
@@ -2114,8 +2157,10 @@
   }
 
   var nada = function(){};
-  deslizar(document.getElementById('cardHoy'),    mostrarSemana, nada);
-  deslizar(document.getElementById('cardSemana'), nada,          mostrarHoy);
+  deslizar(document.getElementById('cardHoy'),
+           function(){ mostrarSemana(true); }, nada);
+  deslizar(document.getElementById('cardSemana'),
+           nada, function(){ mostrarHoy(true); });
 
   // ---- Días de rutina: seleccionar, renombrar, agregar, quitar ----
   // Los días son plantillas con nombre libre (Push, Pierna, Lunes...), no fechas.
