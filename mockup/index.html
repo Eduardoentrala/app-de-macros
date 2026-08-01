@@ -676,6 +676,15 @@
   .plan-cliente b{display:block;font:700 14px/1.2 sans-serif;color:var(--ink);}
   .plan-cliente span{display:block;font:600 11.5px/1.2 sans-serif;color:var(--ink-faint);margin-top:4px;}
 
+  /* Una fila de datos que además se puede tocar. Hereda de .info-row para
+     que no desentone con las de al lado, que son solo texto. */
+  .info-btn{
+    width:100%;border:none;background:none;font:inherit;cursor:pointer;
+    text-align:left;padding-left:0;padding-right:0;
+  }
+  .info-btn .v i{font-style:normal;color:var(--ink-faint);margin-left:7px;}
+  .info-btn:active{opacity:.55;}
+
   /* ---- Cuánto comiste ----
      Una sola cifra protagonista y el resultado debajo. Sin atajos ni rejillas
      de botones: el número se teclea y ya. */
@@ -1234,13 +1243,12 @@
                 <p class="greeting">Hola, <span id="saludoNombre">Eduardo</span> <span class="streak" id="racha">🔥 1 día</span></p>
                 <div class="subdate" id="subDate">—</div>
               </div>
-              <button class="icon-btn">↻</button>
             </div>
           </div>
           <div class="tabrow">
             <button class="tab-hoy active" data-tab="hoy">Hoy</button>
             <button class="tab-semana" data-tab="semana">Semana</button>
-            <div class="tabrow-float"><button class="icon-btn dark" id="themeBtnPhone">☀︎</button></div>
+            <div class="tabrow-float"><button class="icon-btn dark" id="iaBtn" title="Asistente">✨</button></div>
           </div>
 
           <div class="quickrow">
@@ -1433,9 +1441,9 @@
           <div class="card">
             <div class="field-label" style="margin-top:0;">¿Qué quieres lograr?</div>
             <div class="meta-opts" id="regObjetivo">
-              <button class="meta-opt" data-v="bajar"><b>Bajar de peso</b><span>Déficit del 20%</span></button>
+              <button class="meta-opt" data-v="bajar"><b>Bajar de peso</b><span>Poco a poco, ~0,35 kg por semana</span></button>
               <button class="meta-opt active" data-v="mantener"><b>Mantener peso</b><span>Justo tu gasto</span></button>
-              <button class="meta-opt" data-v="subir"><b>Subir de peso</b><span>Superávit del 15%</span></button>
+              <button class="meta-opt" data-v="subir"><b>Subir de peso</b><span>Lento y seguro, ~0,27 kg por semana</span></button>
             </div>
           </div>
 
@@ -1526,6 +1534,24 @@
         </div>
 
         <div class="toast" id="toastComida">Agregado</div>
+      </div>
+
+      <div class="sheet-backdrop" id="iaSheet">
+        <div class="sheet">
+          <h4>✨ Asistente</h4>
+          <p class="hint">Todavía no está conectado. Necesita una clave de IA
+            guardada en el servidor — no puede vivir dentro de la app, o
+            cualquiera podría sacarla y gastarla.</p>
+          <div class="calc-box">
+            <div class="calc-line"><span>Apuntar comida hablando</span><b>Pendiente</b></div>
+            <div class="calc-note">«Me comí dos huevos con pan» y lo registra solo.</div>
+          </div>
+          <div class="calc-box">
+            <div class="calc-line"><span>Armar planes de comida</span><b>Pendiente</b></div>
+            <div class="calc-note">Comidas sencillas que cuadren con las calorías de cada quien.</div>
+          </div>
+          <button class="btn-primary" id="iaCerrar">Entendido</button>
+        </div>
       </div>
 
       <!-- FRECUENTES -->
@@ -2073,7 +2099,14 @@
             <div class="info-row"><span>Peso</span><span class="v" id="profPeso">84.0 kg</span></div>
             <div class="info-row"><span>Altura</span><span class="v" id="profAltura">170.0 cm</span></div>
             <div class="info-row"><span>Edad</span><span class="v" id="profEdad">28 años</span></div>
-            <div class="info-row"><span>Objetivo</span><span class="v" id="profObjetivo">Mantener peso</span></div>
+            <button class="info-row info-btn" id="profObjetivoBtn">
+              <span>Objetivo</span>
+              <span class="v" id="profObjetivo">Mantener peso<i>›</i></span>
+            </button>
+            <button class="info-row info-btn" id="profTemaBtn">
+              <span>Tema</span>
+              <span class="v" id="profTema">Automático<i>›</i></span>
+            </button>
           </div>
           <div class="card" id="tarjetaPanel" hidden>
             <div class="goal-head">
@@ -2161,6 +2194,26 @@
               <span class="unit">min/semana</span>
             </div>
             <button class="btn-primary" id="mcSave">Guardar meta</button>
+          </div>
+        </div>
+
+        <div class="sheet-backdrop" id="objSheet">
+          <div class="sheet">
+            <h4>¿Qué quieres lograr?</h4>
+            <p class="hint">Cambiarlo recalcula tus calorías y arranca una semana nueva.</p>
+            <div class="meta-opts" id="objOpts">
+              <button class="meta-opt" data-obj="bajar"><b>Bajar de peso</b><span>Poco a poco</span></button>
+              <button class="meta-opt" data-obj="mantener"><b>Mantener peso</b><span>Justo tu gasto</span></button>
+              <button class="meta-opt" data-obj="subir"><b>Subir de peso</b><span>Lento y seguro</span></button>
+            </div>
+            <div class="calc-box">
+              <div class="calc-line"><span>Calorías al día</span><b id="objCal">—</b></div>
+              <div class="calc-note" id="objNota">—</div>
+            </div>
+            <p class="wc-warn" id="objAviso" hidden>⚠ Llevas días contados esta semana: al cambiar el objetivo el conteo vuelve a cero y hoy pasa a ser tu día 1.</p>
+            <p class="wc-safe">✓ Tus comidas registradas no se borran — siguen en el historial de cada día.</p>
+            <button class="btn-primary" id="objGuardar">Guardar objetivo</button>
+            <button class="btn-ghost-text" id="objCancelar">Cancelar</button>
           </div>
         </div>
 
@@ -3536,6 +3589,74 @@
     })['catch'](function(){});
     toast('toastPeso', 'Macros guardados · empieza tu semana');
   });
+  // ---- Cambiar el objetivo desde el Perfil ----
+  // Cambiar de "mantener" a "bajar" recalcula las calorías, así que es el
+  // mismo caso que editar los macros a mano: arranca semana nueva.
+  var objSheet = document.getElementById('objSheet');
+  var objElegido = null;
+
+  function pintarPreviaObjetivo(){
+    var antes = reg.objetivo;
+    reg.objetivo = objElegido;              // se prueba el cálculo con el nuevo
+    var m = calcularMacros();
+    reg.objetivo = antes;                   // y se deja como estaba hasta guardar
+
+    document.getElementById('objCal').textContent = mil(m.cal) + ' cal';
+    document.getElementById('objNota').textContent =
+      'Gastas ~' + mil(Math.round(m.gasto)) + ' al día · ' + textoRitmo(m.kgSemana) +
+      ' · P ' + m.P + ' · C ' + m.C + ' · G ' + m.G;
+
+    Array.from(document.querySelectorAll('#objOpts .meta-opt')).forEach(function(b){
+      b.classList.toggle('active', b.dataset.obj === objElegido);
+    });
+    // El aviso de reinicio solo si de verdad hay algo que perder
+    document.getElementById('objAviso').hidden = sumaSemana().cal === 0;
+  }
+
+  document.getElementById('profObjetivoBtn').addEventListener('click', function(){
+    objElegido = reg.objetivo;
+    pintarPreviaObjetivo();
+    objSheet.classList.add('open');
+  });
+  document.getElementById('objOpts').addEventListener('click', function(e){
+    var b = e.target.closest('.meta-opt');
+    if(!b) return;
+    objElegido = b.dataset.obj;
+    pintarPreviaObjetivo();
+  });
+
+  function cerrarObjetivo(){ objSheet.classList.remove('open'); objElegido = null; }
+  document.getElementById('objCancelar').addEventListener('click', cerrarObjetivo);
+  objSheet.addEventListener('click', function(e){ if(e.target === objSheet) cerrarObjetivo(); });
+
+  document.getElementById('objGuardar').addEventListener('click', function(){
+    if(!objElegido) return;
+    var cambio = objElegido !== reg.objetivo;
+    reg.objetivo = objElegido;
+
+    var m = calcularMacros();
+    goalP.value = m.P; goalC.value = m.C; goalG.value = m.G;
+    metasVigentes = leerMetas();            // ya confirmado: no debe volver a preguntar
+    document.getElementById('profObjetivo').innerHTML =
+      NOMBRE_OBJ[reg.objetivo] + '<i>›</i>';
+
+    if(cambio){                             // hoy pasa a ser el día 1
+      inicioSemana = HOY.getDay();
+      anclaSemana  = new Date(HOY);
+    }
+    cerrarObjetivo();
+    actualizarSemana();
+    toast('toastPeso', NOMBRE_OBJ[reg.objetivo] + ' · ' + mil(m.cal) + ' cal al día');
+
+    sbActualizarPerfil({
+      goal: reg.objetivo,
+      goal_protein_g: m.P, goal_carbs_g: m.C, goal_fat_g: m.G,
+      week_start_dow: inicioSemana
+    })['catch'](function(e){
+      toast('toastPeso', 'No se pudo guardar: ' + traducirError(e.message));
+    });
+  });
+
   // Cancelar devuelve los campos a como estaban: si no, quedarían con los
   // números nuevos en pantalla y la semana con los viejos, y el usuario
   // creería que se guardó.
@@ -4419,8 +4540,34 @@
     {f:1.55,  t:'Actividad moderada'}, {f:1.55, t:'Actividad moderada'},
     {f:1.725, t:'Actividad alta'}, {f:1.725, t:'Actividad alta'}, {f:1.9, t:'Actividad muy alta'}
   ];
-  var AJUSTE = {bajar:0.80, mantener:1, subir:1.15};
+  // Ritmo lento a propósito, y en calorías fijas en vez de porcentajes.
+  //
+  // Antes era -20% del gasto: a una persona de gasto alto le quitaba 600
+  // calorías al día, que son ~0.55 kg por semana. Eso se hace a costa de
+  // músculo, da hambre y casi nadie lo sostiene más de un mes.
+  //
+  // Un kilo de grasa son unas 7700 calorías, así que 400 al día salen a
+  // ~0.36 kg por semana. Para subir se va aún más despacio: 300 al día son
+  // ~0.27 kg, y por encima de eso lo que se gana es grasa.
+  var AJUSTE_KCAL = {bajar:-400, mantener:0, subir:300};
+  var KCAL_POR_KG = 7700;
   var NOMBRE_OBJ = {bajar:'Bajar de peso', mantener:'Mantener peso', subir:'Subir de peso'};
+
+  // "~0.36 kg por semana" en lugar de "déficit del 20%": nadie sabe qué
+  // significa un 20%, y todo el mundo entiende cuánto va a bajar.
+  // La fila del objetivo ahora es un botón, así que lleva su flecha. En un
+  // solo sitio para que no se pierda al repintarla desde otro lado.
+  function pintarObjetivoPerfil(){
+    var el = document.getElementById('profObjetivo');
+    if(el) el.innerHTML = (NOMBRE_OBJ[reg.objetivo] || '—') + '<i>›</i>';
+  }
+
+  function textoRitmo(kgSemana){
+    var k = Math.abs(kgSemana);
+    if(k < 0.05) return 'mantener el peso';
+    return (kgSemana < 0 ? 'bajar ~' : 'subir ~') +
+           k.toFixed(2).replace('.', ',') + ' kg por semana';
+  }
 
   function calcularMacros(){
     var edad = Number(document.getElementById('regEdad').value) || 0;
@@ -4430,7 +4577,18 @@
     var tmb = 10*peso + 6.25*alt - 5*edad + (reg.sexo === 'h' ? 5 : -161);
     var nivel = NIVEL[reg.dias];
     var gasto = tmb * nivel.f;
-    var cal = Math.round(gasto * AJUSTE[reg.objetivo]);
+
+    // Suelo de seguridad: nunca por debajo del metabolismo basal ni de
+    // 1200 calorías. Por debajo de ahí ya no se pierde grasa, se pierde
+    // músculo, y en una persona menuda el déficit fijo podría bajar tanto.
+    var cal = Math.max(
+      Math.round(gasto + AJUSTE_KCAL[reg.objetivo]),
+      Math.round(tmb),
+      1200
+    );
+    // El ritmo se calcula del déficit REAL, no del que se pidió: si el
+    // suelo recortó el déficit, la cifra que se enseña tiene que reflejarlo.
+    var kgSemana = (cal - gasto) * 7 / KCAL_POR_KG;
 
     // Proteína 2 g/kg · grasas 25% de las calorías · el resto en carbos
     var P = Math.round(peso * 2);
@@ -4443,8 +4601,9 @@
     document.getElementById('regG').textContent = G;
     document.getElementById('regNivel').textContent = nivel.t + ' · ' + reg.dias + ' días por semana';
     document.getElementById('regDetalle').textContent =
-      'Gastas ~' + mil(Math.round(gasto)) + ' cal al día · ' + NOMBRE_OBJ[reg.objetivo].toLowerCase();
-    return {cal:cal, P:P, C:C, G:G, peso:peso, alt:alt, edad:edad};
+      'Gastas ~' + mil(Math.round(gasto)) + ' cal al día · ' + textoRitmo(kgSemana);
+    return {cal:cal, P:P, C:C, G:G, peso:peso, alt:alt, edad:edad,
+            gasto:gasto, kgSemana:kgSemana};
   }
 
   function grupoOpciones(id, campo){
@@ -4476,7 +4635,7 @@
     document.getElementById('profPeso').textContent = m.peso.toFixed(1) + ' kg';
     document.getElementById('profAltura').textContent = m.alt.toFixed(1) + ' cm';
     document.getElementById('profEdad').textContent = m.edad + ' años';
-    document.getElementById('profObjetivo').textContent = NOMBRE_OBJ[reg.objetivo];
+    pintarObjetivoPerfil();
 
     // Las metas del perfil quedan con lo calculado
     goalP.value = m.P; goalC.value = m.C; goalG.value = m.G;
@@ -5998,7 +6157,7 @@
           if(p.weight_kg != null) document.getElementById('profPeso').textContent   = Number(p.weight_kg).toFixed(1) + ' kg';
           if(p.height_cm != null) document.getElementById('profAltura').textContent = Number(p.height_cm).toFixed(1) + ' cm';
           if(p.age != null)       document.getElementById('profEdad').textContent   = p.age + ' años';
-          document.getElementById('profObjetivo').textContent = NOMBRE_OBJ[reg.objetivo] || '—';
+          pintarObjetivoPerfil();
 
           goalP.value = p.goal_protein_g;
           goalC.value = p.goal_carbs_g;
@@ -6162,11 +6321,22 @@
     );
   }
 
+  function pintarTemaPerfil(){
+    var el = document.getElementById('profTema');
+    if(!el) return;
+    var guardado = null;
+    try{ guardado = localStorage.getItem(TEMA_KEY); }catch(e){}
+    el.innerHTML = (guardado === 'dark' ? 'Oscuro'
+                  : guardado === 'light' ? 'Claro'
+                  : 'Automático') + '<i>›</i>';
+  }
+
   function toggleTheme(){
     var siguiente = temaEfectivo() === 'dark' ? 'light' : 'dark';
     document.documentElement.setAttribute('data-theme', siguiente);
     pintarBarraNavegador(siguiente);
     try{ localStorage.setItem(TEMA_KEY, siguiente); }catch(e){}
+    pintarTemaPerfil();
   }
 
   // Al abrir: si ya había una elección guardada, la barra se pone a juego.
@@ -6174,7 +6344,24 @@
   try{
     if(localStorage.getItem(TEMA_KEY)) pintarBarraNavegador(temaEfectivo());
   }catch(e){}
+  pintarTemaPerfil();
+
+  // ---- Asistente (aún sin conectar) ----
+  var iaSheet = document.getElementById('iaSheet');
+  document.getElementById('iaBtn').addEventListener('click', function(){
+    iaSheet.classList.add('open');
+  });
+  document.getElementById('iaCerrar').addEventListener('click', function(){
+    iaSheet.classList.remove('open');
+  });
+  iaSheet.addEventListener('click', function(e){
+    if(e.target === iaSheet) iaSheet.classList.remove('open');
+  });
+
   document.getElementById('themeBtn').addEventListener('click', toggleTheme);
-  document.getElementById('themeBtnPhone').addEventListener('click', toggleTheme);
+  // El botón del sol se quitó del Diario para dejarle el sitio al asistente.
+  // El tema se cambia ahora desde Perfil: en el teléfono la barra del
+  // estudio no se ve, así que sin esta fila la función quedaba inalcanzable.
+  document.getElementById('profTemaBtn').addEventListener('click', toggleTheme);
 })();
 </script>
