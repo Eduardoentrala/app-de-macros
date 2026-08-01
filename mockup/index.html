@@ -644,9 +644,9 @@
     margin:22px 0 20px;
   }
   .cant-campo input{
-    /* El ancho lo ajusta el JS a los dígitos que haya: con un ancho fijo, el
-       número quedaba descentrado respecto a la unidad. */
-    width:3ch;border:none;background:none;outline:none;
+    /* El ancho lo ajusta el JS midiendo el texto: con un ancho fijo el número
+       quedaba descentrado, y calculándolo en `ch` se cortaba el último dígito. */
+    width:56px;border:none;background:none;outline:none;
     font:800 52px/1 -apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;
     letter-spacing:-.03em;color:var(--ink);text-align:right;
     font-variant-numeric:tabular-nums;   /* que no bailen las cifras al escribir */
@@ -3682,6 +3682,24 @@
 
   function abreviarUnidad(u){ return u === 'Gramos' ? 'g' : u.toLowerCase(); }
 
+  // El campo crece con los dígitos, para que el número y la unidad queden
+  // centrados como un bloque.
+  //
+  // El ancho NO se calcula en `ch`: esa unidad mide el avance del cero en la
+  // fuente, y con negrita 800 y la fuente de respaldo de cada sistema no
+  // coincide con lo que ocupan de verdad los dígitos. Dando los caracteres
+  // justos, "121" salía cortado por el último 1. Se mide el texto real con
+  // un lienzo y se añade un poco de holgura.
+  var medidor = document.createElement('canvas').getContext('2d');
+  function ajustarAnchoCantidad(){
+    var cs = getComputedStyle(cantValor);
+    medidor.font = cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
+    var texto = String(cantValor.value || '0');
+    var ancho = medidor.measureText(texto).width;
+    // El mínimo evita que el campo desaparezca al borrarlo del todo
+    cantValor.style.width = Math.max(46, Math.ceil(ancho) + 6) + 'px';
+  }
+
   function pintarPreviaCantidad(){
     if(!alimentoEditando) return;
     var a = alimentoEditando;
@@ -3691,9 +3709,7 @@
     document.getElementById('cantP').textContent = un(P) + ' g';
     document.getElementById('cantC').textContent = un(C) + ' g';
     document.getElementById('cantG').textContent = un(G) + ' g';
-    // El campo crece con los dígitos para que el número y la unidad queden
-    // centrados como un bloque, sin hueco a un lado.
-    cantValor.style.width = Math.max(2, String(cantValor.value).length) + 'ch';
+    ajustarAnchoCantidad();
   }
 
   function abrirCantidad(a){
