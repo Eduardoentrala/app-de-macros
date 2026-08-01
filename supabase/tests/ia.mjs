@@ -69,6 +69,19 @@ check('cada quien lee su propio uso',
 check('y no el de los demas',
   (await comoUsuario(YO, `select count(*)::int n from public.ia_uso where user_id='${OTRO}'`)).rows[0].n === 0);
 
+console.log('\n— Permisos: quien puede mover el contador —');
+// Esto es lo que fallo en produccion. La 0015 revoco el permiso a
+// `public` para que ningun usuario se regalara consultas, pero
+// service_role -quien llama desde la Edge Function- dependia justo de
+// ese permiso. La 0016 se lo devuelve. Sin esta prueba, volveria a
+// pasar y otra vez sin dejar rastro en el registro.
+const puede = async (rol) => (await db.query(
+  `select has_function_privilege('${rol}','public.gastar_consulta_ia(uuid,integer)','execute') p`
+)).rows[0].p;
+check('el servidor (service_role) SI puede', (await puede('service_role')) === true);
+check('un usuario normal NO puede',          (await puede('authenticated')) === false);
+check('un anonimo NO puede',                 (await puede('anon')) === false);
+
 console.log('\n— Limpieza —');
 await db.exec(`insert into public.ia_uso(user_id,dia,consultas)
                values ('${YO}', current_date - 40, 5)`);
