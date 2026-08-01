@@ -42,9 +42,13 @@ function fuentes() {
   for (const m of html.matchAll(/<script(?![^>]*\ssrc=)[^>]*>([\s\S]*?)<\/script>/g))
     out.push({ nombre: 'index.html <script>', codigo: m[1], modulo: /type=["']module["']/.test(m[0]) });
 
-  for (const m of html.matchAll(/<script[^>]*\ssrc=["']([^"']+)["']/g)) {
+  // Un script clasico y un modulo no se comprueban igual: el modulo va en
+  // modo estricto y el clasico no, asi que hay que mirar la etiqueta en vez
+  // de suponerlo.
+  for (const m of html.matchAll(/<script[^>]*\ssrc=["']([^"']+)["'][^>]*>/g)) {
     const ruta = join(RAIZ, 'docs', m[1]);
-    if (existsSync(ruta)) out.push({ nombre: m[1], codigo: readFileSync(ruta, 'utf8'), modulo: true });
+    const modulo = /type=["']module["']/.test(m[0]);
+    if (existsSync(ruta)) out.push({ nombre: m[1], codigo: readFileSync(ruta, 'utf8'), modulo });
     else out.push({ nombre: m[1], codigo: null });
   }
 
