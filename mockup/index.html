@@ -636,6 +636,55 @@
   }
   .foto-info{margin-top:6px;}
 
+  /* ---- Cuánto comiste ----
+     Una sola cifra protagonista y el resultado debajo. Sin atajos ni rejillas
+     de botones: el número se teclea y ya. */
+  .cant-campo{
+    display:flex;align-items:baseline;justify-content:center;gap:8px;
+    margin:22px 0 20px;
+  }
+  .cant-campo input{
+    /* El ancho lo ajusta el JS a los dígitos que haya: con un ancho fijo, el
+       número quedaba descentrado respecto a la unidad. */
+    width:3ch;border:none;background:none;outline:none;
+    font:800 52px/1 -apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;
+    letter-spacing:-.03em;color:var(--ink);text-align:right;
+    font-variant-numeric:tabular-nums;   /* que no bailen las cifras al escribir */
+    -moz-appearance:textfield;
+  }
+  /* Fuera las flechitas del campo numérico: rompen la línea */
+  .cant-campo input::-webkit-outer-spin-button,
+  .cant-campo input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+  .cant-campo span{
+    font:600 21px/1 sans-serif;color:var(--ink-faint);letter-spacing:-.01em;
+  }
+
+  .cant-resumen{
+    background:var(--app-bg);border-radius:18px;padding:18px 16px 16px;margin-bottom:18px;
+  }
+  .cant-cal{text-align:center;}
+  .cant-cal b{
+    display:block;font:800 34px/1 sans-serif;color:var(--ink);
+    font-variant-numeric:tabular-nums;letter-spacing:-.02em;
+    transition:opacity .18s ease;
+  }
+  .cant-cal span{
+    display:block;font:600 11.5px/1 sans-serif;color:var(--ink-faint);
+    margin-top:6px;text-transform:uppercase;letter-spacing:.07em;
+  }
+  .cant-macros{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:8px;
+    margin-top:16px;padding-top:15px;border-top:1px solid var(--line);
+  }
+  .cant-macros div{text-align:center;}
+  .cant-macros b{
+    display:block;font:700 17px/1 sans-serif;color:var(--ink);
+    font-variant-numeric:tabular-nums;
+  }
+  .cant-macros span{
+    display:block;font:600 10.5px/1 sans-serif;color:var(--ink-faint);margin-top:5px;
+  }
+
 
   /* ---- Comparador ---- */
   .cmp-controles{background:var(--card-bg);padding:0 16px 12px;flex:none;border-bottom:1px solid var(--line);}
@@ -1404,15 +1453,22 @@
         <div class="sheet-backdrop" id="cantSheet">
           <div class="sheet">
             <h4 id="cantNombre">Alimento</h4>
-            <p class="hint">¿Cuánto comiste de verdad? Los macros se recalculan solos.</p>
-            <div class="preset-grid" id="cantPresets"></div>
-            <div class="custom-row">
+            <p class="hint">¿Cuánto comiste?</p>
+
+            <div class="cant-campo">
               <input id="cantValor" type="number" min="0.1" step="1" inputmode="decimal">
-              <span class="unit" id="cantUnidad">g</span>
+              <span id="cantUnidad">g</span>
             </div>
-            <div class="calc-box">
-              <div class="calc-line"><span>Quedaría en</span><b id="cantMacros">—</b></div>
+
+            <div class="cant-resumen">
+              <div class="cant-cal"><b id="cantCal">0</b><span>calorías</span></div>
+              <div class="cant-macros">
+                <div><b id="cantP">0</b><span>Proteína</span></div>
+                <div><b id="cantC">0</b><span>Carbos</span></div>
+                <div><b id="cantG">0</b><span>Grasas</span></div>
+              </div>
             </div>
+
             <button class="btn-primary" id="cantGuardar">Guardar</button>
             <button class="btn-ghost-text" id="cantCancelar">Cancelar</button>
           </div>
@@ -3548,11 +3604,12 @@
     a.G = Math.round(a.porBase.G * f * 10) / 10;
   }
 
-  // En la comida sí interesa ver cuánto es, no solo los macros
+  // En la comida interesa primero cuánto y cuántas calorías; los macros van
+  // detrás y compactos, o la línea se parte en dos en un teléfono.
   function lineaComida(a){
     return un(a.cant) + ' ' + (a.u === 'Gramos' ? 'g' : a.u.toLowerCase()) +
-           ' · P ' + un(a.P) + ' · C ' + un(a.C) + ' · G ' + un(a.G) +
-           ' · ' + Math.round(calAlim(a)) + ' kcal';
+           ' · ' + Math.round(calAlim(a)) + ' kcal' +
+           ' · P' + un(a.P) + ' C' + un(a.C) + ' G' + un(a.G);
   }
 
   // Las calorías de cada fila del Diario salen de lo que tiene esa comida
@@ -3630,34 +3687,30 @@
     var a = alimentoEditando;
     var f = (Number(cantValor.value) || 0) / a.base;
     var P = a.porBase.P * f, C = a.porBase.C * f, G = a.porBase.G * f;
-    document.getElementById('cantMacros').textContent =
-      'P ' + un(P) + ' · C ' + un(C) + ' · G ' + un(G) + ' · ' +
-      Math.round(P*4 + C*4 + G*9) + ' kcal';
-    Array.from(document.querySelectorAll('#cantPresets .preset')).forEach(function(p){
-      p.classList.toggle('active', Number(p.dataset.cant) === Number(cantValor.value));
-    });
+    document.getElementById('cantCal').textContent = mil(P*4 + C*4 + G*9);
+    document.getElementById('cantP').textContent = un(P) + ' g';
+    document.getElementById('cantC').textContent = un(C) + ' g';
+    document.getElementById('cantG').textContent = un(G) + ' g';
+    // El campo crece con los dígitos para que el número y la unidad queden
+    // centrados como un bloque, sin hueco a un lado.
+    cantValor.style.width = Math.max(2, String(cantValor.value).length) + 'ch';
   }
 
   function abrirCantidad(a){
     alimentoEditando = prepararAlimento(a);
     document.getElementById('cantNombre').textContent = a.n;
     document.getElementById('cantUnidad').textContent = abreviarUnidad(a.u);
-    // Atajos distintos según se mida en gramos o en piezas
-    var opciones = a.base === 100 ? [30, 50, 100, 150, 200, 250] : [1, 2, 3, 4];
-    document.getElementById('cantPresets').innerHTML = opciones.map(function(v){
-      return '<button class="preset" data-cant="' + v + '">' + v +
-             '<small>' + abreviarUnidad(a.u) + '</small></button>';
-    }).join('');
     cantValor.value = a.cant;
     pintarPreviaCantidad();
     cantSheet.classList.add('open');
+    // Con el número ya seleccionado: se teclea encima sin tener que borrarlo
+    setTimeout(function(){ cantValor.focus(); cantValor.select(); }, 80);
   }
 
-  document.getElementById('cantPresets').addEventListener('click', function(e){
-    var p = e.target.closest('.preset');
-    if(p){ cantValor.value = p.dataset.cant; pintarPreviaCantidad(); }
-  });
   cantValor.addEventListener('input', pintarPreviaCantidad);
+  cantValor.addEventListener('keydown', function(e){
+    if(e.key === 'Enter') document.getElementById('cantGuardar').click();
+  });
 
   function cerrarCantidad(){ cantSheet.classList.remove('open'); alimentoEditando = null; }
   document.getElementById('cantCancelar').addEventListener('click', cerrarCantidad);
