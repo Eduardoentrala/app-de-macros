@@ -4443,17 +4443,9 @@
   var ROL = 'cliente';
   var NOMBRE_ROL = {cliente:'Cliente', coach:'Coach', super_admin:'Super admin'};
 
-  var CLIENTES_DEL_COACH = [
-    {n:'Ana Rivas',     obj:'Bajar de peso',   sem:'6 sem', act:'hoy'},
-    {n:'Luis Medina',   obj:'Subir de peso',   sem:'3 sem', act:'ayer'},
-    {n:'Sofía Cárdenas',obj:'Mantener peso',   sem:'11 sem', act:'hace 2 d'},
-    {n:'Iván Rocha',    obj:'Bajar de peso',   sem:'2 sem', act:'hoy'}
-  ];
-  var COACHES = [
-    {n:'Diana Salas',  clientes:38},
-    {n:'Marco Téllez', clientes:52},
-    {n:'Paola Nieto',  clientes:19}
-  ];
+  // Los llena cargarPanelCoach() desde la vista mis_clientes
+  var CLIENTES_DEL_COACH = [];
+  var COACHES = [];
 
   function iniciales(nombre){
     return nombre.split(' ').map(function(p){ return p[0]; }).slice(0,2).join('').toUpperCase();
@@ -4527,40 +4519,34 @@
   // Separado del panel de coach a propósito: son públicos distintos.
   // Los números vendrían del RPC admin_estadisticas(), que falla si
   // quien llama no es super admin.
+  // Todo en cero: lo rellena admin_estadisticas() al abrir el panel. Antes
+  // traía cifras inventadas (486 clientes, 2 GB de fotos) que se veían un
+  // instante antes de llegar las de verdad, y se quedaban ahí si la consulta
+  // fallaba. Un tablero que miente es peor que uno vacío.
   var STATS = {
-    entrenadores: 12, entrenadores_activos: 11,
-    clientes: 486, usuarios: 499, cuentas_desactivadas: 7,
-    clientes_activos: 341, altas_7_dias: 23, altas_30_dias: 94, sin_coach: 18,
-    fotos_total: 6144, storage_bytes: 2213908480, storage_objetos: 6144,
-    comidas_registradas: 128740, sesiones_entreno: 9312, dias_inactividad: 14
+    entrenadores: 0, entrenadores_activos: 0,
+    clientes: 0, usuarios: 0, cuentas_desactivadas: 0,
+    clientes_activos: 0, altas_7_dias: 0, altas_30_dias: 0, sin_coach: 0,
+    fotos_total: 0, storage_bytes: 0, storage_objetos: 0,
+    comidas_registradas: 0, sesiones_entreno: 0, dias_inactividad: 14
   };
-  var FLAGS = [
-    {k:'registro_entrenadores', on:false, t:'Registro de entrenadores', d:'Permite darse de alta como coach sin invitación.', g:'Altas'},
-    {k:'registro_clientes',     on:true,  t:'Registro de clientes',     d:'Alta abierta de clientes nuevos.', g:'Altas'},
-    {k:'fotografias',           on:true,  t:'Fotografías de progreso',  d:'Subida y comparación de fotos semanales.', g:'Funciones'},
-    {k:'chat',                  on:false, t:'Chat',                     d:'Mensajería entre coach y cliente.', g:'Funciones'},
-    {k:'ia',                    on:false, t:'Funciones de IA',          d:'Asistente, foto de plato y escáner de etiqueta.', g:'Funciones'},
-    {k:'notificaciones',        on:true,  t:'Notificaciones',           d:'Avisos push y recordatorios.', g:'Funciones'},
-    {k:'suscripciones',         on:false, t:'Suscripciones',            d:'Cobros y planes de pago.', g:'Negocio'},
-    {k:'modo_mantenimiento',    on:false, t:'Modo mantenimiento',       d:'Bloquea el acceso a todos menos a ti.', g:'Sistema'}
-  ];
-  var USUARIOS = [
-    {n:'Diana Salas',     c:'diana@ejemplo.com',  r:'coach',   on:true,  extra:'38 clientes'},
-    {n:'Marco Téllez',    c:'marco@ejemplo.com',  r:'coach',   on:true,  extra:'52 clientes'},
-    {n:'Paola Nieto',     c:'paola@ejemplo.com',  r:'coach',   on:false, extra:'19 clientes'},
-    {n:'Ana Rivas',       c:'ana@ejemplo.com',    r:'cliente', on:true,  extra:'Coach: Diana · hoy'},
-    {n:'Luis Medina',     c:'luis@ejemplo.com',   r:'cliente', on:true,  extra:'Coach: Marco · ayer'},
-    {n:'Sofía Cárdenas',  c:'sofia@ejemplo.com',  r:'cliente', on:true,  extra:'Coach: Diana · hace 2 d'},
-    {n:'Iván Rocha',      c:'ivan@ejemplo.com',   r:'cliente', on:false, extra:'Sin coach · hace 21 d'}
-  ];
+  // Vacíos: los trae cargarPanelAdmin() de la tabla feature_flags y de
+  // admin_buscar_usuarios(). Las listas inventadas (Diana Salas, Ana Rivas…)
+  // se veían mezcladas con las cuentas reales.
+  var FLAGS = [];
+  var USUARIOS = [];
   var admVista = 'tablero', admFiltro = '';
 
   function gb(b){ return (b/1073741824).toFixed(2) + ' GB'; }
   function mil0(n){ return n.toLocaleString('es-MX'); }
 
   function pintarTablero(){
-    var inactivos = STATS.clientes - STATS.clientes_activos;
-    var pct = Math.round(STATS.clientes_activos / STATS.clientes * 100);
+    var inactivos = Math.max(0, STATS.clientes - STATS.clientes_activos);
+    // Sin clientes, la división da NaN y el tablero mostraría "NaN%".
+    var pct = STATS.clientes > 0
+      ? Math.round(STATS.clientes_activos / STATS.clientes * 100) : 0;
+    var kbFoto = STATS.storage_objetos > 0
+      ? Math.round(STATS.storage_bytes / STATS.storage_objetos / 1024) : 0;
     return '<div class="kpi-grid">'+
       '<div class="kpi"><b>'+mil0(STATS.entrenadores)+'</b><span>Entrenadores</span>'+
         '<div class="sub">'+STATS.entrenadores_activos+' activos</div></div>'+
@@ -4575,7 +4561,7 @@
         STATS.cuentas_desactivadas+' desactivadas</div></div>'+
       '<div class="kpi ancho"><b>'+gb(STATS.storage_bytes)+'</b><span>Almacenamiento de fotos</span>'+
         '<div class="sub">'+mil0(STATS.storage_objetos)+' archivos · '+
-        Math.round(STATS.storage_bytes/STATS.storage_objetos/1024)+' KB de promedio</div></div>'+
+        kbFoto+' KB de promedio</div></div>'+
       '<div class="kpi"><b>'+mil0(STATS.comidas_registradas)+'</b><span>Comidas registradas</span></div>'+
       '<div class="kpi"><b>'+mil0(STATS.sesiones_entreno)+'</b><span>Sesiones de entreno</span></div>'+
     '</div>'+
@@ -4595,18 +4581,23 @@
     (lista.length ? lista.map(function(u, i){
       return '<div class="usr-row'+(u.on?'':' apagado')+'">'+
         '<div class="cliente-ava">'+iniciales(u.n)+'</div>'+
+        // NOMBRE_ROL y no un if de dos ramas: ahora hay cuatro roles, y con
+        // el if tu propia cuenta de super admin salía etiquetada "Cliente".
         '<div class="txt"><b>'+u.n+' <span class="rol-badge '+u.r+'" style="margin:0;">'+
-          (u.r==='coach'?'Coach':'Cliente')+'</span></b>'+
+          (NOMBRE_ROL[u.r] || u.r)+'</span></b>'+
           '<span>'+u.c+' · '+u.extra+(u.on?'':' · DESACTIVADO')+'</span></div>'+
         '<div class="usr-acc">'+
           '<button class="'+(u.on?'b-off':'b-on')+'" data-toggle="'+USUARIOS.indexOf(u)+'">'+(u.on?'Desactivar':'Activar')+'</button>'+
           '<button class="b-key" data-pass="'+USUARIOS.indexOf(u)+'">🔑</button>'+
         '</div></div>';
-    }).join('') : '<p class="cmp-aviso">Nadie coincide con esa búsqueda.</p>')+
+    }).join('')
+      : (USUARIOS.length ? '<p class="cmp-aviso">Nadie coincide con esa búsqueda.</p>'
+                         : '<p class="cmp-aviso">Cargando usuarios…</p>'))+
     '<p class="cmp-aviso">Crear cuentas y reiniciar contraseñas pasan por una Edge Function que verifica tu rol en el servidor: la clave de servicio nunca viaja en el teléfono.</p>';
   }
 
   function pintarConfig(){
+    if(!FLAGS.length) return '<p class="cmp-aviso">Cargando ajustes…</p>';
     var grupos = {};
     FLAGS.forEach(function(f){ (grupos[f.g] = grupos[f.g] || []).push(f); });
     return Object.keys(grupos).map(function(g){
