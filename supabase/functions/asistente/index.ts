@@ -23,10 +23,21 @@
 import Anthropic from 'npm:@anthropic-ai/sdk@0.71.0';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
+// OJO CON ESTA LISTA. El navegador, antes de mandar la petición de
+// verdad, pregunta si puede usar estas cabeceras. Si falta una sola de
+// las que la app envía, la respuesta es que no y la petición real NUNCA
+// sale: en el teléfono se ve un "Load failed" sin más explicación, y en
+// el registro de la función no aparece ningún error, porque la petición
+// no llegó.
+//
+// `apikey` es la que faltaba: sbFetch la manda en TODAS las llamadas.
+// curl no hace esa pregunta previa, asi que probar con curl da verde
+// aunque el navegador esté bloqueado. Hay que probarlo desde el navegador.
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, content-type',
+  'Access-Control-Allow-Headers': 'authorization, content-type, apikey, x-client-info',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Max-Age': '86400',
 };
 
 // Tope diario por persona. Es la única defensa contra que un solo usuario
