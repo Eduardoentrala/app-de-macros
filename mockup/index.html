@@ -2017,6 +2017,10 @@
     if(id === 'library') renderBottom();
     show(id);
     animarVista(push ? 'der' : null);   // solo al entrar en una subpantalla
+
+    // Los paneles traen sus datos al abrirse, no al arrancar la app
+    if(id === 'admin' && typeof cargarPanelAdmin === 'function') cargarPanelAdmin();
+    if(id === 'panel' && typeof cargarPanelCoach === 'function') cargarPanelCoach();
   }
   function back(){
     if(stack.length > 1){ stack.pop(); }
@@ -4646,6 +4650,16 @@
       f.on = !f.on;
       pintarAdmin();
       toast('toastAdmin', f.t + (f.on ? ': encendido' : ': apagado'));
+
+      // Se guarda en la tabla; si falla, el interruptor vuelve solo. Un
+      // interruptor que dice "encendido" y no lo está es peor que un error.
+      sbFetch('/rest/v1/feature_flags?clave=eq.' + encodeURIComponent(f.k), {
+        method:'PATCH', headers:{ 'Prefer':'return=minimal' },
+        body: JSON.stringify({ activo: f.on })
+      })['catch'](function(err){
+        f.on = !f.on; pintarAdmin();
+        toast('toastAdmin', 'No se pudo guardar: ' + traducirError(err.message));
+      });
       return;
     }
     var tg = e.target.closest('[data-toggle]');
@@ -4654,6 +4668,15 @@
       u.on = !u.on;
       pintarAdmin();
       toast('toastAdmin', u.n + (u.on ? ' activado' : ' desactivado'));
+
+      // admin_activar() comprueba en la base que quien llama es super admin
+      // y deja anotado el cambio en la bitácora.
+      if(u.id){
+        sbRpc('admin_activar', { p_usuario: u.id, p_activo: u.on })['catch'](function(err){
+          u.on = !u.on; pintarAdmin();
+          toast('toastAdmin', 'No se pudo guardar: ' + traducirError(err.message));
+        });
+      }
       return;
     }
     var pw = e.target.closest('[data-pass]');
@@ -4665,6 +4688,76 @@
   });
 
   pintarAdmin();
+
+  // ---- Los paneles, con datos reales ----
+  // Se cargan al ABRIR el panel, no al arrancar la app: son consultas caras
+  // y la inmensa mayoría de la gente es cliente y nunca las va a ver.
+  function sbRpc(nombre, args){
+    return sbFetch('/rest/v1/rpc/' + nombre, { method:'POST', body: JSON.stringify(args || {}) });
+  }
+
+  function cargarPanelAdmin(){
+    if(!sesion || !sesion.user) return Promise.resolve();
+    return Promise.all([
+      sbRpc('admin_estadisticas'),
+      sbRpc('admin_buscar_usuarios', { p_texto: '', p_limite: 200 }),
+      sbFetch('/rest/v1/feature_flags?select=clave,activo,titulo,descripcion,grupo&order=grupo.asc,clave.asc')
+    ]).then(function(r){
+      var s = r[0] || {}, us = r[1] || [], fl = r[2] || [];
+
+      // Las claves que devuelve admin_estadisticas() son las mismas que ya
+      // usaba el tablero, así que basta con volcarlas encima.
+      Object.keys(s).forEach(function(k){ STATS[k] = s[k]; });
+
+      USUARIOS.length = 0;
+      us.forEach(function(u){
+        USUARIOS.push({
+          id: u.id,
+          n: (u.nombre || '').trim() || '(sin nombre)',
+          c: u.correo,
+          r: u.rol,
+          on: u.activo,
+          extra: (u.coach ? 'Coach: ' + u.coach : 'Sin coach') +
+                 ' · ' + (u.ultima_actividad ? 'activo ' + u.ultima_actividad : 'sin actividad')
+        });
+      });
+
+      FLAGS.length = 0;
+      fl.forEach(function(f){
+        FLAGS.push({ k:f.clave, on:f.activo, t:f.titulo,
+                     d:f.descripcion || '', g:f.grupo || 'general' });
+      });
+
+      pintarAdmin();
+    })['catch'](function(e){
+      toast('toastAdmin', 'No se pudo cargar: ' + traducirError(e.message));
+    });
+  }
+
+  function cargarPanelCoach(){
+    if(!sesion || !sesion.user) return Promise.resolve();
+    // La vista mis_clientes ya viene filtrada por la base: un coach solo
+    // recibe los suyos. No hay que filtrar nada aquí.
+    return sbFetch('/rest/v1/mis_clientes?select=id,full_name,goal,asignado_en&order=asignado_en.desc')
+      .then(function(cs){
+        CLIENTES_DEL_COACH.length = 0;
+        (cs || []).forEach(function(c){
+          var sem = c.asignado_en
+            ? Math.max(1, Math.round((HOY - new Date(c.asignado_en)) / 604800000)) : 1;
+          CLIENTES_DEL_COACH.push({
+            id: c.id,
+            n: (c.full_name || '').trim() || '(sin nombre)',
+            obj: NOMBRE_OBJ[c.goal] || '—',
+            sem: sem + ' sem',
+            act: '—'
+          });
+        });
+        pintarPanel();
+        aplicarRol();          // refresca el contador de la tarjeta del Perfil
+      })['catch'](function(e){
+        toast('toastAdmin', 'No se pudo cargar: ' + traducirError(e.message));
+      });
+  }
 
   // ================= DATOS REALES DEL DIARIO =================
   // No se reescribe nada de la interfaz: se rellenan las MISMAS estructuras
@@ -4808,6 +4901,14 @@
 
           // Las semanas de Fotos se cuentan desde aquí: la del registro es la 1
           if(p.created_at) inicioPrograma = lunesDe(new Date(p.created_at));
+
+          // El rol de verdad, el de la base. Es lo que decide si aparece la
+          // tarjeta del panel en Perfil y a cuál de los dos lleva. El
+          // selector de la barra de estudio solo sirve para ver los diseños.
+          if(p.role && NOMBRE_ROL[p.role]){
+            ROL = p.role;
+            aplicarRol();
+          }
 
           if(p.cardio_goal_min != null) META_CARDIO = Number(p.cardio_goal_min);
           if(p.week_start_dow != null){
