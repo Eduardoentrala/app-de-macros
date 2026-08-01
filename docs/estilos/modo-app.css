@@ -1,0 +1,57 @@
+/* Va el ULTIMO a proposito: apaga el telefono dibujado de maqueta.css
+   y estira la app a pantalla completa. Cargado antes, perderia. */
+
+/* ===================================================================
+   MODO APP — cuando esto se abre en un teléfono de verdad
+
+   El mismo archivo sirve para las dos cosas. En pantalla ancha sigue
+   siendo la vista de estudio: el teléfono dibujado, la barra de
+   navegación de arriba y las notas. En un teléfono desaparece todo eso
+   y la app ocupa la pantalla completa.
+
+   Se activa por ancho O por tipo de puntero, para que un teléfono en
+   horizontal (que puede pasar de 700px de ancho) no se salga del modo
+   app y vuelva a mostrar el teléfono dibujado dentro del teléfono.
+   =================================================================== */
+@media (max-width:700px), (hover:none) and (pointer:coarse){
+  body{
+    display:block;
+    padding:0;
+    gap:0;
+    background:var(--app-bg);
+    height:100vh;
+    height:100dvh;          /* descuenta la barra del navegador al aparecer */
+    overflow:hidden;        /* scrollean los .scroll de dentro, no la página */
+    overscroll-behavior:none;  /* corta el "tirar para recargar" */
+  }
+
+  /* Lo que es del estudio y no de la app. La barra de arriba se oculta
+     pero NO se quita del DOM: el JS le sigue hablando, y la app ya tiene
+     su propia navegación (.bottom-tabs) y su propio ajuste de tema, en
+     una fila del Perfil. */
+  .studio-head,
+  .toolbar,
+  .note-callout,
+  .notch,
+  .home-indicator,
+  .statusbar{ display:none; }
+
+  .stage{ display:block; gap:0; }
+
+  .phone{
+    width:100%;
+    max-width:none;
+    height:100vh;
+    height:100dvh;
+    border-radius:0;
+    padding:0;
+    background:var(--app-bg);
+    box-shadow:none;
+  }
+  .phone-screen{
+    border-radius:0;
+    /* Deja libre la muesca / isla dinámica. En un teléfono sin muesca
+       env() vale 0 y esto no hace nada. */
+    padding-top:env(safe-area-inset-top);
+  }
+}

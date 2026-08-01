@@ -1,0 +1,84 @@
+/* Los colores y el tema, y nada mas. Todo lo demas los usa via var(),
+   asi que cambiar aqui un valor cambia la app entera. Las tres listas
+   estan repetidas a proposito: la fija, la que impone data-theme cuando
+   la persona elige a mano, y la del ajuste del telefono. */
+
+:root{
+  --app-bg:#f1f1f4;
+  --card-bg:#ffffff;
+  --ink:#0b0b0d;
+  --ink-soft:#6c6f75;
+  --ink-faint:#a6a9ae;
+  --line:#e6e6ea;
+  --pill-bg:#eef0f2;
+  --pill-ink:#4a4d53;
+  --green:#1c9a56;
+  --green-soft:#e4f6ec;
+  --red:#e0473e;
+  --red-soft:#fbe9e8;
+  --amber:#c8790a;
+  --amber-soft:#fdf1de;
+  --shadow:0 1px 2px rgba(20,20,25,.04), 0 8px 24px -12px rgba(20,20,25,.12);
+  --chrome-bg:#f6f5f2;
+  --chrome-ink:#1c1c1e;
+  --chrome-line:#dedcd6;
+  --chrome-accent:#0b0b0d;
+}
+:root[data-theme="dark"]{
+  --app-bg:#0b0b0c;
+  --card-bg:#1b1c1e;
+  --ink:#f2f2f4;
+  --ink-soft:#9a9da3;
+  --ink-faint:#6c6f75;
+  --line:#2c2d30;
+  --pill-bg:#26272a;
+  --pill-ink:#c7c9cd;
+  --green:#3ecb7e;
+  --green-soft:#12271b;
+  --red:#ff6b62;
+  --red-soft:#2c1615;
+  --amber:#e2a13a;
+  --amber-soft:#2e2411;
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+  --chrome-bg:#141416;
+  --chrome-ink:#eceae6;
+  --chrome-line:#2c2b28;
+  --chrome-accent:#f2f2f4;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --app-bg:#0b0b0c;
+    --card-bg:#1b1c1e;
+    --ink:#f2f2f4;
+    --ink-soft:#9a9da3;
+    --ink-faint:#6c6f75;
+    --line:#2c2d30;
+    --pill-bg:#26272a;
+    --pill-ink:#c7c9cd;
+    --green:#3ecb7e;
+    --green-soft:#12271b;
+    --red:#ff6b62;
+    --red-soft:#2c1615;
+    --amber:#e2a13a;
+  --amber-soft:#2e2411;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+    --chrome-bg:#141416;
+    --chrome-ink:#eceae6;
+    --chrome-line:#2c2b28;
+    --chrome-accent:#f2f2f4;
+  }
+}
+
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--chrome-bg);
+  color:var(--chrome-ink);
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:20px;
+  padding:28px 16px 60px;
+}

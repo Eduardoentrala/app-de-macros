@@ -1,0 +1,98 @@
+/* El telefono dibujado y la pagina que lo rodea. Esto NO es la app: es
+   el escaparate que se ve en pantalla ancha. En un telefono de verdad
+   desaparece entero -lo apaga modo-app.css-. */
+
+.studio-head{max-width:560px;text-align:center;}
+.studio-head .eyebrow{
+  font:600 11px/1 ui-monospace,"SF Mono",Menlo,monospace;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:var(--ink-soft);
+  color:color-mix(in srgb, var(--chrome-ink) 55%, transparent);
+}
+.studio-head h1{
+  font-size:22px;
+  margin:6px 0 8px;
+  letter-spacing:-.01em;
+  text-wrap:balance;
+}
+.studio-head p{
+  margin:0;
+  font-size:14px;
+  line-height:1.5;
+  color:color-mix(in srgb, var(--chrome-ink) 62%, transparent);
+  text-wrap:balance;
+}
+
+.toolbar{
+  width:100%;
+  max-width:900px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  justify-content:center;
+  padding:10px;
+  border:1px solid var(--chrome-line);
+  border-radius:14px;
+  background:color-mix(in srgb, var(--chrome-bg) 60%, white 4%);
+}
+.toolbar button{
+  font:600 12.5px/1 ui-monospace,"SF Mono",Menlo,monospace;
+  letter-spacing:.01em;
+  padding:8px 12px;
+  border-radius:9px;
+  border:1px solid var(--chrome-line);
+  background:transparent;
+  color:var(--chrome-ink);
+  cursor:pointer;
+}
+.toolbar button.active{
+  background:var(--chrome-accent);
+  color:var(--chrome-bg);
+  border-color:var(--chrome-accent);
+}
+.toolbar button:focus-visible{outline:2px solid var(--chrome-accent);outline-offset:2px;}
+.toolbar .sep{width:1px;background:var(--chrome-line);margin:2px 4px;}
+.toolbar .theme-btn{margin-left:auto;}
+
+.stage{
+  display:flex;
+  gap:28px;
+  align-items:flex-start;
+  flex-wrap:wrap;
+  justify-content:center;
+}
+
+.phone{
+  width:390px;
+  height:844px;
+  background:#000;
+  border-radius:54px;
+  padding:14px;
+  box-shadow:0 30px 60px -20px rgba(0,0,0,.45);
+  position:relative;
+  flex:none;
+}
+.phone-screen{
+  width:100%;height:100%;
+  background:var(--app-bg);
+  border-radius:40px;
+  overflow:hidden;
+  position:relative;
+  display:flex;
+  flex-direction:column;
+}
+.notch{
+  position:absolute;top:14px;left:50%;transform:translateX(-50%);
+  width:120px;height:26px;background:#000;border-radius:14px;z-index:30;
+}
+.statusbar{
+  height:48px;flex:none;display:flex;align-items:flex-end;justify-content:space-between;
+  padding:0 22px 6px;font:600 15px/1 -apple-system,sans-serif;color:var(--ink);
+  background:var(--card-bg);
+}
+.statusbar .icons{display:flex;gap:5px;align-items:center;font-size:13px;}
+.home-indicator{
+  position:absolute;bottom:8px;left:50%;transform:translateX(-50%);
+  width:134px;height:5px;border-radius:3px;background:var(--ink);opacity:.35;z-index:30;
+}

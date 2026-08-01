@@ -1,0 +1,476 @@
+/* Las pantallas que no tienen sitio propio todavia: fotos, plan,
+   asistente, cuanto comiste, comparador y cronometro. Cuando alguna
+   crezca, se saca a su archivo. */
+
+/* ---- Fotos de progreso ---- */
+.foto-rango{font:600 11.5px/1 sans-serif;color:var(--ink-faint);margin-top:5px;}
+.foto-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 16px 4px;}
+.foto-slot{
+  background:var(--card-bg);border-radius:16px;overflow:hidden;box-shadow:var(--shadow);
+  border:1.5px dashed var(--line);cursor:pointer;position:relative;
+}
+.foto-slot.llena{border-style:solid;border-color:transparent;}
+.foto-lienzo{aspect-ratio:.78;display:flex;align-items:center;justify-content:center;background:var(--app-bg);}
+.foto-lienzo img{width:100%;height:100%;object-fit:cover;display:block;}
+/* El hueco vacío ES el botón de subir: se toca y abre la galería. Antes
+   era un "+" gris clarísimo sobre fondo gris claro y no se leía como algo
+   pulsable — había que saber que estaba ahí. Ahora el + va en un círculo
+   oscuro, como cualquier botón de añadir, y el texto tiene contraste. */
+.foto-vacia{text-align:center;color:var(--ink-soft);}
+.foto-vacia b{
+  display:flex;width:46px;height:46px;margin:0 auto;border-radius:50%;
+  background:var(--ink);color:var(--card-bg);
+  align-items:center;justify-content:center;font:400 26px/1 sans-serif;
+}
+.foto-vacia span{display:block;font:700 12px/1.3 sans-serif;margin-top:9px;color:var(--ink);}
+.foto-slot:active .foto-vacia b{transform:scale(.92);}
+.foto-vacia b{transition:transform .15s ease;}
+.foto-pie{padding:9px 11px 11px;}
+.foto-pie b{display:block;font:700 12.5px/1 sans-serif;color:var(--ink);}
+.foto-pie span{display:block;font:600 10.5px/1 sans-serif;color:var(--ink-faint);margin-top:5px;}
+.foto-quitar{
+  position:absolute;top:7px;right:7px;width:26px;height:26px;border-radius:50%;border:none;
+  background:rgba(0,0,0,.55);color:#fff;font-size:14px;cursor:pointer;display:flex;
+  align-items:center;justify-content:center;
+}
+.foto-info{margin-top:6px;}
+
+/* ---- Plan de comida ----
+   Pensado para quien no cuenta nada: texto grande, mucho aire y ni un
+   número a la vista. */
+.plan-comida{
+  background:var(--card-bg);margin:0 16px 10px;border-radius:16px;
+  padding:16px 18px;box-shadow:var(--shadow);
+}
+.plan-momento{
+  display:flex;align-items:center;gap:9px;
+  font:700 11.5px/1 sans-serif;color:var(--ink-faint);
+  text-transform:uppercase;letter-spacing:.08em;margin-bottom:9px;
+}
+.plan-texto{
+  font:500 16.5px/1.5 sans-serif;color:var(--ink);white-space:pre-wrap;
+}
+.plan-nota{
+  margin:4px 16px 0;padding:14px 16px;border-radius:14px;
+  background:var(--green-soft);color:var(--green);
+  font:600 13.5px/1.5 sans-serif;
+}
+.plan-vacio{
+  margin:8px 16px;padding:28px 22px;border-radius:16px;background:var(--card-bg);
+  box-shadow:var(--shadow);text-align:center;
+}
+.plan-vacio .ico{font-size:32px;}
+.plan-vacio b{display:block;font:800 15.5px/1.3 sans-serif;color:var(--ink);margin-top:10px;}
+.plan-vacio span{
+  display:block;font:500 13px/1.5 sans-serif;color:var(--ink-faint);
+  margin-top:7px;max-width:250px;margin-left:auto;margin-right:auto;
+}
+/* Fila de cliente en la lista del entrenador */
+.plan-cliente{
+  display:flex;align-items:center;gap:12px;background:var(--card-bg);
+  margin:0 16px 8px;padding:13px 15px;border-radius:14px;
+  box-shadow:var(--shadow);cursor:pointer;
+}
+.plan-cliente .info{flex:1;min-width:0;}
+.plan-cliente b{display:block;font:700 14px/1.2 sans-serif;color:var(--ink);}
+.plan-cliente span{display:block;font:600 11.5px/1.2 sans-serif;color:var(--ink-faint);margin-top:4px;}
+
+/* Los siete días. Se desplazan en horizontal en vez de apretarse: en un
+   teléfono, siete botones legibles no caben en 375 px. */
+.plan-dias{
+  display:flex;gap:6px;overflow-x:auto;padding:0 16px 4px;margin-bottom:8px;
+  -webkit-overflow-scrolling:touch;scrollbar-width:none;
+}
+.plan-dias::-webkit-scrollbar{display:none;}
+.plan-dias-ver{padding-top:2px;}
+.plan-dia{
+  flex:0 0 auto;padding:9px 14px;border-radius:11px;border:none;cursor:pointer;
+  background:var(--pill-bg);color:var(--ink-faint);
+  font:700 12.5px/1 sans-serif;
+  transition:background .18s ease, color .18s ease;
+}
+.plan-dia.active{background:var(--ink);color:var(--card-bg);}
+/* Un punto en los días que ya tienen algo escrito: al armar la semana a
+   mano, dice de un vistazo qué falta. */
+.plan-dia.lleno:not(.active)::after{
+  content:'';display:block;width:4px;height:4px;border-radius:50%;
+  background:var(--green);margin:4px auto 0;
+}
+
+/* Una fila de datos que además se puede tocar. Hereda de .info-row para
+   que no desentone con las de al lado, que son solo texto. */
+.info-btn{
+  width:100%;border:none;background:none;font:inherit;cursor:pointer;
+  text-align:left;padding-left:0;padding-right:0;
+}
+.info-btn .v i{font-style:normal;color:var(--ink-faint);margin-left:7px;}
+.info-btn:active{opacity:.55;}
+
+/* ---- Asistente: pantalla de conversación ---- */
+.ia-head{
+  display:flex;align-items:center;gap:12px;padding:16px 18px 14px;
+  background:var(--card-bg);border-bottom:1px solid var(--line);flex:none;
+}
+.ia-head b{display:block;font:800 16px/1.2 sans-serif;color:var(--ink);}
+.ia-head span{display:block;font:600 11.5px/1.2 sans-serif;color:var(--ink-faint);margin-top:2px;}
+.ia-cerrar{
+  background:none;border:none;cursor:pointer;font:400 20px/1 sans-serif;
+  color:var(--ink-faint);padding:2px 4px;
+}
+
+#iaChat{padding:16px 0 8px;}
+.ia-msg{margin:0 16px 10px;max-width:86%;}
+.ia-msg .burbuja{
+  padding:13px 15px;border-radius:16px;font:500 14.5px/1.5 sans-serif;
+  white-space:pre-wrap;
+}
+.ia-msg.de-el .burbuja{background:var(--card-bg);color:var(--ink);box-shadow:var(--shadow);}
+.ia-msg.de-mi{margin-left:auto;}
+.ia-msg.de-mi .burbuja{background:var(--ink);color:var(--card-bg);}
+.ia-msg img{width:100%;border-radius:14px;display:block;margin-bottom:6px;}
+
+/* Los atajos de la primera pantalla */
+.ia-atajo{
+  display:block;width:calc(100% - 32px);margin:0 16px 8px;text-align:left;
+  padding:15px 16px;border-radius:14px;border:none;cursor:pointer;
+  background:var(--card-bg);box-shadow:var(--shadow);
+  font:600 14px/1.3 sans-serif;color:var(--ink);
+}
+.ia-atajo:active{opacity:.6;}
+
+/* Barra de escritura, pegada abajo */
+.ia-barra{flex:none;padding:8px 16px 14px;background:var(--app-bg);border-top:1px solid var(--line);}
+.ia-entrada{display:flex;align-items:flex-end;gap:8px;}
+.ia-entrada textarea{
+  flex:1;min-height:44px;max-height:120px;resize:none;overflow-y:auto;
+  padding:12px 14px;border-radius:22px;border:none;background:var(--pill-bg);
+  font:500 14.5px/1.35 sans-serif;color:var(--ink);outline:none;
+}
+.ia-icono, .ia-enviar{
+  flex:0 0 auto;width:44px;height:44px;border-radius:50%;border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;font-size:18px;
+}
+.ia-icono{background:var(--pill-bg);}
+.ia-enviar{background:var(--ink);color:var(--card-bg);font-size:16px;}
+.ia-enviar:disabled{opacity:.4;}
+
+.ia-momento{display:flex;gap:7px;margin:10px 0 4px;}
+.ia-momento .meta-opt{flex:1;padding:9px 4px;text-align:center;font:700 12.5px/1 sans-serif;}
+.ia-fila{
+  display:flex;align-items:flex-start;gap:10px;padding:11px 0;
+  border-bottom:1px solid var(--line);
+}
+.ia-fila:last-child{border-bottom:none;}
+.ia-fila .txt{flex:1;min-width:0;}
+.ia-fila b{display:block;font:700 13.5px/1.3 sans-serif;color:var(--ink);}
+.ia-fila span{display:block;font:600 11.5px/1.4 sans-serif;color:var(--ink-faint);margin-top:3px;}
+/* Marca de cuánto se fía el asistente de esos macros. Sin esto, una
+   estimación floja se lee igual que un dato seguro. */
+.ia-duda{
+  flex:0 0 auto;font:700 9.5px/1 sans-serif;padding:4px 7px;border-radius:6px;
+  text-transform:uppercase;letter-spacing:.05em;margin-top:2px;
+}
+.ia-duda.media{background:var(--amber-soft);color:var(--amber);}
+.ia-duda.baja{background:var(--red-soft);color:var(--red);}
+.ia-foto-btn{
+  width:100%;display:flex;align-items:center;justify-content:center;gap:9px;
+  padding:15px;border-radius:14px;border:1.5px dashed var(--line);
+  background:var(--app-bg);color:var(--ink-faint);cursor:pointer;
+  font:700 13.5px/1 sans-serif;margin-bottom:10px;
+}
+.ia-foto-btn span{font-size:19px;}
+.ia-foto-btn:active{opacity:.6;}
+/* La foto elegida, con su botón para quitarla encima */
+.ia-foto-previa{position:relative;margin-bottom:10px;}
+.ia-foto-previa img{
+  width:100%;max-height:190px;object-fit:cover;border-radius:14px;display:block;
+}
+.ia-foto-previa button{
+  position:absolute;top:8px;right:8px;width:30px;height:30px;border-radius:50%;
+  border:none;background:rgba(0,0,0,.62);color:#fff;cursor:pointer;
+  font:700 15px/1 sans-serif;
+}
+.ia-quita{
+  flex:0 0 auto;background:none;border:none;cursor:pointer;padding:2px 4px;
+  font:700 15px/1 sans-serif;color:var(--ink-faint);
+}
+
+/* ---- Cuánto comiste ----
+   Una sola cifra protagonista y el resultado debajo. Sin atajos ni rejillas
+   de botones: el número se teclea y ya. */
+.cant-campo{
+  display:flex;align-items:baseline;justify-content:center;gap:6px;
+  margin:18px 0 16px;
+}
+/* Ancho FIJO y alineado a la derecha. Fijo porque calcularlo midiendo el
+   texto depende de la fuente que acabe usando cada sistema, y en el
+   teléfono salía corto y cortaba el último dígito. A la derecha para que
+   la unidad quede siempre pegada al número: centrado, el recuadro dejaba
+   un hueco entre el "121" y la "g".
+
+   El ancho va en `em` y no en píxeles: así queda atado al tamaño de
+   letra y no a lo ancho que dibuje los dígitos cada sistema. En iOS son
+   más anchos que en Windows, y con 96px fijos se cortaba el cuarto. Un
+   dígito ocupa como mucho 0.62em, así que 3.8em cubre cuatro con casi la
+   mitad de sobra. Va holgado a propósito: esto ya se cortó dos veces por
+   apurar el ancho, y el hueco de más no se nota porque el texto va a la
+   derecha. El JS no deja pasar de 9999. */
+.cant-campo input{
+  width:3.8em;border:none;background:none;outline:none;
+  font:800 34px/1.1 -apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;
+  letter-spacing:-.02em;color:var(--ink);text-align:right;
+  font-variant-numeric:tabular-nums;   /* que no bailen las cifras al escribir */
+  -moz-appearance:textfield;
+}
+/* Fuera las flechitas del campo numérico: rompen la línea */
+.cant-campo input::-webkit-outer-spin-button,
+.cant-campo input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+.cant-campo span{
+  font:600 16px/1 sans-serif;color:var(--ink-faint);
+}
+
+.cant-resumen{
+  background:var(--app-bg);border-radius:16px;padding:15px 14px 13px;margin-bottom:16px;
+}
+.cant-cal{text-align:center;}
+.cant-cal b{
+  display:block;font:800 26px/1 sans-serif;color:var(--ink);
+  font-variant-numeric:tabular-nums;letter-spacing:-.01em;
+}
+.cant-cal span{
+  display:block;font:600 10px/1 sans-serif;color:var(--ink-faint);
+  margin-top:5px;text-transform:uppercase;letter-spacing:.08em;
+}
+.cant-macros{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:6px;
+  margin-top:13px;padding-top:12px;border-top:1px solid var(--line);
+}
+.cant-macros div{text-align:center;}
+.cant-macros b{
+  display:block;font:700 15px/1 sans-serif;color:var(--ink);
+  font-variant-numeric:tabular-nums;
+}
+.cant-macros span{
+  display:block;font:600 10px/1 sans-serif;color:var(--ink-faint);margin-top:4px;
+}
+
+
+/* ---- Comparador ---- */
+.cmp-controles{background:var(--card-bg);padding:0 16px 12px;flex:none;border-bottom:1px solid var(--line);}
+.cmp-selects{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.cmp-selects label{display:block;font:700 11px/1 sans-serif;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.05em;}
+.cmp-selects select{
+  width:100%;margin-top:6px;border:1.5px solid var(--line);background:var(--app-bg);border-radius:11px;
+  padding:10px;font:700 12.5px/1 sans-serif;color:var(--ink);
+}
+.cmp-modo{margin:10px 0 0;}
+.cmp-lado{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:14px 16px;}
+.cmp-foto{background:var(--card-bg);border-radius:14px;overflow:hidden;box-shadow:var(--shadow);cursor:zoom-in;}
+.cmp-foto .foto-lienzo{aspect-ratio:.72;}
+.cmp-foto b{display:block;padding:9px 10px;font:700 11.5px/1 sans-serif;color:var(--ink-faint);text-align:center;}
+.cmp-slider{
+  position:relative;margin:14px 16px;border-radius:16px;overflow:hidden;background:var(--app-bg);
+  box-shadow:var(--shadow);aspect-ratio:.72;cursor:ew-resize;user-select:none;touch-action:none;
+}
+.cmp-slider img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+.cmp-slider .capa{position:absolute;inset:0;overflow:hidden;}
+.cmp-linea{position:absolute;top:0;bottom:0;width:3px;background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.3);pointer-events:none;}
+.cmp-tirador{
+  position:absolute;top:50%;width:38px;height:38px;border-radius:50%;background:#fff;color:#111;
+  transform:translate(-50%,-50%);display:flex;align-items:center;justify-content:center;
+  font:800 15px/1 sans-serif;box-shadow:0 3px 12px rgba(0,0,0,.35);pointer-events:none;
+}
+.cmp-etq{
+  position:absolute;top:10px;padding:5px 9px;border-radius:8px;background:rgba(0,0,0,.6);color:#fff;
+  font:700 10.5px/1 sans-serif;pointer-events:none;
+}
+.cmp-aviso{margin:20px 16px;text-align:center;font:500 13px/1.5 sans-serif;color:var(--ink-faint);}
+
+/* ---- Visor a pantalla completa ---- */
+.visor{position:absolute;inset:0;z-index:80;background:#000;display:flex;flex-direction:column;}
+.visor[hidden]{display:none;}
+.visor-top{
+  display:flex;align-items:center;justify-content:space-between;padding:14px 16px;color:#fff;
+  font:700 13px/1 sans-serif;
+}
+.visor-top button{background:rgba(255,255,255,.15);border:none;color:#fff;width:32px;height:32px;border-radius:50%;font-size:15px;cursor:pointer;}
+.visor-lienzo{flex:1;overflow:hidden;display:flex;align-items:center;justify-content:center;touch-action:none;}
+.visor-lienzo img{max-width:100%;max-height:100%;transform-origin:center center;cursor:grab;}
+.visor-controles{
+  display:flex;align-items:center;justify-content:center;gap:10px;padding:16px;color:#fff;
+  font:700 12px/1 sans-serif;
+}
+.visor-controles button{
+  background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:11px;padding:11px 15px;
+  font:700 14px/1 sans-serif;cursor:pointer;
+}
+
+/* Nacieron con el calendario, que ya no existe, pero la pantalla de
+   Fotos las reutiliza para su navegador de semanas. No borrar. */
+.cal-nav{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 6px;}
+.cal-mes{font:800 20px/1 sans-serif;letter-spacing:-.01em;}
+.cal-arrow{
+  width:34px;height:34px;border-radius:50%;border:none;background:var(--pill-bg);color:var(--ink);
+  font:700 19px/1 sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;
+}
+.cal-arrow:focus-visible{outline:2px solid var(--ink);outline-offset:2px;}
+
+.date-title{color:var(--red);font:800 17px/1 sans-serif;}
+.date-chip{background:var(--ink);color:var(--card-bg);font:800 12px/1 sans-serif;padding:8px 12px;border-radius:10px;display:inline-block;margin-top:8px;text-align:center;}
+.macro-pill{
+  background:var(--card-bg);margin:14px 16px;padding:14px;border-radius:16px;text-align:center;
+  font:700 13.5px/1 sans-serif;color:var(--ink);box-shadow:var(--shadow);font-variant-numeric:tabular-nums;
+}
+.food-item{
+  background:var(--card-bg);margin:0 16px 10px;padding:14px 16px;border-radius:14px;
+  display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow);gap:10px;
+}
+.food-check{width:18px;height:18px;border-radius:5px;border:1.5px solid var(--ink-faint);flex:none;}
+.food-main{flex:1;min-width:0;}
+.food-name{font:700 14.5px/1.2 sans-serif;}
+.food-macros{font:600 12.5px/1 sans-serif;color:var(--ink-faint);margin-top:4px;font-variant-numeric:tabular-nums;}
+.food-actions{display:flex;gap:6px;flex:none;}
+.btn-mini{border:none;border-radius:9px;font:700 12px/1 sans-serif;padding:8px 10px;cursor:pointer;}
+.btn-mini.edit{background:#e5f0fb;color:#1d6fbf;}
+.btn-mini.del{background:var(--red-soft);color:var(--red);}
+.add-food-btn{
+  margin:6px 16px 20px;padding:14px;border-radius:14px;border:1.5px dashed var(--ink-faint);
+  background:none;color:var(--ink-soft);font:700 13.5px/1 sans-serif;cursor:pointer;text-align:center;
+}
+
+.day-tabs{display:flex;gap:8px;overflow-x:auto;padding:12px 4px;background:var(--card-bg);flex:none;scroll-behavior:smooth;}
+.day-tabs::-webkit-scrollbar{display:none;}
+.day-tab{
+  flex:none;padding:12px 18px;border-radius:16px;background:var(--pill-bg);border:none;cursor:pointer;
+  font:700 14px/1.2 sans-serif;color:var(--ink);text-align:center;white-space:nowrap;
+}
+.day-tab.active{background:var(--ink);color:var(--card-bg);}
+.day-tab.add{
+  border:1.5px dashed var(--ink-faint);background:none;color:var(--ink-soft);
+  display:flex;align-items:center;justify-content:center;padding:12px 16px;
+}
+.day-actions{display:flex;gap:8px;margin:12px 16px;}
+.day-actions button{
+  flex:1;padding:12px;border-radius:14px;font:700 13px/1 sans-serif;cursor:pointer;background:none;
+}
+.btn-rename{border:1.5px solid var(--line);color:var(--ink);}
+.btn-delete-day{border:1.5px solid var(--red);color:var(--red);}
+.sheet input.name-input{
+  border:1.5px solid var(--line);background:var(--app-bg);border-radius:12px;padding:14px;
+  font:700 16px/1 sans-serif;color:var(--ink);width:100%;
+}
+.empty-day{
+  margin:24px 16px;padding:34px 20px;text-align:center;border-radius:18px;
+  border:1.5px dashed var(--line);
+}
+.empty-day .ico{font-size:30px;opacity:.5;}
+.empty-day b{display:block;font:800 15px/1.3 sans-serif;color:var(--ink);margin-top:10px;}
+.empty-day span{display:block;font:500 13px/1.45 sans-serif;color:var(--ink-faint);margin-top:5px;}
+
+/* ---- Cronómetro de descanso ---- */
+.sheet-backdrop{
+  position:absolute;inset:0;background:rgba(0,0,0,.4);z-index:60;display:none;
+  align-items:flex-end;justify-content:center;
+}
+.sheet-backdrop.open{display:flex;}
+.sheet{
+  background:var(--card-bg);width:100%;border-radius:22px 22px 0 0;padding:20px 18px 26px;
+  display:flex;flex-direction:column;gap:14px;
+}
+.sheet h4{margin:0;font:800 16px/1 sans-serif;color:var(--ink);}
+.sheet .hint{margin:0;font:500 12.5px/1.45 sans-serif;color:var(--ink-faint);}
+.preset-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;}
+.preset{
+  padding:14px 10px;border-radius:14px;border:1.5px solid var(--line);background:var(--app-bg);
+  font:700 14px/1.2 sans-serif;color:var(--ink);cursor:pointer;text-align:center;
+}
+.preset small{display:block;font:600 11.5px/1 sans-serif;color:var(--ink-faint);margin-top:4px;}
+.preset.active{background:var(--ink);color:var(--card-bg);border-color:var(--ink);}
+.preset.active small{color:var(--ink-faint);}
+.custom-row{display:flex;gap:8px;align-items:center;}
+.custom-row input{
+  flex:1;border:1.5px solid var(--line);background:var(--app-bg);border-radius:12px;padding:13px;
+  font:700 15px/1 sans-serif;color:var(--ink);text-align:center;font-variant-numeric:tabular-nums;
+}
+.custom-row .unit{font:600 13px/1 sans-serif;color:var(--ink-faint);flex:none;}
+
+.rest-bar{
+  position:absolute;left:12px;right:12px;bottom:96px;background:var(--ink);color:var(--card-bg);
+  border-radius:18px;padding:13px 15px 14px;z-index:55;display:none;flex-direction:column;gap:9px;
+  box-shadow:0 16px 40px -12px rgba(0,0,0,.5);
+}
+.rest-bar.open{display:flex;}
+.rest-bar.done{background:var(--green);color:#fff;}
+.rest-top{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.rest-time{font:800 32px/1 sans-serif;font-variant-numeric:tabular-nums;letter-spacing:.01em;flex:none;}
+.rest-who{
+  font:700 12px/1.3 sans-serif;opacity:.72;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.rest-track{height:4px;border-radius:3px;background:rgba(255,255,255,.25);overflow:hidden;}
+.rest-fill{height:100%;background:currentColor;border-radius:3px;width:100%;}
+.rest-actions{display:flex;gap:6px;flex:none;}
+.rest-actions button{
+  background:rgba(255,255,255,.18);border:none;color:inherit;border-radius:10px;padding:10px 11px;
+  font:700 12px/1 sans-serif;cursor:pointer;white-space:nowrap;
+}
+.rest-actions button:focus-visible{outline:2px solid currentColor;outline-offset:2px;}
+.danger-outline{
+  margin:12px 16px;padding:13px;border-radius:14px;border:1.5px solid var(--red);color:var(--red);
+  background:none;font:700 13.5px/1 sans-serif;width:calc(100% - 32px);cursor:pointer;
+}
+
+.exercise-card{background:var(--card-bg);margin:0 16px 14px;border-radius:18px;box-shadow:var(--shadow);overflow:hidden;}
+.ex-head{padding:14px 16px 12px;border-bottom:1px solid var(--line);}
+.ex-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+.ex-name{font:800 15.5px/1.2 sans-serif;}
+.ex-delta{font:700 12.5px/1 sans-serif;margin-top:4px;display:none;}
+.ex-delta.show{display:block;}
+.ex-delta.up{color:var(--green);}
+.ex-delta.down{color:var(--red);}
+.ex-delta.same{color:var(--ink-faint);}
+.ex-vol .prev{display:block;font-size:11px;font-weight:600;opacity:.7;margin-top:2px;}
+.ex-vol{font:600 12.5px/1.3 sans-serif;color:var(--ink-faint);text-align:right;font-variant-numeric:tabular-nums;}
+.ex-pills{display:flex;gap:6px;align-items:center;margin-top:10px;flex-wrap:wrap;}
+.ex-pills .chip{padding:7px 11px;font-size:11.5px;}
+.ex-pills .icon-mini{margin-left:auto;display:flex;gap:8px;}
+.icon-mini button{background:none;border:none;color:var(--ink-faint);cursor:pointer;font-size:15px;padding:2px;}
+.icon-mini button.danger{color:var(--red);}
+
+.sets-table{width:100%;border-collapse:collapse;}
+.sets-table th{
+  font:700 11px/1 sans-serif;color:var(--ink-faint);text-transform:lowercase;padding:10px 16px 6px;text-align:left;
+}
+.sets-table th.num, .sets-table td.num{text-align:center;}
+.sets-table td{padding:6px 16px;}
+.set-input{
+  width:100%;text-align:center;border:1px solid var(--line);background:var(--app-bg);
+  border-radius:10px;padding:8px 4px;font:700 14px/1 sans-serif;color:var(--ink);font-variant-numeric:tabular-nums;
+}
+.set-check{
+  width:26px;height:26px;border-radius:8px;border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center;
+  cursor:pointer;background:var(--app-bg);color:transparent;font-size:14px;font-weight:900;
+}
+.set-check.done{background:var(--green);border-color:var(--green);color:#fff;}
+.set-row-actions{display:flex;gap:8px;align-items:center;}
+.clock-btn{background:none;border:none;font-size:15px;cursor:pointer;color:var(--red);}
+.rm-set{background:none;border:none;color:var(--ink-faint);font-size:14px;cursor:pointer;}
+.add-set-row{padding:8px 16px 14px;}
+.add-set{
+  border:1.5px dashed var(--ink-faint);background:none;border-radius:10px;padding:8px 14px;
+  font:700 12.5px/1 sans-serif;color:var(--ink-soft);cursor:pointer;
+}
+.add-exercise-btn{
+  margin:4px 16px 100px;padding:15px;border-radius:16px;border:1.5px dashed var(--ink-faint);
+  background:none;color:var(--ink-soft);font:700 13.5px/1 sans-serif;cursor:pointer;width:calc(100% - 32px);
+}
+.bottom-bar{
+  position:absolute;left:0;right:0;bottom:0;background:var(--card-bg);border-top:1px solid var(--line);
+  padding:14px 16px;display:flex;flex-direction:column;gap:8px;
+  /* Igual que .bottom-tabs: 22px en escritorio, y en el teléfono lo que
+     haga falta para que el botón no quede bajo la barra de gestos. */
+  padding-bottom:calc(14px + max(8px, env(safe-area-inset-bottom)));
+}
+.btn-primary{background:var(--ink);color:var(--card-bg);border:none;border-radius:14px;padding:15px;font:800 15px/1 sans-serif;cursor:pointer;}
+.btn-ghost-text{background:none;border:none;color:var(--ink-faint);font:600 13px/1 sans-serif;cursor:pointer;padding:4px;}
+

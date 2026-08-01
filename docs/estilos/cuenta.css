@@ -1,0 +1,155 @@
+/* Todo lo que va de cuentas: darse de alta, los roles, el panel de
+   super admin y el catalogo de alimentos que solo el ve. */
+
+/* ---- Registro / alta de cuenta ---- */
+.reg-head{padding:22px 20px 4px;}
+.reg-head h2{margin:0;font-size:26px;font-weight:800;letter-spacing:-.015em;}
+.reg-head p{margin:7px 0 0;font:500 13.5px/1.45 sans-serif;color:var(--ink-faint);}
+.reg-input{border:1.5px solid var(--line);background:var(--app-bg);border-radius:12px;padding:13px;}
+.reg-input.error{border-color:var(--red);}
+.calc-note.error{color:var(--red);font-weight:700;}
+.opt-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.opt{
+  padding:13px;border-radius:13px;border:1.5px solid var(--line);background:var(--app-bg);
+  font:700 14px/1 sans-serif;color:var(--ink);cursor:pointer;
+}
+.opt.active{background:var(--ink);color:var(--card-bg);border-color:var(--ink);}
+.tres-campos{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.mini-field{
+  display:flex;align-items:baseline;gap:4px;background:var(--app-bg);border:1.5px solid var(--line);
+  border-radius:12px;padding:11px 10px;
+}
+.mini-field input{
+  width:100%;min-width:0;border:none;background:none;font:800 17px/1 sans-serif;color:var(--ink);
+  outline:none;font-variant-numeric:tabular-nums;
+}
+.mini-field span{font:600 11.5px/1 sans-serif;color:var(--ink-faint);flex:none;}
+.meta-opts{display:flex;flex-direction:column;gap:8px;}
+.meta-opt{
+  text-align:left;padding:14px;border-radius:14px;border:1.5px solid var(--line);
+  background:var(--app-bg);cursor:pointer;
+}
+.meta-opt b{display:block;font:700 14.5px/1 sans-serif;color:var(--ink);}
+.meta-opt span{display:block;font:500 12px/1 sans-serif;color:var(--ink-faint);margin-top:5px;}
+.meta-opt.active{background:var(--ink);border-color:var(--ink);}
+.meta-opt.active b{color:var(--card-bg);}
+.meta-opt.active span{color:var(--ink-faint);}
+.dias-ej{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;}
+.dias-ej button{
+  padding:12px 0;border-radius:11px;border:1.5px solid var(--line);background:var(--app-bg);
+  font:700 14px/1 sans-serif;color:var(--ink);cursor:pointer;font-variant-numeric:tabular-nums;
+}
+.dias-ej button.active{background:var(--ink);color:var(--card-bg);border-color:var(--ink);}
+.reg-result{background:var(--ink);}
+.reg-result .ring-label,.reg-result .calc-note{color:rgba(255,255,255,.6);}
+.reg-cal{text-align:center;}
+.reg-cal b{font:800 44px/1 sans-serif;color:var(--card-bg);font-variant-numeric:tabular-nums;}
+.reg-cal span{display:block;font:600 12px/1 sans-serif;color:rgba(255,255,255,.6);margin-top:7px;}
+.reg-result .week-goal div{background:rgba(255,255,255,.12);}
+.reg-result .week-goal b{color:var(--card-bg);}
+.reg-result .week-goal span{color:rgba(255,255,255,.6);}
+.reg-result .calc-note{text-align:center;margin-top:12px;}
+.reg-aviso{
+  margin:0 16px;font:500 11.5px/1.5 sans-serif;color:var(--ink-faint);text-align:center;
+}
+
+/* ---- Roles ---- */
+.rls-aviso{
+  margin:14px 16px;padding:12px 14px;border-radius:13px;background:var(--green-soft);
+  color:var(--green);font:600 11.5px/1.5 sans-serif;
+}
+.rol-badge{
+  display:inline-block;font:800 10px/1 sans-serif;letter-spacing:.06em;text-transform:uppercase;
+  padding:5px 8px;border-radius:7px;margin-top:6px;
+}
+.rol-badge.cliente{background:var(--pill-bg);color:var(--pill-ink);}
+.rol-badge.coach{background:#e6eefb;color:#1d5fbf;}
+.rol-badge.super_admin{background:var(--ink);color:var(--card-bg);}
+.cliente-card{
+  background:var(--card-bg);margin:0 16px 10px;padding:14px 16px;border-radius:15px;
+  box-shadow:var(--shadow);display:flex;align-items:center;gap:12px;
+}
+.cliente-ava{
+  width:42px;height:42px;border-radius:50%;background:var(--pill-bg);flex:none;
+  display:flex;align-items:center;justify-content:center;font:800 15px/1 sans-serif;color:var(--ink-soft);
+}
+.cliente-card .info{flex:1;min-width:0;}
+.cliente-card .info b{display:block;font:700 14.5px/1 sans-serif;}
+.cliente-card .info span{display:block;font:600 11.5px/1 sans-serif;color:var(--ink-faint);margin-top:5px;}
+.panel-seccion{padding:14px 20px 8px;font:800 14px/1 sans-serif;display:flex;justify-content:space-between;align-items:baseline;}
+.panel-seccion small{font:600 11.5px/1 sans-serif;color:var(--ink-faint);}
+.demo-rol{
+  display:flex;align-items:center;gap:6px;background:#fdf3d7;border:1px solid #e8d9a8;
+  border-radius:10px;padding:6px 8px;
+}
+.demo-rol span{font:700 10px/1 sans-serif;color:#8a6d1f;text-transform:uppercase;letter-spacing:.05em;}
+.demo-rol select{border:none;background:none;font:700 11.5px/1 sans-serif;color:#5f4a12;cursor:pointer;}
+
+/* ---- Panel de super admin ---- */
+.adm-tabs{grid-template-columns:repeat(3,1fr);background:var(--card-bg);padding:0 16px 12px;margin:0;flex:none;border-bottom:1px solid var(--line);}
+.adm-tabs button{padding:10px 4px;font-size:12.5px;}
+.adm-tabs button.active{background:var(--ink);color:var(--card-bg);border-color:var(--ink);}
+.kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px 16px 4px;}
+.kpi{background:var(--card-bg);border-radius:15px;padding:14px;box-shadow:var(--shadow);}
+.kpi b{display:block;font:800 26px/1 sans-serif;font-variant-numeric:tabular-nums;}
+.kpi span{display:block;font:600 11px/1.3 sans-serif;color:var(--ink-faint);margin-top:6px;}
+.kpi.ancho{grid-column:1 / -1;}
+.kpi .sub{font:600 11px/1 sans-serif;color:var(--ink-faint);margin-top:8px;}
+.kpi.alerta b{color:var(--red);}
+.kpi.bien b{color:var(--green);}
+.adm-busca{padding:14px 16px 4px;}
+.flag-row{
+  display:flex;align-items:center;gap:12px;background:var(--card-bg);margin:0 16px 8px;
+  padding:13px 15px;border-radius:14px;box-shadow:var(--shadow);
+}
+.flag-row .txt{flex:1;min-width:0;}
+.flag-row b{display:block;font:700 13.5px/1.2 sans-serif;}
+.flag-row span{display:block;font:500 11.5px/1.4 sans-serif;color:var(--ink-faint);margin-top:4px;}
+.flag-row.peligro{border:1.5px solid var(--red);}
+.usr-row{
+  display:flex;align-items:center;gap:10px;background:var(--card-bg);margin:0 16px 8px;
+  padding:12px 14px;border-radius:14px;box-shadow:var(--shadow);
+}
+.usr-row .txt{flex:1;min-width:0;}
+.usr-row b{display:block;font:700 13.5px/1.2 sans-serif;}
+.usr-row span{display:block;font:600 11px/1.3 sans-serif;color:var(--ink-faint);margin-top:4px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.usr-acc{display:flex;gap:5px;flex:none;}
+.usr-acc button{border:none;border-radius:9px;padding:7px 9px;font:700 10.5px/1 sans-serif;cursor:pointer;}
+.usr-acc .b-on{background:var(--green-soft);color:var(--green);}
+.usr-susp{color:var(--red);font-weight:800;}
+
+/* La estrella de guardar. Sin fondo ni borde: es un gesto, no un botón
+   que compita con Editar y Quitar. */
+.btn-estrella{
+  background:none;border:none;cursor:pointer;padding:2px 5px;
+  font:400 19px/1 sans-serif;color:var(--ink-faint);
+  transition:transform .18s cubic-bezier(.32,.72,0,1), color .18s ease;
+}
+.btn-estrella.on{color:var(--amber);}
+
+/* ---- Catálogo en el panel ---- */
+.cat-row{
+  display:flex;align-items:center;gap:10px;background:var(--card-bg);
+  margin:0 16px 7px;padding:12px 14px;border-radius:13px;
+  box-shadow:var(--shadow);cursor:pointer;
+}
+.cat-row.apagado{opacity:.5;}
+.cat-row .info{flex:1;min-width:0;}
+.cat-row b{display:block;font:700 13.5px/1.3 sans-serif;color:var(--ink);}
+.cat-row span{display:block;font:600 11px/1.3 sans-serif;color:var(--ink-faint);margin-top:3px;}
+.cat-fila2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.cat-macros{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;}
+.cat-macros .field-label{margin-top:0;}
+
+/* La etiqueta crudo/cocido junto al nombre en las sugerencias */
+.cat-estado{
+  font:700 9.5px/1 sans-serif;text-transform:uppercase;letter-spacing:.06em;
+  background:var(--pill-bg);color:var(--ink-faint);
+  padding:3px 6px;border-radius:5px;margin-left:5px;vertical-align:middle;
+}
+.btn-estrella:active{transform:scale(1.35);}
+.usr-acc .b-off{background:var(--red-soft);color:var(--red);}
+.usr-acc .b-key{background:var(--pill-bg);color:var(--pill-ink);}
+.apagado{opacity:.5;}
+

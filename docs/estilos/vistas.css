@@ -1,0 +1,43 @@
+/* Como se muestra y como entra cada pantalla. Lo usan todas, por eso
+   va aqui y no en la de una en concreto. */
+
+.app-view{flex:1;display:none;flex-direction:column;min-height:0;}
+.app-view.active{display:flex;}
+/* overflow-x oculto: durante el deslizamiento entre Hoy y Semana el panel
+   entra desplazado unos píxeles, y sin esto asomaría una barra horizontal */
+.scroll{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;}
+.scroll::-webkit-scrollbar{display:none;}
+
+/* ---- Cambio entre Hoy y Semana ----
+   El panel entra deslizándose desde el lado contrario al gesto, con un
+   punto de desvanecido. La curva no es un `ease` cualquiera: arranca
+   rápido y frena muy largo, que es lo que hace que se sienta suave en vez
+   de mecánico.
+
+   Solo se anima el que ENTRA. Animar los dos a la vez obligaría a
+   superponerlos en posición absoluta, y como miden distinto la pantalla
+   daría un salto de alto a mitad de la transición. */
+@keyframes paneEntra{
+  from{ opacity:0; transform:translate3d(var(--dx,34px),0,0); }
+  to  { opacity:1; transform:translate3d(0,0,0); }
+}
+/* Entre Hoy y Semana: recorrido corto, porque solo cambia el contenido
+   de una tarjeta y un desplazamiento largo se vería exagerado. */
+.pane-entra{ --dx:34px; animation:paneEntra .58s cubic-bezier(.32,.72,0,1) both; }
+.pane-entra.desde-izq{ --dx:-34px; }
+
+/* Entre pantallas completas: más recorrido y algo más de tiempo, para que
+   se lea de dónde viene y a dónde va. */
+.vista-entra{ --dx:52px; animation:paneEntra .62s cubic-bezier(.32,.72,0,1) both; }
+.vista-entra.desde-izq{ --dx:-52px; }
+
+/* El anillo barre hasta su valor en vez de saltar. Se nota sobre todo al
+   cambiar de Hoy a Semana, que son dos cifras distintas. */
+.ring-prog{ transition:stroke-dashoffset .85s cubic-bezier(.32,.72,0,1); }
+.dots span{ transition:background .3s ease; }
+
+/* Quien tenga activado "reducir movimiento" en su teléfono no lo ve */
+@media (prefers-reduced-motion: reduce){
+  .pane-entra, .vista-entra{ animation-duration:.01ms; }
+  .ring-prog{ transition:none; }
+}

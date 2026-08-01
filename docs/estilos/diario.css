@@ -1,0 +1,242 @@
+/* La pantalla que se abre al entrar: cabecera, accesos, el anillo, los
+   macros y las comidas del dia. Incluye el flujo de agregar comida,
+   que sale de aqui. */
+
+.header{
+  background:var(--card-bg);
+  padding:14px 20px 10px;
+  flex:none;
+}
+.header-row{display:flex;align-items:center;justify-content:space-between;}
+.greeting{font-size:22px;font-weight:800;letter-spacing:-.01em;margin:0;display:flex;align-items:center;gap:6px;}
+.greeting .streak{font-size:14px;font-weight:600;color:var(--ink-soft);}
+.subdate{font:700 11px/1 -apple-system,sans-serif;letter-spacing:.06em;color:var(--ink-faint);margin-top:4px;}
+.icon-btn{
+  width:32px;height:32px;border-radius:50%;border:none;
+  background:var(--pill-bg);color:var(--ink);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;
+}
+.icon-btn.dark{background:var(--ink);color:var(--card-bg);}
+
+.back-header{
+  background:var(--card-bg);
+  padding:16px 18px 10px;
+  display:flex;align-items:center;justify-content:space-between;flex:none;
+}
+.back-btn{
+  background:none;border:none;font-size:16px;color:var(--ink);display:flex;align-items:center;gap:2px;cursor:pointer;padding:4px 2px;
+}
+.back-title{
+  font-size:17px;font-weight:800;position:absolute;left:78px;right:78px;text-align:center;
+  pointer-events:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.back-title.sm{font-size:15px;}
+/* Encabezado en dos líneas para títulos largos (igual que Mi Peso / Ejercicio) */
+.back-header.stacked .back-header-inner{flex-direction:column;align-items:stretch;gap:10px;}
+.back-header.stacked .back-btn{align-self:flex-start;}
+.back-header.stacked .back-title{position:static;left:auto;right:auto;font-size:17px;padding-bottom:2px;}
+.back-header-inner{position:relative;width:100%;display:flex;align-items:center;justify-content:space-between;}
+.chip{
+  background:var(--pill-bg);color:var(--pill-ink);font:700 12.5px/1 sans-serif;
+  padding:9px 12px;border-radius:16px;display:flex;align-items:center;gap:5px;border:none;
+}
+
+.tabrow{display:flex;gap:22px;padding:6px 20px 0;border-bottom:1px solid var(--line);flex:none;position:relative;background:var(--card-bg);}
+.tabrow button{
+  background:none;border:none;font:600 15px/1 sans-serif;color:var(--ink-faint);
+  padding:10px 0;cursor:pointer;position:relative;
+}
+.tabrow button.active{color:var(--ink);font-weight:800;}
+.tabrow button.active::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--ink);border-radius:2px;}
+.tabrow-float{margin-left:auto;transform:translateY(-6px);}
+
+/* Quedan dos accesos (Rutinas y Progreso) porque Peso y Fotos se fueron a
+   la barra de abajo. Dos círculos sueltos en una rejilla de cinco se veían
+   descolgados a la izquierda, así que pasan a ser dos tarjetas anchas que
+   llenan la fila. De paso son mucho más fáciles de acertar con el pulgar. */
+.quickrow{
+  display:grid;grid-template-columns:1fr 1fr;gap:10px;
+  padding:12px 16px 4px;background:var(--card-bg);flex:none;
+}
+.quick-item{
+  display:flex;flex-direction:row;align-items:center;gap:10px;
+  background:var(--app-bg);border:none;border-radius:15px;
+  padding:9px 12px;cursor:pointer;color:var(--ink);text-align:left;
+}
+.quick-item:active{background:var(--pill-bg);}
+.quick-circle{
+  width:32px;height:32px;border-radius:50%;background:var(--pill-bg);
+  display:flex;align-items:center;justify-content:center;flex:none;font-size:16px;
+}
+/* Solo la etiqueta: si no, la regla también encogería el emoji del círculo */
+.quick-item > span:not(.quick-circle){font:700 13px/1.15 sans-serif;color:var(--ink);}
+
+.section-label{
+  display:flex;justify-content:space-between;align-items:baseline;
+  padding:9px 20px 6px;font:800 15px/1 sans-serif;color:var(--ink);
+}
+.section-label small{font:600 12.5px/1 sans-serif;color:var(--ink-faint);}
+
+.card{
+  background:var(--card-bg);margin:0 16px 14px;border-radius:20px;padding:18px;box-shadow:var(--shadow);
+}
+/* El Diario cabe en una pantalla. Todo lo de aquí abajo está apretado a
+   propósito: el anillo encogió a 112 px y los huecos bajaron con él. Si
+   algún día se añade una fila más, hay que quitar otra, no volver a
+   estirar esto. */
+.ring-card{display:flex;flex-direction:column;align-items:center;padding:14px 18px 6px;margin:0 16px 8px;}
+.ring-label{font:800 11px/1 sans-serif;letter-spacing:.1em;color:var(--ink-faint);margin-bottom:8px;}
+.ring-wrap{position:relative;width:112px;height:112px;}
+.ring-wrap svg{transform:rotate(-90deg);}
+.ring-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:25px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums;}
+.macros{width:100%;margin-top:12px;display:flex;flex-direction:column;gap:9px;}
+.macro-row{display:flex;flex-direction:column;gap:5px;}
+.macro-top{display:flex;justify-content:space-between;font:600 13px/1 sans-serif;}
+.macro-top .name{color:var(--ink-soft);}
+.macro-top .val{color:var(--ink);font-weight:800;font-variant-numeric:tabular-nums;}
+.bar-track{height:6px;border-radius:4px;background:var(--pill-bg);overflow:hidden;}
+.bar-fill{height:100%;border-radius:4px;background:var(--ink);}
+.dots{display:flex;gap:5px;justify-content:center;margin:6px 0 4px;}
+.dots span{width:5px;height:5px;border-radius:50%;background:var(--ink-faint);}
+.dots span.on{background:var(--ink);}
+.week-summary{text-align:center;font:600 13px/1 sans-serif;color:var(--ink-faint);margin:0 0 14px;font-variant-numeric:tabular-nums;}
+.ajuste-nota{
+  margin-top:10px;padding:7px 12px;border-radius:11px;text-align:center;
+  font:600 11.5px/1.35 sans-serif;background:var(--pill-bg);color:var(--ink-soft);
+}
+.ajuste-nota:empty{display:none;}
+.ajuste-nota.sobra{background:var(--green-soft);color:var(--green);}
+.ajuste-nota.debe{background:var(--red-soft);color:var(--red);}
+
+.meal-row{
+  display:flex;align-items:center;justify-content:space-between;background:var(--card-bg);
+  margin:0 16px;padding:13px 18px;border-bottom:1px solid var(--line);cursor:pointer;
+}
+.meal-row:first-of-type{border-radius:16px 16px 0 0;}
+.meal-row:last-of-type{border-radius:0 0 16px 16px;border-bottom:none;}
+.meal-left{display:flex;align-items:center;gap:12px;}
+.meal-emoji{width:34px;height:34px;border-radius:50%;background:var(--pill-bg);display:flex;align-items:center;justify-content:center;font-size:16px;}
+.meal-name{font:700 15px/1 sans-serif;}
+.meal-cal{font:600 14px/1 sans-serif;color:var(--ink-faint);font-variant-numeric:tabular-nums;}
+.meals-wrap{margin:0 16px 20px;box-shadow:var(--shadow);border-radius:16px;overflow:hidden;}
+.meals-wrap .meal-row{margin:0;}
+
+.bottom-tabs{
+  display:flex;border-top:1px solid var(--line);background:var(--card-bg);flex:none;
+  /* La barra de gestos del teléfono se come esta franja. En escritorio
+     env() vale 0 y quedan los 6px de siempre. */
+  padding-bottom:calc(6px + env(safe-area-inset-bottom));
+}
+.bottom-tabs button{
+  flex:1;background:none;border:none;display:flex;flex-direction:column;align-items:center;gap:4px;
+  padding:8px 0 2px;color:var(--ink-faint);font:600 10.5px/1 sans-serif;cursor:pointer;
+}
+.bottom-tabs button.active{color:var(--ink);}
+
+/* ---- Flujo de agregar comida ---- */
+.meal-title-row{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.meal-title-row h2{margin:0;font-size:26px;font-weight:800;letter-spacing:-.01em;}
+.sub-title{display:block;text-align:center;font:500 12.5px/1.35 sans-serif;color:var(--ink-faint);margin-top:3px;}
+.search-wrap{background:var(--card-bg);padding:0 16px 14px;flex:none;}
+.searchbox{
+  display:flex;align-items:center;gap:9px;background:var(--app-bg);border-radius:26px;
+  padding:13px 16px;border:1px solid var(--line);
+}
+.searchbox span{font-size:15px;opacity:.6;}
+.searchbox input{
+  flex:1;border:none;background:none;font:500 14.5px/1 sans-serif;color:var(--ink);outline:none;min-width:0;
+}
+/* Los cuatro accesos caben completos en el ancho del teléfono */
+.src-pills{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px;}
+.src-pills button{
+  border:1px solid var(--line);background:var(--card-bg);color:var(--ink);
+  border-radius:16px;padding:9px 4px;font:600 11.5px/1 sans-serif;cursor:pointer;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.src-pills button:active{background:var(--pill-bg);}
+.empty-search{
+  margin:14px 16px;padding:30px 16px;background:var(--card-bg);border-radius:16px;
+  text-align:center;font:500 14px/1 sans-serif;color:var(--ink-faint);box-shadow:var(--shadow);
+}
+.totals-bar{
+  position:absolute;left:0;right:0;bottom:0;background:var(--card-bg);border-top:1px solid var(--line);
+  padding:14px 16px 22px;
+}
+.totals-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.totals-grid div{background:var(--app-bg);border-radius:13px;padding:12px 6px;text-align:center;}
+.totals-grid b{display:block;font:800 17px/1 sans-serif;font-variant-numeric:tabular-nums;}
+.totals-grid span{display:block;font:600 11px/1 sans-serif;color:var(--ink-faint);margin-top:5px;}
+.totals-line{
+  display:flex;justify-content:space-between;align-items:baseline;margin-top:12px;
+  padding-top:12px;border-top:1px solid var(--line);
+}
+.totals-line span{font:800 15px/1 sans-serif;}
+.totals-line b{font:800 19px/1 sans-serif;font-variant-numeric:tabular-nums;}
+
+.food-list{padding:14px 16px 24px;display:flex;flex-direction:column;gap:10px;}
+.food-card{
+  background:var(--card-bg);border-radius:15px;padding:15px 16px;box-shadow:var(--shadow);
+  display:flex;align-items:center;gap:12px;cursor:pointer;
+}
+.food-card .fc-main{flex:1;min-width:0;}
+.food-card .fc-name{font:700 15px/1.25 sans-serif;}
+.food-card .fc-sub{font:500 12.5px/1.3 sans-serif;color:var(--ink-faint);margin-top:5px;}
+.food-card .fc-arrows{display:flex;flex-direction:column;gap:3px;flex:none;}
+.food-card .fc-arrows button{
+  background:var(--pill-bg);border:none;border-radius:7px;width:26px;height:20px;
+  color:var(--ink-soft);font-size:9px;cursor:pointer;
+}
+.fc-actions{display:flex;gap:6px;flex:none;}
+
+.share-row{
+  display:flex;align-items:center;gap:12px;background:var(--app-bg);border-radius:15px;
+  padding:14px;margin-top:11px;
+}
+.share-row b{display:block;font:700 13.5px/1.2 sans-serif;}
+.share-row span{display:block;font:500 12px/1.35 sans-serif;color:var(--ink-faint);margin-top:4px;}
+.switch{
+  flex:none;width:52px;height:31px;border-radius:16px;border:none;background:var(--ink-faint);
+  cursor:pointer;padding:3px;display:flex;
+}
+.switch i{width:25px;height:25px;border-radius:50%;background:#fff;display:block;transition:margin-left .18s;}
+.switch.on{background:var(--ink);}
+.switch.on i{margin-left:21px;}
+.switch[disabled]{opacity:.4;cursor:not-allowed;}
+.share-row.is-soon b{color:var(--ink-soft);}
+.soon-tag{
+  display:inline-block;font:700 9.5px/1 sans-serif;letter-spacing:.05em;text-transform:uppercase;
+  background:var(--pill-bg);color:var(--ink-faint);border-radius:6px;padding:4px 6px;
+  margin-left:6px;vertical-align:middle;font-style:normal;
+}
+
+.btn-outline{
+  background:none;border:1.5px solid var(--line);border-radius:14px;padding:14px;
+  font:700 13.5px/1 sans-serif;color:var(--ink);cursor:pointer;
+}
+.btn-outline[disabled]{opacity:.45;cursor:not-allowed;color:var(--ink-soft);}
+.or-sep{display:flex;align-items:center;gap:10px;color:var(--ink-faint);}
+.or-sep::before,.or-sep::after{content:"";flex:1;height:1px;background:var(--line);}
+.or-sep span{font:600 11.5px/1 sans-serif;text-transform:uppercase;letter-spacing:.08em;}
+.big-input{
+  width:100%;border:none;background:none;font:600 16px/1 sans-serif;color:var(--ink);
+  outline:none;padding:4px 0;
+}
+.unit-pills{display:flex;flex-wrap:wrap;gap:8px;}
+.unit-pills button{
+  border:1.5px solid var(--line);background:var(--app-bg);color:var(--ink);border-radius:20px;
+  padding:11px 18px;font:600 13.5px/1 sans-serif;cursor:pointer;
+}
+.unit-pills button.active{background:var(--ink);color:var(--card-bg);border-color:var(--green);}
+.nf-cal{text-align:center;font:700 15px/1 sans-serif;margin-top:18px;color:var(--ink);}
+.nf-cal b{font-size:19px;font-variant-numeric:tabular-nums;}
+
+/* Marca de notas y píldoras accionables del ejercicio */
+.nota-badge{font-size:12px;vertical-align:middle;}
+.ex-pills .chip{cursor:pointer;}
+.ex-pills .chip.con-nota{background:var(--green-soft);color:var(--green);}
+.notas-input{
+  width:100%;border:1.5px solid var(--line);background:var(--app-bg);border-radius:12px;
+  padding:13px;font:500 14px/1.5 sans-serif;color:var(--ink);resize:vertical;outline:none;
+}
+.notas-input:focus{border-color:var(--ink);}
+
