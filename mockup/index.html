@@ -2617,15 +2617,38 @@
       var t = audioCtx.currentTime + (cuando || 0);
       var osc = audioCtx.createOscillator(), g = audioCtx.createGain();
       osc.type = 'sine'; osc.frequency.value = freq;
-      g.gain.setValueAtTime(0, t);
-      g.gain.linearRampToValueAtTime(vol || 0.25, t + 0.02);
+      // Ataque y caída exponenciales: así se apaga como una campana en vez
+      // de cortarse en seco, que es lo que hace que un pitido corto suene a
+      // microondas. El 0.0001 es porque la curva exponencial no admite cero.
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(vol || 0.25, t + 0.015);
       g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
       osc.connect(g); g.connect(audioCtx.destination);
       osc.start(t); osc.stop(t + dur + 0.05);
     }catch(e){ /* si el navegador no deja sonar, seguimos sin ruido */ }
   }
-  function bipAviso(){ tono(880, 0.14); }                                  // faltan 10 s
-  function bipFinal(){ tono(660,0.18,0); tono(880,0.18,0.2); tono(1180,0.32,0.4); }  // se acabó
+
+  // Faltan 10 segundos: DOS notas, no una. Un pitido suelto de 0.14s se
+  // confunde con cualquier ruido del gimnasio; un par se reconoce al vuelo.
+  // Van graves a propósito, para no parecerse al aviso del final.
+  function bipAviso(){
+    tono(587.33, 0.30, 0,    0.22);
+    tono(587.33, 0.36, 0.30, 0.22);
+  }
+
+  // Cuenta atrás en los últimos tres segundos. Esto es lo que de verdad da
+  // tiempo a colocarse: antes había un aviso a los 10 s y después silencio
+  // hasta el cero, así que había que estar mirando la pantalla.
+  function bipCuenta(){ tono(784, 0.18, 0, 0.20); }
+
+  // Final: arpegio de re mayor con las notas encadenadas y la última
+  // sostenida, apagándose sola. Dura ~1.7 s en vez de 0.7.
+  function bipFinal(){
+    tono(587.33, 0.50, 0,    0.26);   // re
+    tono(739.99, 0.50, 0.18, 0.26);   // fa#
+    tono(880.00, 0.55, 0.36, 0.26);   // la
+    tono(1174.66, 1.20, 0.56, 0.30);  // re agudo, la que se queda sonando
+  }
   function vibrar(ms){ if(navigator.vibrate) try{ navigator.vibrate(ms); }catch(e){} }
 
   function stopTick(){ if(ticking){ clearInterval(ticking); ticking = null; } }
@@ -2637,18 +2660,20 @@
     restWho.textContent = label;
     restBar.classList.add('open');
     paintRest();
-    tono(520, 0.09, 0, 0.18);   // confirma que arrancó
+    tono(523.25, 0.22, 0, 0.18);   // confirma que arrancó
     ticking = setInterval(function(){
       if(paused) return;
       remaining--;
       paintRest();
-      if(remaining === 10){ bipAviso(); vibrar(80); }
+      // Aviso doble a los 10 s, y cuenta atrás en los tres últimos
+      if(remaining === 10){ bipAviso(); vibrar([90,90,90]); }
+      if(remaining === 3 || remaining === 2 || remaining === 1){ bipCuenta(); vibrar(45); }
       if(remaining <= 0){
         stopTick();
         restBar.classList.add('done');
         restWho.textContent = '¡Descanso terminado! A la siguiente serie';
         restTime.textContent = '0:00';
-        bipFinal(); vibrar([120,80,120]);
+        bipFinal(); vibrar([150,90,150,90,260]);
       }
     }, 1000);
   }
