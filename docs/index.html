@@ -306,37 +306,41 @@
      llenan la fila. De paso son mucho más fáciles de acertar con el pulgar. */
   .quickrow{
     display:grid;grid-template-columns:1fr 1fr;gap:10px;
-    padding:16px 16px 4px;background:var(--card-bg);flex:none;
+    padding:12px 16px 4px;background:var(--card-bg);flex:none;
   }
   .quick-item{
-    display:flex;flex-direction:row;align-items:center;gap:11px;
+    display:flex;flex-direction:row;align-items:center;gap:10px;
     background:var(--app-bg);border:none;border-radius:15px;
-    padding:11px 13px;cursor:pointer;color:var(--ink);text-align:left;
+    padding:9px 12px;cursor:pointer;color:var(--ink);text-align:left;
   }
   .quick-item:active{background:var(--pill-bg);}
   .quick-circle{
-    width:36px;height:36px;border-radius:50%;background:var(--pill-bg);
-    display:flex;align-items:center;justify-content:center;flex:none;font-size:17px;
+    width:32px;height:32px;border-radius:50%;background:var(--pill-bg);
+    display:flex;align-items:center;justify-content:center;flex:none;font-size:16px;
   }
   /* Solo la etiqueta: si no, la regla también encogería el emoji del círculo */
   .quick-item > span:not(.quick-circle){font:700 13px/1.15 sans-serif;color:var(--ink);}
 
   .section-label{
     display:flex;justify-content:space-between;align-items:baseline;
-    padding:16px 20px 8px;font:800 15px/1 sans-serif;color:var(--ink);
+    padding:9px 20px 6px;font:800 15px/1 sans-serif;color:var(--ink);
   }
   .section-label small{font:600 12.5px/1 sans-serif;color:var(--ink-faint);}
 
   .card{
     background:var(--card-bg);margin:0 16px 14px;border-radius:20px;padding:18px;box-shadow:var(--shadow);
   }
-  .ring-card{display:flex;flex-direction:column;align-items:center;padding-bottom:8px;margin:0 16px 10px;}
-  .ring-label{font:800 11px/1 sans-serif;letter-spacing:.1em;color:var(--ink-faint);margin-bottom:10px;}
-  .ring-wrap{position:relative;width:150px;height:150px;}
+  /* El Diario cabe en una pantalla. Todo lo de aquí abajo está apretado a
+     propósito: el anillo encogió a 112 px y los huecos bajaron con él. Si
+     algún día se añade una fila más, hay que quitar otra, no volver a
+     estirar esto. */
+  .ring-card{display:flex;flex-direction:column;align-items:center;padding:14px 18px 6px;margin:0 16px 8px;}
+  .ring-label{font:800 11px/1 sans-serif;letter-spacing:.1em;color:var(--ink-faint);margin-bottom:8px;}
+  .ring-wrap{position:relative;width:112px;height:112px;}
   .ring-wrap svg{transform:rotate(-90deg);}
-  .ring-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums;}
-  .macros{width:100%;margin-top:16px;display:flex;flex-direction:column;gap:12px;}
-  .macro-row{display:flex;flex-direction:column;gap:6px;}
+  .ring-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:25px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums;}
+  .macros{width:100%;margin-top:12px;display:flex;flex-direction:column;gap:9px;}
+  .macro-row{display:flex;flex-direction:column;gap:5px;}
   .macro-top{display:flex;justify-content:space-between;font:600 13px/1 sans-serif;}
   .macro-top .name{color:var(--ink-soft);}
   .macro-top .val{color:var(--ink);font-weight:800;font-variant-numeric:tabular-nums;}
@@ -347,8 +351,8 @@
   .dots span.on{background:var(--ink);}
   .week-summary{text-align:center;font:600 13px/1 sans-serif;color:var(--ink-faint);margin:0 0 14px;font-variant-numeric:tabular-nums;}
   .ajuste-nota{
-    margin-top:12px;padding:9px 13px;border-radius:11px;text-align:center;
-    font:600 11.5px/1.4 sans-serif;background:var(--pill-bg);color:var(--ink-soft);
+    margin-top:10px;padding:7px 12px;border-radius:11px;text-align:center;
+    font:600 11.5px/1.35 sans-serif;background:var(--pill-bg);color:var(--ink-soft);
   }
   .ajuste-nota:empty{display:none;}
   .ajuste-nota.sobra{background:var(--green-soft);color:var(--green);}
@@ -356,7 +360,7 @@
 
   .meal-row{
     display:flex;align-items:center;justify-content:space-between;background:var(--card-bg);
-    margin:0 16px;padding:16px 18px;border-bottom:1px solid var(--line);cursor:pointer;
+    margin:0 16px;padding:13px 18px;border-bottom:1px solid var(--line);cursor:pointer;
   }
   .meal-row:first-of-type{border-radius:16px 16px 0 0;}
   .meal-row:last-of-type{border-radius:0 0 16px 16px;border-bottom:none;}
@@ -1406,12 +1410,15 @@
           <div id="pane-hoy">
             <div class="section-label">Tu día de hoy <small class="day-count">3/7 días</small></div>
             <div class="card ring-card" id="cardHoy">
-              <div class="ring-label">CALORÍAS CONSUMIDAS</div>
+              <div class="ring-label" id="ringLabelHoy">CALORÍAS CONSUMIDAS</div>
               <div class="ring-wrap">
-                <svg width="150" height="150" viewBox="0 0 150 150">
-                  <circle cx="75" cy="75" r="64" fill="none" stroke="var(--pill-bg)" stroke-width="13"/>
-                  <circle class="ring-prog" cx="75" cy="75" r="64" fill="none" stroke="var(--ink)" stroke-width="13" stroke-linecap="round"
-                    stroke-dasharray="402" stroke-dashoffset="402"/>
+                <!-- pathLength=100 hace que el trazo se mida en porcentaje.
+                     Así se puede cambiar el tamaño del anillo sin recalcular
+                     2πr en el JavaScript, que es donde se cuela el error. -->
+                <svg width="112" height="112" viewBox="0 0 112 112">
+                  <circle cx="56" cy="56" r="48" fill="none" stroke="var(--pill-bg)" stroke-width="10"/>
+                  <circle class="ring-prog" cx="56" cy="56" r="48" fill="none" stroke="var(--ink)" stroke-width="10" stroke-linecap="round"
+                    pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/>
                 </svg>
                 <div class="ring-num">0</div>
               </div>
@@ -1421,7 +1428,7 @@
                 <div class="macro-row"><div class="macro-top"><span class="name">Carbos</span><span class="val" data-macro="C" >—</span></div><div class="bar-track"><div class="bar-fill"></div></div></div>
                 <div class="macro-row"><div class="macro-top"><span class="name">Grasas</span><span class="val" data-macro="G" >—</span></div><div class="bar-track"><div class="bar-fill"></div></div></div>
               </div>
-              <div class="dots" style="margin-top:14px;"><span class="on"></span><span></span></div>
+              <div class="dots" id="ringDots"><span class="on"></span><span></span></div>
             </div>
 
             <div class="section-label">Mis comidas</div>
@@ -1445,12 +1452,12 @@
             <div class="section-label">Tu semana <small class="day-count">3/7 días</small></div>
             <div class="week-range" id="weekRange">Del 27 jul al 2 ago</div>
             <div class="card ring-card" id="cardSemana">
-              <div class="ring-label">CALORÍAS CONSUMIDAS</div>
+              <div class="ring-label" id="ringLabelSem">CALORÍAS CONSUMIDAS</div>
               <div class="ring-wrap">
-                <svg width="150" height="150" viewBox="0 0 150 150">
-                  <circle cx="75" cy="75" r="64" fill="none" stroke="var(--pill-bg)" stroke-width="13"/>
-                  <circle class="ring-prog" cx="75" cy="75" r="64" fill="none" stroke="var(--ink)" stroke-width="13" stroke-linecap="round"
-                    stroke-dasharray="402" stroke-dashoffset="402"/>
+                <svg width="112" height="112" viewBox="0 0 112 112">
+                  <circle cx="56" cy="56" r="48" fill="none" stroke="var(--pill-bg)" stroke-width="10"/>
+                  <circle class="ring-prog" cx="56" cy="56" r="48" fill="none" stroke="var(--ink)" stroke-width="10" stroke-linecap="round"
+                    pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/>
                 </svg>
                 <div class="ring-num">0</div>
               </div>
@@ -1459,7 +1466,7 @@
                 <div class="macro-row"><div class="macro-top"><span class="name">Carbos</span><span class="val" data-macro="C" >—</span></div><div class="bar-track"><div class="bar-fill"></div></div></div>
                 <div class="macro-row"><div class="macro-top"><span class="name">Grasas</span><span class="val" data-macro="G" >—</span></div><div class="bar-track"><div class="bar-fill"></div></div></div>
               </div>
-              <div class="dots" style="margin-top:14px;"><span></span><span class="on"></span></div>
+              <div class="dots" id="ringDotsSem"><span class="on"></span><span></span></div>
             </div>
             <div class="week-summary" id="weekSummary">P 170 · C 240 · G 75 · 2,315 cal/día · se reinicia cada lunes</div>
           </div>
@@ -2641,11 +2648,40 @@
     }, {passive:true});
   }
 
-  var nada = function(){};
-  deslizar(document.getElementById('cardHoy'),
-           function(){ mostrarSemana(true); }, nada);
-  deslizar(document.getElementById('cardSemana'),
-           nada, function(){ mostrarHoy(true); });
+  // Deslizar el anillo cambia entre CONSUMIDAS y RESTANTES, no entre día y
+  // semana: para eso ya están las dos pestañas de arriba, y lo que uno mira
+  // veinte veces al día es cuánto le queda. Los dos anillos comparten modo
+  // para que nunca digan cosas distintas.
+  var vistaAnillo = 'consumidas';
+
+  function cambiarVistaAnillo(cual){
+    if(cual === vistaAnillo) return;
+    vistaAnillo = cual;
+    var restando = cual === 'restantes';
+    ['ringLabelHoy','ringLabelSem'].forEach(function(id){
+      document.getElementById(id).textContent =
+        restando ? 'CALORÍAS RESTANTES' : 'CALORÍAS CONSUMIDAS';
+    });
+    ['ringDots','ringDotsSem'].forEach(function(id){
+      var p = document.getElementById(id).children;
+      p[0].classList.toggle('on', !restando);
+      p[1].classList.toggle('on',  restando);
+    });
+    // Las cifras y las barras las recalcula quien ya sabe hacerlo.
+    actualizarMetas();
+  }
+
+  ['cardHoy','cardSemana','ringDots','ringDotsSem'].forEach(function(id){
+    var el = document.getElementById(id);
+    deslizar(el, function(){ cambiarVistaAnillo('restantes'); },
+                 function(){ cambiarVistaAnillo('consumidas'); });
+    // Los puntos también se pueden tocar: en un teléfono no siempre se
+    // adivina que la tarjeta se desliza.
+    if(id.indexOf('Dots') > 0) el.addEventListener('click', function(e){
+      var i = Array.prototype.indexOf.call(this.children, e.target);
+      if(i >= 0) cambiarVistaAnillo(i === 0 ? 'consumidas' : 'restantes');
+    });
+  });
 
   // ---- Días de rutina: seleccionar, renombrar, agregar, quitar ----
   // Los días son plantillas con nombre libre (Push, Pierna, Lunes...), no fechas.
@@ -3725,11 +3761,19 @@
   }
   function sumaSemana(){ return sumaDesde(anclaSemana); }
 
-  function pintarAnillo(cardId, consumido, meta){
+  // El anillo se hizo más pequeño para que el Diario quepa en una pantalla
+  // sin desplazar. El trazo va por `pathLength`, así que el largo del
+  // círculo es siempre 100 y no hay que recalcular 2πr al cambiar el radio.
+  // `valor` es lo que se enseña dentro y lo que llena el trazo. En
+  // "consumidas" es lo comido y el anillo se llena; en "restantes" es lo
+  // que falta, así que empieza entero y se vacía. Quien llama decide cuál
+  // de los dos manda, y aquí no hay que saberlo.
+  function pintarAnillo(cardId, valor, meta){
     var card = document.getElementById(cardId);
-    var pct = meta > 0 ? Math.min(1, consumido / meta) : 0;
-    card.querySelector('.ring-num').textContent = mil(consumido);
-    card.querySelector('.ring-prog').setAttribute('stroke-dashoffset', String(402 - 402 * pct));
+    if(!card) return;
+    var pct = meta > 0 ? Math.min(1, valor / meta) : 0;
+    card.querySelector('.ring-num').textContent = mil(valor);
+    card.querySelector('.ring-prog').setAttribute('stroke-dashoffset', String(100 - 100 * pct));
   }
 
   function actualizarSemana(){
@@ -3928,17 +3972,31 @@
       var esSemana = box.dataset.scope === 'semana';
       var metasBox = esSemana ? {P:P*7, C:C*7, G:G*7} : metaHoy;
       var comidoBox = esSemana ? sem : hoy;
+      // En "restantes" se enseña lo que falta, no lo que va: la barra se
+      // vacía en vez de llenarse, que es lo que uno espera de un contador
+      // hacia atrás.
+      var restando = vistaAnillo === 'restantes';
       Array.from(box.querySelectorAll('.val')).forEach(function(el){
         var k = el.dataset.macro;
         var meta = metasBox[k];
         var comido = comidoBox[k] || 0;
-        el.textContent = mil(comido) + '/' + mil(meta) + 'g';
+        if(restando){
+          el.textContent = mil(Math.max(0, meta - comido)) + 'g';
+        } else {
+          el.textContent = mil(comido) + '/' + mil(meta) + 'g';
+        }
         var pct = meta > 0 ? Math.min(100, comido / meta * 100) : 0;
-        el.closest('.macro-row').querySelector('.bar-fill').style.width = pct + '%';
+        el.closest('.macro-row').querySelector('.bar-fill').style.width =
+          (restando ? Math.max(0, 100 - pct) : pct) + '%';
       });
     });
-    pintarAnillo('cardHoy', calDe(hoy), calHoyMeta);
-    pintarAnillo('cardSemana', calDe(sem), calSem);
+
+    // En "restantes" el anillo se vacía según se come, en vez de llenarse.
+    var falta = vistaAnillo === 'restantes'
+      ? function(comido, meta){ return Math.max(0, meta - comido); }
+      : function(comido){ return comido; };
+    pintarAnillo('cardHoy',    falta(calDe(hoy), calHoyMeta), calHoyMeta);
+    pintarAnillo('cardSemana', falta(calDe(sem), calSem),     calSem);
 
     // Nota que explica por qué la meta de hoy cambió
     var nota = document.getElementById('ajusteNota');
