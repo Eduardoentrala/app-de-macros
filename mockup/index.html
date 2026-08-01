@@ -636,6 +636,22 @@
   }
   .foto-info{margin-top:6px;}
 
+  /* ---- Historial de fotos, dentro de Progreso ---- */
+  .hist-sem{
+    display:flex;align-items:center;gap:11px;padding:10px 0;cursor:pointer;
+    border-bottom:1px solid var(--line);
+  }
+  .hist-sem:last-child{border-bottom:none;}
+  .hist-minis{display:flex;gap:3px;flex:none;}
+  .hist-minis i{
+    width:30px;height:38px;border-radius:6px;background:var(--pill-bg);
+    background-size:cover;background-position:center;display:block;
+  }
+  .hist-txt{flex:1;min-width:0;}
+  .hist-txt b{display:block;font:700 13px/1.2 sans-serif;color:var(--ink);}
+  .hist-txt span{display:block;font:600 11px/1.2 sans-serif;color:var(--ink-faint);margin-top:3px;}
+  .hist-cuenta{font:700 12px/1 sans-serif;color:var(--ink-faint);flex:none;}
+
   /* ---- Comparador ---- */
   .cmp-controles{background:var(--card-bg);padding:0 16px 12px;flex:none;border-bottom:1px solid var(--line);}
   .cmp-selects{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
@@ -1805,6 +1821,15 @@
             <tr><th>Día</th><th>Fecha</th><th>Fuerza</th><th>Cardio</th></tr>
             <tbody id="ejFilas"></tbody>
           </table>
+
+          <div class="card">
+            <div class="goal-head">
+              <div style="font:800 14.5px/1 sans-serif;">Historial de fotos</div>
+              <span class="goal-hint">últimos 6 meses</span>
+            </div>
+            <div id="histFotos"></div>
+          </div>
+          <div style="height:20px;"></div>
         </div>
         <div class="toast" id="toastEjercicio">Listo</div>
 
@@ -4299,7 +4324,9 @@
     var quien = deQuien || sesion.user.id;
     return sbFetch('/rest/v1/progress_photos' +
         '?select=week_key,pose,storage_path,bytes,width,height' +
-        '&user_id=eq.' + quien + '&order=week_key.desc')
+        '&user_id=eq.' + quien +
+        '&week_key=gte.' + claveLimiteFotos() +   // solo seis meses
+        '&order=week_key.desc')
       .then(function(fs){
         fs = fs || [];
         return sbFirmar(fs.map(function(f){ return f.storage_path; })).then(function(urls){
@@ -4315,6 +4342,55 @@
         });
       });
   }
+
+  // Las fotos se guardan seis meses. Pasado eso dejan de mostrarse, y la
+  // función limpiar_fotos_viejas() de la migración 0011 las quita de la base.
+  // Se compara por clave de semana ('2026-W31'), que ordena bien también
+  // entre años: '2025-W52' < '2026-W01'.
+  function claveLimiteFotos(){
+    var MESES_FOTOS = 6;      // dentro: como constante suelta valdría
+    var d = new Date(HOY);    // undefined al arrancar, por el hoisting de var
+    d.setMonth(d.getMonth() - MESES_FOTOS);
+    return claveSemana(d);
+  }
+
+  // --- Historial de fotos (en Progreso) ---
+  function pintarHistorialFotos(){
+    var cont = document.getElementById('histFotos');
+    if(!cont) return;
+    var semanas = Object.keys(FOTOS)
+      .filter(function(k){ return Object.keys(FOTOS[k]).length; })
+      .sort().reverse();
+
+    if(!semanas.length){
+      cont.innerHTML = '<p class="calc-note" style="margin:6px 0 0;">Todavía no has subido fotos. ' +
+        'Las que subas se guardan seis meses y aparecerán aquí.</p>';
+      return;
+    }
+
+    cont.innerHTML = semanas.map(function(k){
+      var set = FOTOS[k], n = Object.keys(set).length;
+      var minis = POSES.map(function(p){
+        var f = set[p.k];
+        return '<i' + (f ? ' style="background-image:url(' + f.src + ')"' : '') + '></i>';
+      }).join('');
+      return '<div class="hist-sem" data-sem="' + k + '">' +
+        '<div class="hist-minis">' + minis + '</div>' +
+        '<div class="hist-txt"><b>' + etiquetaClave(k) + '</b>' +
+          '<span>' + rangoSemana(lunesDeClave(k)) + '</span></div>' +
+        '<div class="hist-cuenta">' + n + '/4</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  // Tocar una semana abre esa semana en la pantalla de Fotos
+  document.getElementById('histFotos').addEventListener('click', function(e){
+    var fila = e.target.closest('[data-sem]');
+    if(!fila) return;
+    semanaFoto = lunesDeClave(fila.dataset.sem);
+    pintarFotos();
+    goto('fotos', true);
+  });
 
   // --- Pantalla de fotos ---
   function pintarFotos(){
@@ -4337,6 +4413,10 @@
         (f ? '<button class="foto-quitar" data-quitar-foto="'+p.k+'" aria-label="Quitar">✕</button>' : '')+
       '</div>';
     }).join('');
+
+    // El historial va aquí y no en cada sitio que toca fotos: pintarFotos()
+    // ya se llama en todos ellos, así que no hay forma de que se olvide.
+    pintarHistorialFotos();
   }
 
   document.getElementById('fotoGrid').addEventListener('click', function(e){
