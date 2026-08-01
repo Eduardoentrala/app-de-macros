@@ -1401,6 +1401,23 @@
           </div>
           <div class="totals-line"><span>Total</span><b id="tCal">0 cal</b></div>
         </div>
+        <div class="sheet-backdrop" id="cantSheet">
+          <div class="sheet">
+            <h4 id="cantNombre">Alimento</h4>
+            <p class="hint">¿Cuánto comiste de verdad? Los macros se recalculan solos.</p>
+            <div class="preset-grid" id="cantPresets"></div>
+            <div class="custom-row">
+              <input id="cantValor" type="number" min="0.1" step="1" inputmode="decimal">
+              <span class="unit" id="cantUnidad">g</span>
+            </div>
+            <div class="calc-box">
+              <div class="calc-line"><span>Quedaría en</span><b id="cantMacros">—</b></div>
+            </div>
+            <button class="btn-primary" id="cantGuardar">Guardar</button>
+            <button class="btn-ghost-text" id="cantCancelar">Cancelar</button>
+          </div>
+        </div>
+
         <div class="toast" id="toastComida">Agregado</div>
       </div>
 
@@ -3504,6 +3521,40 @@
            Math.round(calAlim(a)) + 'kcal · ' + a.u;
   }
 
+  // ---- Cantidad de un alimento ya apuntado ----
+  // Para poder cambiar "me comí 150 g y no 100" hacen falta dos cosas que
+  // antes no se guardaban: cuánto se comió (cant) y los macros de UNA
+  // porción base (porBase). Los P/C/G de la tarjeta son siempre lo
+  // consumido; la base es lo que permite recalcularlos.
+  function baseDeUnidad(u){ return (u === 'Gramos' || u === 'Onzas') ? 100 : 1; }
+
+  function prepararAlimento(a){
+    a.base = baseDeUnidad(a.u);
+    if(a.cant == null) a.cant = a.base;        // recién agregado: una porción
+    if(!a.porBase){
+      // Al venir de la base de datos ya trae cantidad y macros consumidos,
+      // así que la porción base se deduce dividiendo.
+      var f = (a.cant / a.base) || 1;
+      a.porBase = { P: a.P / f, C: a.C / f, G: a.G / f };
+    }
+    return a;
+  }
+
+  function aplicarCantidad(a, cant){
+    a.cant = Math.max(0.1, Number(cant) || 0.1);
+    var f = a.cant / a.base;
+    a.P = Math.round(a.porBase.P * f * 10) / 10;
+    a.C = Math.round(a.porBase.C * f * 10) / 10;
+    a.G = Math.round(a.porBase.G * f * 10) / 10;
+  }
+
+  // En la comida sí interesa ver cuánto es, no solo los macros
+  function lineaComida(a){
+    return un(a.cant) + ' ' + (a.u === 'Gramos' ? 'g' : a.u.toLowerCase()) +
+           ' · P ' + un(a.P) + ' · C ' + un(a.C) + ' · G ' + un(a.G) +
+           ' · ' + Math.round(calAlim(a)) + ' kcal';
+  }
+
   // Las calorías de cada fila del Diario salen de lo que tiene esa comida
   function pintarFilasComidas(){
     Array.from(document.querySelectorAll('[data-cal]')).forEach(function(el){
@@ -3521,9 +3572,13 @@
     document.getElementById('mealEmpty').style.display = lista.length ? 'none' : '';
 
     cont.innerHTML = lista.length ? '<div class="food-list">' + lista.map(function(a, i){
+      prepararAlimento(a);
       return '<div class="food-card"><div class="fc-main"><div class="fc-name">'+a.n+'</div>'+
-        '<div class="fc-sub">'+lineaMacros(a)+'</div></div>'+
-        '<div class="fc-actions"><button class="btn-mini del" data-quitar="'+i+'">Quitar</button></div></div>';
+        '<div class="fc-sub">'+lineaComida(a)+'</div></div>'+
+        '<div class="fc-actions">'+
+          '<button class="btn-mini edit" data-editar="'+i+'">Editar</button>'+
+          '<button class="btn-mini del" data-quitar="'+i+'">Quitar</button>'+
+        '</div></div>';
     }).join('') + '</div>' : '';
 
     var t = lista.reduce(function(s,a){ s.P+=a.P; s.C+=a.C; s.G+=a.G; return s; }, {P:0,C:0,G:0});
@@ -3537,6 +3592,7 @@
 
   function agregarAlimento(a){
     var comida = comidaActual;      // se fija: la pantalla puede cambiar mientras se guarda
+    prepararAlimento(a);            // deja lista la cantidad y la porción base
     COMIDAS[comida].push(a);
     if(typeof sumarAlRegistro === 'function') sumarAlRegistro(a, +1);
     pintarComida();
@@ -3562,7 +3618,87 @@
     }
   }
 
+  // ---- Editar cuánto se comió ----
+  var cantSheet = document.getElementById('cantSheet');
+  var cantValor = document.getElementById('cantValor');
+  var alimentoEditando = null;
+
+  function abreviarUnidad(u){ return u === 'Gramos' ? 'g' : u.toLowerCase(); }
+
+  function pintarPreviaCantidad(){
+    if(!alimentoEditando) return;
+    var a = alimentoEditando;
+    var f = (Number(cantValor.value) || 0) / a.base;
+    var P = a.porBase.P * f, C = a.porBase.C * f, G = a.porBase.G * f;
+    document.getElementById('cantMacros').textContent =
+      'P ' + un(P) + ' · C ' + un(C) + ' · G ' + un(G) + ' · ' +
+      Math.round(P*4 + C*4 + G*9) + ' kcal';
+    Array.from(document.querySelectorAll('#cantPresets .preset')).forEach(function(p){
+      p.classList.toggle('active', Number(p.dataset.cant) === Number(cantValor.value));
+    });
+  }
+
+  function abrirCantidad(a){
+    alimentoEditando = prepararAlimento(a);
+    document.getElementById('cantNombre').textContent = a.n;
+    document.getElementById('cantUnidad').textContent = abreviarUnidad(a.u);
+    // Atajos distintos según se mida en gramos o en piezas
+    var opciones = a.base === 100 ? [30, 50, 100, 150, 200, 250] : [1, 2, 3, 4];
+    document.getElementById('cantPresets').innerHTML = opciones.map(function(v){
+      return '<button class="preset" data-cant="' + v + '">' + v +
+             '<small>' + abreviarUnidad(a.u) + '</small></button>';
+    }).join('');
+    cantValor.value = a.cant;
+    pintarPreviaCantidad();
+    cantSheet.classList.add('open');
+  }
+
+  document.getElementById('cantPresets').addEventListener('click', function(e){
+    var p = e.target.closest('.preset');
+    if(p){ cantValor.value = p.dataset.cant; pintarPreviaCantidad(); }
+  });
+  cantValor.addEventListener('input', pintarPreviaCantidad);
+
+  function cerrarCantidad(){ cantSheet.classList.remove('open'); alimentoEditando = null; }
+  document.getElementById('cantCancelar').addEventListener('click', cerrarCantidad);
+  cantSheet.addEventListener('click', function(e){ if(e.target === cantSheet) cerrarCantidad(); });
+
+  document.getElementById('cantGuardar').addEventListener('click', function(){
+    if(!alimentoEditando) return;
+    var a = alimentoEditando;
+    var antes = { cant:a.cant, P:a.P, C:a.C, G:a.G };
+
+    // El día lleva la cuenta de lo consumido, así que hay que restar lo
+    // viejo antes de sumar lo nuevo o el anillo se descuadra.
+    sumarAlRegistro(a, -1);
+    aplicarCantidad(a, cantValor.value);
+    sumarAlRegistro(a, +1);
+
+    cerrarCantidad();
+    pintarComida();
+    toast('toastComida', a.n + ': ' + un(a.cant) + ' ' + abreviarUnidad(a.u));
+
+    if(a.id && sesion){
+      sbFetch('/rest/v1/diary_entries?id=eq.' + a.id, {
+        method:'PATCH', headers:{ 'Prefer':'return=minimal' },
+        body: JSON.stringify({ quantity: a.cant, protein_g: a.P, carbs_g: a.C, fat_g: a.G })
+      })['catch'](function(e){
+        sumarAlRegistro(a, -1);
+        a.cant = antes.cant; a.P = antes.P; a.C = antes.C; a.G = antes.G;
+        sumarAlRegistro(a, +1);
+        pintarComida();
+        toast('toastComida', 'No se pudo guardar: ' + traducirError(e.message));
+      });
+    }
+  });
+
   document.getElementById('mealList').addEventListener('click', function(e){
+    var ed = e.target.closest('[data-editar]');
+    if(ed){
+      var aEd = COMIDAS[comidaActual][Number(ed.dataset.editar)];
+      if(aEd) abrirCantidad(aEd);
+      return;
+    }
     var b = e.target.closest('[data-quitar]');
     if(!b) return;
     var comida = comidaActual;
@@ -5370,7 +5506,7 @@
   }
   function sbDiario(desde){
     return sbFetch('/rest/v1/diary_entries' +
-      '?select=id,entry_date,meal,food_name,unit,protein_g,carbs_g,fat_g' +
+      '?select=id,entry_date,meal,food_name,unit,quantity,protein_g,carbs_g,fat_g' +
       '&entry_date=gte.' + desde + '&order=created_at.asc');
   }
   function sbAgregarAlimento(a, comida){
@@ -5382,7 +5518,9 @@
         entry_date: isoDe(HOY),
         meal: comida,
         food_name: a.n,
-        quantity: 1,              // la cantidad ya viene aplicada en P/C/G
+        // Cuánto se comió, en su unidad. Los macros van ya multiplicados por
+        // esta cantidad; guardarla aparte es lo que permite editarla después.
+        quantity: a.cant || 1,
         unit: a.u || 'Gramos',
         protein_g: a.P, carbs_g: a.C, fat_g: a.G
       })
@@ -5535,7 +5673,12 @@
           // La base admite 'Snack', que el Diario todavía no muestra: se
           // suma al día pero no se lista, en vez de reventar.
           if(f.entry_date === hoy && COMIDAS[f.meal]){
-            COMIDAS[f.meal].push({ id:f.id, n:f.food_name, P:P, C:C, G:G, u:f.unit || 'Gramos' });
+            // prepararAlimento() deduce la porción base a partir de la
+            // cantidad y los macros consumidos, para poder volver a editarla.
+            COMIDAS[f.meal].push(prepararAlimento({
+              id:f.id, n:f.food_name, u:f.unit || 'Gramos',
+              cant: Number(f.quantity) || null, P:P, C:C, G:G
+            }));
           }
         });
 
