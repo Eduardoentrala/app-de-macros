@@ -612,6 +612,27 @@
     transition:transform .18s cubic-bezier(.32,.72,0,1), color .18s ease;
   }
   .btn-estrella.on{color:var(--amber);}
+
+  /* ---- Catálogo en el panel ---- */
+  .cat-row{
+    display:flex;align-items:center;gap:10px;background:var(--card-bg);
+    margin:0 16px 7px;padding:12px 14px;border-radius:13px;
+    box-shadow:var(--shadow);cursor:pointer;
+  }
+  .cat-row.apagado{opacity:.5;}
+  .cat-row .info{flex:1;min-width:0;}
+  .cat-row b{display:block;font:700 13.5px/1.3 sans-serif;color:var(--ink);}
+  .cat-row span{display:block;font:600 11px/1.3 sans-serif;color:var(--ink-faint);margin-top:3px;}
+  .cat-fila2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .cat-macros{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;}
+  .cat-macros .field-label{margin-top:0;}
+
+  /* La etiqueta crudo/cocido junto al nombre en las sugerencias */
+  .cat-estado{
+    font:700 9.5px/1 sans-serif;text-transform:uppercase;letter-spacing:.06em;
+    background:var(--pill-bg);color:var(--ink-faint);
+    padding:3px 6px;border-radius:5px;margin-left:5px;vertical-align:middle;
+  }
   .btn-estrella:active{transform:scale(1.35);}
   .usr-acc .b-off{background:var(--red-soft);color:var(--red);}
   .usr-acc .b-key{background:var(--pill-bg);color:var(--pill-ink);}
@@ -1775,9 +1796,59 @@
         <div class="src-pills adm-tabs" id="admTabs">
           <button class="active" data-adm="tablero">Tablero</button>
           <button data-adm="usuarios">Usuarios</button>
+          <button data-adm="alimentos">Alimentos</button>
           <button data-adm="config">Ajustes</button>
         </div>
         <div class="scroll"><div id="admCuerpo"></div></div>
+
+        <!-- Ficha de un alimento del catálogo -->
+        <div class="sheet-backdrop" id="catSheet">
+          <div class="sheet">
+            <h4 id="catTitulo">Alimento</h4>
+            <p class="hint" id="catFuente">—</p>
+
+            <div class="field-label" style="margin-top:0;">Nombre</div>
+            <input class="big-input" id="catNombre" maxlength="80" placeholder="Ej. Pechuga de pollo">
+
+            <div class="cat-fila2">
+              <div>
+                <div class="field-label">Categoría</div>
+                <select class="big-input" id="catCategoria"></select>
+              </div>
+              <div>
+                <div class="field-label">Estado</div>
+                <select class="big-input" id="catEstado">
+                  <option value="unico">No cambia</option>
+                  <option value="crudo">Crudo</option>
+                  <option value="cocido">Cocido</option>
+                </select>
+              </div>
+            </div>
+
+            <p class="calc-note">Los macros van <b>por 100 g</b>. Las calorías se calculan solas.</p>
+            <div class="cat-macros">
+              <div><div class="field-label">Proteína</div><input class="big-input" id="catP" type="number" step="0.1" inputmode="decimal"></div>
+              <div><div class="field-label">Carbos</div><input class="big-input" id="catC" type="number" step="0.1" inputmode="decimal"></div>
+              <div><div class="field-label">Grasas</div><input class="big-input" id="catG" type="number" step="0.1" inputmode="decimal"></div>
+            </div>
+            <div class="calc-box"><div class="calc-line"><span>Calorías por 100 g</span><b id="catCal">0</b></div></div>
+
+            <div class="cat-fila2">
+              <div>
+                <div class="field-label">Porción casera</div>
+                <input class="big-input" id="catPorcion" maxlength="40" placeholder="1 pieza mediana">
+              </div>
+              <div>
+                <div class="field-label">Pesa (g)</div>
+                <input class="big-input" id="catPorcionG" type="number" step="1" inputmode="numeric">
+              </div>
+            </div>
+
+            <button class="btn-primary" id="catGuardar">Guardar</button>
+            <button class="btn-rename" id="catOcultar" style="width:100%;margin-top:8px;">Ocultar del buscador</button>
+            <button class="btn-ghost-text" id="catCancelar">Cancelar</button>
+          </div>
+        </div>
 
         <!-- Ficha de un usuario: se abre tocando su fila en la lista -->
         <div class="sheet-backdrop" id="usrSheet">
@@ -4224,37 +4295,97 @@
   var mealSugeridos = document.getElementById('mealSugeridos');
   var SUGERIDOS = [], relojBusqueda = null;
 
+  // Dos fuentes, y el orden importa: primero el catálogo -datos de USDA,
+  // medidos- y debajo lo que registra la gente, que es estimado. Quien
+  // busca "pollo" debe encontrar antes el dato bueno.
   function pintarSugerencias(lista, texto){
     if(!texto || texto.length < 2){ mealSugeridos.innerHTML = ''; return; }
+
+    var deCatalogo = lista.filter(function(a){ return a.fuente === 'catalogo'; });
+    var deGente    = lista.filter(function(a){ return a.fuente !== 'catalogo'; });
+
     if(!lista.length){
       mealSugeridos.innerHTML = '<p class="calc-note" style="padding:14px 20px 0;">' +
-        'Nadie ha registrado «' + texto + '» todavía. Créalo en la pestaña «Crear» y, ' +
-        'cuando otras personas lo registren también, empezará a sugerirse solo.</p>';
+        'No encontré «' + escapar(texto) + '». Créalo en la pestaña «Crear»: ' +
+        'quedará guardado para ti y, si otras personas lo registran también, ' +
+        'empezará a sugerirse solo.</p>';
       return;
     }
+
+    var bloque = function(titulo, sub, arr){
+      if(!arr.length) return '';
+      return '<div class="section-label">' + titulo + ' <small>' + sub + '</small></div>' +
+        '<div class="food-list">' + arr.map(function(a){
+          return '<div class="food-card" data-sug="' + lista.indexOf(a) + '">' +
+            '<div class="fc-main"><div class="fc-name">' + escapar(a.n) +
+              (a.estado && a.estado !== 'unico'
+                ? ' <span class="cat-estado">' + a.estado + '</span>' : '') + '</div>' +
+            '<div class="fc-sub">' + lineaMacros(a) +
+              (a.personas ? ' · lo usan ' + a.personas : '') + '</div></div>' +
+            '<span style="color:var(--ink-faint);font-size:19px;">+</span></div>';
+        }).join('') + '</div>';
+    };
+
     mealSugeridos.innerHTML =
-      '<div class="section-label">Sugerencias <small>de otras personas</small></div>' +
-      '<div class="food-list">' + lista.map(function(a, i){
-        return '<div class="food-card" data-sug="' + i + '">' +
-          '<div class="fc-main"><div class="fc-name">' + a.n + '</div>' +
-          '<div class="fc-sub">' + lineaMacros(a) + ' · lo usan ' + a.personas + '</div></div>' +
-          '<span style="color:var(--ink-faint);font-size:19px;">+</span></div>';
-      }).join('') + '</div>';
+      bloque('Catálogo', 'datos de USDA', deCatalogo) +
+      bloque('Sugerencias', 'de otras personas', deGente);
   }
 
   function buscarSugerencias(){
     var texto = mealSearch.value.trim();
     if(texto.length < 2 || !sesion){ SUGERIDOS = []; pintarSugerencias([], texto); return; }
 
-    sbRpc('buscar_alimentos', { p_texto: texto, p_limite: 12 }).then(function(r){
+    // Las dos búsquedas van a la vez. Si una falla, la otra sigue
+    // sirviendo: quedarse sin catálogo no debe dejar sin sugerencias.
+    Promise.all([
+      sbRpc('buscar_catalogo',  { p_texto: texto, p_limite: 12 })['catch'](function(){ return []; }),
+      sbRpc('buscar_alimentos', { p_texto: texto, p_limite: 8  })['catch'](function(){ return []; })
+    ]).then(function(r){
       // Si mientras llegaba la respuesta ya se escribió otra cosa, esta sobra
       if(mealSearch.value.trim() !== texto) return;
-      SUGERIDOS = (r || []).map(function(x){
-        return { n:x.nombre, u:x.unit, personas:x.personas,
-                 P:Number(x.protein_g)||0, C:Number(x.carbs_g)||0, G:Number(x.fat_g)||0 };
+
+      var cat = (r[0] || []).map(function(x){
+        // El catálogo viene por 100 g. Si trae peso de porción se ofrece
+        // en piezas o tazas, que es como la gente mide de verdad.
+        var enPiezas = x.porcion_g && x.porcion && !/^\d+\s*g/.test(x.porcion);
+        return {
+          fuente: 'catalogo', n: x.nombre, estado: x.estado,
+          u: enPiezas ? 'Pieza' : 'Gramos',
+          cant: enPiezas ? 1 : 100,
+          P: Number(x.proteina) || 0, C: Number(x.carbos) || 0, G: Number(x.grasas) || 0,
+          porcion_g: x.porcion_g
+        };
       });
+      // Los del catálogo van por 100 g; si se ofrecen en piezas hay que
+      // llevar los macros al peso de esa pieza.
+      cat.forEach(function(a){
+        if(a.u === 'Pieza' && a.porcion_g){
+          var k = a.porcion_g / 100;
+          a.P = Math.round(a.P * k * 10) / 10;
+          a.C = Math.round(a.C * k * 10) / 10;
+          a.G = Math.round(a.G * k * 10) / 10;
+        }
+      });
+
+      var gente = (r[1] || []).map(function(x){
+        return { fuente:'gente', n:x.nombre, u:x.unit, personas:x.personas, cant:null,
+                 P:Number(x.protein_g)||0, C:Number(x.carbs_g)||0, G:Number(x.fat_g)||0 };
+      // Lo que ya está en el catálogo no se repite abajo.
+      }).filter(function(x){
+        return !cat.some(function(c){
+          return normalizarBusqueda(c.n) === normalizarBusqueda(x.n); });
+      });
+
+      SUGERIDOS = cat.concat(gente);
       pintarSugerencias(SUGERIDOS, texto);
-    })['catch'](function(){ /* sin sugerencias se sigue pudiendo crear a mano */ });
+    });
+  }
+
+  // Misma normalización que usa la base (0012): sin acentos y en
+  // minúsculas, para que "Plátano" y "platano" cuenten como el mismo.
+  function normalizarBusqueda(s){
+    return String(s || '').toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
   }
 
   mealSearch.addEventListener('input', function(){
@@ -4270,7 +4401,11 @@
     if(!a) return;
     mealSearch.value = '';
     mealSugeridos.innerHTML = '';
-    agregarAlimento({ n:a.n, u:a.u, P:a.P, C:a.C, G:a.G });
+    // El nombre lleva el estado cuando lo tiene: en el diario hay que
+    // poder distinguir el arroz crudo del cocido de un vistazo, que es
+    // toda la razón de que sean registros separados.
+    var nombre = (a.estado && a.estado !== 'unico') ? a.n + ' (' + a.estado + ')' : a.n;
+    agregarAlimento({ n:nombre, u:a.u, cant:a.cant || undefined, P:a.P, C:a.C, G:a.G });
   });
 
   // Crear alimento: las calorías salen solas de los macros
@@ -5743,11 +5878,194 @@
     '<p class="cmp-aviso">Estos interruptores viven en la tabla <b>feature_flags</b>. Se aplican al instante para todos, sin publicar una versión nueva de la app.</p>';
   }
 
+  // ---- El catálogo de alimentos, solo para el super admin ----
+  // Se carga bajo demanda y por búsqueda, no entero: son cientos de filas
+  // y cargarlas todas para ver una sería tirar red y memoria.
+  var CATALOGO = [], catFiltro = '', catCargando = false;
+  var CATEGORIAS = ['carnes','aves','pescados','mariscos','huevos','lacteos','verduras',
+    'frutas','legumbres','cereales','pastas','arroces','tuberculos','semillas',
+    'frutos_secos','aceites','grasas','condimentos','bebidas','harinas','panes',
+    'azucares','otros'];
+
+  function cargarCatalogo(){
+    if(catCargando) return;
+    catCargando = true;
+    // Aquí sí se lee la tabla directa y no buscar_catalogo(): el super
+    // admin necesita ver los campos que la función no devuelve (fdc_id,
+    // el nombre de USDA, si está activo) y su política se lo permite.
+    var q = '/rest/v1/alimentos_catalogo?select=id,nombre,categoria,estado,kcal,' +
+            'proteina,carbos,grasas,porcion,porcion_g,fdc_id,nombre_usda,activo' +
+            '&order=nombre.asc&limit=400';
+    if(catFiltro.trim().length >= 2){
+      q += '&nombre=ilike.*' + encodeURIComponent(catFiltro.trim()) + '*';
+    }
+    sbFetch(q).then(function(r){
+      CATALOGO = r || [];
+      catCargando = false;
+      if(admVista !== 'alimentos') return;
+      // Repintar destruye el campo de búsqueda. Se guarda dónde estaba el
+      // cursor y se devuelve el foco, o escribir se volvería imposible:
+      // cada resultado echaría al usuario fuera del campo.
+      var antes = document.getElementById('catBuscar');
+      var pos = antes && document.activeElement === antes ? antes.selectionStart : null;
+      pintarAdmin();
+      if(pos !== null){
+        var nuevo = document.getElementById('catBuscar');
+        if(nuevo){ nuevo.focus(); nuevo.setSelectionRange(pos, pos); }
+      }
+    })['catch'](function(e){
+      catCargando = false;
+      toast('toastAdmin', 'No se pudo cargar: ' + traducirError(e.message));
+    });
+  }
+
+  function pintarAlimentos(){
+    var filas = CATALOGO;
+    return '<div class="adm-busca">' +
+      '<div class="searchbox"><span>🔍</span>' +
+      '<input id="catBuscar" placeholder="Buscar en el catálogo…" value="' + escapar(catFiltro) + '"></div>' +
+      '<button class="btn-primary" id="catNuevo" style="width:100%;margin-top:10px;">+ Agregar alimento</button>' +
+    '</div>' +
+    '<div class="panel-seccion">Catálogo <small>' + filas.length +
+      (catFiltro ? ' que coinciden' : ' cargados') + '</small></div>' +
+    (filas.length ? filas.map(function(a, i){
+      var cal = Math.round(Number(a.kcal));
+      return '<div class="cat-row' + (a.activo ? '' : ' apagado') + '" data-cat="' + i + '">' +
+        '<div class="info">' +
+          '<b>' + escapar(a.nombre) +
+            (a.estado !== 'unico' ? ' <span class="cat-estado">' + a.estado + '</span>' : '') +
+            (a.activo ? '' : ' <span class="cat-estado">oculto</span>') + '</b>' +
+          '<span>' + a.categoria + ' · ' + cal + ' cal · P' + a.proteina +
+            ' C' + a.carbos + ' G' + a.grasas + ' · por 100 g</span>' +
+        '</div>' +
+        '<span style="color:var(--ink-faint)">›</span></div>';
+    }).join('')
+      : '<p class="cmp-aviso">' + (catFiltro
+          ? 'Nada coincide con esa búsqueda.'
+          : 'Toca aquí arriba para buscar, o agrega un alimento nuevo.') + '</p>') +
+    '<p class="cmp-aviso">Los datos vienen de USDA. Cada fila guarda su identificador ' +
+      'original para poder comprobarla contra la fuente. Nadie más ve esta tabla: ' +
+      'el resto solo la usa al buscar un alimento.</p>';
+  }
+
+  // ---- Editar un alimento del catálogo ----
+  var catSheet = document.getElementById('catSheet');
+  var catEditando = null;
+
+  document.getElementById('catCategoria').innerHTML =
+    CATEGORIAS.map(function(c){
+      return '<option value="' + c + '">' + c.replace(/_/g, ' ') + '</option>'; }).join('');
+
+  function calcularCalCatalogo(){
+    var p = Number(document.getElementById('catP').value) || 0;
+    var c = Number(document.getElementById('catC').value) || 0;
+    var g = Number(document.getElementById('catG').value) || 0;
+    document.getElementById('catCal').textContent = Math.round(p*4 + c*4 + g*9) + ' cal';
+  }
+  ['catP','catC','catG'].forEach(function(id){
+    document.getElementById(id).addEventListener('input', calcularCalCatalogo);
+  });
+
+  function abrirCatalogo(a){
+    catEditando = a || null;
+    var nuevo = !a;
+    document.getElementById('catTitulo').textContent = nuevo ? 'Alimento nuevo' : 'Editar alimento';
+    // De dónde salió el dato. Si alguien lo cambia a mano, deja de ser de
+    // USDA y hay que decirlo: es lo que permite auditarlo después.
+    document.getElementById('catFuente').textContent = (a && a.fdc_id)
+      ? 'USDA #' + a.fdc_id + ' · ' + (a.nombre_usda || '')
+      : 'Alimento propio, no viene de USDA';
+
+    document.getElementById('catNombre').value    = a ? a.nombre : '';
+    document.getElementById('catCategoria').value = a ? a.categoria : 'otros';
+    document.getElementById('catEstado').value    = a ? a.estado : 'unico';
+    document.getElementById('catP').value = a ? a.proteina : '';
+    document.getElementById('catC').value = a ? a.carbos : '';
+    document.getElementById('catG').value = a ? a.grasas : '';
+    document.getElementById('catPorcion').value  = (a && a.porcion) || '';
+    document.getElementById('catPorcionG').value = (a && a.porcion_g) || '';
+    document.getElementById('catOcultar').hidden = nuevo;
+    document.getElementById('catOcultar').textContent =
+      (a && !a.activo) ? 'Volver a mostrarlo' : 'Ocultar del buscador';
+    calcularCalCatalogo();
+    catSheet.classList.add('open');
+  }
+
+  function cerrarCatalogo(){ catSheet.classList.remove('open'); catEditando = null; }
+  document.getElementById('catCancelar').addEventListener('click', cerrarCatalogo);
+  catSheet.addEventListener('click', function(e){ if(e.target === catSheet) cerrarCatalogo(); });
+
+  document.getElementById('catGuardar').addEventListener('click', function(){
+    var nombre = document.getElementById('catNombre').value.trim();
+    if(!nombre){ toast('toastAdmin', 'Ponle nombre'); return; }
+
+    var cuerpo = {
+      nombre: nombre,
+      categoria: document.getElementById('catCategoria').value,
+      estado: document.getElementById('catEstado').value,
+      proteina: Number(document.getElementById('catP').value) || 0,
+      carbos:   Number(document.getElementById('catC').value) || 0,
+      grasas:   Number(document.getElementById('catG').value) || 0,
+      porcion:   document.getElementById('catPorcion').value.trim() || null,
+      porcion_g: Number(document.getElementById('catPorcionG').value) || null
+    };
+    // Las calorías no se piden: se calculan. Pedirlas invita a que un día
+    // no cuadren con los macros de su propia fila.
+    cuerpo.kcal = Math.round((cuerpo.proteina*4 + cuerpo.carbos*4 + cuerpo.grasas*9) * 10) / 10;
+
+    var p = catEditando
+      ? sbFetch('/rest/v1/alimentos_catalogo?id=eq.' + catEditando.id, {
+          method:'PATCH', headers:{ 'Prefer':'return=minimal' }, body: JSON.stringify(cuerpo) })
+      : sbFetch('/rest/v1/alimentos_catalogo', {
+          method:'POST', headers:{ 'Prefer':'return=minimal' }, body: JSON.stringify(cuerpo) });
+
+    p.then(function(){
+      toast('toastAdmin', catEditando ? 'Alimento actualizado' : 'Alimento agregado');
+      cerrarCatalogo();
+      cargarCatalogo();
+    })['catch'](function(e){
+      var m = e.message || '';
+      toast('toastAdmin', /duplicate|unique/.test(m)
+        ? 'Ya existe ese alimento en ese estado'
+        : 'No se pudo guardar: ' + traducirError(m));
+    });
+  });
+
+  // Ocultar en vez de borrar: si alguien ya lo tiene apuntado en su
+  // diario, borrarlo del catálogo no debe hacer desaparecer su comida.
+  document.getElementById('catOcultar').addEventListener('click', function(){
+    if(!catEditando) return;
+    var mostrar = !catEditando.activo;
+    sbFetch('/rest/v1/alimentos_catalogo?id=eq.' + catEditando.id, {
+      method:'PATCH', headers:{ 'Prefer':'return=minimal' },
+      body: JSON.stringify({ activo: mostrar })
+    }).then(function(){
+      toast('toastAdmin', mostrar ? 'Vuelve a aparecer al buscar' : 'Ya no aparece al buscar');
+      cerrarCatalogo();
+      cargarCatalogo();
+    })['catch'](function(e){
+      toast('toastAdmin', 'No se pudo: ' + traducirError(e.message));
+    });
+  });
+
   function pintarAdmin(){
     var c = document.getElementById('admCuerpo');
     c.innerHTML = admVista === 'tablero' ? pintarTablero()
                 : admVista === 'usuarios' ? pintarUsuarios()
+                : admVista === 'alimentos' ? pintarAlimentos()
                 : pintarConfig();
+    // La del catálogo va a la base en cada búsqueda -son cientos de filas
+    // y no están todas en memoria-, con retardo para no lanzar una
+    // petición por tecla.
+    var catB = document.getElementById('catBuscar');
+    if(catB){
+      catB.addEventListener('input', function(){
+        catFiltro = this.value;
+        clearTimeout(catB._reloj);
+        catB._reloj = setTimeout(cargarCatalogo, 350);
+      });
+    }
+
     var busca = document.getElementById('admBuscar');
     if(busca){
       busca.addEventListener('input', function(){
@@ -5764,6 +6082,9 @@
     var b = e.target.closest('button'); if(!b) return;
     Array.from(this.querySelectorAll('button')).forEach(function(x){ x.classList.remove('active'); });
     b.classList.add('active'); admVista = b.dataset.adm; pintarAdmin();
+    // El catálogo se trae al entrar en su pestaña, no al abrir el panel:
+    // son cientos de filas que casi nunca se miran.
+    if(admVista === 'alimentos' && !CATALOGO.length) cargarCatalogo();
   });
 
   document.getElementById('admCuerpo').addEventListener('click', function(e){
@@ -5785,6 +6106,11 @@
       });
       return;
     }
+    // --- Catálogo: abrir uno, o crear ---
+    var bc = e.target.closest('[data-cat]');
+    if(bc){ abrirCatalogo(CATALOGO[Number(bc.dataset.cat)]); return; }
+    if(e.target.closest('#catNuevo')){ abrirCatalogo(null); return; }
+
     // --- Apagarle la IA a alguien ---
     var bi = e.target.closest('[data-ia]');
     if(bi){
