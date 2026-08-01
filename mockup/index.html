@@ -1389,6 +1389,7 @@
           </div>
         </div>
         <div class="scroll">
+          <div id="mealSugeridos"></div>
           <div class="empty-search" id="mealEmpty">Busca un alimento arriba</div>
           <div id="mealList"></div>
         </div>
@@ -1427,10 +1428,11 @@
           <div class="searchbox"><span>🔍</span><input placeholder="Buscar alimento..."></div>
           <div class="share-row is-soon">
             <div>
-              <b>Compartir con la comunidad <em class="soon-tag">Próximamente</em></b>
-              <span>Otras personas podrán ver tus alimentos al buscar.</span>
+              <b>Cómo se sugieren los alimentos</b>
+              <span>Un alimento empieza a sugerirse a los demás solo cuando varias
+                personas lo han creado por separado. Los que solo tienes tú no
+                se comparten, y de los macros se toma el valor más repetido.</span>
             </div>
-            <button class="switch" id="shareSwitch" role="switch" aria-checked="false" disabled><i></i></button>
           </div>
         </div>
         <div class="scroll"><div id="misAlimList" class="food-list"></div></div>
@@ -3624,7 +3626,62 @@
   conectarLista('frecList', FRECUENTES);
   conectarLista('misAlimList', MIS_ALIMENTOS);
 
-  // El compartir con la comunidad queda apagado en v1; se activa en la v2.
+  // ---- Sugerencias mientras escribes ----
+  // Salen de lo que otras personas ya guardaron. Qué se sugiere y qué no lo
+  // decide la base (buscar_alimentos): solo aparece lo que varias personas
+  // han creado por separado, así nadie enseña sin querer sus alimentos.
+  var mealSearch = document.getElementById('mealSearch');
+  var mealSugeridos = document.getElementById('mealSugeridos');
+  var SUGERIDOS = [], relojBusqueda = null;
+
+  function pintarSugerencias(lista, texto){
+    if(!texto || texto.length < 2){ mealSugeridos.innerHTML = ''; return; }
+    if(!lista.length){
+      mealSugeridos.innerHTML = '<p class="calc-note" style="padding:14px 20px 0;">' +
+        'Nadie ha registrado «' + texto + '» todavía. Créalo en la pestaña «Crear» y, ' +
+        'cuando otras personas lo registren también, empezará a sugerirse solo.</p>';
+      return;
+    }
+    mealSugeridos.innerHTML =
+      '<div class="section-label">Sugerencias <small>de otras personas</small></div>' +
+      '<div class="food-list">' + lista.map(function(a, i){
+        return '<div class="food-card" data-sug="' + i + '">' +
+          '<div class="fc-main"><div class="fc-name">' + a.n + '</div>' +
+          '<div class="fc-sub">' + lineaMacros(a) + ' · lo usan ' + a.personas + '</div></div>' +
+          '<span style="color:var(--ink-faint);font-size:19px;">+</span></div>';
+      }).join('') + '</div>';
+  }
+
+  function buscarSugerencias(){
+    var texto = mealSearch.value.trim();
+    if(texto.length < 2 || !sesion){ SUGERIDOS = []; pintarSugerencias([], texto); return; }
+
+    sbRpc('buscar_alimentos', { p_texto: texto, p_limite: 12 }).then(function(r){
+      // Si mientras llegaba la respuesta ya se escribió otra cosa, esta sobra
+      if(mealSearch.value.trim() !== texto) return;
+      SUGERIDOS = (r || []).map(function(x){
+        return { n:x.nombre, u:x.unit, personas:x.personas,
+                 P:Number(x.protein_g)||0, C:Number(x.carbs_g)||0, G:Number(x.fat_g)||0 };
+      });
+      pintarSugerencias(SUGERIDOS, texto);
+    })['catch'](function(){ /* sin sugerencias se sigue pudiendo crear a mano */ });
+  }
+
+  mealSearch.addEventListener('input', function(){
+    clearTimeout(relojBusqueda);
+    // Con retardo: una petición por tecla saturaría por nada
+    relojBusqueda = setTimeout(buscarSugerencias, 350);
+  });
+
+  mealSugeridos.addEventListener('click', function(e){
+    var c = e.target.closest('[data-sug]');
+    if(!c) return;
+    var a = SUGERIDOS[Number(c.dataset.sug)];
+    if(!a) return;
+    mealSearch.value = '';
+    mealSugeridos.innerHTML = '';
+    agregarAlimento({ n:a.n, u:a.u, P:a.P, C:a.C, G:a.G });
+  });
 
   // Crear alimento: las calorías salen solas de los macros
   var unitPills = document.getElementById('unitPills');
