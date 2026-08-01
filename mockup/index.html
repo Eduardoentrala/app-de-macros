@@ -1516,6 +1516,23 @@
           <button data-adm="config">Ajustes</button>
         </div>
         <div class="scroll"><div id="admCuerpo"></div></div>
+
+        <!-- Ficha de un usuario: se abre tocando su fila en la lista -->
+        <div class="sheet-backdrop" id="usrSheet">
+          <div class="sheet">
+            <h4 id="usrNombre">—</h4>
+            <p class="hint" id="usrCorreo">—</p>
+            <div id="usrCuerpo"><p class="cmp-aviso">Cargando…</p></div>
+            <div class="field-label">Cambiar rol</div>
+            <div class="opt-row" id="usrRoles">
+              <button class="opt" data-rol="cliente">Cliente</button>
+              <button class="opt" data-rol="coach">Coach</button>
+              <button class="opt" data-rol="org_admin">Admin org</button>
+            </div>
+            <button class="btn-ghost-text" id="usrCerrar">Cerrar</button>
+          </div>
+        </div>
+
         <div class="toast" id="toastAdmin">Listo</div>
       </div>
 
@@ -4404,35 +4421,13 @@
     visorImg.addEventListener('pointerup', function(){ activo = false; });
   })();
 
-  // Fotos de ejemplo para poder probar la comparación sin subir nada
-  (function sembrarFotos(){
-    function silueta(tono, ancho){
-      var c = document.createElement('canvas');
-      c.width = 540; c.height = 700;
-      var g = c.getContext('2d');
-      g.fillStyle = '#e9ebee'; g.fillRect(0,0,540,700);
-      g.fillStyle = tono;
-      g.beginPath(); g.arc(270, 110, 58, 0, Math.PI*2); g.fill();
-      g.beginPath();
-      g.moveTo(270-ancho, 200); g.lineTo(270+ancho, 200);
-      g.lineTo(270+ancho*0.72, 430); g.lineTo(270+ancho*0.5, 660);
-      g.lineTo(270-ancho*0.5, 660); g.lineTo(270-ancho*0.72, 430);
-      g.closePath(); g.fill();
-      return c.toDataURL('image/jpeg', 0.82);
-    }
-    function meter(fecha, tono, ancho){
-      var c = claveSemana(fecha);
-      FOTOS[c] = {};
-      POSES.forEach(function(p, i){
-        FOTOS[c][p.k] = {src: silueta(tono, ancho - i*4), bytes: 240*1024 + i*9000, w:540, h:700, tipo:TIPO_SALIDA, calidad:0.85};
-      });
-    }
-    var hace8 = new Date(HOY); hace8.setDate(hace8.getDate() - 56);
-    var hace4 = new Date(HOY); hace4.setDate(hace4.getDate() - 28);
-    meter(hace8, '#b9c0c8', 96);
-    meter(hace4, '#a9b2bb', 88);
-  })();
-
+  // Aquí se sembraban dos semanas de fotos falsas (siluetas dibujadas) para
+  // poder probar la comparación. Fuera: quien se registra no debe encontrarse
+  // el cuerpo de nadie en su galería.
+  //
+  // PENDIENTE: las fotos todavía no se suben a Supabase. Viven solo en esta
+  // variable, como base64 en memoria, y se pierden al recargar. Falta subirlas
+  // al bucket privado 'progress-photos' y guardar su ficha en progress_photos.
   pintarFotos();
   llenarSelectores();
 
@@ -4579,7 +4574,7 @@
     '</div>'+
     '<div class="panel-seccion">Usuarios <small>'+lista.length+' de '+USUARIOS.length+'</small></div>'+
     (lista.length ? lista.map(function(u, i){
-      return '<div class="usr-row'+(u.on?'':' apagado')+'">'+
+      return '<div class="usr-row'+(u.on?'':' apagado')+'" data-usr="'+USUARIOS.indexOf(u)+'">'+
         '<div class="cliente-ava">'+iniciales(u.n)+'</div>'+
         // NOMBRE_ROL y no un if de dos ramas: ahora hay cuatro roles, y con
         // el if tu propia cuenta de super admin salía etiquetada "Cliente".
@@ -4675,7 +4670,17 @@
       toast('toastAdmin', 'Enlace de recuperación enviado a ' + USUARIOS[Number(pw.dataset.pass)].c);
       return;
     }
-    if(e.target.closest('#admCrear')) toast('toastAdmin', 'Se enviaría la invitación por correo');
+    if(e.target.closest('#admCrear')){
+      toast('toastAdmin', 'Se enviaría la invitación por correo');
+      return;
+    }
+    // Va al final: los botones de la fila ya devolvieron antes, así que
+    // tocar el resto de la fila abre la ficha sin pelearse con ellos.
+    var fila = e.target.closest('[data-usr]');
+    if(fila && typeof abrirFichaUsuario === 'function'){
+      var u = USUARIOS[Number(fila.dataset.usr)];
+      if(u && u.id) abrirFichaUsuario(u);
+    }
   });
 
   pintarAdmin();
@@ -4724,6 +4729,111 @@
       toast('toastAdmin', 'No se pudo cargar: ' + traducirError(e.message));
     });
   }
+
+  // ---- Ficha de un usuario ----
+  // Como super admin, el RLS ya te deja ver los datos de cualquiera: las
+  // políticas incluyen es_super_admin(). Esto solo pone la pantalla.
+  // Entre ellos siguen sin verse: un coach solo alcanza a sus asignados y un
+  // cliente solo lo suyo, y eso lo decide Postgres, no esta consulta.
+  var usrSheet = document.getElementById('usrSheet');
+  var usrActual = null;
+
+  function dias(desde){
+    if(!desde) return null;
+    return Math.round((HOY - new Date(desde + 'T00:00:00')) / 86400000);
+  }
+  function haceCuanto(fecha){
+    var d = dias(fecha);
+    if(d === null) return 'nunca';
+    if(d <= 0) return 'hoy';
+    if(d === 1) return 'ayer';
+    return 'hace ' + d + ' días';
+  }
+
+  function abrirFichaUsuario(u){
+    usrActual = u;
+    document.getElementById('usrNombre').textContent = u.n;
+    document.getElementById('usrCorreo').textContent = u.c;
+    document.getElementById('usrCuerpo').innerHTML = '<p class="cmp-aviso">Cargando…</p>';
+    Array.from(document.querySelectorAll('#usrRoles button')).forEach(function(b){
+      b.classList.toggle('active', b.dataset.rol === u.r);
+    });
+    usrSheet.classList.add('open');
+
+    var q = '&user_id=eq.' + u.id;
+    Promise.all([
+      sbFetch('/rest/v1/profiles?select=weight_kg,height_cm,age,goal,estado,created_at&id=eq.' + u.id),
+      sbFetch('/rest/v1/weight_logs?select=log_date,weight_kg&order=log_date.desc&limit=60' + q),
+      sbFetch('/rest/v1/diary_entries?select=entry_date&order=entry_date.desc&limit=1' + q),
+      sbFetch('/rest/v1/workout_sessions?select=session_date&order=session_date.desc&limit=1' + q),
+      sbFetch('/rest/v1/progress_photos?select=week_key,pose&order=week_key.desc' + q)
+    ]).then(function(r){
+      if(usrActual !== u) return;                 // se abrió otra ficha mientras tanto
+      var p = (r[0] || [])[0] || {};
+      var pesos = r[1] || [], comida = (r[2] || [])[0], sesion = (r[3] || [])[0], fotos = r[4] || [];
+
+      var linea = '';
+      if(pesos.length){
+        var hoy = Number(pesos[0].weight_kg);
+        var viejo = Number(pesos[pesos.length - 1].weight_kg);
+        var dif = hoy - viejo;
+        linea = hoy.toFixed(1) + ' kg · ' + (dif === 0 ? 'sin cambio'
+              : (dif > 0 ? '+' : '') + dif.toFixed(1) + ' kg en ' + pesos.length + ' registros');
+      } else {
+        linea = 'sin registros de peso';
+      }
+
+      document.getElementById('usrCuerpo').innerHTML =
+        '<div class="calc-box">' +
+          fila('Estado',    (p.estado || '—') + (u.on ? '' : ' · cuenta desactivada')) +
+          fila('Objetivo',  NOMBRE_OBJ[p.goal] || '—') +
+          fila('Físico',    (p.weight_kg != null ? Number(p.weight_kg).toFixed(1) + ' kg' : '—') + ' · ' +
+                            (p.height_cm != null ? Number(p.height_cm).toFixed(0) + ' cm' : '—') + ' · ' +
+                            (p.age != null ? p.age + ' años' : '—')) +
+          fila('Peso',      linea) +
+          fila('Última comida',  haceCuanto(comida && comida.entry_date)) +
+          fila('Último entreno', haceCuanto(sesion && sesion.session_date)) +
+          fila('Fotos',     fotos.length ? fotos.length + ' en ' +
+                            (new Set(fotos.map(function(f){ return f.week_key; }))).size + ' semanas'
+                            : 'ninguna todavía') +
+        '</div>';
+    })['catch'](function(e){
+      document.getElementById('usrCuerpo').innerHTML =
+        '<p class="cmp-aviso">No se pudo cargar: ' + traducirError(e.message) + '</p>';
+    });
+  }
+  function fila(k, v){
+    return '<div class="calc-line"><span>' + k + '</span><b>' + v + '</b></div>';
+  }
+
+  function cerrarFicha(){ usrSheet.classList.remove('open'); usrActual = null; }
+  document.getElementById('usrCerrar').addEventListener('click', cerrarFicha);
+  usrSheet.addEventListener('click', function(e){ if(e.target === usrSheet) cerrarFicha(); });
+
+  document.getElementById('usrRoles').addEventListener('click', function(e){
+    var b = e.target.closest('button'); if(!b || !usrActual) return;
+    var u = usrActual, antes = u.r, nuevo = b.dataset.rol;
+    if(nuevo === antes) return;
+
+    u.r = nuevo;
+    Array.from(this.querySelectorAll('button')).forEach(function(x){
+      x.classList.toggle('active', x.dataset.rol === nuevo);
+    });
+    pintarAdmin();
+
+    // admin_cambiar_rol() vuelve a comprobar el permiso dentro de Postgres y
+    // se niega si intentas cambiarte el rol a ti mismo.
+    sbRpc('admin_cambiar_rol', { p_usuario: u.id, p_rol: nuevo })
+      .then(function(){ toast('toastAdmin', u.n + ' ahora es ' + (NOMBRE_ROL[nuevo] || nuevo)); })
+      ['catch'](function(err){
+        u.r = antes;
+        Array.from(document.querySelectorAll('#usrRoles button')).forEach(function(x){
+          x.classList.toggle('active', x.dataset.rol === antes);
+        });
+        pintarAdmin();
+        toast('toastAdmin', 'No se pudo cambiar: ' + traducirError(err.message));
+      });
+  });
 
   function cargarPanelCoach(){
     if(!sesion || !sesion.user) return Promise.resolve();
