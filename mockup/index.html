@@ -636,6 +636,46 @@
   }
   .foto-info{margin-top:6px;}
 
+  /* ---- Plan de comida ----
+     Pensado para quien no cuenta nada: texto grande, mucho aire y ni un
+     número a la vista. */
+  .plan-comida{
+    background:var(--card-bg);margin:0 16px 10px;border-radius:16px;
+    padding:16px 18px;box-shadow:var(--shadow);
+  }
+  .plan-momento{
+    display:flex;align-items:center;gap:9px;
+    font:700 11.5px/1 sans-serif;color:var(--ink-faint);
+    text-transform:uppercase;letter-spacing:.08em;margin-bottom:9px;
+  }
+  .plan-texto{
+    font:500 16.5px/1.5 sans-serif;color:var(--ink);white-space:pre-wrap;
+  }
+  .plan-nota{
+    margin:4px 16px 0;padding:14px 16px;border-radius:14px;
+    background:var(--green-soft);color:var(--green);
+    font:600 13.5px/1.5 sans-serif;
+  }
+  .plan-vacio{
+    margin:8px 16px;padding:28px 22px;border-radius:16px;background:var(--card-bg);
+    box-shadow:var(--shadow);text-align:center;
+  }
+  .plan-vacio .ico{font-size:32px;}
+  .plan-vacio b{display:block;font:800 15.5px/1.3 sans-serif;color:var(--ink);margin-top:10px;}
+  .plan-vacio span{
+    display:block;font:500 13px/1.5 sans-serif;color:var(--ink-faint);
+    margin-top:7px;max-width:250px;margin-left:auto;margin-right:auto;
+  }
+  /* Fila de cliente en la lista del entrenador */
+  .plan-cliente{
+    display:flex;align-items:center;gap:12px;background:var(--card-bg);
+    margin:0 16px 8px;padding:13px 15px;border-radius:14px;
+    box-shadow:var(--shadow);cursor:pointer;
+  }
+  .plan-cliente .info{flex:1;min-width:0;}
+  .plan-cliente b{display:block;font:700 14px/1.2 sans-serif;color:var(--ink);}
+  .plan-cliente span{display:block;font:600 11.5px/1.2 sans-serif;color:var(--ink-faint);margin-top:4px;}
+
   /* ---- Cuánto comiste ----
      Una sola cifra protagonista y el resultado debajo. Sin atajos ni rejillas
      de botones: el número se teclea y ya. */
@@ -1272,6 +1312,7 @@
 
         <div class="bottom-tabs">
           <button class="active" data-tabbar="diario"><span>▦</span>Diario</button>
+          <button data-tabbar="plan"><span>🍽️</span>Plan</button>
           <button data-tabbar="peso"><span>⚖️</span>Peso</button>
           <button data-tabbar="fotos"><span>📸</span>Fotos</button>
           <button data-tabbar="perfil"><span>👤</span>Perfil</button>
@@ -1630,6 +1671,69 @@
         </div>
 
         <div class="toast" id="toastAdmin">Listo</div>
+      </div>
+
+      <!-- PLAN DE COMIDA -->
+      <div class="app-view" data-view="plan">
+        <div class="scroll">
+          <div class="header">
+            <div class="header-row">
+              <div>
+                <p class="greeting">Tu plan</p>
+                <div class="subdate" id="planSub">Qué comer hoy</div>
+              </div>
+            </div>
+          </div>
+
+          <div id="planMio"></div>
+
+          <div id="planCoach" hidden>
+            <div class="section-label">Planes que escribes <small id="planCuenta"></small></div>
+            <div id="planClientes"></div>
+          </div>
+
+          <div style="height:24px;"></div>
+        </div>
+
+        <div class="bottom-tabs">
+          <button data-tabbar="diario"><span>▦</span>Diario</button>
+          <button class="active" data-tabbar="plan"><span>🍽️</span>Plan</button>
+          <button data-tabbar="peso"><span>⚖️</span>Peso</button>
+          <button data-tabbar="fotos"><span>📸</span>Fotos</button>
+          <button data-tabbar="perfil"><span>👤</span>Perfil</button>
+        </div>
+        <div class="toast" id="toastPlan">Listo</div>
+      </div>
+
+      <!-- ESCRIBIR EL PLAN DE ALGUIEN -->
+      <div class="app-view" data-view="planedit">
+        <div class="back-header stacked">
+          <div class="back-header-inner">
+            <button class="back-btn" data-back>‹ Regresar</button>
+            <span class="back-title" id="peTitulo">Plan</span>
+          </div>
+        </div>
+        <div class="scroll">
+          <p class="calc-note" style="padding:14px 20px 0;">
+            Escribe qué debe comer, con sus palabras. Nada de gramos ni macros:
+            esta pantalla es para quien solo quiere abrir la app y saber qué toca.
+          </p>
+          <div class="card">
+            <div class="field-label" style="margin-top:0;">Nombre del plan</div>
+            <input class="big-input" id="peNombre" maxlength="60" placeholder="Ej. Plan de mamá">
+          </div>
+          <div id="peComidas"></div>
+          <div class="card">
+            <div class="field-label" style="margin-top:0;">Nota (opcional)</div>
+            <textarea class="notas-input" id="peNota" rows="3" maxlength="300"
+              placeholder="Ej. Tomar agua entre comidas. Si da hambre, una fruta."></textarea>
+          </div>
+          <div style="height:100px;"></div>
+        </div>
+        <div class="bottom-bar">
+          <button class="btn-primary" id="peGuardar">Guardar plan</button>
+          <button class="btn-ghost-text" id="peQuitar">Quitar el plan</button>
+        </div>
       </div>
 
       <!-- FOTOS DE PROGRESO -->
@@ -2036,6 +2140,7 @@
         </div>
         <div class="bottom-tabs">
           <button data-tabbar="diario"><span>▦</span>Diario</button>
+          <button data-tabbar="plan"><span>🍽️</span>Plan</button>
           <button data-tabbar="peso"><span>⚖️</span>Peso</button>
           <button data-tabbar="fotos"><span>📸</span>Fotos</button>
           <button class="active" data-tabbar="perfil"><span>👤</span>Perfil</button>
@@ -2135,6 +2240,7 @@
     // Los paneles traen sus datos al abrirse, no al arrancar la app
     if(id === 'admin' && typeof cargarPanelAdmin === 'function') cargarPanelAdmin();
     if(id === 'panel' && typeof cargarPanelCoach === 'function') cargarPanelCoach();
+    if(id === 'plan'  && typeof cargarPlan       === 'function') cargarPlan();
   }
   function back(){
     if(stack.length > 1){ stack.pop(); }
@@ -5142,7 +5248,7 @@
   // La seguridad de verdad vive en Postgres (supabase/migrations/0002_roles_y_rls.sql):
   // las políticas RLS filtran las filas antes de que salgan de la base de datos.
   var ROL = 'cliente';
-  var NOMBRE_ROL = {cliente:'Cliente', coach:'Coach', super_admin:'Super admin'};
+  var NOMBRE_ROL = {cliente:'Cliente', coach:'Coach', org_admin:'Admin org', super_admin:'Super admin'};
 
   // Los llena cargarPanelCoach() desde la vista mis_clientes
   var CLIENTES_DEL_COACH = [];
@@ -5390,6 +5496,199 @@
   });
 
   pintarAdmin();
+
+  // ================= PLAN DE COMIDA =================
+  // Para quien no quiere contar nada: abre la app y ve qué le toca comer.
+  // Lo escribe su entrenador; el cliente solo lo lee.
+  var MOMENTOS = [
+    { k:'Desayuno', emoji:'🌅' },
+    { k:'Comida',   emoji:'🍽️' },
+    { k:'Cena',     emoji:'🌙' },
+    { k:'Snack',    emoji:'🍎' }
+  ];
+  var MI_PLAN = null;        // el plan propio, si alguien me lo escribió
+  var PLAN_CLIENTES = [];    // a quiénes les escribo yo
+  var planEditando = null;   // { userId, nombre, plan }
+
+  function sbPlanDe(userId){
+    return sbFetch('/rest/v1/planes?select=id,nombre,nota,comidas,user_id' +
+                   '&user_id=eq.' + userId + '&activo=is.true&limit=1')
+      .then(function(r){ return (r || [])[0] || null; });
+  }
+
+  function pintarMiPlan(){
+    var cont = document.getElementById('planMio');
+    if(!MI_PLAN || !(MI_PLAN.comidas || []).length){
+      cont.innerHTML =
+        '<div class="plan-vacio"><div class="ico">🍽️</div>' +
+        '<b>Todavía no tienes un plan</b>' +
+        '<span>Cuando tu entrenador te escriba uno, aparecerá aquí: qué desayunar, ' +
+        'qué comer y qué cenar. Sin pesar ni apuntar nada.</span></div>';
+      document.getElementById('planSub').textContent = 'Qué comer hoy';
+      return;
+    }
+
+    document.getElementById('planSub').textContent = MI_PLAN.nombre || 'Qué comer hoy';
+    cont.innerHTML = (MI_PLAN.comidas || []).map(function(c){
+      var m = MOMENTOS.filter(function(x){ return x.k === c.momento; })[0];
+      return '<div class="plan-comida">' +
+        '<div class="plan-momento"><span>' + (m ? m.emoji : '•') + '</span>' + c.momento + '</div>' +
+        '<div class="plan-texto">' + escapar(c.texto) + '</div></div>';
+    }).join('') +
+    (MI_PLAN.nota ? '<div class="plan-nota">' + escapar(MI_PLAN.nota) + '</div>' : '');
+  }
+
+  // El texto lo escribe una persona y se pinta con innerHTML: hay que
+  // escaparlo o un "<" cualquiera rompería la tarjeta.
+  function escapar(t){
+    return String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function pintarPlanClientes(){
+    var caja = document.getElementById('planCoach');
+    var puedeEscribir = ROL === 'coach' || ROL === 'super_admin' || ROL === 'org_admin';
+    caja.hidden = !puedeEscribir;
+    if(!puedeEscribir) return;
+
+    document.getElementById('planCuenta').textContent = PLAN_CLIENTES.length || '';
+    document.getElementById('planClientes').innerHTML = PLAN_CLIENTES.length
+      ? PLAN_CLIENTES.map(function(c, i){
+          return '<div class="plan-cliente" data-plan-cli="' + i + '">' +
+            '<div class="cliente-ava">' + iniciales(c.nombre) + '</div>' +
+            '<div class="info"><b>' + escapar(c.nombre) + '</b>' +
+            '<span>' + (c.tienePlan ? 'con plan' : 'sin plan todavía') + '</span></div>' +
+            '<span style="color:var(--ink-faint)">›</span></div>';
+        }).join('')
+      : '<p class="calc-note" style="padding:4px 20px 0;">Todavía no tienes a nadie asignado.</p>';
+  }
+
+  function cargarPlan(){
+    if(!sesion || !sesion.user) return Promise.resolve();
+
+    var tareas = [ sbPlanDe(sesion.user.id).then(function(p){ MI_PLAN = p; }) ];
+
+    // Un entrenador ve a sus asignados; el super admin, a todo el mundo
+    if(ROL === 'coach' || ROL === 'org_admin'){
+      tareas.push(
+        sbFetch('/rest/v1/mis_clientes?select=id,full_name&order=full_name.asc')
+          .then(function(cs){
+            PLAN_CLIENTES = (cs || []).map(function(c){
+              return { id:c.id, nombre:(c.full_name || '').trim() || '(sin nombre)' };
+            });
+          }));
+    } else if(ROL === 'super_admin'){
+      tareas.push(
+        sbFetch('/rest/v1/profiles?select=id,full_name,role&role=neq.super_admin&order=full_name.asc')
+          .then(function(ps){
+            PLAN_CLIENTES = (ps || []).map(function(p){
+              return { id:p.id, nombre:(p.full_name || '').trim() || '(sin nombre)' };
+            });
+          }));
+    } else {
+      PLAN_CLIENTES = [];
+    }
+
+    return Promise.all(tareas).then(function(){
+      // Marcar quién ya tiene plan, para no tener que entrar a comprobarlo
+      if(!PLAN_CLIENTES.length){ pintarMiPlan(); pintarPlanClientes(); return; }
+      var ids = PLAN_CLIENTES.map(function(c){ return c.id; }).join(',');
+      return sbFetch('/rest/v1/planes?select=user_id&activo=is.true&user_id=in.(' + ids + ')')
+        .then(function(ps){
+          var con = {};
+          (ps || []).forEach(function(p){ con[p.user_id] = true; });
+          PLAN_CLIENTES.forEach(function(c){ c.tienePlan = !!con[c.id]; });
+        })['catch'](function(){})
+        .then(function(){ pintarMiPlan(); pintarPlanClientes(); });
+    })['catch'](function(e){
+      toast('toastPlan', 'No se pudo cargar: ' + traducirError(e.message));
+    });
+  }
+
+  document.getElementById('planClientes').addEventListener('click', function(e){
+    var f = e.target.closest('[data-plan-cli]');
+    if(!f) return;
+    abrirEditorPlan(PLAN_CLIENTES[Number(f.dataset.planCli)]);
+  });
+
+  // ---- Editor ----
+  function abrirEditorPlan(cliente){
+    if(!cliente) return;
+    document.getElementById('peTitulo').textContent = 'Plan de ' + cliente.nombre;
+    document.getElementById('peComidas').innerHTML = MOMENTOS.map(function(m){
+      return '<div class="card">' +
+        '<div class="field-label" style="margin-top:0;">' + m.emoji + ' ' + m.k + '</div>' +
+        '<textarea class="notas-input" rows="3" maxlength="400" data-momento="' + m.k + '" ' +
+        'placeholder="Ej. 2 huevos, pan integral y café"></textarea></div>';
+    }).join('');
+    document.getElementById('peNombre').value = '';
+    document.getElementById('peNota').value = '';
+    planEditando = { userId: cliente.id, nombre: cliente.nombre, plan: null };
+    goto('planedit', true);
+
+    sbPlanDe(cliente.id).then(function(p){
+      if(!planEditando || planEditando.userId !== cliente.id) return;
+      planEditando.plan = p;
+      document.getElementById('peNombre').value = (p && p.nombre) || ('Plan de ' + cliente.nombre);
+      document.getElementById('peNota').value = (p && p.nota) || '';
+      ((p && p.comidas) || []).forEach(function(c){
+        var t = document.querySelector('#peComidas [data-momento="' + c.momento + '"]');
+        if(t) t.value = c.texto || '';
+      });
+    })['catch'](function(){});
+  }
+
+  function leerEditorPlan(){
+    var comidas = [];
+    Array.from(document.querySelectorAll('#peComidas [data-momento]')).forEach(function(t){
+      var txt = t.value.trim();
+      // Solo se guardan los momentos con algo escrito: un plan de dos
+      // comidas no debe enseñar dos tarjetas vacías.
+      if(txt) comidas.push({ momento: t.dataset.momento, texto: txt });
+    });
+    return comidas;
+  }
+
+  document.getElementById('peGuardar').addEventListener('click', function(){
+    if(!planEditando || !sesion) return;
+    var comidas = leerEditorPlan();
+    if(!comidas.length){ toast('toastPlan', 'Escribe al menos una comida'); return; }
+
+    var cuerpo = {
+      user_id: planEditando.userId,
+      nombre: document.getElementById('peNombre').value.trim() || 'Mi plan',
+      nota: document.getElementById('peNota').value.trim() || null,
+      comidas: comidas,
+      activo: true,
+      creado_por: sesion.user.id
+    };
+    var p = planEditando.plan
+      ? sbFetch('/rest/v1/planes?id=eq.' + planEditando.plan.id, {
+          method:'PATCH', headers:{ 'Prefer':'return=minimal' }, body: JSON.stringify(cuerpo) })
+      : sbFetch('/rest/v1/planes', {
+          method:'POST', headers:{ 'Prefer':'return=minimal' }, body: JSON.stringify(cuerpo) });
+
+    p.then(function(){
+      toast('toastPlan', 'Plan guardado');
+      back();
+      return cargarPlan();
+    })['catch'](function(e){
+      toast('toastPlan', 'No se pudo guardar: ' + traducirError(e.message));
+    });
+  });
+
+  document.getElementById('peQuitar').addEventListener('click', function(){
+    if(!planEditando || !planEditando.plan){ back(); return; }
+    // No se borra de verdad: la 0007 lo archiva y se puede recuperar
+    sbFetch('/rest/v1/planes?id=eq.' + planEditando.plan.id, { method:'DELETE' })
+      .then(function(){
+        toast('toastPlan', 'Plan quitado');
+        back();
+        return cargarPlan();
+      })['catch'](function(e){
+        toast('toastPlan', 'No se pudo quitar: ' + traducirError(e.message));
+      });
+  });
 
   // ---- Los paneles, con datos reales ----
   // Se cargan al ABRIR el panel, no al arrancar la app: son consultas caras
