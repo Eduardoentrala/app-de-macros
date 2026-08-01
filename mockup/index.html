@@ -50,6 +50,7 @@
     --red:#e0473e;
     --red-soft:#fbe9e8;
     --amber:#c8790a;
+    --amber-soft:#fdf1de;
     --shadow:0 1px 2px rgba(20,20,25,.04), 0 8px 24px -12px rgba(20,20,25,.12);
     --chrome-bg:#f6f5f2;
     --chrome-ink:#1c1c1e;
@@ -70,6 +71,7 @@
     --red:#ff6b62;
     --red-soft:#2c1615;
     --amber:#e2a13a;
+    --amber-soft:#2e2411;
     --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
     --chrome-bg:#141416;
     --chrome-ink:#eceae6;
@@ -91,6 +93,7 @@
       --red:#ff6b62;
       --red-soft:#2c1615;
       --amber:#e2a13a;
+    --amber-soft:#2e2411;
       --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
       --chrome-bg:#141416;
       --chrome-ink:#eceae6;
@@ -684,6 +687,30 @@
   }
   .info-btn .v i{font-style:normal;color:var(--ink-faint);margin-left:7px;}
   .info-btn:active{opacity:.55;}
+
+  /* ---- Asistente ---- */
+  .ia-momento{display:flex;gap:7px;margin:10px 0 4px;}
+  .ia-momento .meta-opt{flex:1;padding:9px 4px;text-align:center;font:700 12.5px/1 sans-serif;}
+  .ia-fila{
+    display:flex;align-items:flex-start;gap:10px;padding:11px 0;
+    border-bottom:1px solid var(--line);
+  }
+  .ia-fila:last-child{border-bottom:none;}
+  .ia-fila .txt{flex:1;min-width:0;}
+  .ia-fila b{display:block;font:700 13.5px/1.3 sans-serif;color:var(--ink);}
+  .ia-fila span{display:block;font:600 11.5px/1.4 sans-serif;color:var(--ink-faint);margin-top:3px;}
+  /* Marca de cuánto se fía el asistente de esos macros. Sin esto, una
+     estimación floja se lee igual que un dato seguro. */
+  .ia-duda{
+    flex:0 0 auto;font:700 9.5px/1 sans-serif;padding:4px 7px;border-radius:6px;
+    text-transform:uppercase;letter-spacing:.05em;margin-top:2px;
+  }
+  .ia-duda.media{background:var(--amber-soft);color:var(--amber);}
+  .ia-duda.baja{background:var(--red-soft);color:var(--red);}
+  .ia-quita{
+    flex:0 0 auto;background:none;border:none;cursor:pointer;padding:2px 4px;
+    font:700 15px/1 sans-serif;color:var(--ink-faint);
+  }
 
   /* ---- Cuánto comiste ----
      Una sola cifra protagonista y el resultado debajo. Sin atajos ni rejillas
@@ -1536,21 +1563,34 @@
         <div class="toast" id="toastComida">Agregado</div>
       </div>
 
+      <!-- El aviso del asistente va FUERA de las vistas a propósito: se abre
+           desde el Diario, y los .toast de cada vista solo se ven cuando esa
+           vista está activa. -->
+      <div class="toast" id="toastIA">Listo</div>
+
       <div class="sheet-backdrop" id="iaSheet">
         <div class="sheet">
-          <h4>✨ Asistente</h4>
-          <p class="hint">Todavía no está conectado. Necesita una clave de IA
-            guardada en el servidor — no puede vivir dentro de la app, o
-            cualquiera podría sacarla y gastarla.</p>
-          <div class="calc-box">
-            <div class="calc-line"><span>Apuntar comida hablando</span><b>Pendiente</b></div>
-            <div class="calc-note">«Me comí dos huevos con pan» y lo registra solo.</div>
+          <h4>✨ Apuntar comida</h4>
+          <p class="hint">Escribe lo que comiste como lo dirías en voz alta.</p>
+
+          <textarea class="notas-input" id="iaTexto" rows="3" maxlength="500"
+            placeholder="Dos huevos revueltos, una tortilla y café con leche"></textarea>
+
+          <div class="ia-momento" id="iaMomento">
+            <button class="meta-opt active" data-ia-momento="Desayuno">Desayuno</button>
+            <button class="meta-opt" data-ia-momento="Comida">Comida</button>
+            <button class="meta-opt" data-ia-momento="Cena">Cena</button>
           </div>
-          <div class="calc-box">
-            <div class="calc-line"><span>Armar planes de comida</span><b>Pendiente</b></div>
-            <div class="calc-note">Comidas sencillas que cuadren con las calorías de cada quien.</div>
-          </div>
-          <button class="btn-primary" id="iaCerrar">Entendido</button>
+
+          <div id="iaResultado"></div>
+
+          <p class="calc-note" id="iaAviso" hidden>
+            Los macros son una estimación: revísalos antes de guardar.
+          </p>
+
+          <button class="btn-primary" id="iaBuscar">Calcular</button>
+          <button class="btn-primary" id="iaGuardar" hidden>Agregar al diario</button>
+          <button class="btn-ghost-text" id="iaCerrar">Cancelar</button>
         </div>
       </div>
 
@@ -1758,6 +1798,7 @@
         </div>
         <div class="bottom-bar">
           <button class="btn-primary" id="peGuardar">Guardar plan</button>
+          <button class="btn-rename" id="peGenerar" style="width:100%;margin-top:8px;">✨ Que lo arme el asistente</button>
           <button class="btn-ghost-text" id="peQuitar">Quitar el plan</button>
         </div>
       </div>
@@ -5836,6 +5877,51 @@
     });
   });
 
+  // ---- Que el asistente arme el plan ----
+  // Necesita las calorías de esa persona; sin ellas el plan no cuadraría
+  // con nada. Salen de sus macros, que es lo que la app ya calcula.
+  document.getElementById('peGenerar').addEventListener('click', function(){
+    if(!planEditando || !sesion) return;
+    var btn = document.getElementById('peGenerar');
+    btn.disabled = true;
+    btn.textContent = 'Pensando…';
+
+    sbFetch('/rest/v1/profiles?select=goal_protein_g,goal_carbs_g,goal_fat_g' +
+            '&id=eq.' + planEditando.userId + '&limit=1')
+      .then(function(ps){
+        var p = (ps || [])[0];
+        if(!p || !p.goal_protein_g){
+          throw new Error('Esa persona todavía no tiene sus macros calculados.');
+        }
+        var cal = Math.round(p.goal_protein_g*4 + p.goal_carbs_g*4 + p.goal_fat_g*9);
+        return iaLlamar({
+          accion: 'plan',
+          nombre: planEditando.nombre,
+          calorias: cal,
+          proteina: p.goal_protein_g,
+          gustos: document.getElementById('peNota').value.trim()
+        });
+      })
+      .then(function(r){
+        // Se vuelca en los campos, no se guarda: quien firma el plan es
+        // el entrenador, y tiene que poder corregirlo antes.
+        if(r.nombre) document.getElementById('peNombre').value = r.nombre;
+        if(r.nota)   document.getElementById('peNota').value = r.nota;
+        (r.comidas || []).forEach(function(c){
+          var t = document.querySelector('#peComidas [data-momento="' + c.momento + '"]');
+          if(t) t.value = c.texto || '';
+        });
+        toast('toastPlan', 'Listo — revísalo y guarda');
+      })
+      ['catch'](function(e){
+        toast('toastPlan', traducirError(e.message));
+      })
+      .then(function(){
+        btn.disabled = false;
+        btn.textContent = '✨ Que lo arme el asistente';
+      });
+  });
+
   document.getElementById('peQuitar').addEventListener('click', function(){
     if(!planEditando || !planEditando.plan){ back(); return; }
     // No se borra de verdad: la 0007 lo archiva y se puede recuperar
@@ -6346,11 +6432,155 @@
   }catch(e){}
   pintarTemaPerfil();
 
-  // ---- Asistente (aún sin conectar) ----
+  // ================= ASISTENTE =================
+  // La clave de Anthropic vive en una Edge Function, nunca aquí: este
+  // archivo se descarga entero en cada teléfono y el repositorio es
+  // público. Desde la app solo se llama a la función con el token del
+  // usuario, y ella decide si contesta.
   var iaSheet = document.getElementById('iaSheet');
-  document.getElementById('iaBtn').addEventListener('click', function(){
+  var iaMomento = 'Desayuno';
+  var iaPropuesta = [];      // lo que el asistente calculó, aún sin guardar
+
+  function iaLlamar(cuerpo){
+    return sbFetch('/functions/v1/asistente', {
+      method: 'POST',
+      body: JSON.stringify(cuerpo)
+    });
+  }
+
+  function abrirAsistente(){
+    document.getElementById('iaTexto').value = '';
+    document.getElementById('iaResultado').innerHTML = '';
+    document.getElementById('iaAviso').hidden = true;
+    document.getElementById('iaGuardar').hidden = true;
+    document.getElementById('iaBuscar').hidden = false;
+    document.getElementById('iaBuscar').textContent = 'Calcular';
+    iaPropuesta = [];
+    // El momento arranca en el más probable según la hora, no siempre en
+    // desayuno: a las nueve de la noche nadie va a apuntar el desayuno.
+    var h = new Date().getHours();
+    iaMomento = h < 11 ? 'Desayuno' : h < 18 ? 'Comida' : 'Cena';
+    pintarMomentoIA();
     iaSheet.classList.add('open');
+    setTimeout(function(){ document.getElementById('iaTexto').focus(); }, 120);
+  }
+
+  function pintarMomentoIA(){
+    Array.from(document.querySelectorAll('#iaMomento [data-ia-momento]')).forEach(function(b){
+      b.classList.toggle('active', b.dataset.iaMomento === iaMomento);
+    });
+  }
+
+  document.getElementById('iaMomento').addEventListener('click', function(e){
+    var b = e.target.closest('[data-ia-momento]');
+    if(!b) return;
+    iaMomento = b.dataset.iaMomento;
+    pintarMomentoIA();
   });
+
+  function pintarPropuestaIA(nota){
+    var cont = document.getElementById('iaResultado');
+    if(!iaPropuesta.length){
+      cont.innerHTML = '<p class="calc-note">' + escapar(nota || 'No encontré comida ahí.') + '</p>';
+      document.getElementById('iaGuardar').hidden = true;
+      document.getElementById('iaAviso').hidden = true;
+      return;
+    }
+
+    cont.innerHTML = '<div class="calc-box">' + iaPropuesta.map(function(a, i){
+      var cal = Math.round(a.P*4 + a.C*4 + a.G*9);
+      return '<div class="ia-fila">' +
+        (a.seguridad !== 'alta'
+          ? '<span class="ia-duda ' + a.seguridad + '">' + (a.seguridad === 'baja' ? 'a ojo' : 'aprox') + '</span>'
+          : '') +
+        '<div class="txt"><b>' + escapar(a.n) + '</b>' +
+        '<span>' + un(a.cant) + ' ' + escapar(abreviarUnidad(a.u)) + ' · ' + mil(cal) + ' cal · ' +
+        'P' + un(a.P) + ' C' + un(a.C) + ' G' + un(a.G) + '</span></div>' +
+        '<button class="ia-quita" data-ia-quita="' + i + '" title="Quitar">✕</button>' +
+      '</div>';
+    }).join('') + '</div>' +
+    (nota ? '<p class="calc-note">' + escapar(nota) + '</p>' : '');
+
+    document.getElementById('iaGuardar').hidden = false;
+    document.getElementById('iaGuardar').textContent =
+      'Agregar ' + iaPropuesta.length + (iaPropuesta.length === 1 ? ' alimento a ' : ' alimentos a ') +
+      iaMomento.toLowerCase();
+    document.getElementById('iaAviso').hidden = false;
+  }
+
+  document.getElementById('iaResultado').addEventListener('click', function(e){
+    var b = e.target.closest('[data-ia-quita]');
+    if(!b) return;
+    iaPropuesta.splice(Number(b.dataset.iaQuita), 1);
+    pintarPropuestaIA('');
+  });
+
+  document.getElementById('iaBuscar').addEventListener('click', function(){
+    var texto = document.getElementById('iaTexto').value.trim();
+    if(!texto){ toast('toastIA', 'Escribe qué comiste'); return; }
+    if(!sesion){ toast('toastIA', 'Inicia sesión para usar el asistente'); return; }
+
+    var btn = document.getElementById('iaBuscar');
+    btn.disabled = true;
+    btn.textContent = 'Calculando…';
+
+    iaLlamar({ accion:'apuntar', texto: texto })
+      .then(function(r){
+        iaPropuesta = (r.alimentos || []).map(function(x){
+          return prepararAlimento({
+            n: x.nombre, u: x.unidad || 'Gramos',
+            cant: Number(x.cantidad) || 1,
+            P: Number(x.proteina) || 0,
+            C: Number(x.carbos)   || 0,
+            G: Number(x.grasas)   || 0,
+            seguridad: x.seguridad || 'media'
+          });
+        });
+        pintarPropuestaIA(r.nota || '');
+      })
+      ['catch'](function(e){
+        document.getElementById('iaResultado').innerHTML =
+          '<p class="calc-note">' + escapar(traducirError(e.message)) + '</p>';
+      })
+      .then(function(){
+        btn.disabled = false;
+        btn.textContent = 'Calcular';
+      });
+  });
+
+  document.getElementById('iaGuardar').addEventListener('click', function(){
+    if(!iaPropuesta.length || !sesion) return;
+    var btn = document.getElementById('iaGuardar');
+    btn.disabled = true;
+
+    var comida = iaMomento;
+    // Se guardan uno a uno por el camino de siempre, con RLS: el asistente
+    // propone, pero quien escribe en la base es el usuario.
+    var cadena = iaPropuesta.reduce(function(prev, a){
+      return prev.then(function(){
+        return sbAgregarAlimento(a, comida).then(function(fila){
+          if(fila) a.id = fila.id;
+          COMIDAS[comida].push(a);
+          sumarAlRegistro(a, 1);
+        });
+      });
+    }, Promise.resolve());
+
+    cadena.then(function(){
+      var n = iaPropuesta.length;
+      iaSheet.classList.remove('open');
+      iaPropuesta = [];
+      // sumarAlRegistro ya movió el anillo; falta refrescar las filas del
+      // Diario y, si estuviera abierta, la pantalla de esa comida.
+      pintarFilasComidas();
+      pintarComida();
+      toast('toastIA', n + (n === 1 ? ' alimento agregado a ' : ' alimentos agregados a ') + comida.toLowerCase());
+    })['catch'](function(e){
+      toast('toastIA', 'No se pudo guardar: ' + traducirError(e.message));
+    }).then(function(){ btn.disabled = false; });
+  });
+
+  document.getElementById('iaBtn').addEventListener('click', abrirAsistente);
   document.getElementById('iaCerrar').addEventListener('click', function(){
     iaSheet.classList.remove('open');
   });
