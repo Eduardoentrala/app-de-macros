@@ -1,0 +1,16 @@
+# Qué publicar cuando el sitio se construye desde GitHub.
+#
+# Sin esto Netlify serviría la raíz del repositorio, donde no hay ningún
+# index.html, y el sitio saldría en blanco. La app vive en mockup/.
+#
+# No hay paso de compilación: es un solo archivo HTML sin dependencias.
+[build]
+  publish = "mockup"
+  command = ""
+
+# El HTML no se guarda en caché: así, en cuanto se publica un cambio, el
+# teléfono lo ve al recargar sin tener que forzar nada ni añadir ?v=2.
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"

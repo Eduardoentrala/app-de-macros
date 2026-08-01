@@ -1,0 +1,14 @@
+{
+  "name": "macros-db-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "aplicar": "node aplicar.mjs",
+    "seguridad": "node seguridad.mjs",
+    "generar": "node generar.mjs",
+    "test": "node aplicar.mjs && node seguridad.mjs && node generar.mjs"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.4"
+  }
+}

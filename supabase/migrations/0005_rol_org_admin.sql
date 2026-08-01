@@ -1,0 +1,42 @@
+-- =====================================================================
+--  EL ROL org_admin, ESTA VEZ DE VERDAD
+--
+--  Esta migración hace UNA sola cosa y por un motivo concreto.
+--
+--  0004 (sección 2) añade el valor 'org_admin' al enum app_role así:
+--
+--      do $$ begin
+--        alter type public.app_role add value if not exists 'org_admin';
+--      exception when others then null;
+--      end $$;
+--
+--  Tiene dos problemas encadenados:
+--
+--    a) Postgres restringe `ALTER TYPE ... ADD VALUE` dentro de bloques
+--       de transacción, y un bloque DO con manejador de excepciones abre
+--       además una subtransacción. Según la versión, eso falla.
+--
+--    b) `exception when others then null` se traga CUALQUIER error, no
+--       solo el de "ya existe". Si (a) ocurre, la migración termina en
+--       verde y el valor nunca se añade. Nadie puede ser org_admin jamás,
+--       `es_org_admin()` siempre devuelve false, y todo lo que cuelga de
+--       ese rol queda muerto — en silencio, que es lo peor.
+--
+--  Aquí va suelto, sin DO y sin manejador: si falla, falla a la vista.
+--  Y va en su propio archivo porque el valor nuevo de un enum no se
+--  puede USAR en la misma transacción en que se añade. Al estar solo,
+--  esta migración cierra su transacción antes de que la 0006 lo use.
+--
+--  `if not exists` la hace idempotente: si 0004 sí consiguió añadirlo,
+--  esto no hace nada y no molesta.
+-- =====================================================================
+
+alter type public.app_role add value if not exists 'org_admin';
+
+
+-- ---------------------------------------------------------------------
+--  Comprobación
+--  Después de aplicar esto, la lista debe traer los cuatro roles:
+--  super_admin, coach, cliente, org_admin.
+-- ---------------------------------------------------------------------
+-- select unnest(enum_range(null::public.app_role));
