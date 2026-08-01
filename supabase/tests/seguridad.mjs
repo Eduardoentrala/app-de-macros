@@ -130,6 +130,11 @@ check('el historial no se puede alterar desde la API',
   (await db.query('select count(*)::int n from public.auditoria')).rows[0].n > 0);
 
 console.log('\n— Cuenta desactivada (0006) —');
+// Suspender es cosa del super admin desde la 0017. Este db.exec corre
+// como dueño de la base, pero arrastra el auth.uid() de la comprobación
+// anterior, así que el trigger lo tomaría por un usuario cualquiera y lo
+// rechazaría. Se limpia la sesión para simular el contexto de servidor.
+await db.exec(`select set_config('request.jwt.claim.sub','',false)`);
 await db.exec(`update public.profiles set estado='suspendido' where id='${U.cliA2}'`);
 check('suspender apaga el acceso',
   (await db.query(`select activo from public.profiles where id='${U.cliA2}'`)).rows[0].activo === false);

@@ -188,6 +188,22 @@ Deno.serve(async (req) => {
   if (errAuth || !quien?.user) return json({ error: 'Tu sesión caducó.' }, 401);
   const userId = quien.user.id;
 
+  // --- ¿Le dejan usar el asistente? ---
+  // El super admin puede apagárselo a alguien concreto sin suspenderle la
+  // cuenta: sigue apuntando comida a mano, pero deja de gastar.
+  const { data: perfil } = await admin
+    .from('profiles')
+    .select('ia_habilitada, activo')
+    .eq('id', userId)
+    .single();
+
+  if (perfil && perfil.activo === false) {
+    return json({ error: 'Tu cuenta está suspendida.' }, 403);
+  }
+  if (perfil && perfil.ia_habilitada === false) {
+    return json({ error: 'El asistente está desactivado en tu cuenta.' }, 403);
+  }
+
   // --- Tope diario ---
   const { data: quedan, error: errTope } = await admin.rpc('gastar_consulta_ia', {
     usuario: userId,

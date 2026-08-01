@@ -602,6 +602,7 @@
   .usr-acc{display:flex;gap:5px;flex:none;}
   .usr-acc button{border:none;border-radius:9px;padding:7px 9px;font:700 10.5px/1 sans-serif;cursor:pointer;}
   .usr-acc .b-on{background:var(--green-soft);color:var(--green);}
+  .usr-susp{color:var(--red);font-weight:800;}
   .usr-acc .b-off{background:var(--red-soft);color:var(--red);}
   .usr-acc .b-key{background:var(--pill-bg);color:var(--pill-ink);}
   .apagado{opacity:.5;}
@@ -5608,7 +5609,8 @@
     });
     return '<div class="adm-busca">'+
       '<div class="searchbox"><span>🔍</span><input id="admBuscar" placeholder="Buscar por nombre o correo…" value="'+admFiltro+'"></div>'+
-      '<button class="btn-primary" id="admCrear" style="width:100%;margin-top:10px;">+ Crear entrenador</button>'+
+      '<button class="btn-primary" id="admInvitar" style="width:100%;margin-top:10px;">+ Agregar a alguien por correo</button>'+
+      '<button class="btn-rename" id="admCrear" style="width:100%;margin-top:7px;">Crear entrenador con contraseña</button>'+
     '</div>'+
     '<div class="panel-seccion">Usuarios <small>'+lista.length+' de '+USUARIOS.length+'</small></div>'+
     (lista.length ? lista.map(function(u, i){
@@ -5618,9 +5620,17 @@
         // el if tu propia cuenta de super admin salía etiquetada "Cliente".
         '<div class="txt"><b>'+u.n+' <span class="rol-badge '+u.r+'" style="margin:0;">'+
           (NOMBRE_ROL[u.r] || u.r)+'</span></b>'+
-          '<span>'+u.c+' · '+u.extra+(u.on?'':' · DESACTIVADO')+'</span></div>'+
+          '<span>'+u.c+' · '+u.extra+
+            (u.estado !== 'activo' ? ' · <b class="usr-susp">'+u.estado.toUpperCase()+'</b>' : '')+
+          '</span></div>'+
         '<div class="usr-acc">'+
-          '<button class="'+(u.on?'b-off':'b-on')+'" data-toggle="'+USUARIOS.indexOf(u)+'">'+(u.on?'Desactivar':'Activar')+'</button>'+
+          // La IA se apaga sola, sin tocar la cuenta: sigue apuntando a
+          // mano pero deja de gastar. Es el caso más común, así que va
+          // primero y con su estado a la vista.
+          '<button class="'+(u.ia?'b-on':'b-off')+'" data-ia="'+USUARIOS.indexOf(u)+'" '+
+            'title="'+(u.ia?'Apagarle la IA':'Encenderle la IA')+'">'+(u.ia?'✨ on':'✨ off')+'</button>'+
+          '<button class="'+(u.estado==='suspendido'?'b-on':'b-off')+'" data-susp="'+USUARIOS.indexOf(u)+'">'+
+            (u.estado==='suspendido'?'Reactivar':'Suspender')+'</button>'+
           '<button class="b-key" data-pass="'+USUARIOS.indexOf(u)+'">🔑</button>'+
         '</div></div>';
     }).join('')
@@ -5686,6 +5696,68 @@
       });
       return;
     }
+    // --- Apagarle la IA a alguien ---
+    var bi = e.target.closest('[data-ia]');
+    if(bi){
+      var ui = USUARIOS[Number(bi.dataset.ia)];
+      ui.ia = !ui.ia;
+      pintarAdmin();
+      toast('toastAdmin', ui.n + (ui.ia ? ': IA encendida' : ': IA apagada'));
+      if(ui.id){
+        sbRpc('admin_ia', { p_usuario: ui.id, p_habilitada: ui.ia })['catch'](function(err){
+          ui.ia = !ui.ia; pintarAdmin();
+          toast('toastAdmin', 'No se pudo guardar: ' + traducirError(err.message));
+        });
+      }
+      return;
+    }
+
+    // --- Suspender o reactivar ---
+    var bs = e.target.closest('[data-susp]');
+    if(bs){
+      var us = USUARIOS[Number(bs.dataset.susp)];
+      var suspender = us.estado !== 'suspendido';
+      // Suspender deja a alguien fuera de su propia cuenta. Eso se
+      // pregunta; encenderla de vuelta no hace falta.
+      if(suspender && !confirm('¿Suspender a ' + us.n + '?\n\n' +
+          'No podrá entrar a la app. Sus comidas, fotos y progreso se conservan, ' +
+          'y puedes reactivarla cuando quieras.')) return;
+
+      var antes = us.estado;
+      us.estado = suspender ? 'suspendido' : 'activo';
+      if(suspender) us.on = false; else us.on = true;
+      pintarAdmin();
+      toast('toastAdmin', us.n + (suspender ? ' suspendido' : ' reactivado'));
+      if(us.id){
+        sbRpc('admin_estado', { p_usuario: us.id, p_estado: us.estado })['catch'](function(err){
+          us.estado = antes; us.on = (antes === 'activo'); pintarAdmin();
+          toast('toastAdmin', 'No se pudo guardar: ' + traducirError(err.message));
+        });
+      }
+      return;
+    }
+
+    // --- Invitar por correo ---
+    if(e.target.closest('#admInvitar')){
+      var correo = (prompt('Correo de la persona que quieres agregar:') || '').trim();
+      if(!correo) return;
+      if(correo.indexOf('@') < 0){ toast('toastAdmin', 'Ese correo no parece válido'); return; }
+
+      sbFetch('/rest/v1/invitaciones', {
+        method: 'POST',
+        headers: { 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ correo: correo, rol: 'cliente', invitado_por: sesion.user.id })
+      }).then(function(){
+        toast('toastAdmin', 'Apuntado. Entrará como tu cliente al registrarse.');
+      })['catch'](function(err){
+        var m = err.message || '';
+        toast('toastAdmin', m.indexOf('duplicate') >= 0 || m.indexOf('unique') >= 0
+          ? 'Ese correo ya está invitado'
+          : 'No se pudo: ' + traducirError(m));
+      });
+      return;
+    }
+
     var tg = e.target.closest('[data-toggle]');
     if(tg){
       var u = USUARIOS[Number(tg.dataset.toggle)];
@@ -5989,6 +6061,8 @@
           c: u.correo,
           r: u.rol,
           on: u.activo,
+          ia: u.ia_habilitada !== false,
+          estado: u.estado || 'activo',
           extra: (u.coach ? 'Coach: ' + u.coach : 'Sin coach') +
                  ' · ' + (u.ultima_actividad ? 'activo ' + u.ultima_actividad : 'sin actividad')
         });
