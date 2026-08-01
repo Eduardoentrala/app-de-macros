@@ -624,7 +624,8 @@
     font:700 14px/1 sans-serif;cursor:pointer;
   }
 
-  /* ---- Calendario estilo iOS ---- */
+  /* Nacieron con el calendario, que ya no existe, pero la pantalla de
+     Fotos las reutiliza para su navegador de semanas. No borrar. */
   .cal-nav{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 6px;}
   .cal-mes{font:800 20px/1 sans-serif;letter-spacing:-.01em;}
   .cal-arrow{
@@ -632,32 +633,6 @@
     font:700 19px/1 sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;
   }
   .cal-arrow:focus-visible{outline:2px solid var(--ink);outline-offset:2px;}
-  .cal-dow{
-    display:grid;grid-template-columns:repeat(7,1fr);padding:10px 12px 6px;
-    font:700 11.5px/1 sans-serif;color:var(--ink-faint);text-align:center;
-    border-bottom:1px solid var(--line);
-  }
-  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;padding:10px 12px 4px;}
-  .cal-dia{
-    aspect-ratio:1;display:flex;align-items:center;justify-content:center;
-    font:600 15px/1 sans-serif;color:var(--ink);border-radius:50%;
-    background:none;border:none;cursor:pointer;font-variant-numeric:tabular-nums;
-  }
-  .cal-dia.vacio{visibility:hidden;}
-  .cal-dia.otro{color:var(--ink-faint);opacity:.45;}
-  .cal-dia.entreno{background:var(--green);color:#fff;font-weight:800;}
-  .cal-dia.hoy{box-shadow:inset 0 0 0 2px var(--ink);font-weight:800;}
-  .cal-dia.hoy.entreno{box-shadow:inset 0 0 0 2px var(--ink);}
-  .cal-dia:focus-visible{outline:2px solid var(--ink);outline-offset:1px;}
-
-  .cal-resumen{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;}
-  .cal-res-num b{font:800 30px/1 sans-serif;font-variant-numeric:tabular-nums;}
-  .cal-res-num span{display:block;font:600 12px/1 sans-serif;color:var(--ink-faint);margin-top:5px;}
-  .cal-leyenda{display:flex;flex-direction:column;gap:7px;}
-  .cal-leyenda span{display:flex;align-items:center;gap:7px;font:600 11.5px/1 sans-serif;color:var(--ink-soft);}
-  .lg{width:13px;height:13px;border-radius:50%;flex:none;}
-  .lg.verde{background:var(--green);}
-  .lg.hoy{box-shadow:inset 0 0 0 2px var(--ink);}
 
   .date-title{color:var(--red);font:800 17px/1 sans-serif;}
   .date-chip{background:var(--ink);color:var(--card-bg);font:800 12px/1 sans-serif;padding:8px 12px;border-radius:10px;display:inline-block;margin-top:8px;text-align:center;}
@@ -869,12 +844,9 @@
   .lib-tab-header{background:var(--card-bg);padding:18px 20px 12px;flex:none;}
   .lib-tab-header h2{margin:0;font-size:22px;font-weight:800;letter-spacing:-.01em;}
   .lib-tab-header p{margin:5px 0 0;font:500 13px/1.4 sans-serif;color:var(--ink-faint);}
-  [data-view="library"] #libTabHeader,
-  [data-view="library"] #libBottomTabs{display:none;}
-  [data-view="library"].as-tab #libBackHeader{display:none;}
-  [data-view="library"].as-tab #libTabHeader{display:block;}
-  [data-view="library"].as-tab #libBottomTabs{display:flex;}
-  [data-view="library"].as-tab .lib-bottom{bottom:78px;}
+  /* La librería solo se abre desde "+ agregar ejercicio", así que siempre
+     lleva su cabecera con "Regresar" y nunca la de pestaña. */
+  [data-view="library"] #libTabHeader{display:none;}
 
   .week-card-title{display:flex;justify-content:space-between;align-items:flex-start;}
   .week-num{font:800 40px/1 sans-serif;margin:6px 0 2px;font-variant-numeric:tabular-nums;}
@@ -1111,7 +1083,6 @@
 
           <div class="quickrow">
             <button class="quick-item" data-push="rutina"><span class="quick-circle">💪</span><span>Rutinas</span></button>
-            <button class="quick-item" data-push="calendario"><span class="quick-circle">📅</span><span>Calendario</span></button>
             <button class="quick-item" data-push="ejercicio"><span class="quick-circle">📈</span><span>Progreso</span></button>
             <button class="quick-item" data-push="peso"><span class="quick-circle">⚖️</span><span>Peso</span></button>
             <button class="quick-item" data-push="fotos"><span class="quick-circle">📸</span><span>Fotos</span></button>
@@ -1181,23 +1152,6 @@
 
         <div class="bottom-tabs">
           <button class="active" data-tabbar="diario"><span>▦</span>Diario</button>
-          <button data-tabbar="articulos"><span>📖</span>Artículos</button>
-          <button data-tabbar="library"><span>🏋️</span>Ejercicios</button>
-          <button data-tabbar="perfil"><span>👤</span>Perfil</button>
-        </div>
-      </div>
-
-      <!-- ARTICULOS / VIDCALL placeholders -->
-      <div class="app-view" data-view="articulos">
-        <div class="placeholder-view">
-          <div class="big-emoji">📖</div>
-          <h3>Artículos</h3>
-          <p>Próximamente — contenido educativo sobre nutrición y entrenamiento.</p>
-        </div>
-        <div class="bottom-tabs">
-          <button data-tabbar="diario"><span>▦</span>Diario</button>
-          <button class="active" data-tabbar="articulos"><span>📖</span>Artículos</button>
-          <button data-tabbar="library"><span>🏋️</span>Ejercicios</button>
           <button data-tabbar="perfil"><span>👤</span>Perfil</button>
         </div>
       </div>
@@ -1590,37 +1544,6 @@
         </div>
       </div>
 
-      <!-- CALENDARIO (jump minimal) -->
-      <div class="app-view" data-view="calendario">
-        <div class="back-header">
-          <div class="back-header-inner">
-            <button class="back-btn" data-back>‹ Regresar</button>
-            <span class="back-title">Calendario</span>
-            <span style="width:60px;"></span>
-          </div>
-        </div>
-        <div class="scroll">
-          <div class="cal-nav">
-            <button class="cal-arrow" id="calPrev" aria-label="Mes anterior">‹</button>
-            <div class="cal-mes" id="calTitulo">—</div>
-            <button class="cal-arrow" id="calNext" aria-label="Mes siguiente">›</button>
-          </div>
-
-          <div class="cal-dow">
-            <span>L</span><span>M</span><span>M</span><span>J</span><span>V</span><span>S</span><span>D</span>
-          </div>
-          <div class="cal-grid" id="calGrid"></div>
-
-          <div class="card cal-resumen">
-            <div class="cal-res-num"><b id="calDiasEj">0</b><span>días de ejercicio</span></div>
-            <div class="cal-leyenda">
-              <span><i class="lg verde"></i> Entrenaste</span>
-              <span><i class="lg hoy"></i> Hoy</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- MI RUTINA -->
       <div class="app-view" data-view="rutina">
         <div class="back-header">
@@ -1814,12 +1737,6 @@
           <div class="exercise-grid" id="exerciseGrid"></div>
         </div>
         <div class="lib-bottom disabled" id="libBottomBtn">Agregar seleccionados (0)</div>
-        <div class="bottom-tabs" id="libBottomTabs">
-          <button data-tabbar="diario"><span>▦</span>Diario</button>
-          <button data-tabbar="articulos"><span>📖</span>Artículos</button>
-          <button class="active" data-tabbar="library"><span>🏋️</span>Ejercicios</button>
-          <button data-tabbar="perfil"><span>👤</span>Perfil</button>
-        </div>
       </div>
 
       <!-- EJERCICIO (weekly overview) -->
@@ -2028,8 +1945,6 @@
         </div>
         <div class="bottom-tabs">
           <button data-tabbar="diario"><span>▦</span>Diario</button>
-          <button data-tabbar="articulos"><span>📖</span>Artículos</button>
-          <button data-tabbar="library"><span>🏋️</span>Ejercicios</button>
           <button class="active" data-tabbar="perfil"><span>👤</span>Perfil</button>
         </div>
 
@@ -2103,11 +2018,10 @@
   var libView = document.querySelector('[data-view="library"]');
   function goto(id, push){
     if(push){ stack.push(id); } else { stack = [id]; }
-    // La librería se muestra como pestaña cuando no se llegó desde "+ agregar ejercicio"
-    if(id === 'library'){
-      libView.classList.toggle('as-tab', !push);
-      renderBottom();
-    }
+    // La librería siempre se abre apilada, con su botón de regresar: ya no
+    // existe como pestaña de la barra de abajo, solo se llega desde
+    // "+ agregar ejercicio" dentro de Mi Rutina.
+    if(id === 'library') renderBottom();
     show(id);
   }
   function back(){
@@ -2826,8 +2740,7 @@
   }
   function renderBottom(){
     var n = selected.size;
-    var esPestana = libView.classList.contains('as-tab');
-    libBottom.textContent = (esPestana ? 'Agregar a mi rutina (' : 'Agregar seleccionados (')+n+')';
+    libBottom.textContent = 'Agregar seleccionados (' + n + ')';
     libBottom.classList.toggle('disabled', n===0);
   }
   renderTabs(); renderGrid(); renderBottom();
@@ -2848,20 +2761,18 @@
   libBottom.addEventListener('click', function(){
     if(selected.size===0) return;
     var cuantos = selected.size;
-    var esPestana = libView.classList.contains('as-tab');
     var list = document.getElementById('exerciseList');
     selected.forEach(function(id){ list.appendChild(nuevaTarjetaEjercicio(id.split('::')[1])); });
     selected.clear(); renderGrid();
     recalcAll();
     syncEmptyState();
     if(typeof marcarTodasLasNotas === 'function') marcarTodasLasNotas();
-    if(esPestana){
-      volverA('rutina', 'diario');   // desde la pestaña: a su rutina, con regreso al diario
-      var dia = activeTab() ? activeTab().textContent.trim() : 'tu rutina';
-      toast('toastRutina', cuantos + (cuantos===1?' ejercicio agregado a ':' ejercicios agregados a ') + dia);
-    } else {
-      back();                  // desde "+ agregar ejercicio": regresa a Mi Rutina
-    }
+
+    // Solo se llega aquí desde "+ agregar ejercicio", así que regresar
+    // siempre devuelve a Mi Rutina, que es de donde se vino.
+    back();
+    var dia = activeTab() ? activeTab().textContent.trim() : 'tu rutina';
+    toast('toastRutina', cuantos + (cuantos===1?' ejercicio agregado a ':' ejercicios agregados a ') + dia);
     renderBottom();
   });
 
@@ -3387,7 +3298,6 @@
     });
     saveCurrentDay();
     pintarEjercicio();
-    if(typeof pintarCalendario === 'function') pintarCalendario();
   });
 
   // Cardio por día
@@ -3489,44 +3399,6 @@
 
   }
   pintarFechas();
-
-  // ---- Calendario: marca en verde cada día con sesión de ejercicio guardada ----
-  var calMes = new Date(HOY.getFullYear(), HOY.getMonth(), 1);
-
-  function pintarCalendario(){
-    document.getElementById('calTitulo').textContent =
-      MESES_LARGO[calMes.getMonth()].replace(/^./, function(c){ return c.toUpperCase(); }) +
-      ' ' + calMes.getFullYear();
-
-    var huecos = (calMes.getDay() + 6) % 7;                    // la rejilla empieza en lunes
-    var ultimo = new Date(calMes.getFullYear(), calMes.getMonth() + 1, 0).getDate();
-    var celdas = '', entrenados = 0;
-
-    for(var h = 0; h < huecos; h++) celdas += '<button class="cal-dia vacio" disabled></button>';
-
-    for(var n = 1; n <= ultimo; n++){
-      var d = new Date(calMes.getFullYear(), calMes.getMonth(), n);
-      var entreno = !!SESIONES[isoDe(d)];
-      var esHoy = isoDe(d) === isoDe(HOY);
-      if(entreno) entrenados++;
-      celdas += '<button class="cal-dia' + (entreno ? ' entreno' : '') + (esHoy ? ' hoy' : '') + '"'+
-                ' data-fecha="' + isoDe(d) + '">' + n + '</button>';
-    }
-    document.getElementById('calGrid').innerHTML = celdas;
-    document.getElementById('calDiasEj').textContent = entrenados;
-    document.querySelector('#calDiasEj + span').textContent =
-      'días de ejercicio en ' + MESES_LARGO[calMes.getMonth()];
-  }
-
-  document.getElementById('calPrev').addEventListener('click', function(){
-    calMes = new Date(calMes.getFullYear(), calMes.getMonth() - 1, 1);
-    pintarCalendario();
-  });
-  document.getElementById('calNext').addEventListener('click', function(){
-    calMes = new Date(calMes.getFullYear(), calMes.getMonth() + 1, 1);
-    pintarCalendario();
-  });
-  pintarCalendario();
 
   // ---- Mi Peso: registros reales, rangos y variación calculada ----
   // Un año de registros de ejemplo: bajada progresiva con altibajos.
@@ -4858,7 +4730,6 @@
         pintarPeso();
         if(typeof pintarCardioPerfil === 'function') pintarCardioPerfil();
         if(typeof pintarEjercicio    === 'function') pintarEjercicio();
-        if(typeof pintarCalendario   === 'function') pintarCalendario();
       })
       ['catch'](function(e){
         toast('toastComida', 'No se pudieron cargar tus datos: ' + traducirError(e.message));
