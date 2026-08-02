@@ -3191,6 +3191,21 @@
     });
   }
 
+  // Quitar una foto tiene que llegar a la base. Antes se borraba solo del
+  // mapa en memoria, así que volvía a aparecer en cuanto se recargaba la
+  // app: era como no haberla borrado.
+  //
+  // El archivo del bucket NO se toca. En esta base un DELETE no borra: un
+  // trigger lo archiva (0007) para que exista una papelera de la que
+  // restaurar. Borrar el archivo dejaría la ficha apuntando a la nada y lo
+  // restaurado sería un hueco roto. De los archivos ya se encarga
+  // limpiar_fotos_viejas(), que sí borra de verdad pasados seis meses.
+  function sbBorrarFoto(clave, pose){
+    if(!sesion || !sesion.user) return Promise.resolve();
+    return sbFetch('/rest/v1/progress_photos?user_id=eq.' + sesion.user.id +
+                   '&week_key=eq.' + clave + '&pose=eq.' + pose, { method:'DELETE' });
+  }
+
   // Los enlaces firmados se piden en bloque, no uno por uno: son decenas de
   // fotos y una petición por cada una tardaría una eternidad.
   function sbFirmar(rutas){
@@ -3276,9 +3291,23 @@
     var quitar = e.target.closest('[data-quitar-foto]');
     if(quitar){
       var c = claveSemana(semanaFoto);
-      if(FOTOS[c]) delete FOTOS[c][quitar.dataset.quitarFoto];
+      var pose = quitar.dataset.quitarFoto;
+      var borrada = (FOTOS[c] || {})[pose];
+      if(!borrada) return;
+
+      // Se quita ya de la pantalla y el borrado va detrás, como en el resto
+      // de la app. Si falla, la foto vuelve: decir "eliminada" sobre algo
+      // que sigue guardado es justo el fallo que había aquí.
+      delete FOTOS[c][pose];
       pintarFotos(); llenarSelectores();
       toast('toastFotos', 'Foto eliminada');
+
+      sbBorrarFoto(c, pose)['catch'](function(err){
+        FOTOS[c] = FOTOS[c] || {};
+        FOTOS[c][pose] = borrada;
+        pintarFotos(); llenarSelectores();
+        toast('toastFotos', 'No se pudo borrar: ' + traducirError(err.message));
+      });
       return;
     }
     var slot = e.target.closest('.foto-slot');
