@@ -464,11 +464,17 @@ Deno.serve(async (req) => {
       const gustos = String(cuerpo.gustos || '').trim().slice(0, 300);
       const semana = cuerpo.semana === true;
 
-      const r = await ia.messages.create({
+      // EN STREAMING, y no por capricho: una petición larga sin streaming se
+      // queda esperando la respuesta entera y la conexión se corta antes de
+      // llegar. Es lo que rompía "armar la semana completa" -pedía 32.000
+      // tokens de una sentada- mientras que el plan de un día, mucho más
+      // corto, sí llegaba. Se recogen los trozos y se devuelve el mensaje
+      // completo, así que para quien llama no cambia nada.
+      const flujo = ia.messages.stream({
         model: MODELO,
         // Siete días son siete veces más texto. Con el tope de un día se
         // cortaría a mitad del jueves.
-        max_tokens: semana ? 32000 : 8000,
+        max_tokens: semana ? 24000 : 8000,
         system: SISTEMA_PLAN,
         // Cuadrar las comidas con las calorías es aritmética con criterio:
         // aquí sí conviene que piense antes de contestar.
@@ -496,6 +502,7 @@ Deno.serve(async (req) => {
         }],
       });
 
+      const r = await flujo.finalMessage();
       return json({ ...leerJson(r), quedan });
     }
 
@@ -504,8 +511,16 @@ Deno.serve(async (req) => {
   } catch (e) {
     // El detalle real va al log de la función, no al teléfono: un mensaje
     // de error de la API puede llevar dentro trozos de la petición.
+    //
+    // Pero el NOMBRE del error sí viaja. Sin él, "no pudo responder" era lo
+    // único que se veía y no había forma de saber si fue un tiempo agotado,
+    // la clave, o la respuesta cortada; se perdió un rato averiguándolo.
+    // El nombre no lleva datos de nadie.
     console.error('asistente:', e);
-    return json({ error: 'El asistente no pudo responder. Inténtalo de nuevo.' }, 502);
+    const clase = (e && typeof e === 'object' && 'name' in e) ? String(e.name) : 'Error';
+    return json({
+      error: 'El asistente no pudo responder. Inténtalo de nuevo. (' + clase + ')',
+    }, 502);
   }
 });
 

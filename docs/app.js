@@ -2551,6 +2551,41 @@
 
   pintarPeso();
 
+  // ---- Empezar de cero ----
+  // Borra el historial de peso entero. A diferencia de casi todo lo demás,
+  // aquí el borrado es DE VERDAD: weight_logs no está entre las tablas que
+  // la 0007 archiva, porque es historial y no algo que se edite. Por eso el
+  // aviso dice que no se puede deshacer, y por eso pide confirmar.
+  var pesoReinicioSheet = document.getElementById('pesoReinicioSheet');
+  function cerrarReinicio(){ pesoReinicioSheet.classList.remove('open'); }
+
+  document.getElementById('pesoReiniciar').addEventListener('click', function(){
+    pesoReinicioSheet.classList.add('open');
+  });
+  document.getElementById('pesoReinicioNo').addEventListener('click', cerrarReinicio);
+  pesoReinicioSheet.addEventListener('click', function(e){
+    if(e.target === pesoReinicioSheet) cerrarReinicio();
+  });
+
+  document.getElementById('pesoReinicioOk').addEventListener('click', function(){
+    // La pantalla se vacía SIEMPRE, haya sesión o no. Antes se salía antes
+    // de tiempo cuando no la había y el botón se quedaba mudo: confirmabas
+    // el borrado y no pasaba nada, sin siquiera un aviso.
+    var antes = Object.assign({}, PESOS);
+    Object.keys(PESOS).forEach(function(k){ delete PESOS[k]; });
+    cerrarReinicio();
+    pintarPeso();
+    toast('toastPeso', 'Historial de peso borrado');
+
+    if(!sesion || !sesion.user) return;
+    sbFetch('/rest/v1/weight_logs?user_id=eq.' + sesion.user.id, { method:'DELETE' })
+      ['catch'](function(e){
+        Object.keys(antes).forEach(function(k){ PESOS[k] = antes[k]; });
+        pintarPeso();
+        toast('toastPeso', 'No se pudo borrar: ' + traducirError(e.message));
+      });
+  });
+
   // ---- Flechas para recorrer pestañas que no caben ----
   function estadoFlechas(id){
     var box = document.getElementById(id);
@@ -4177,27 +4212,25 @@
   // planComidas guarda TODO el plan (un día o los siete). El editor pinta
   // solo el día activo; sin esto, siete días serían 28 campos a la vez.
   var planComidas = [];
-  var planDia = null;          // null = plan de un solo día
+  var planDia = null;          // el día que se está editando
 
-  function esSemanal(){ return planComidas.some(function(c){ return !!c.dia; }); }
-
+  // El editor es SIEMPRE semanal: al abrir a una persona salen los siete
+  // días y se va llenando el que toque. Antes las pestañas solo aparecían si
+  // el plan ya traía días, así que un plan nuevo no tenía forma de volverse
+  // semanal — el modo dependía de lo que ya hubiera, no de lo que quisieras.
   function pintarEditorComidas(){
     var cont = document.getElementById('peComidas');
-    var semanal = esSemanal();
-    if(semanal && !planDia) planDia = DIAS_SEMANA[0];
-    if(!semanal) planDia = null;
+    if(!planDia) planDia = DIAS_SEMANA[0];
 
-    var tabs = semanal
-      ? '<div class="plan-dias">' + DIAS_SEMANA.map(function(d){
-          var lleno = planComidas.some(function(c){ return c.dia === d && c.texto; });
-          return '<button class="plan-dia' + (d === planDia ? ' active' : '') +
-                 (lleno ? ' lleno' : '') + '" data-dia="' + d + '">' + d.slice(0,3) + '</button>';
-        }).join('') + '</div>'
-      : '';
+    var tabs = '<div class="plan-dias">' + DIAS_SEMANA.map(function(d){
+      var lleno = planComidas.some(function(c){ return c.dia === d && c.texto; });
+      return '<button class="plan-dia' + (d === planDia ? ' active' : '') +
+             (lleno ? ' lleno' : '') + '" data-dia="' + d + '">' + d.slice(0,3) + '</button>';
+    }).join('') + '</div>';
 
     cont.innerHTML = tabs + MOMENTOS.map(function(m){
       var c = planComidas.filter(function(x){
-        return x.momento === m.k && (!semanal || x.dia === planDia); })[0];
+        return x.momento === m.k && x.dia === planDia; })[0];
       return '<div class="card">' +
         '<div class="field-label" style="margin-top:0;">' + m.emoji + ' ' + m.k + '</div>' +
         '<textarea class="notas-input" rows="3" maxlength="400" data-momento="' + m.k + '" ' +
@@ -4209,18 +4242,22 @@
   // Lo escrito se guarda en planComidas al cambiar de día o al guardar: si
   // solo se leyera al final, cambiar de pestaña perdería lo tecleado.
   function volcarDiaActual(){
-    var semanal = esSemanal();
     Array.from(document.querySelectorAll('#peComidas [data-momento]')).forEach(function(t){
       var txt = t.value.trim();
       var i = planComidas.findIndex(function(x){
-        return x.momento === t.dataset.momento && (!semanal || x.dia === planDia); });
+        return x.momento === t.dataset.momento && x.dia === planDia; });
       if(txt){
         if(i >= 0) planComidas[i].texto = txt;
-        else planComidas.push(semanal
-          ? { dia: planDia, momento: t.dataset.momento, texto: txt }
-          : { momento: t.dataset.momento, texto: txt });
+        else planComidas.push({ dia: planDia, momento: t.dataset.momento, texto: txt });
       } else if(i >= 0) planComidas.splice(i, 1);
     });
+  }
+
+  // Los planes guardados antes de esto no tienen día. Se colocan en lunes en
+  // vez de dejarlos invisibles: el editor solo enseña comidas con día, así
+  // que sin esto un plan viejo se abriría en blanco y se perdería al guardar.
+  function ponerDiaALosViejos(){
+    planComidas.forEach(function(c){ if(!c.dia) c.dia = DIAS_SEMANA[0]; });
   }
 
   document.getElementById('peComidas').addEventListener('click', function(e){
@@ -4248,7 +4285,7 @@
       document.getElementById('peNombre').value = (p && p.nombre) || ('Plan de ' + cliente.nombre);
       document.getElementById('peNota').value = (p && p.nota) || '';
       planComidas = ((p && p.comidas) || []).slice();
-      planDia = null;
+      ponerDiaALosViejos();
       pintarEditorComidas();
     })['catch'](function(){});
   }
@@ -4321,6 +4358,7 @@
         if(r.nombre) document.getElementById('peNombre').value = r.nombre;
         if(r.nota)   document.getElementById('peNota').value = r.nota;
         planComidas = (r.comidas || []).slice();
+        ponerDiaALosViejos();
         pintarEditorComidas();
         toast('toastPlan', semana
           ? 'Semana lista — revísala día por día y guarda'

@@ -942,7 +942,10 @@
           <div class="back-header-inner">
             <button class="back-btn" data-back>‹ Regresar</button>
             <span class="back-title">Mi Peso ⚖️</span>
-            <span style="width:60px;"></span>
+            <!-- Discreto a propósito: borra el historial entero, así que no
+                 debe competir por el pulgar con el botón de registrar peso. -->
+            <button class="borrar-discreto" id="pesoReiniciar"
+                    title="Empezar de cero">Reiniciar</button>
           </div>
         </div>
         <div class="scroll" style="position:relative;">
@@ -1150,6 +1153,20 @@
            Dentro de una de ellas, desde las otras tres no se vería.
            El fondo se posiciona contra .phone-screen, así que se ve igual
            que cuando estaba dentro. -->
+      <!-- Borrar el historial de peso. Vive aquí fuera por lo mismo que la
+           hoja de cantidad: se abre desde Peso, que es una vista aparte. -->
+      <div class="sheet-backdrop" id="pesoReinicioSheet">
+        <div class="sheet">
+          <h4>¿Empezar de cero?</h4>
+          <p class="hint">Se borran <b>todas</b> tus medidas de peso, no solo las
+            de esta semana. La gráfica y el historial quedan vacíos y tu progreso
+            vuelve a contarse desde el peso que registres a partir de ahora.</p>
+          <p class="wc-warn">⚠ Esto no se puede deshacer.</p>
+          <button class="btn-primary" id="pesoReinicioOk">Sí, borrar mi historial</button>
+          <button class="btn-ghost-text" id="pesoReinicioNo">Cancelar</button>
+        </div>
+      </div>
+
       <div class="sheet-backdrop" id="cantSheet">
         <div class="sheet">
           <h4 id="cantNombre">Alimento</h4>
