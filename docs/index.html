@@ -754,8 +754,8 @@
           <button class="sc-arrow" data-scroll="dayTabs" data-dir="1" aria-label="Ver más días">›</button>
           </div>
           <div class="day-actions">
-            <button class="btn-rename" id="renameDayBtn">✏️ Renombrar día</button>
-            <button class="btn-delete-day" id="deleteDayBtn">🗑 Borrar día</button>
+            <button class="btn-rename" id="renameDayBtn">Renombrar</button>
+            <button class="btn-delete-day" id="deleteDayBtn">Borrar día</button>
           </div>
 
           <div id="exerciseList"></div>
@@ -836,10 +836,12 @@
             <h4>Descanso entre series</h4>
             <p class="hint">Se usa al tocar el ⏰ de cualquier serie. Puedes elegir un tiempo rápido o poner el tuyo.</p>
             <div class="preset-grid" id="presetGrid">
-              <button class="preset" data-secs="60">1:00<small>1 minuto</small></button>
-              <button class="preset" data-secs="90">1:30<small>1 min 30 s</small></button>
-              <button class="preset" data-secs="120">2:00<small>2 minutos</small></button>
-              <button class="preset active" data-secs="180">3:00<small>3 minutos</small></button>
+              <!-- Sin el "1 minuto" debajo: decía lo mismo que el 1:00 de
+                   arriba y obligaba a leer dos veces para elegir. -->
+              <button class="preset" data-secs="60">1:00</button>
+              <button class="preset" data-secs="90">1:30</button>
+              <button class="preset" data-secs="120">2:00</button>
+              <button class="preset active" data-secs="180">3:00</button>
             </div>
             <div class="custom-row">
               <input id="customSecs" type="number" min="5" max="900" step="5" value="180" inputmode="numeric">

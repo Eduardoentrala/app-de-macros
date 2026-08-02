@@ -387,12 +387,26 @@
   border:1.5px dashed var(--ink-faint);background:none;color:var(--ink-soft);
   display:flex;align-items:center;justify-content:center;padding:12px 16px;
 }
-.day-actions{display:flex;gap:8px;margin:12px 16px;}
-.day-actions button{
-  flex:1;padding:12px;border-radius:14px;font:700 13px/1 sans-serif;cursor:pointer;background:none;
+/* Renombrar y borrar el día son acciones de segunda fila: se usan de vez en
+   cuando y no deben pesar como el contenido. Dejan de ser dos botones
+   anchos con recuadro y pasan a texto pequeño a la derecha, que es como
+   iOS pone este tipo de acción.
+   Van dentro de .day-actions y no en .btn-rename porque esa clase la usan
+   cuatro botones más, que sí son anchos y con recuadro. */
+[data-view="rutina"] .day-actions{
+  display:flex;gap:16px;justify-content:flex-end;margin:4px 18px 10px;
 }
+[data-view="rutina"] .day-actions button{
+  flex:none;padding:2px 0;border:none;background:none;cursor:pointer;
+  font:600 12.5px/1 sans-serif;letter-spacing:-.01em;
+}
+[data-view="rutina"] .day-actions button:active{opacity:.5;}
 .btn-rename{border:1.5px solid var(--line);color:var(--ink);}
 .btn-delete-day{border:1.5px solid var(--red);color:var(--red);}
+/* Dentro de la fila del día mandan estos: sin recuadro, y el de borrar en
+   rojo porque es lo único ahí que no se deshace. */
+[data-view="rutina"] .day-actions .btn-rename{color:var(--ink-soft);}
+[data-view="rutina"] .day-actions .btn-delete-day{color:var(--red);}
 .sheet input.name-input{
   border:1.5px solid var(--line);background:var(--app-bg);border-radius:12px;padding:14px;
   font:700 16px/1 sans-serif;color:var(--ink);width:100%;
@@ -417,19 +431,35 @@
 }
 .sheet h4{margin:0;font:800 16px/1 sans-serif;color:var(--ink);}
 .sheet .hint{margin:0;font:500 12.5px/1.45 sans-serif;color:var(--ink-faint);}
-.preset-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;}
+/* Elegir entre cuatro tiempos cortos es exactamente para lo que sirve un
+   control segmentado, no para cuatro recuadros en rejilla: una sola fila,
+   un carril y el elegido resaltado. Es el mismo gesto visual que el
+   14 días / Mes / Año de Peso, así que la app se siente de una pieza. */
+.preset-grid{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:3px;
+  background:var(--pill-bg);border-radius:13px;padding:3px;
+}
 .preset{
-  padding:14px 10px;border-radius:14px;border:1.5px solid var(--line);background:var(--app-bg);
-  font:700 14px/1.2 sans-serif;color:var(--ink);cursor:pointer;text-align:center;
+  padding:10px 4px;border-radius:10px;border:none;background:none;
+  font:700 14px/1 sans-serif;color:var(--ink-soft);cursor:pointer;text-align:center;
+  font-variant-numeric:tabular-nums;
+  transition:background .18s ease, color .18s ease;
 }
-.preset small{display:block;font:600 11.5px/1 sans-serif;color:var(--ink-faint);margin-top:4px;}
-.preset.active{background:var(--ink);color:var(--card-bg);border-color:var(--ink);}
-.preset.active small{color:var(--ink-faint);}
-.custom-row{display:flex;gap:8px;align-items:center;}
+.preset.active{background:var(--card-bg);color:var(--ink);box-shadow:var(--shadow);}
+
+/* El campo de los segundos deja de competir con el control de arriba: sin
+   recuadro, como una fila de ajustes. El número manda; "segundos" acompaña. */
+.custom-row{
+  display:flex;gap:8px;align-items:baseline;justify-content:center;
+  background:var(--app-bg);border-radius:13px;padding:12px;
+}
 .custom-row input{
-  flex:1;border:1.5px solid var(--line);background:var(--app-bg);border-radius:12px;padding:13px;
-  font:700 15px/1 sans-serif;color:var(--ink);text-align:center;font-variant-numeric:tabular-nums;
+  flex:none;width:3.6em;border:none;background:none;outline:none;padding:0;
+  font:800 22px/1 sans-serif;color:var(--ink);text-align:right;
+  font-variant-numeric:tabular-nums;-moz-appearance:textfield;
 }
+.custom-row input::-webkit-outer-spin-button,
+.custom-row input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
 .custom-row .unit{font:600 13px/1 sans-serif;color:var(--ink-faint);flex:none;}
 
 .rest-bar{
