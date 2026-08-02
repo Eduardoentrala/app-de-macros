@@ -84,18 +84,36 @@
    propósito: el anillo encogió a 112 px y los huecos bajaron con él. Si
    algún día se añade una fila más, hay que quitar otra, no volver a
    estirar esto. */
-.ring-card{display:flex;flex-direction:column;align-items:center;padding:14px 18px 6px;margin:0 16px 8px;}
-.ring-label{font:800 11px/1 sans-serif;letter-spacing:.1em;color:var(--ink-faint);margin-bottom:8px;}
-.ring-wrap{position:relative;width:112px;height:112px;}
+.ring-card{display:flex;flex-direction:column;align-items:center;padding:16px 18px 6px;margin:0 16px 8px;}
+.ring-label{font:800 11px/1 sans-serif;letter-spacing:.1em;color:var(--ink-faint);margin-bottom:10px;}
+.ring-wrap{position:relative;width:132px;height:132px;}
 .ring-wrap svg{transform:rotate(-90deg);}
-.ring-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:25px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums;}
-.macros{width:100%;margin-top:12px;display:flex;flex-direction:column;gap:9px;}
-.macro-row{display:flex;flex-direction:column;gap:5px;}
-.macro-top{display:flex;justify-content:space-between;font:600 13px/1 sans-serif;}
-.macro-top .name{color:var(--ink-soft);}
-.macro-top .val{color:var(--ink);font-weight:800;font-variant-numeric:tabular-nums;}
-.bar-track{height:6px;border-radius:4px;background:var(--pill-bg);overflow:hidden;}
-.bar-fill{height:100%;border-radius:4px;background:var(--ink);}
+.ring-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums;}
+/* Los tres macros en una fila, no apilados. Ocupan un tercio de alto y el
+   anillo se queda con el sitio, que es lo que se mira. Cada columna lleva
+   su nombre, su cifra y su barra debajo. */
+.macros{
+  width:100%;margin-top:14px;display:grid;grid-template-columns:repeat(3,1fr);gap:9px;
+}
+.macro-row{display:flex;flex-direction:column;gap:6px;min-width:0;}
+/* 10.5px y no 13: en tres columnas tienen que caber el nombre y la cifra en
+   la misma línea. A 12px "Carbos" se cortaba en "C..".
+   Y `flex-wrap`: en un teléfono estrecho "+37g exc" no cabe al lado de
+   "Grasas" y se montaban las columnas unas sobre otras. Así la cifra baja
+   de línea en vez de invadir la vecina. */
+.macro-top{
+  display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;
+  gap:1px 3px;font:600 10.5px/1.25 sans-serif;
+}
+.macro-top .name{color:var(--ink-soft);white-space:nowrap;}
+.macro-top .val{color:var(--ink);font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;}
+/* Pasarse se ve en rojo, no en negro con signo. El número del anillo y los
+   macros van juntos: si el anillo dice "excedidas" y los gramos siguen en
+   negro, parece que solo se pasó en calorías. */
+.macro-top .val.exc{color:var(--red);}
+.ring-card.excedido .ring-num{color:var(--red);}
+.bar-track{height:4px;border-radius:3px;background:var(--pill-bg);overflow:hidden;}
+.bar-fill{height:100%;border-radius:3px;background:var(--ink);}
 .dots{display:flex;gap:5px;justify-content:center;margin:6px 0 4px;}
 .dots span{width:5px;height:5px;border-radius:50%;background:var(--ink-faint);}
 .dots span.on{background:var(--ink);}

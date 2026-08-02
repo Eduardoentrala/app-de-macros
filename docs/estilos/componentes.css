@@ -105,6 +105,9 @@ table.week-table tr.today td{font-weight:800;}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(-6px);}
 
 .profile-head{display:flex;align-items:center;gap:14px;padding:20px;background:var(--card-bg);flex:none;}
+/* El sol se va al extremo, separado del nombre y la foto: es el único
+   control de esta fila y no compite con los datos de la persona. */
+.tema-sol{margin-left:auto;align-self:flex-start;}
 .avatar{width:64px;height:64px;border-radius:16px;background:var(--pill-bg);display:flex;align-items:center;justify-content:center;flex:none;}
 .prof-name{font:800 19px/1.2 sans-serif;}
 .prof-email{font:500 13px/1.3 sans-serif;color:var(--ink-faint);margin-top:2px;}

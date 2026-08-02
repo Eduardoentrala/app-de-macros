@@ -28,10 +28,12 @@
   // código (al final del archivo), la app se dibujaría un instante con el
   // tema equivocado y se vería el parpadeo al abrir.
   //
-  // Sin elección guardada no se toca nada y manda el ajuste del teléfono.
+  // Claro por defecto: sin elección guardada NO manda el ajuste del
+  // teléfono. Antes sí, y quien tuviera el móvil en oscuro abría la app en
+  // oscuro sin haberlo pedido. Se cambia con el sol de arriba del Perfil.
   try{
     var __tema = localStorage.getItem('macros.tema');
-    if(__tema) document.documentElement.setAttribute('data-theme', __tema);
+    document.documentElement.setAttribute('data-theme', __tema === 'dark' ? 'dark' : 'light');
   }catch(e){}
 </script>
 
@@ -73,7 +75,6 @@
       <option value="super_admin">Super admin</option>
     </select>
   </div>
-  <button class="theme-btn" id="themeBtn" title="Cambiar tema">🌗 Tema</button>
 </div>
 
 <div class="stage">
@@ -116,9 +117,9 @@
                 <!-- pathLength=100 hace que el trazo se mida en porcentaje.
                      Así se puede cambiar el tamaño del anillo sin recalcular
                      2πr en el JavaScript, que es donde se cuela el error. -->
-                <svg width="112" height="112" viewBox="0 0 112 112">
-                  <circle cx="56" cy="56" r="48" fill="none" stroke="var(--pill-bg)" stroke-width="10"/>
-                  <circle class="ring-prog" cx="56" cy="56" r="48" fill="none" stroke="var(--ink)" stroke-width="10" stroke-linecap="round"
+                <svg width="132" height="132" viewBox="0 0 132 132">
+                  <circle cx="66" cy="66" r="59" fill="none" stroke="var(--pill-bg)" stroke-width="9"/>
+                  <circle class="ring-prog" cx="66" cy="66" r="59" fill="none" stroke="var(--ink)" stroke-width="9" stroke-linecap="round"
                     pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/>
                 </svg>
                 <div class="ring-num">0</div>
@@ -155,9 +156,9 @@
             <div class="card ring-card" id="cardSemana">
               <div class="ring-label" id="ringLabelSem">CALORÍAS CONSUMIDAS</div>
               <div class="ring-wrap">
-                <svg width="112" height="112" viewBox="0 0 112 112">
-                  <circle cx="56" cy="56" r="48" fill="none" stroke="var(--pill-bg)" stroke-width="10"/>
-                  <circle class="ring-prog" cx="56" cy="56" r="48" fill="none" stroke="var(--ink)" stroke-width="10" stroke-linecap="round"
+                <svg width="132" height="132" viewBox="0 0 132 132">
+                  <circle cx="66" cy="66" r="59" fill="none" stroke="var(--pill-bg)" stroke-width="9"/>
+                  <circle class="ring-prog" cx="66" cy="66" r="59" fill="none" stroke="var(--ink)" stroke-width="9" stroke-linecap="round"
                     pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/>
                 </svg>
                 <div class="ring-num">0</div>
@@ -985,6 +986,16 @@
               <span class="rol-badge cliente" id="rolBadge">Cliente</span>
               <button class="prof-edit" id="editPhotoBtn">Editar foto</button>
             </div>
+            <!-- El sol dibujado y no un emoji: cada sistema pinta ☀ a su
+                 manera (iOS lo saca naranja y enorme) y aquí tiene que ser
+                 un icono más de la app. -->
+            <button class="icon-btn dark tema-sol" id="profTemaBtn" title="Cambiar entre claro y oscuro">
+              <svg viewBox="0 0 24 24" width="17" height="17" fill="none"
+                   stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="4.2"/>
+                <path d="M12 2v2.4M12 19.6V22M2 12h2.4M19.6 12H22M4.9 4.9l1.7 1.7M17.4 17.4l1.7 1.7M19.1 4.9l-1.7 1.7M6.6 17.4l-1.7 1.7"/>
+              </svg>
+            </button>
           </div>
           <div class="card">
             <div class="info-row"><span>Peso</span><span class="v" id="profPeso">84.0 kg</span></div>
@@ -993,10 +1004,6 @@
             <button class="info-row info-btn" id="profObjetivoBtn">
               <span>Objetivo</span>
               <span class="v" id="profObjetivo">Mantener peso<i>›</i></span>
-            </button>
-            <button class="info-row info-btn" id="profTemaBtn">
-              <span>Tema</span>
-              <span class="v" id="profTema">Automático<i>›</i></span>
             </button>
           </div>
           <div class="card" id="tarjetaPanel" hidden>

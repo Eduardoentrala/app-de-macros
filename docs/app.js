@@ -190,16 +190,13 @@
     if(cual === vistaAnillo) return;
     vistaAnillo = cual;
     var restando = cual === 'restantes';
-    ['ringLabelHoy','ringLabelSem'].forEach(function(id){
-      document.getElementById(id).textContent =
-        restando ? 'CALORÍAS RESTANTES' : 'CALORÍAS CONSUMIDAS';
-    });
     ['ringDots','ringDotsSem'].forEach(function(id){
       var p = document.getElementById(id).children;
       p[0].classList.toggle('on', !restando);
       p[1].classList.toggle('on',  restando);
     });
-    // Las cifras y las barras las recalcula quien ya sabe hacerlo.
+    // Las cifras, las barras y los rótulos los recalcula quien ya sabe
+    // hacerlo: el rótulo también depende de si se ha pasado, no solo del modo.
     actualizarMetas();
   }
 
@@ -1300,12 +1297,29 @@
   // "consumidas" es lo comido y el anillo se llena; en "restantes" es lo
   // que falta, así que empieza entero y se vacía. Quien llama decide cuál
   // de los dos manda, y aquí no hay que saberlo.
-  function pintarAnillo(cardId, valor, meta){
+  //
+  // Pasarse no es "te quedan 0": es un dato que hay que ver. Cuando se
+  // excede, el anillo se queda vacío y el número pasa a ser lo que sobra,
+  // en rojo. Un anillo lleno diría lo contrario de lo que ocurre.
+  function pintarAnillo(cardId, valor, meta, excedido){
     var card = document.getElementById(cardId);
     if(!card) return;
-    var pct = meta > 0 ? Math.min(1, valor / meta) : 0;
+    var pct = (excedido || !(meta > 0)) ? 0 : Math.min(1, valor / meta);
     card.querySelector('.ring-num').textContent = mil(valor);
+    card.classList.toggle('excedido', !!excedido);
     card.querySelector('.ring-prog').setAttribute('stroke-dashoffset', String(100 - 100 * pct));
+  }
+
+  // El rótulo depende del modo Y de si se ha pasado, así que se decide en
+  // un solo sitio, cada vez que se recalculan las metas. Ponerlo desde el
+  // cambio de vista dejaba "RESTANTES" escrito sobre un número que ya era
+  // exceso, hasta que algo más repintara.
+  function etiquetaAnillo(id, excedido){
+    var el = document.getElementById(id);
+    if(!el) return;
+    el.textContent = vistaAnillo !== 'restantes' ? 'CALORÍAS CONSUMIDAS'
+                   : excedido ? 'CALORÍAS EXCEDIDAS'
+                   : 'CALORÍAS RESTANTES';
   }
 
   function actualizarSemana(){
@@ -1483,16 +1497,22 @@
       dd.setDate(dd.getDate() + 1);
     }
 
-    // Quien acaba de registrarse cae a media semana sin haber apuntado nada.
-    // El reparto lo leería como "ahorraste 4 días" y le regalaría esas
-    // calorías, cuando en realidad no estaba usando la app. Sin días
-    // previos con registro no hay saldo que repartir: la meta de hoy es
-    // la meta de siempre.
+    // Solo cuentan los días que se usaron de verdad, no los siete.
+    //
+    // Antes se repartía (meta×7 − lo comido) entre los días que faltan. Con
+    // la semana empezada eso regalaba calorías: quien apuntaba UN día y se
+    // pasaba veía la meta de hoy SUBIR, porque los días en blanco anteriores
+    // se leían como ahorro. Pasarse acababa premiando.
+    //
+    // El saldo se hace sobre los días con registro más los que quedan. Así
+    // pasarse resta y ahorrar suma, que es lo que se espera, y los días en
+    // los que no se usó la app no ponen ni quitan nada.
+    var diasCuenta = diasUsados + diasRestantes;
     var hayHistorialSemana = diasUsados > 0;
     var metaHoy = hayHistorialSemana ? {
-      P: (P*7 - antes.P) / diasRestantes,
-      C: (C*7 - antes.C) / diasRestantes,
-      G: (G*7 - antes.G) / diasRestantes
+      P: (P*diasCuenta - antes.P) / diasRestantes,
+      C: (C*diasCuenta - antes.C) / diasRestantes,
+      G: (G*diasCuenta - antes.G) / diasRestantes
     } : {P:P, C:C, G:G};
     var calHoyMeta = calDe(metaHoy);
 
@@ -1504,31 +1524,43 @@
       var esSemana = box.dataset.scope === 'semana';
       var metasBox = esSemana ? {P:P*7, C:C*7, G:G*7} : metaHoy;
       var comidoBox = esSemana ? sem : hoy;
-      // En "restantes" se enseña lo que falta, no lo que va: la barra se
-      // vacía en vez de llenarse, que es lo que uno espera de un contador
-      // hacia atrás.
+      // En "restantes" cambia la CIFRA -lo que falta en vez de lo que va-,
+      // pero la barra no: siempre se llena según se come y se queda llena al
+      // llegar a la meta. Estuvo vaciándose en este modo y se leía al revés.
+      // Lo que uno sobrepasa no se pinta: la barra dice cuánto de la meta
+      // llevas, y ese tope es 100.
       var restando = vistaAnillo === 'restantes';
       Array.from(box.querySelectorAll('.val')).forEach(function(el){
         var k = el.dataset.macro;
         var meta = metasBox[k];
         var comido = comidoBox[k] || 0;
-        if(restando){
-          el.textContent = mil(Math.max(0, meta - comido)) + 'g';
+        var pasado = restando && comido > meta;
+        if(pasado){
+          el.textContent = '+' + mil(comido - meta) + 'g exc';
+        } else if(restando){
+          el.textContent = mil(meta - comido) + 'g';
         } else {
           el.textContent = mil(comido) + '/' + mil(meta) + 'g';
         }
+        el.classList.toggle('exc', pasado);
         var pct = meta > 0 ? Math.min(100, comido / meta * 100) : 0;
-        el.closest('.macro-row').querySelector('.bar-fill').style.width =
-          (restando ? Math.max(0, 100 - pct) : pct) + '%';
+        el.closest('.macro-row').querySelector('.bar-fill').style.width = pct + '%';
       });
     });
 
-    // En "restantes" el anillo se vacía según se come, en vez de llenarse.
-    var falta = vistaAnillo === 'restantes'
-      ? function(comido, meta){ return Math.max(0, meta - comido); }
-      : function(comido){ return comido; };
-    pintarAnillo('cardHoy',    falta(calDe(hoy), calHoyMeta), calHoyMeta);
-    pintarAnillo('cardSemana', falta(calDe(sem), calSem),     calSem);
+    // En "restantes" el anillo se vacía según se come. Y si ya se pasó, en
+    // vez de quedarse clavado en cero enseña por cuánto.
+    var restando = vistaAnillo === 'restantes';
+    function pintarCard(cardId, comido, meta){
+      if(!restando) return pintarAnillo(cardId, comido, meta, false);
+      var pasado = comido > meta;
+      pintarAnillo(cardId, pasado ? comido - meta : meta - comido, meta, pasado);
+      return pasado;
+    }
+    var excHoy = pintarCard('cardHoy',    calDe(hoy), calHoyMeta);
+    var excSem = pintarCard('cardSemana', calDe(sem), calSem);
+    etiquetaAnillo('ringLabelHoy', excHoy);
+    etiquetaAnillo('ringLabelSem', excSem);
 
     // Nota que explica por qué la meta de hoy cambió
     var nota = document.getElementById('ajusteNota');
@@ -2587,16 +2619,13 @@
     {f:1.55,  t:'Actividad moderada'}, {f:1.55, t:'Actividad moderada'},
     {f:1.725, t:'Actividad alta'}, {f:1.725, t:'Actividad alta'}, {f:1.9, t:'Actividad muy alta'}
   ];
-  // Ritmo lento a propósito, y en calorías fijas en vez de porcentajes.
+  // Proporcional al gasto: −20% para bajar, +15% para subir. Es el cálculo
+  // original, el de siempre.
   //
-  // Antes era -20% del gasto: a una persona de gasto alto le quitaba 600
-  // calorías al día, que son ~0.55 kg por semana. Eso se hace a costa de
-  // músculo, da hambre y casi nadie lo sostiene más de un mes.
-  //
-  // Un kilo de grasa son unas 7700 calorías, así que 400 al día salen a
-  // ~0.36 kg por semana. Para subir se va aún más despacio: 300 al día son
-  // ~0.27 kg, y por encima de eso lo que se gana es grasa.
-  var AJUSTE_KCAL = {bajar:-400, mantener:0, subir:300};
+  // Estuvo un tiempo en calorías fijas (−400 / +300) para forzar un ritmo
+  // lento de ~0.35 kg por semana. Se quitó a petición: el porcentaje escala
+  // con la persona, y a quien gasta mucho un déficit fijo se le queda corto.
+  var AJUSTE = {bajar:0.80, mantener:1, subir:1.15};
   var KCAL_POR_KG = 7700;
   var NOMBRE_OBJ = {bajar:'Bajar de peso', mantener:'Mantener peso', subir:'Subir de peso'};
 
@@ -2627,9 +2656,10 @@
 
     // Suelo de seguridad: nunca por debajo del metabolismo basal ni de
     // 1200 calorías. Por debajo de ahí ya no se pierde grasa, se pierde
-    // músculo, y en una persona menuda el déficit fijo podría bajar tanto.
+    // músculo. Se queda aunque el ajuste vuelva a ser porcentual: en una
+    // persona menuda y sedentaria, el −20% sí puede cruzar ese suelo.
     var cal = Math.max(
-      Math.round(gasto + AJUSTE_KCAL[reg.objetivo]),
+      Math.round(gasto * AJUSTE[reg.objetivo]),
       Math.round(tmb),
       1200
     );
@@ -4741,16 +4771,11 @@
   // teléfono esté en oscuro, hasta que él mismo lo cambie.
   var TEMA_KEY = 'macros.tema';
 
-  // Qué tema se está VIENDO ahora mismo. Si nadie ha elegido, no hay
-  // atributo y manda el sistema — hay que preguntárselo. Antes se leía
-  // solo el atributo: al arrancar valía null, así que la primera pulsación
-  // en un teléfono en oscuro lo ponía... en oscuro. No pasaba nada y había
-  // que pulsar dos veces.
+  // Qué tema se está VIENDO ahora mismo. El script del <head> deja siempre
+  // puesto data-theme -claro si no hay nada guardado-, así que basta con
+  // leerlo; ya no hay que preguntarle al sistema.
   function temaEfectivo(){
-    var attr = document.documentElement.getAttribute('data-theme');
-    if(attr === 'dark' || attr === 'light') return attr;
-    return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
-      ? 'dark' : 'light';
+    return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
   }
 
   // La franja de arriba del teléfono (barra de estado) la pinta el navegador
@@ -4766,30 +4791,16 @@
     );
   }
 
-  function pintarTemaPerfil(){
-    var el = document.getElementById('profTema');
-    if(!el) return;
-    var guardado = null;
-    try{ guardado = localStorage.getItem(TEMA_KEY); }catch(e){}
-    el.innerHTML = (guardado === 'dark' ? 'Oscuro'
-                  : guardado === 'light' ? 'Claro'
-                  : 'Automático') + '<i>›</i>';
-  }
-
   function toggleTheme(){
     var siguiente = temaEfectivo() === 'dark' ? 'light' : 'dark';
     document.documentElement.setAttribute('data-theme', siguiente);
     pintarBarraNavegador(siguiente);
     try{ localStorage.setItem(TEMA_KEY, siguiente); }catch(e){}
-    pintarTemaPerfil();
   }
 
-  // Al abrir: si ya había una elección guardada, la barra se pone a juego.
-  // Si no la hay, no se toca nada y sigue mandando el ajuste del teléfono.
-  try{
-    if(localStorage.getItem(TEMA_KEY)) pintarBarraNavegador(temaEfectivo());
-  }catch(e){}
-  pintarTemaPerfil();
+  // La barra del navegador se pone a juego desde el arranque: ahora siempre
+  // hay tema puesto, así que no hay caso en el que deba mandar el sistema.
+  pintarBarraNavegador(temaEfectivo());
 
   // ================= ASISTENTE =================
   // Una conversación, no un formulario. La clave de Anthropic vive en una
@@ -5042,9 +5053,8 @@
   document.getElementById('iaCerrar').addEventListener('click', function(){ back(); });
 
 
-  document.getElementById('themeBtn').addEventListener('click', toggleTheme);
-  // El botón del sol se quitó del Diario para dejarle el sitio al asistente.
-  // El tema se cambia ahora desde Perfil: en el teléfono la barra del
-  // estudio no se ve, así que sin esta fila la función quedaba inalcanzable.
+  // Único sitio donde se cambia el tema: el sol de arriba del Perfil. El
+  // botón de la barra del estudio se fue -en el teléfono esa barra ni se
+  // ve, así que dejaba la función a medio alcance.
   document.getElementById('profTemaBtn').addEventListener('click', toggleTheme);
 })();
