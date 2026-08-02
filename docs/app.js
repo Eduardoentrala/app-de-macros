@@ -386,21 +386,41 @@
     }
 
     if(prevEl) prevEl.textContent = 'antes ' + prev.toLocaleString('es-MX');
-
-    var pct = (vol - prev) / prev * 100;
-    var rounded = Math.round(pct);
     if(!badge) return;
 
-    if(rounded === 0){
+    // El veredicto NO se calcula aquí. Aquí solo se pinta lo que ya se
+    // decidió al guardar la sesión, que es cuando tiene sentido comparar:
+    // mientras se teclean las series el número baila con cada pulsación y
+    // decía "-33%" a media serie, cuando aún faltaba la mitad del trabajo.
+    pintarVeredicto(card);
+  }
+
+  // El veredicto vive en la propia tarjeta. Así sobrevive a los repintados
+  // -que son muchos- y desaparece solo cuando se vuelve a tocar algo o
+  // cuando se cambia de día, que es cuando deja de ser cierto.
+  function pintarVeredicto(card){
+    var badge = card.querySelector('.ex-delta');
+    if(!badge) return;
+    var v = card.getAttribute('data-veredicto');
+    if(!v){ badge.className = 'ex-delta'; badge.textContent = ''; return; }
+
+    var pct = Number(v);
+    if(pct === 0){
       badge.className = 'ex-delta show same';
       badge.textContent = 'igual al anterior';
-    } else if(rounded > 0){
+    } else if(pct > 0){
       badge.className = 'ex-delta show up';
-      badge.textContent = '+' + rounded + '% vs anterior';
+      badge.textContent = '+' + pct + '% vs anterior';
     } else {
       badge.className = 'ex-delta show down';
-      badge.textContent = rounded + '% vs anterior';
+      badge.textContent = pct + '% vs anterior';
     }
+  }
+
+  // Al tocar una serie el veredicto deja de valer: se borra hasta la
+  // proxima vez que se guarde.
+  function olvidarVeredicto(card){
+    if(card) card.removeAttribute('data-veredicto');
   }
 
   function recalcAll(){
@@ -459,7 +479,10 @@
   });
   exList.addEventListener('input', function(e){
     var card = e.target.closest('.exercise-card');
-    if(card && e.target.classList.contains('set-input')) recalcCard(card);
+    if(card && e.target.classList.contains('set-input')){
+      olvidarVeredicto(card);
+      recalcCard(card);
+    }
   });
   recalcAll();
   // Arranque: solo el día activo trae ejercicios de ejemplo; los demás abren vacíos.
@@ -2338,6 +2361,19 @@
       if(vol > 0){
         if(!HISTORIAL[nombre]) HISTORIAL[nombre] = [];
         HISTORIAL[nombre].push(vol);
+
+        // EL ORDEN IMPORTA: se compara contra la sesión anterior ANTES de
+        // pisar la referencia con la de hoy. Al revés siempre saldría
+        // "igual al anterior", porque se estaría comparando con uno mismo.
+        var crudo = c.getAttribute('data-prev-vol');
+        var antes = crudo === null ? null : parseFloat(crudo);
+        if(antes !== null && isFinite(antes) && antes > 0){
+          c.setAttribute('data-veredicto', String(Math.round((vol - antes) / antes * 100)));
+        } else {
+          // Primera vez que se hace este ejercicio: no hay con qué comparar.
+          c.removeAttribute('data-veredicto');
+        }
+
         c.setAttribute('data-prev-vol', vol);   // la próxima sesión compara contra esta
         detalle.push({ nombre: nombre, volumen: vol, series: series });
         total += vol;
@@ -2345,6 +2381,8 @@
     });
     saveCurrentDay();
     pintarEjercicio();
+    // Después de repintar, para que el veredicto recién decidido se vea.
+    recalcAll();
 
     if(!sesion || !sesion.user){ toast('toastRutina', 'Sesión guardada'); return; }
     if(!detalle.length){ toast('toastRutina', 'No hay series con peso que guardar'); return; }
@@ -4194,7 +4232,11 @@
       ? PLAN_CLIENTES.map(function(c, i){
           return '<div class="plan-cliente" data-plan-cli="' + i + '">' +
             '<div class="cliente-ava">' + iniciales(c.nombre) + '</div>' +
+            // El correo debajo del nombre: dos personas pueden llamarse
+            // igual y el correo es lo que de verdad las distingue. Un
+            // entrenador no lo ve porque su vista de clientes no lo trae.
             '<div class="info"><b>' + escapar(c.nombre) + '</b>' +
+            (c.correo ? '<span class="cli-correo">' + escapar(c.correo) + '</span>' : '') +
             '<span>' + (c.tienePlan ? 'con plan' : 'sin plan todavía') + '</span></div>' +
             '<span style="color:var(--ink-faint)">›</span></div>';
         }).join('')
@@ -4216,12 +4258,19 @@
             });
           }));
     } else if(ROL === 'super_admin'){
+      // Por admin_buscar_usuarios y no por profiles: el correo no está en
+      // profiles -vive en auth.users, que la app no puede leer- y esa
+      // función sí lo devuelve. Es la misma que ya alimenta el panel.
       tareas.push(
-        sbFetch('/rest/v1/profiles?select=id,full_name,role&role=neq.super_admin&order=full_name.asc')
-          .then(function(ps){
-            PLAN_CLIENTES = (ps || []).map(function(p){
-              return { id:p.id, nombre:(p.full_name || '').trim() || '(sin nombre)' };
-            });
+        sbRpc('admin_buscar_usuarios', { p_texto: '', p_limite: 200 })
+          .then(function(us){
+            PLAN_CLIENTES = (us || [])
+              .filter(function(u){ return u.rol !== 'super_admin'; })
+              .map(function(u){
+                return { id:u.id, nombre:(u.nombre || '').trim() || '(sin nombre)',
+                         correo:u.correo || '' };
+              })
+              .sort(function(a,b){ return a.nombre.localeCompare(b.nombre, 'es'); });
           }));
     } else {
       PLAN_CLIENTES = [];
@@ -4446,10 +4495,22 @@
 
   function cargarPanelAdmin(){
     if(!sesion || !sesion.user) return Promise.resolve();
+    // Cada parte va por su cuenta. Con Promise.all, que una sola fallara
+    // -por ejemplo feature_flags- tumbaba también la lista de usuarios y el
+    // panel salía vacío con un "no se pudo cargar" que no decía cuál.
+    // Ahora se pinta lo que sí llegó y se avisa solo de lo que faltó.
+    var fallos = [];
+    function aparte(nombre, promesa, siFalla){
+      return promesa['catch'](function(e){
+        fallos.push(nombre + ' (' + traducirError(e.message) + ')');
+        return siFalla;
+      });
+    }
     return Promise.all([
-      sbRpc('admin_estadisticas'),
-      sbRpc('admin_buscar_usuarios', { p_texto: '', p_limite: 200 }),
-      sbFetch('/rest/v1/feature_flags?select=clave,activo,titulo,descripcion,grupo&order=grupo.asc,clave.asc')
+      aparte('las estadísticas', sbRpc('admin_estadisticas'), {}),
+      aparte('los usuarios', sbRpc('admin_buscar_usuarios', { p_texto: '', p_limite: 200 }), []),
+      aparte('los ajustes',
+        sbFetch('/rest/v1/feature_flags?select=clave,activo,titulo,descripcion,grupo&order=grupo.asc,clave.asc'), [])
     ]).then(function(r){
       var s = r[0] || {}, us = r[1] || [], fl = r[2] || [];
 
@@ -4479,6 +4540,7 @@
       });
 
       pintarAdmin();
+      if(fallos.length) toast('toastAdmin', 'No se pudo cargar ' + fallos.join(' ni '));
     })['catch'](function(e){
       toast('toastAdmin', 'No se pudo cargar: ' + traducirError(e.message));
     });

@@ -122,6 +122,13 @@
 .plan-cliente .info{flex:1;min-width:0;}
 .plan-cliente b{display:block;font:700 14px/1.2 sans-serif;color:var(--ink);}
 .plan-cliente span{display:block;font:600 11.5px/1.2 sans-serif;color:var(--ink-faint);margin-top:4px;}
+/* El correo, más apagado que el estado del plan: identifica, no informa.
+   Se corta con puntos suspensivos porque un correo largo empujaría la
+   flecha fuera de la tarjeta. */
+.plan-cliente .cli-correo{
+  color:var(--ink-soft);margin-top:3px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
 
 /* Los siete días. Se desplazan en horizontal en vez de apretarse: en un
    teléfono, siete botones legibles no caben en 375 px. */
