@@ -237,7 +237,6 @@
                    autocomplete="current-password" maxlength="72" placeholder="Tu contraseña">
             <p class="calc-note" id="logAviso">&nbsp;</p>
           </div>
-          <div style="height:100px;"></div>
         </div>
         <div class="bottom-bar">
           <button class="btn-primary" id="logEntrar">Entrar</button>
@@ -324,7 +323,6 @@
           </div>
 
           <p class="reg-aviso">Son estimaciones basadas en fórmulas estándar. Ajusta tus metas cuando quieras desde Perfil.</p>
-          <div style="height:100px;"></div>
         </div>
         <div class="bottom-bar">
           <button class="btn-primary" id="regEmpezar">Empezar con estos macros</button>
@@ -481,7 +479,6 @@
             <input class="field-value" id="nfG" type="number" placeholder="0" style="border:none;width:100%;font-family:inherit;color:var(--ink);text-align:left;">
             <div class="nf-cal"><b id="nfCal">0</b> Calorías</div>
           </div>
-          <div style="height:90px;"></div>
         </div>
         <div class="bottom-bar">
           <button class="btn-primary" id="nfSave">Guardar alimento</button>
@@ -638,19 +635,25 @@
             <div class="field-label" style="margin-top:0;">Nombre del plan</div>
             <input class="big-input" id="peNombre" maxlength="60" placeholder="Ej. Plan de mamá">
           </div>
+          <!-- Armar con el asistente va aquí y no en la barra de abajo: son
+               acciones sobre estos campos, se usan una vez y no tienen por qué
+               ocupar sitio fijo en pantalla el resto del rato. -->
+          <div class="plan-armar">
+            <button id="peGenerar">✨ Armar un día</button>
+            <button id="peGenerarSemana">✨ Armar la semana</button>
+          </div>
           <div id="peComidas"></div>
           <div class="card">
             <div class="field-label" style="margin-top:0;">Nota (opcional)</div>
             <textarea class="notas-input" id="peNota" rows="3" maxlength="300"
               placeholder="Ej. Tomar agua entre comidas. Si da hambre, una fruta."></textarea>
           </div>
-          <div style="height:100px;"></div>
+          <div class="plan-quitar">
+            <button id="peQuitar">Quitar el plan</button>
+          </div>
         </div>
         <div class="bottom-bar">
           <button class="btn-primary" id="peGuardar">Guardar plan</button>
-          <button class="btn-rename" id="peGenerar" style="width:100%;margin-top:8px;">✨ Armar un día</button>
-          <button class="btn-rename" id="peGenerarSemana" style="width:100%;margin-top:6px;">✨ Armar la semana completa</button>
-          <button class="btn-ghost-text" id="peQuitar">Quitar el plan</button>
         </div>
       </div>
 

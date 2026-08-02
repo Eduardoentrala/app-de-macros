@@ -91,6 +91,28 @@
   display:block;font:500 13px/1.5 sans-serif;color:var(--ink-faint);
   margin-top:7px;max-width:250px;margin-left:auto;margin-right:auto;
 }
+/* Los dos botones de armar con el asistente, uno al lado del otro. Estaban
+   apilados en la barra de abajo, que llegaba a 186 px de alto en un teléfono
+   de 740: se comía un cuarto de la pantalla Y tapaba 86 px de contenido que
+   ni deslizando aparecían, porque el hueco reservado eran 100 px. */
+.plan-armar{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 16px 12px;}
+.plan-armar button{
+  padding:11px 8px;border-radius:12px;border:1.5px solid var(--line);
+  background:var(--card-bg);color:var(--ink);cursor:pointer;
+  font:700 12.5px/1.2 sans-serif;
+}
+.plan-armar button:active{opacity:.6;}
+.plan-armar button:disabled{opacity:.5;cursor:default;}
+
+/* Quitar el plan: texto pequeño en rojo al final del todo, como las acciones
+   destructivas de iOS. Es lo único de esta pantalla que no se deshace. */
+.plan-quitar{display:flex;justify-content:center;margin:2px 16px 0;}
+.plan-quitar button{
+  background:none;border:none;cursor:pointer;padding:6px 10px;
+  font:600 12.5px/1 sans-serif;color:var(--red);
+}
+.plan-quitar button:active{opacity:.5;}
+
 /* Fila de cliente en la lista del entrenador */
 .plan-cliente{
   display:flex;align-items:center;gap:12px;background:var(--card-bg);
@@ -532,8 +554,16 @@
   margin:4px 16px 100px;padding:15px;border-radius:16px;border:1.5px dashed var(--ink-faint);
   background:none;color:var(--ink-soft);font:700 13.5px/1 sans-serif;cursor:pointer;width:calc(100% - 32px);
 }
+/* La barra OCUPA SU SITIO en la columna, no flota encima.
+   Flotando había que reservarle hueco con un <div> de alto fijo en cada
+   pantalla, y ese número había que mantenerlo a mano cada vez que cambiaba
+   un botón. Se descuadró en cuatro sitios: Mis recetas y Mi rutina tapaban
+   151 y 111 px de contenido SIN hueco ninguno, y no aparecían ni deslizando
+   porque el scroll ya estaba al final.
+   Como parte de la columna, el hueco lo calcula el navegador y no se puede
+   volver a descuadrar. */
 .bottom-bar{
-  position:absolute;left:0;right:0;bottom:0;background:var(--card-bg);border-top:1px solid var(--line);
+  flex:none;background:var(--card-bg);border-top:1px solid var(--line);
   padding:14px 16px;display:flex;flex-direction:column;gap:8px;
   /* Igual que .bottom-tabs: 22px en escritorio, y en el teléfono lo que
      haga falta para que el botón no quede bajo la barra de gestos. */
