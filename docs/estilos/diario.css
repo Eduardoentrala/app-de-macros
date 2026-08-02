@@ -123,6 +123,14 @@
   font:600 11.5px/1.35 sans-serif;background:var(--pill-bg);color:var(--ink-soft);
 }
 .ajuste-nota:empty{display:none;}
+/* Se va desvaneciéndose y encogiendo a la vez: si solo se ocultara, el
+   anillo daría un salto hacia arriba. */
+.ajuste-nota{transition:opacity .35s ease, margin-top .35s ease, max-height .35s ease;
+  max-height:80px;overflow:hidden;}
+.ajuste-nota.yendose{opacity:0;max-height:0;margin-top:0;padding-top:0;padding-bottom:0;}
+@media (prefers-reduced-motion: reduce){
+  .ajuste-nota{transition:none;}
+}
 .ajuste-nota.sobra{background:var(--green-soft);color:var(--green);}
 .ajuste-nota.debe{background:var(--red-soft);color:var(--red);}
 

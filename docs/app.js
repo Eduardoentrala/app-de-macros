@@ -1476,6 +1476,37 @@
   }
   function mil(n){ return Math.round(n).toLocaleString('es-MX'); }
 
+  // ---- El aviso de calorías que sobran o faltan ----
+  // Se enseña UNA vez por día y se retira solo. Es un dato del arranque —
+  // "hoy te tocan 600 menos"—, no algo que haya que tener delante todo el
+  // rato: leído una vez, el resto del día solo estorba encima del anillo.
+  //
+  // Lo visto se guarda por fecha y no como un simple "ya se vio": así el
+  // día siguiente vuelve a salir sin tener que borrar nada.
+  var CLAVE_AVISO = 'macros.avisoAjuste';
+  var SEGUNDOS_AVISO = 9;
+  var avisoAjustePendiente = (function(){
+    try{ return localStorage.getItem(CLAVE_AVISO) !== isoDe(HOY); }
+    catch(e){ return true; }       // sin almacenamiento, mejor enseñarlo
+  })();
+  var relojAviso = null;
+
+  function programarRetiradaDelAviso(){
+    if(relojAviso) return;         // ya contando: no reiniciar en cada repintado
+    try{ localStorage.setItem(CLAVE_AVISO, isoDe(HOY)); }catch(e){}
+    relojAviso = setTimeout(function(){
+      avisoAjustePendiente = false;
+      var n = document.getElementById('ajusteNota');
+      n.classList.add('yendose');
+      // Se quita del todo cuando acaba el desvanecido, no antes: si se
+      // vaciara ya, desaparecería de golpe y no se vería irse.
+      setTimeout(function(){
+        n.className = 'ajuste-nota';
+        n.textContent = '';
+      }, 400);
+    }, SEGUNDOS_AVISO * 1000);
+  }
+
   function actualizarMetas(){
     var P = num(goalP, 600), C = num(goalC, 900), G = num(goalG, 400);
     var calDia = P*4 + C*4 + G*9;
@@ -1565,7 +1596,11 @@
     // Nota que explica por qué la meta de hoy cambió
     var nota = document.getElementById('ajusteNota');
     var dif = Math.round(calHoyMeta - calDia);
-    if(Math.abs(dif) < 5){
+    if(!avisoAjustePendiente){
+      // Ya se enseñó hoy: la nota no vuelve hasta mañana.
+      nota.className = 'ajuste-nota';
+      nota.textContent = '';
+    } else if(Math.abs(dif) < 5){
       nota.className = 'ajuste-nota';
       nota.textContent = '';
     } else if(dif > 0){
@@ -1581,6 +1616,7 @@
         : 'Te pasaste en días anteriores: hoy te tocan ' + mil(-dif) +
           ' cal menos, repartidas entre los ' + diasRestantes + ' días que faltan.';
     }
+    if(nota.textContent) programarRetiradaDelAviso();
     document.getElementById('weekSummary').textContent =
       'P ' + P + ' · C ' + C + ' · G ' + G + ' · ' + mil(calDia) + ' cal/día · se reinicia cada ' + DIAS[inicioSemana];
   }

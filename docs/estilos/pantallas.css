@@ -4,13 +4,39 @@
 
 /* ---- Fotos de progreso ---- */
 .foto-rango{font:600 11.5px/1 sans-serif;color:var(--ink-faint);margin-top:5px;}
-.foto-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 16px 4px;}
+/* Mi Peso cabe en una pantalla, igual que el Diario y Fotos.
+   Va acotado a esta vista: .card, .segmented y .empty-note los usan otras
+   pantallas y apretarlos en todas cambiaría sitios que ya estaban bien.
+   El caso a batir es el de siempre —el aviso de "no registrado hoy" puesto,
+   que es como se ve antes de pesarse—, no la pantalla ya rellena. */
+[data-view="peso"] .segmented{margin:10px 16px;}
+[data-view="peso"] .empty-note{margin:0 16px 10px;padding:12px;}
+[data-view="peso"] .card{padding:14px;margin:0 16px 10px;}
+[data-view="peso"] #pesoChart{height:150px;}
+[data-view="peso"] .chart-title-row{margin-bottom:4px;}
+
+/* Solo en Fotos: la columna se vuelve flexible para que la rejilla pueda
+   quedarse con lo que sobra. Va acotado a esta vista a propósito — .scroll
+   lo usan todas las pantallas y volverlo flexible en todas cambiaría cómo
+   se apilan las demás. */
+[data-view="fotos"] .scroll{display:flex;flex-direction:column;}
+
+/* Las cuatro fotos caben en una pantalla sin arrastrar, como el Diario.
+   El hueco se reparte con `minmax(0,1fr)` en vez de dar alto fijo a cada
+   foto: así las cuatro encogen a la vez y siguen cuadradas entre ellas. */
+.foto-grid{
+  display:grid;grid-template-columns:1fr 1fr;grid-template-rows:minmax(0,1fr) minmax(0,1fr);
+  gap:8px;padding:8px 16px 4px;flex:1;min-height:0;
+}
 .foto-slot{
   background:var(--card-bg);border-radius:16px;overflow:hidden;box-shadow:var(--shadow);
   border:1.5px dashed var(--line);cursor:pointer;position:relative;
 }
 .foto-slot.llena{border-style:solid;border-color:transparent;}
-.foto-lienzo{aspect-ratio:.78;display:flex;align-items:center;justify-content:center;background:var(--app-bg);}
+/* Sin `aspect-ratio`: el alto lo manda ahora la rejilla, que se reparte lo
+   que sobra de la pantalla. Con la proporción fija las fotos crecían por su
+   cuenta y empujaban el botón fuera de la vista. */
+.foto-lienzo{height:100%;min-height:0;display:flex;align-items:center;justify-content:center;background:var(--app-bg);}
 .foto-lienzo img{width:100%;height:100%;object-fit:cover;display:block;}
 /* El hueco vacío ES el botón de subir: se toca y abre la galería. Antes
    era un "+" gris clarísimo sobre fondo gris claro y no se leía como algo
