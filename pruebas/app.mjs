@@ -139,6 +139,23 @@ const perdidas = [...navegadas].filter(v => !vistas.has(v));
 check(`las ${navegadas.size} vistas navegadas existen`, perdidas.length === 0, perdidas.join(', '));
 
 // ---------------------------------------------------------------------
+//  Un dia con algo apuntado sigue contando aunque sume cero calorias
+// ---------------------------------------------------------------------
+// Que exista REGISTRO[dia] es lo que sostiene la racha y lo que hace que el
+// dia cuente para repartir la semana. Se borraba mirando si los macros
+// sumaban cero, asi que apuntar solo agua o cafe solo rompia la racha en
+// silencio. Debe mirarse si queda algo apuntado, no cuanto suma.
+console.log('\n— El dia se borra por estar vacio, no por sumar cero —');
+const cuerpoSumar = (JS.map(f => f.codigo || '').join('\n')
+  .match(/function sumarAlRegistro[\s\S]*?\n  \}/) || [''])[0];
+check('sumarAlRegistro existe', cuerpoSumar.length > 0);
+check('no borra el dia por sumar cero',
+  !/if\s*\(\s*r\.P === 0 && r\.C === 0 && r\.G === 0\s*\)\s*delete/.test(cuerpoSumar));
+check('lo borra cuando no queda nada apuntado',
+  /COMIDAS\[m\]\.length/.test(cuerpoSumar) && /delete REGISTRO\[k\]/.test(cuerpoSumar),
+  cuerpoSumar.slice(-220));
+
+// ---------------------------------------------------------------------
 //  Tamano: para ver el reparto segun avanzan las fases
 // ---------------------------------------------------------------------
 console.log('\n— Reparto —');

@@ -125,8 +125,12 @@
 .ajuste-nota:empty{display:none;}
 /* Se va desvaneciéndose y encogiendo a la vez: si solo se ocultara, el
    anillo daría un salto hacia arriba. */
+/* El tope solo existe para poder animar el encogido: `max-height` no anima
+   desde `auto`. Va MUY holgado (el texto más largo mide 61 px en una
+   pantalla de 320) porque si un día el mensaje crece, un tope justo lo
+   cortaría sin avisar. Un tope de sobra no se nota; uno corto sí. */
 .ajuste-nota{transition:opacity .35s ease, margin-top .35s ease, max-height .35s ease;
-  max-height:80px;overflow:hidden;}
+  max-height:200px;overflow:hidden;}
 .ajuste-nota.yendose{opacity:0;max-height:0;margin-top:0;padding-top:0;padding-bottom:0;}
 @media (prefers-reduced-motion: reduce){
   .ajuste-nota{transition:none;}

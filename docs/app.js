@@ -2676,7 +2676,19 @@
     r.P = Math.max(0, r.P + signo * a.P);
     r.C = Math.max(0, r.C + signo * a.C);
     r.G = Math.max(0, r.G + signo * a.G);
-    if(r.P === 0 && r.C === 0 && r.G === 0) delete REGISTRO[k];
+
+    // Que el día tenga registro es lo que sostiene la racha y lo que hace
+    // que cuente para el reparto de la semana. Así que se borra cuando no
+    // queda NADA apuntado, no cuando los macros suman cero: agua, café solo
+    // o un refresco light son cero calorías y aun así son un día usado.
+    //
+    // Antes se miraba la suma, así que apuntar solo agua rompía la racha en
+    // silencio y el día no contaba para compensar.
+    var hayAlgoApuntado = Object.keys(COMIDAS).some(function(m){
+      return COMIDAS[m].length > 0;
+    });
+    if(!hayAlgoApuntado) delete REGISTRO[k];
+
     actualizarMetas();
     pintarRacha();
   }
