@@ -348,7 +348,7 @@
             <button data-push="frecuentes">Frecuentes</button>
             <button data-push="misalimentos">Guardados</button>
             <button data-push="misrecetas">Recetas</button>
-            <button data-push="crearalimento">Crear</button>
+            <button data-push="crearalimento" id="pillCrear">Crear</button>
           </div>
         </div>
         <div class="scroll">
@@ -424,6 +424,7 @@
           </div>
         </div>
         <div class="scroll"><div id="misAlimList" class="food-list"></div></div>
+        <div class="toast" id="toastGuardados">Guardado</div>
       </div>
 
       <!-- MIS RECETAS -->
@@ -449,7 +450,7 @@
         <div class="back-header stacked">
           <div class="back-header-inner">
             <button class="back-btn" data-back>‹ Regresar</button>
-            <span class="back-title">Agregar alimento</span>
+            <span class="back-title" id="nfTitulo">Agregar alimento</span>
           </div>
         </div>
         <div class="scroll">

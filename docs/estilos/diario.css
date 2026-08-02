@@ -158,6 +158,14 @@
   margin:14px 16px;padding:30px 16px;background:var(--card-bg);border-radius:16px;
   text-align:center;font:500 14px/1 sans-serif;color:var(--ink-faint);box-shadow:var(--shadow);
 }
+/* La barra de totales flota encima (position:absolute) por eso mismo no
+   empuja al resto: al haber varios alimentos, sus últimas filas quedaban
+   tapadas y el scroll no alcanzaba para verlas, no había forma de leerlas.
+   Mismo problema que ya se resolvió en "Agregar alimento" con un hueco fijo
+   debajo de la lista; aquí se hace con padding porque el que se desplaza es
+   este mismo contenedor. 150px de sobra sobre los ~137 que mide hoy la
+   barra, para que un total con más dígitos no vuelva a tapar algo. */
+[data-view="mealadd"] .scroll{ padding-bottom:150px; }
 .totals-bar{
   position:absolute;left:0;right:0;bottom:0;background:var(--card-bg);border-top:1px solid var(--line);
   padding:14px 16px 22px;

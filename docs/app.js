@@ -1935,17 +1935,66 @@
 
   function conectarLista(id, datos){
     document.getElementById(id).addEventListener('click', function(e){
-      if(e.target.closest('.btn-mini')) return;      // Editar/Borrar no agregan
       var card = e.target.closest('.food-card');
       if(!card) return;
       var a = datos.filter(function(x){ return x.n === card.dataset.alim; })[0];
+      if(!a) return;
+
+      // Editar y Borrar tienen que ir ANTES de agregar: los dos viven
+      // dentro de la tarjeta, y sin esto tocar cualquiera de ellos abriría
+      // además la hoja de cantidad.
+      if(e.target.closest('.btn-mini.edit')){ editarGuardado(a); return; }
+      if(e.target.closest('.btn-mini.del')){ borrarGuardado(a); return; }
+      if(e.target.closest('.fc-arrows')) return;     // las flechas no agregan
+
       // Copia: la hoja va a fijarle cantidad y porción base, y no debe
       // tocar la ficha que vive en la lista.
-      if(a) elegirAlimento(Object.assign({}, a));
+      elegirAlimento(Object.assign({}, a));
     });
   }
   conectarLista('frecList', FRECUENTES);
   conectarLista('misAlimList', MIS_ALIMENTOS);
+
+  // ---- Editar y borrar un alimento de Guardados ----
+  // Los botones estaban pintados desde el principio pero no hacían nada:
+  // el manejador de la lista los descartaba y no había ningún otro
+  // escuchándolos. Se reaprovecha la pantalla de "Crear" en lugar de
+  // duplicar el formulario; solo cambia a qué alimento apunta al guardar.
+  var alimentoGuardadoEditando = null;
+
+  function editarGuardado(a){
+    alimentoGuardadoEditando = a;
+    document.getElementById('nfTitulo').textContent = 'Editar alimento';
+    document.getElementById('nfSave').textContent = 'Guardar cambios';
+    document.getElementById('nfName').value = a.n;
+    nfP.value = a.P || ''; nfC.value = a.C || ''; nfG.value = a.G || '';
+    ponerUnidad(a.u || 'Gramos');
+    calcNuevo();
+    goto('crearalimento', true);
+  }
+
+  function borrarGuardado(a){
+    if(!confirm('¿Borrar "' + a.n + '" de Guardados?')) return;
+    var i = MIS_ALIMENTOS.indexOf(a);
+    if(i < 0) return;
+    MIS_ALIMENTOS.splice(i, 1);
+    var j = FRECUENTES.indexOf(a);
+    if(j >= 0) FRECUENTES.splice(j, 1);
+    pintarListas();
+    toast('toastGuardados', a.n + ' borrado');
+
+    // Si el borrado falla se devuelve a la lista: enseñar como borrado algo
+    // que sigue en la base es peor que no borrarlo.
+    if(a.id && sesion){
+      sbFetch('/rest/v1/saved_foods?id=eq.' + a.id, { method:'DELETE' })
+        ['catch'](function(e){
+          MIS_ALIMENTOS.splice(i, 0, a);
+          if(j >= 0) FRECUENTES.splice(j, 0, a);
+          pintarListas();
+          toast('toastGuardados', 'No se pudo borrar: ' + traducirError(e.message));
+        });
+    }
+  }
 
   // ---- Sugerencias mientras escribes ----
   // Salen de lo que otras personas ya guardaron. Qué se sugiere y qué no lo
@@ -2004,27 +2053,26 @@
       // Si mientras llegaba la respuesta ya se escribió otra cosa, esta sobra
       if(mealSearch.value.trim() !== texto) return;
 
+      // El catálogo va SIEMPRE en gramos, tal y como viene de USDA: por
+      // 100 g y sin convertir.
+      //
+      // Antes, si el alimento traía peso de porción se ofrecía en "piezas"
+      // y los macros se multiplicaban por ese peso. La idea era acercarse a
+      // como mide la gente, pero la porción de USDA no es una pieza: son
+      // cosas como "cup, chopped", "oz" o "cup spaghetti". De 164 alimentos
+      // ninguno dice cuántos gramos pesa una unidad de comer. Así que
+      // "1 Pieza" de espagueti acababa significando una taza, y nadie
+      // podía saberlo mirando la pantalla.
+      //
+      // En gramos el dato es el que es y se pesa. Si algún día hace falta
+      // ofrecer piezas, tiene que salir de un peso por pieza de verdad, no
+      // de reinterpretar el texto de la porción.
       var cat = (r[0] || []).map(function(x){
-        // El catálogo viene por 100 g. Si trae peso de porción se ofrece
-        // en piezas o tazas, que es como la gente mide de verdad.
-        var enPiezas = x.porcion_g && x.porcion && !/^\d+\s*g/.test(x.porcion);
         return {
           fuente: 'catalogo', n: x.nombre, estado: x.estado,
-          u: enPiezas ? 'Pieza' : 'Gramos',
-          cant: enPiezas ? 1 : 100,
-          P: Number(x.proteina) || 0, C: Number(x.carbos) || 0, G: Number(x.grasas) || 0,
-          porcion_g: x.porcion_g
+          u: 'Gramos', cant: 100,
+          P: Number(x.proteina) || 0, C: Number(x.carbos) || 0, G: Number(x.grasas) || 0
         };
-      });
-      // Los del catálogo van por 100 g; si se ofrecen en piezas hay que
-      // llevar los macros al peso de esa pieza.
-      cat.forEach(function(a){
-        if(a.u === 'Pieza' && a.porcion_g){
-          var k = a.porcion_g / 100;
-          a.P = Math.round(a.P * k * 10) / 10;
-          a.C = Math.round(a.C * k * 10) / 10;
-          a.G = Math.round(a.G * k * 10) / 10;
-        }
       });
 
       var gente = (r[1] || []).map(function(x){
@@ -2074,14 +2122,21 @@
   var UNIDAD_ABREV = {Gramos:'(g)', Pieza:'(pza)', Servicio:'(serv)', Taza:'(taza)', Cucharada:'(cda)', Onzas:'(oz)'};
   var UNIDAD_BASE  = {Gramos:'100g', Pieza:'pieza', Servicio:'servicio', Taza:'taza', Cucharada:'cucharada', Onzas:'onza'};
 
+  // Sacado del manejador para poder dejar la unidad puesta desde fuera, al
+  // abrir la pantalla para editar un alimento que ya la tiene.
+  function ponerUnidad(u){
+    if(!UNIDAD_ABREV[u]) u = 'Gramos';
+    unidadActual = u;
+    Array.from(unitPills.querySelectorAll('button')).forEach(function(x){
+      x.classList.toggle('active', x.textContent === u);
+    });
+    document.getElementById('unitLabel').textContent = UNIDAD_ABREV[u];
+    document.getElementById('baseLabel').textContent = UNIDAD_BASE[u];
+  }
+
   unitPills.addEventListener('click', function(e){
     var b = e.target.closest('button');
-    if(!b) return;
-    Array.from(unitPills.querySelectorAll('button')).forEach(function(x){ x.classList.remove('active'); });
-    b.classList.add('active');
-    unidadActual = b.textContent;
-    document.getElementById('unitLabel').textContent = UNIDAD_ABREV[unidadActual];
-    document.getElementById('baseLabel').textContent = UNIDAD_BASE[unidadActual];
+    if(b) ponerUnidad(b.textContent);
   });
 
   var nfP = document.getElementById('nfP'), nfC = document.getElementById('nfC'), nfG = document.getElementById('nfG');
@@ -2091,9 +2146,49 @@
   }
   [nfP, nfC, nfG].forEach(function(el){ el.addEventListener('input', calcNuevo); });
 
+  // Se vuelve a "crear" siempre que se entra por el botón Crear: si no, la
+  // pantalla se quedaría en modo editar desde la vez anterior.
+  function limpiarFormularioAlimento(){
+    alimentoGuardadoEditando = null;
+    document.getElementById('nfTitulo').textContent = 'Agregar alimento';
+    document.getElementById('nfSave').textContent = 'Guardar alimento';
+    document.getElementById('nfName').value = '';
+    nfP.value = ''; nfC.value = ''; nfG.value = '';
+    ponerUnidad('Gramos');
+    calcNuevo();
+  }
+  document.getElementById('pillCrear').addEventListener('click', limpiarFormularioAlimento);
+
   document.getElementById('nfSave').addEventListener('click', function(){
     var nombre = document.getElementById('nfName').value.trim();
     if(!nombre){ document.getElementById('nfName').focus(); return; }
+
+    // Editando: se cambia la ficha que ya existe en vez de crear otra.
+    if(alimentoGuardadoEditando){
+      var ed = alimentoGuardadoEditando;
+      var antes = { n:ed.n, P:ed.P, C:ed.C, G:ed.G, u:ed.u };
+      ed.n = nombre;
+      ed.P = Number(nfP.value)||0; ed.C = Number(nfC.value)||0; ed.G = Number(nfG.value)||0;
+      ed.u = unidadActual;
+      pintarListas();
+      limpiarFormularioAlimento();
+      back();
+      toast('toastGuardados', nombre + ' actualizado');
+
+      if(ed.id && sesion){
+        sbFetch('/rest/v1/saved_foods?id=eq.' + ed.id, {
+          method:'PATCH', headers:{ 'Prefer':'return=minimal' },
+          body: JSON.stringify({ name:ed.n, unit:ed.u,
+                                 protein_g:ed.P, carbs_g:ed.C, fat_g:ed.G })
+        })['catch'](function(e){
+          ed.n = antes.n; ed.P = antes.P; ed.C = antes.C; ed.G = antes.G; ed.u = antes.u;
+          pintarListas();
+          toast('toastGuardados', 'No se pudo guardar: ' + traducirError(e.message));
+        });
+      }
+      return;
+    }
+
     var a = {n:nombre, P:Number(nfP.value)||0, C:Number(nfC.value)||0, G:Number(nfG.value)||0, u:unidadActual};
     MIS_ALIMENTOS.unshift(a);
     pintarListas();
