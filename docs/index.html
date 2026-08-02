@@ -303,6 +303,32 @@
           </div>
 
           <div class="card">
+            <div class="field-label" style="margin-top:0;">¿Alguna condición de salud?</div>
+            <p class="calc-note" style="margin:0 0 10px;">Opcional. Sirve para no proponerte
+              un plan que te venga mal. Marca las que apliquen.</p>
+            <div class="cond-opts" id="regCondiciones">
+              <button data-cond="diabetes_1">Diabetes tipo 1</button>
+              <button data-cond="diabetes_2">Diabetes tipo 2</button>
+              <button data-cond="prediabetes">Prediabetes</button>
+              <button data-cond="hipertension">Hipertensión</button>
+              <button data-cond="colesterol_alto">Colesterol alto</button>
+              <button data-cond="hipotiroidismo">Hipotiroidismo</button>
+              <button data-cond="higado_graso">Hígado graso</button>
+              <button data-cond="enfermedad_renal">Enfermedad renal</button>
+              <button data-cond="celiaquia">Celiaquía</button>
+              <button data-cond="embarazo">Embarazo</button>
+              <button data-cond="lactancia">Lactancia</button>
+            </div>
+            <textarea class="notas-input" id="regNotaSalud" rows="2" maxlength="300"
+              placeholder="Otra cosa que debamos saber (opcional)"></textarea>
+            <p class="cond-aviso" id="regAvisoSalud" hidden>
+              ⚕ Esto <b>no sustituye a tu médico</b>. La app calcula con la fórmula
+              de siempre y nunca baja del mínimo seguro, pero con una condición así
+              las calorías conviene confirmarlas con quien te lleva.
+            </p>
+          </div>
+
+          <div class="card">
             <div class="field-label" style="margin-top:0;">¿Cuántos días entrenas por semana?</div>
             <div class="dias-ej" id="regDias">
               <button>0</button><button>1</button><button>2</button><button class="active">3</button>

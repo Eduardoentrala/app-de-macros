@@ -1,0 +1,90 @@
+// Las condiciones de salud: que se guarden, que no se pueda meter basura,
+// y -lo importante- que sigan siendo dato privado de cada quien.
+import { PGlite } from '@electric-sql/pglite';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const AQUI = dirname(fileURLToPath(import.meta.url));
+const MIG = join(AQUI, '..', 'migrations');
+
+const db = await PGlite.create();
+await db.exec(readFileSync(join(AQUI, 'bootstrap.sql'), 'utf8'));
+for (const f of readdirSync(MIG).filter(f => f.endsWith('.sql')).sort())
+  await db.exec(readFileSync(join(MIG, f), 'utf8'));
+
+let ok = 0, mal = 0;
+const check = (n, cond, extra = '') => {
+  if (cond) { ok++; console.log(`  PASA  ${n}`); }
+  else { mal++; console.log(`  FALLA ${n}${extra ? ' — ' + extra : ''}`); }
+};
+const as = async (uid, sql) => {
+  await db.exec(`select set_config('request.jwt.claim.sub','${uid}',false)`);
+  await db.exec('set role authenticated');
+  try { return await db.query(sql); } finally { await db.exec('reset role'); }
+};
+const falla = async (uid, sql) => {
+  await db.exec(`select set_config('request.jwt.claim.sub','${uid}',false)`);
+  await db.exec('set role authenticated');
+  try { await db.query(sql); return null; }
+  catch (e) { return e.message.split('\n')[0]; }
+  finally { await db.exec('reset role'); }
+};
+
+const YO   = '11111111-1111-1111-1111-111111111111';
+const OTRO = '22222222-2222-2222-2222-222222222222';
+await db.exec(`insert into auth.users(id,email) values
+  ('${YO}','yo@x.com'),('${OTRO}','otro@x.com')`);
+
+console.log('— Se guardan y se leen —');
+await as(YO, `update public.profiles
+                 set condiciones = '{diabetes_2,hipertension}'::public.condicion_salud[],
+                     nota_salud  = 'Metformina por las mañanas'
+               where id = '${YO}'`);
+const mio = (await as(YO, `select condiciones::text[] c, nota_salud n
+                             from public.profiles where id='${YO}'`)).rows[0];
+check('quedan las dos condiciones',
+  mio.c.length === 2 && mio.c.includes('diabetes_2') && mio.c.includes('hipertension'),
+  JSON.stringify(mio.c));
+check('y la nota', mio.n === 'Metformina por las mañanas');
+
+console.log('\n— Por defecto no hay ninguna —');
+const otro = (await as(OTRO, `select condiciones::text[] c, nota_salud n
+                                from public.profiles where id='${OTRO}'`)).rows[0];
+check('lista vacía, no nula', Array.isArray(otro.c) && otro.c.length === 0, JSON.stringify(otro.c));
+check('sin nota', otro.n === null);
+
+console.log('\n— Lo que la base NO deja pasar —');
+check('una condición inventada',
+  (await falla(YO, `update public.profiles set condiciones='{gripe}'::public.condicion_salud[]
+                     where id='${YO}'`)) !== null);
+check('la misma condición repetida',
+  (await falla(YO, `update public.profiles
+                       set condiciones='{diabetes_2,diabetes_2}'::public.condicion_salud[]
+                     where id='${YO}'`)) !== null);
+// Los dos tipos de diabetes a la vez no existen. Se comprueba en la base y
+// no solo en la pantalla: la app habla por PostgREST y no es la única puerta.
+check('diabetes tipo 1 y tipo 2 a la vez',
+  (await falla(YO, `update public.profiles
+                       set condiciones='{diabetes_1,diabetes_2}'::public.condicion_salud[]
+                     where id='${YO}'`)) !== null);
+check('una nota larguísima',
+  (await falla(YO, `update public.profiles set nota_salud=repeat('x',301) where id='${YO}'`)) !== null);
+
+console.log('\n— Sigue siendo dato privado —');
+const espia = await as(OTRO, `select condiciones::text[] c, nota_salud n
+                                from public.profiles where id='${YO}'`);
+check('otra persona NO ve mis condiciones', espia.rows.length === 0,
+  JSON.stringify(espia.rows));
+await as(OTRO, `update public.profiles set condiciones='{embarazo}'::public.condicion_salud[]
+                 where id='${YO}'`);
+const trasIntento = (await db.query(`select condiciones::text[] c from public.profiles
+                                      where id='${YO}'`)).rows[0];
+// Un UPDATE que no encaja con ninguna fila NO da error: sale bien sin tocar
+// nada. Por eso se comprueba el valor que queda, no que salte una excepción.
+check('ni me las puede cambiar',
+  !trasIntento.c.includes('embarazo'), JSON.stringify(trasIntento.c));
+
+console.log(`\n${ok} pasan · ${mal} fallan`);
+await db.close();
+process.exit(mal ? 1 : 0);

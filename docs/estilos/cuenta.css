@@ -1,6 +1,29 @@
 /* Todo lo que va de cuentas: darse de alta, los roles, el panel de
    super admin y el catalogo de alimentos que solo el ve. */
 
+/* ---- Condiciones de salud ----
+   Píldoras que se marcan y desmarcan. Se pueden elegir varias, así que no
+   se parecen a los botones de objetivo (donde solo vale uno): estas tienen
+   marca de "puesta" en vez de rellenarse enteras. */
+.cond-opts{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px;}
+.cond-opts button{
+  padding:9px 13px;border-radius:11px;cursor:pointer;
+  border:1.5px solid var(--line);background:var(--app-bg);color:var(--ink-soft);
+  font:700 12.5px/1 sans-serif;
+  transition:background .15s ease, color .15s ease, border-color .15s ease;
+}
+.cond-opts button.on{
+  background:var(--ink);color:var(--card-bg);border-color:var(--ink);
+}
+/* El aviso sale solo cuando hay algo marcado. En ámbar y no en rojo: no es
+   un error, es algo que conviene confirmar con quien te lleva. */
+.cond-aviso{
+  margin:0;padding:11px 13px;border-radius:12px;
+  background:var(--amber-soft);color:var(--amber);
+  font:600 12px/1.45 sans-serif;
+}
+.cond-aviso b{font-weight:800;}
+
 /* ---- Registro / alta de cuenta ---- */
 .reg-head{padding:22px 20px 4px;}
 .reg-head h2{margin:0;font-size:26px;font-weight:800;letter-spacing:-.015em;}

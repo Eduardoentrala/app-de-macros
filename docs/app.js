@@ -2840,6 +2840,41 @@
   }
   grupoOpciones('regSexo', 'sexo');
   grupoOpciones('regObjetivo', 'objetivo');
+
+  // ---- Condiciones de salud ----
+  // Se pueden marcar varias, así que no vale grupoOpciones (que deja una).
+  // Diabetes 1 y 2 se excluyen entre sí: marcar una desmarca la otra. Eso
+  // también lo rechaza la base (0020), porque la pantalla no es la única
+  // puerta —la app habla por PostgREST y se puede llamar directo—.
+  var CONDICIONES_EXCLUYENTES = [['diabetes_1', 'diabetes_2']];
+  var cajaCond = document.getElementById('regCondiciones');
+
+  function condicionesElegidas(){
+    return Array.from(cajaCond.querySelectorAll('button.on'))
+                .map(function(b){ return b.dataset.cond; });
+  }
+
+  function pintarAvisoSalud(){
+    document.getElementById('regAvisoSalud').hidden = condicionesElegidas().length === 0;
+  }
+
+  cajaCond.addEventListener('click', function(e){
+    var b = e.target.closest('[data-cond]');
+    if(!b) return;
+    var seEnciende = !b.classList.contains('on');
+    b.classList.toggle('on', seEnciende);
+    if(seEnciende){
+      CONDICIONES_EXCLUYENTES.forEach(function(par){
+        if(par.indexOf(b.dataset.cond) < 0) return;
+        par.forEach(function(otra){
+          if(otra === b.dataset.cond) return;
+          var el = cajaCond.querySelector('[data-cond="' + otra + '"]');
+          if(el) el.classList.remove('on');
+        });
+      });
+    }
+    pintarAvisoSalud();
+  });
   grupoOpciones('regDias', 'dias');
   ['regEdad','regAltura','regPeso'].forEach(function(id){
     document.getElementById(id).addEventListener('input', calcularMacros);
@@ -2979,7 +3014,9 @@
         height_cm:Number(document.getElementById('regAltura').value) || null,
         weight_kg:Number(document.getElementById('regPeso').value)   || null,
         goal: reg.objetivo,                       // 'bajar' | 'mantener' | 'subir'
-        goal_protein_g: m.P, goal_carbs_g: m.C, goal_fat_g: m.G
+        goal_protein_g: m.P, goal_carbs_g: m.C, goal_fat_g: m.G,
+        condiciones: condicionesElegidas(),
+        nota_salud: document.getElementById('regNotaSalud').value.trim() || null
       })
     });
   }
