@@ -118,6 +118,27 @@
 .dots span{width:5px;height:5px;border-radius:50%;background:var(--ink-faint);}
 .dots span.on{background:var(--ink);}
 .week-summary{text-align:center;font:600 13px/1 sans-serif;color:var(--ink-faint);margin:0 0 14px;font-variant-numeric:tabular-nums;}
+
+/* La franja que separa de dónde viene cada resultado de la búsqueda.
+   Es una banda con fondo, no un título suelto: con el título del mismo
+   color que el resto, las tarjetas de la base de datos y las de otra gente
+   se leían como una lista sola.
+   Se queda pegada arriba al deslizar, así siempre se sabe qué se está
+   mirando aunque la lista sea larga. */
+.sug-franja{
+  position:sticky;top:0;z-index:2;
+  display:flex;align-items:baseline;gap:7px;
+  padding:7px 20px;background:var(--app-bg);
+  border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+  font:800 11px/1.2 sans-serif;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--ink-soft);
+}
+.sug-franja small{
+  font:600 10.5px/1.2 sans-serif;letter-spacing:0;text-transform:none;
+  color:var(--ink-faint);
+}
+/* La primera no necesita raya arriba: ya la separa la barra de búsqueda. */
+.sug-franja:first-child{border-top:none;}
 .ajuste-nota{
   margin-top:10px;padding:7px 12px;border-radius:11px;text-align:center;
   font:600 11.5px/1.35 sans-serif;background:var(--pill-bg);color:var(--ink-soft);

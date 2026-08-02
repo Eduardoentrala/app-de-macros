@@ -2101,8 +2101,9 @@
   function pintarSugerencias(lista, texto){
     if(!texto || texto.length < 2){ mealSugeridos.innerHTML = ''; return; }
 
+    var deMios     = lista.filter(function(a){ return a.fuente === 'mio'; });
     var deCatalogo = lista.filter(function(a){ return a.fuente === 'catalogo'; });
-    var deGente    = lista.filter(function(a){ return a.fuente !== 'catalogo'; });
+    var deGente    = lista.filter(function(a){ return a.fuente === 'gente'; });
 
     if(!lista.length){
       mealSugeridos.innerHTML = '<p class="calc-note" style="padding:14px 20px 0;">' +
@@ -2112,9 +2113,13 @@
       return;
     }
 
+    // Cada procedencia con su franja. Antes los dos bloques se distinguían
+    // solo por un título del mismo color que el resto y las tarjetas se
+    // leían como una lista sola: no había forma de saber qué venía de la
+    // base de datos y qué de otra gente.
     var bloque = function(titulo, sub, arr){
       if(!arr.length) return '';
-      return '<div class="section-label">' + titulo + ' <small>' + sub + '</small></div>' +
+      return '<div class="sug-franja">' + titulo + '<small>' + sub + '</small></div>' +
         '<div class="food-list">' + arr.map(function(a){
           return '<div class="food-card" data-sug="' + lista.indexOf(a) + '">' +
             '<div class="fc-main"><div class="fc-name">' + escapar(a.n) +
@@ -2127,8 +2132,9 @@
     };
 
     mealSugeridos.innerHTML =
-      bloque('Catálogo', 'datos de USDA', deCatalogo) +
-      bloque('Sugerencias', 'de otras personas', deGente);
+      bloque('Tus guardados', 'lo que ya usas', deMios) +
+      bloque('Base de datos', 'medido, en gramos', deCatalogo) +
+      bloque('De otras personas', 'lo que registran otros', deGente);
   }
 
   function buscarSugerencias(){
@@ -2175,7 +2181,25 @@
           return normalizarBusqueda(c.n) === normalizarBusqueda(x.n); });
       });
 
-      SUGERIDOS = cat.concat(gente);
+      // Lo que la persona ya guardó va PRIMERO y no hace falta pedirlo: ya
+      // está en memoria. Antes no aparecía en la búsqueda —solo en la
+      // pestaña Guardados—, así que escribir "avena" no encontraba tu
+      // propia avena y acababas eligiendo la de otro.
+      var suyo = normalizarBusqueda(texto);
+      var mios = MIS_ALIMENTOS.filter(function(a){
+        return normalizarBusqueda(a.n).indexOf(suyo) >= 0;
+      }).map(function(a){
+        return { fuente:'mio', n:a.n, u:a.u || 'Gramos', cant:null,
+                 P:Number(a.P)||0, C:Number(a.C)||0, G:Number(a.G)||0 };
+      });
+
+      // Lo suyo manda: si ya lo tiene guardado, no se repite abajo.
+      var noRepetido = function(x){
+        return !mios.some(function(m){
+          return normalizarBusqueda(m.n) === normalizarBusqueda(x.n); });
+      };
+
+      SUGERIDOS = mios.concat(cat.filter(noRepetido), gente.filter(noRepetido));
       pintarSugerencias(SUGERIDOS, texto);
     });
   }
