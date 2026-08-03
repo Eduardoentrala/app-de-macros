@@ -132,5 +132,57 @@ console.log('\n— Sin margen no inventa —');
     a.P === justo.P && a.C === justo.C && a.G === justo.G, JSON.stringify(a));
 }
 
+console.log('\n— Y todo eso esta enchufado a la app —');
+{
+  // La aritmetica perfecta no sirve de nada si nadie la llama. Ese error ya
+  // se cometio una vez: una funcion correcta que ninguna pantalla invocaba.
+  const llamadas = (APP.match(/apartarParaEvento\(/g) || []).length;
+  check('apartarParaEvento se usa fuera de su definicion', llamadas >= 2,
+    `aparece ${llamadas} vez/veces: solo la definicion`);
+
+  check('el reparto entra en el balance diario',
+    /metaHoy\s*=\s*\{\s*P:\s*conEvento\.P/.test(APP),
+    'la meta de hoy no recoge lo apartado');
+
+  // El dia del evento NO se recorta: es el que se esta protegiendo. Sin
+  // esto, la persona llega a la boda con la meta ya rebajada.
+  check('el dia del evento no se recorta a si mismo',
+    /hoyEsEvento\s*\?\s*0\s*:\s*reservaDeLaSemana\(\)/.test(APP));
+
+  check('el evento se guarda en la base', APP.includes("'/rest/v1/eventos"));
+  check('y con upsert, para no sumar dos veces el mismo dia',
+    APP.includes('on_conflict=user_id,fecha'));
+
+  // Nada se guarda mientras el asistente siga preguntando.
+  const g = APP.slice(APP.indexOf('function guardarEventoSiEstaCompleto('),
+                      APP.indexOf('function reservaDeLaSemana('));
+  check('no guarda si todavia falta algo por preguntar',
+    /ev\.falta\)\s*&&\s*ev\.falta\.length\)\s*return/.test(g));
+  check('ni un evento del pasado', /ev\.fecha < isoDe\(HOY\)\)\s*return/.test(g));
+  check('la reserva viene acotada a lo que admite la base',
+    /Math\.min\(4000/.test(g), 'la columna tiene check entre 0 y 4000');
+  check('se llama al recibir la respuesta del chat',
+    (APP.match(/guardarEventoSiEstaCompleto\(/g) || []).length >= 2);
+}
+
+console.log('\n— Y la Edge Function lo manda —');
+{
+  const FN = readFileSync(join(RAIZ, 'supabase', 'functions', 'asistente', 'index.ts'), 'utf8');
+  check('el esquema del chat lleva evento', /evento: \{ anyOf:/.test(FN));
+  check('con la lista de lo que falta por preguntar', FN.includes("enum: ['calorias', 'bebidas', 'prioridad']"));
+  // Prometer algo que la app va a negar despues es peor que no ofrecerlo.
+  check('las reglas de eventos solo se mandan a Plus',
+    /esPlus \? SISTEMA_EVENTOS : ''/.test(FN));
+  check('y el evento se borra en la salida si no es Plus',
+    /if \(!esPlus\) salida\.evento = null/.test(FN));
+  check('el ajuste semanal exige Plus', /if \(!esPlus\) \{[\s\S]{0,200}IA Plus/.test(FN));
+  // Que no ajusta cuando no hay datos lo decide el codigo, no el modelo.
+  check('sin material no se ajusta, y lo decide el codigo',
+    /if \(!hayMaterial\) \{ salida\.ajusto = false/.test(FN));
+  check('el corte es 4 dias apuntados y 2 pesos',
+    /diasApuntados >= 4 && pesos\.length >= 2/.test(FN));
+  check('se le dice al modelo que dia es hoy', FN.includes('HOY es'));
+}
+
 console.log(`\n${ok} pasan · ${mal} fallan`);
 process.exit(mal ? 1 : 0);

@@ -1568,6 +1568,21 @@
       C: (C*diasCuenta - antes.C) / diasRestantes,
       G: (G*diasCuenta - antes.G) / diasRestantes
     } : {P:P, C:C, G:G};
+
+    // Lo apartado para un evento sale de los días de ANTES. En el día del
+    // evento no se recorta: ese día es el que se está protegiendo.
+    //
+    // El suelo se calcula sobre la meta base y no sobre la de hoy: si
+    // alguien ya viene compensando, el margen que queda es menor, y
+    // apartar sobre un suelo inflado dejaría días por debajo de lo sano.
+    var hoyEsEvento = !!EVENTOS[isoDe(HOY)];
+    var reserva = hoyEsEvento ? 0 : reservaDeLaSemana();
+    if(reserva > 0){
+      var pisoDia = Math.max(1200, calDe({P:P, C:C, G:G}) * 0.65);
+      var conEvento = apartarParaEvento(metaHoy, diasRestantes, reserva, pisoDia);
+      metaHoy = { P: conEvento.P, C: conEvento.C, G: conEvento.G };
+    }
+
     var calHoyMeta = calDe(metaHoy);
 
     // El Diario usa estas metas y lo que realmente se ha registrado
@@ -5620,7 +5635,13 @@
                        .map(function(m){ return { rol:m.rol, texto:m.texto }; }),
       imagen: fotoEnvio ? fotoEnvio.base64 : undefined,
       tipo_imagen: fotoEnvio ? fotoEnvio.tipo : undefined,
-      macros: macrosDeHoy()
+      macros: macrosDeHoy(),
+      // El servidor corre en UTC. A las 8 de la noche en México allí ya es
+      // mañana, y "el viernes" saldría corrido un día.
+      zona: (function(){
+        try{ return Intl.DateTimeFormat().resolvedOptions().timeZone; }
+        catch(e){ return 'America/Mexico_City'; }
+      })()
     }).then(function(r){
       IA_MSGS.pop();                       // quitar el "pensando"
       IA_MSGS.push({
@@ -5641,6 +5662,10 @@
         document.getElementById('iaQuedan').textContent =
           r.quedan + (r.quedan === 1 ? ' consulta hoy' : ' consultas hoy');
       }
+      // Solo se guarda cuando ya no falta nada por preguntar. Mientras el
+      // asistente siga conversando, `falta` trae algo y aquí no pasa nada:
+      // en pantalla solo se ve su pregunta, que es lo que se quería.
+      guardarEventoSiEstaCompleto(r.evento);
       pintarChat();
     })['catch'](function(e){
       IA_MSGS.pop();
@@ -5650,6 +5675,67 @@
       iaOcupado = false;
       document.getElementById('iaEnviar').disabled = false;
     });
+  }
+
+  // ---- Eventos que el asistente detectó en la conversación ----
+  // EVENTOS vive en memoria y en la base. En memoria porque el Diario lo
+  // consulta en cada repintado y no puede esperar a la red; en la base
+  // porque si no, cerrar la app deshace la semana que ya se repartió.
+  var EVENTOS = {};        // { 'AAAA-MM-DD': {titulo, calorias, bebidas, prioridad} }
+
+  function guardarEventoSiEstaCompleto(ev){
+    if(!ev || !ev.fecha) return;
+    // Mientras falte algo, el asistente sigue preguntando y aquí no se
+    // toca nada: guardar a medias dejaría la semana repartida con una
+    // reserva que la persona todavía no ha confirmado.
+    if(Array.isArray(ev.falta) && ev.falta.length) return;
+
+    var cal = Math.max(0, Math.min(4000, Math.round(Number(ev.calorias) || 0)));
+    if(!cal) return;
+
+    // Un evento de la semana pasada no reparte nada: lo que ya pasó, pasó.
+    if(ev.fecha < isoDe(HOY)) return;
+
+    EVENTOS[ev.fecha] = {
+      titulo: String(ev.titulo || 'Evento').slice(0, 120),
+      calorias: cal,
+      bebidas: Math.max(0, Math.min(30, Math.round(Number(ev.bebidas) || 0))),
+      prioridad: ev.prioridad === 'comida' || ev.prioridad === 'bebida'
+                 ? ev.prioridad : 'ambas'
+    };
+    actualizarSemana();          // la meta de hoy ya baja, sin recargar nada
+
+    if(!sesion || !sesion.user) return;
+    // upsert por (user_id, fecha): si cambian de idea sobre el mismo día,
+    // se corrige la reserva en vez de sumar dos.
+    sbFetch('/rest/v1/eventos?on_conflict=user_id,fecha', {
+      method: 'POST',
+      headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({
+        user_id: sesion.user.id,
+        fecha: ev.fecha,
+        titulo: EVENTOS[ev.fecha].titulo,
+        calorias: cal,
+        bebidas: EVENTOS[ev.fecha].bebidas,
+        prioridad: EVENTOS[ev.fecha].prioridad
+      })
+    })['catch'](function(){
+      // Sin toast: el asistente ya dijo que lo acomodó, y contradecirle con
+      // un error rojo justo debajo es peor que reintentarlo al recargar.
+    });
+  }
+
+  // Lo que hay apartado de hoy en adelante, dentro de esta semana. Los
+  // eventos de más allá no tocan la semana en curso: cada semana reparte
+  // lo suyo.
+  function reservaDeLaSemana(){
+    var total = 0;
+    var fin = new Date(anclaSemana);
+    fin.setDate(fin.getDate() + 7);
+    Object.keys(EVENTOS).forEach(function(f){
+      if(f >= isoDe(HOY) && f < isoDe(fin)) total += EVENTOS[f].calorias;
+    });
+    return total;
   }
 
   // Lo que lleva y lo que le queda hoy. Sin esto, recomendar sería a

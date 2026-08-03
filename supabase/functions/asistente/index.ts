@@ -143,13 +143,39 @@ const ESQUEMA_PLAN_DIA = {
 // Lo que se ve en el chat: un texto y, si viene al caso, alimentos que se
 // pueden apuntar de un toque. Los dos campos van siempre para no tener que
 // adivinar en la app si el modelo devolvió una cosa u otra.
+// Un evento que la persona mencionó de pasada: "el viernes tengo cena".
+//
+// `falta` es lo que hace que esto sea una conversación y no un formulario.
+// El modelo dice qué le queda por saber, la app no enseña nada hasta que la
+// lista está vacía, y mientras tanto se pregunta como preguntaría una
+// persona. Sin esto habría que sacar tres campos en pantalla, que es justo
+// lo que no se quiere.
+const ESQUEMA_EVENTO = {
+  type: 'object',
+  properties: {
+    titulo:    { type: 'string' },
+    fecha:     { type: 'string' },          // AAAA-MM-DD
+    calorias:  { type: 'integer' },
+    bebidas:   { type: 'integer' },
+    prioridad: { type: 'string', enum: ['comida', 'bebida', 'ambas'] },
+    falta: {
+      type: 'array',
+      items: { type: 'string', enum: ['calorias', 'bebidas', 'prioridad'] },
+    },
+  },
+  required: ['titulo', 'fecha', 'calorias', 'bebidas', 'prioridad', 'falta'],
+  additionalProperties: false,
+} as const;
+
 const ESQUEMA_CHAT = {
   type: 'object',
   properties: {
     respuesta: { type: 'string' },
     alimentos: ESQUEMA_ALIMENTOS.properties.alimentos,
+    // null casi siempre: solo se llena cuando de verdad hay un plan futuro.
+    evento: { anyOf: [{ type: 'null' }, ESQUEMA_EVENTO] },
   },
-  required: ['respuesta', 'alimentos'],
+  required: ['respuesta', 'alimentos', 'evento'],
   additionalProperties: false,
 } as const;
 
@@ -239,6 +265,129 @@ Los macros que te paso son los de HOY de esa persona. Úsalos: no es lo
 mismo recomendar con 1.400 calorías libres que con 200.
 `.trim();
 
+const ESQUEMA_SEMANA = {
+  type: 'object',
+  properties: {
+    // Lo que lee la persona. Es lo único que ve.
+    mensaje:   { type: 'string' },
+    ajusto:    { type: 'boolean' },
+    cal_nueva: { anyOf: [{ type: 'null' }, { type: 'integer' }] },
+    // Para el historial, no para la pantalla: por qué se hizo lo que se hizo.
+    motivo:    { type: 'string' },
+  },
+  required: ['mensaje', 'ajusto', 'cal_nueva', 'motivo'],
+  additionalProperties: false,
+} as const;
+
+const SISTEMA_SEMANA = `
+Eres el entrenador de esta persona y estás cerrando su semana. Hablas
+español de México, de tú, corto y humano.
+
+Decides si tocarle las calorías de la semana que entra.
+
+QUÉ MIRAS, EN ESTE ORDEN
+
+1. Si hay material. Si te digo que NO hay material para ajustar, NO
+   ajustas. Punto. Pon ajusto en false y cal_nueva en null.
+2. Cómo se siente. Hambre alta y energía baja durante una semana entera
+   significa que el déficit es demasiado, aunque el peso vaya bien.
+   Bajarle más calorías a alguien así es como se abandona una dieta.
+3. El peso, y la TENDENCIA, no el último número. Un kilo arriba de un día
+   para otro es agua, no grasa.
+
+CUÁNTO MUEVES
+
+Poco. Entre 100 y 200 calorías. Nadie necesita saltos de 400, y una
+corrección chica se puede repetir la semana que viene; una grande no se
+puede deshacer.
+
+Si todo va bien y se siente bien, no toques nada. Que algo funcione es
+razón para dejarlo, no para moverlo.
+
+CUANDO NO HAY MATERIAL
+
+Este es el caso delicado. Esa persona apuntó dos o tres días y no hay de
+dónde sacar conclusiones. Lo que NO haces:
+
+- No la regañas. Ni un poco. Ni "recuerda que es importante apuntar".
+- No le haces sentir que falló ni que te decepcionó.
+- No inventas un ajuste para que parezca que hiciste algo.
+
+Lo que haces: le dices la verdad, que es que con lo que hay no puedes
+leer su semana, y que prefieres no moverle las calorías a ciegas. Eso es
+cuidado, no reproche, y así tiene que sonar.
+
+Ejemplo del tono:
+  "Esta semana quedaron pocos días apuntados, así que prefiero no
+   moverte nada todavía. No quiero cambiarte las calorías adivinando.
+   Si la próxima me apuntas aunque sea la mayoría de los días, ya te leo
+   bien y ajustamos. Seguimos."
+
+Y si la semana fue buena, dilo. La gente necesita oírlo mucho más de lo
+que necesita un número:
+  "Esta semana la hiciste muy bien."
+
+REGLAS DURAS
+
+- "mensaje" no lleva cifras salvo las calorías nuevas, y solo si ajustaste.
+- Nada de listas ni viñetas. Dos o tres frases.
+- Nunca consejo médico.
+- "motivo" es aparte, para el historial: ahí sí sé concreto y técnico.
+`.trim();
+
+// Solo para IA Plus. Va aparte y no dentro de SISTEMA_CHAT porque a quien
+// no lo tiene contratado no se le puede ni insinuar: si el modelo lo lee,
+// acaba ofreciéndolo, y prometer algo que la app va a negar después es peor
+// que no ofrecerlo.
+const SISTEMA_EVENTOS = `
+
+4. EVENTOS. La gente cuenta sus planes de pasada: "el sábado hay boda",
+   "el viernes salgo a cenar", "este finde me voy de viaje". Cuando pase,
+   llena "evento" en vez de dejarlo en null.
+
+   Esto NO es un fallo de nadie ni algo que haya que evitar. Una boda es
+   una boda. Lo que se hace es dejarle sitio en la semana de ANTES, que es
+   lo que hace cualquiera que sepa comer.
+
+   Te faltan tres datos y los pides CONVERSANDO, uno o dos por mensaje,
+   nunca los tres de golpe ni como cuestionario:
+     - calorías: cuánto quiere apartar para ese día.
+     - bebidas: cuántas copas o cervezas espera tomar.
+     - prioridad: si prefiere gastar en comida o en bebida.
+
+   Pon en "falta" los que todavía no sabes. Mientras "falta" tenga algo,
+   la app no guarda nada: solo se ve tu pregunta.
+
+   Si te dan una pista de cuánto ("me voy a poner morado", "solo voy a
+   cenar ligero"), propón tú un número y pide que lo confirmen. Es más
+   fácil decir "sí" que inventarse una cifra. Referencias: una cena fuera
+   normal son unas 800 de más; una boda con barra libre, entre 1.500 y
+   2.500; un asado, unas 1.200. Una copa son ~150 calorías.
+
+   La fecha va en AAAA-MM-DD. "El viernes" es el viernes que viene, no el
+   que pasó. Si no queda claro qué día es, pregúntalo: apartar calorías
+   para el día equivocado es peor que no apartarlas.
+
+   Cuando ya no falte nada, tu "respuesta" es la de un entrenador que ya
+   lo resolvió, no la de un sistema que confirma una operación:
+     "Listo, el viernes ya tiene su espacio."
+     "No te preocupes por eso, lo acomodé en la semana."
+   Nada de "he registrado el evento con 1200 calorías reservadas".
+
+CÓMO HABLAS
+
+Como un entrenador que lleva años con esa persona, no como una app.
+Frases cortas. Sin cifras que no hagan falta: si ya reorganizaste la
+semana, no hace falta enseñar la cuenta.
+
+Bien:  "Detecté que el viernes cenarás fuera. Ya hice espacio."
+       "Esta semana lo hiciste muy bien."
+       "Tranquilo, seguimos avanzando."
+Mal:   "Se han redistribuido 1.200 kcal entre los días 12, 13 y 14."
+
+Nunca regañes. Nadie sigue a alguien que le hace sentir mal.
+`.trim();
+
 const SISTEMA_PLAN = `
 Escribes planes de comida para gente que NO quiere contar nada. Abren la
 app, leen qué les toca comer, y ya.
@@ -310,7 +459,7 @@ Deno.serve(async (req) => {
   // cuenta: sigue apuntando comida a mano, pero deja de gastar.
   const { data: perfil } = await admin
     .from('profiles')
-    .select('ia_habilitada, activo')
+    .select('ia_habilitada, activo, nivel_ia')
     .eq('id', userId)
     .single();
 
@@ -320,6 +469,15 @@ Deno.serve(async (req) => {
   if (perfil && perfil.ia_habilitada === false) {
     return json({ error: 'El asistente está desactivado en tu cuenta.' }, 403);
   }
+
+  // Tres niveles: apagada / normal / plus. Lo que sigue a partir de aquí se
+  // reparte entre los dos últimos.
+  //
+  // El `?? 'normal'` no es pereza: si la columna todavía no existe -porque
+  // la migración va por detrás del despliegue- el asistente tiene que seguir
+  // funcionando como antes en vez de dejar a todo el mundo fuera.
+  const nivel = String(perfil?.nivel_ia ?? 'normal');
+  const esPlus = nivel === 'plus';
 
   // --- Tope diario ---
   const { data: quedan, error: errTope } = await admin.rpc('gastar_consulta_ia', {
@@ -420,6 +578,25 @@ Deno.serve(async (req) => {
           `G${Math.round((m.meta_g || 0) - (m.hoy_g || 0))}`
         : '';
 
+      // "El viernes" no significa nada sin saber qué día es hoy, y el
+      // modelo no lo sabe. La zona la manda el cliente porque el servidor
+      // corre en UTC: a las 8 de la noche en México allí ya es mañana, y
+      // apartar calorías para el día equivocado es peor que no apartarlas.
+      let hoyEs = '';
+      try {
+        const zona = String(cuerpo.zona || 'America/Mexico_City');
+        const f = (o: Intl.DateTimeFormatOptions) =>
+          new Intl.DateTimeFormat('es-MX', { timeZone: zona, ...o }).format(new Date());
+        const iso = new Intl.DateTimeFormat('en-CA', {
+          timeZone: zona, year: 'numeric', month: '2-digit', day: '2-digit',
+        }).format(new Date());
+        hoyEs = `\n\nHOY es ${f({ weekday: 'long' })} ${iso}.`;
+      } catch {
+        // Zona inválida: mejor sin fecha que reventar la conversación. El
+        // modelo preguntará qué día es, que es lo correcto si no lo sabe.
+        hoyEs = '';
+      }
+
       // Solo los últimos turnos: una conversación larga se paga entera en
       // cada mensaje, y para esto no hace falta recordar más atrás.
       const mensajes = historial.slice(-12).map((x: Record<string, unknown>) => ({
@@ -445,7 +622,8 @@ Deno.serve(async (req) => {
       const r = await ia.messages.create({
         model: MODELO,
         max_tokens: imagen ? 4000 : 2000,
-        system: SISTEMA_CHAT + SISTEMA_APUNTAR_REGLAS + contexto,
+        system: SISTEMA_CHAT + (esPlus ? SISTEMA_EVENTOS : '') +
+                SISTEMA_APUNTAR_REGLAS + hoyEs + contexto,
         ...(imagen ? { thinking: { type: 'adaptive' as const } } : {}),
         output_config: {
           effort: imagen ? 'medium' : 'low',
@@ -456,7 +634,70 @@ Deno.serve(async (req) => {
 
       const salida = leerJson(r);
       salida.alimentos = await afinarConCatalogo(admin, salida.alimentos || []);
-      return json({ ...salida, quedan });
+      // Cinturón además de tirantes: a quien no tiene Plus no se le manda
+      // evento aunque el modelo se lo invente. Quitarlo aquí es una línea;
+      // confiar en que el prompt siempre se respete no es una garantía.
+      if (!esPlus) salida.evento = null;
+      return json({ ...salida, quedan, nivel });
+    }
+
+    // ---- Ajuste semanal de calorías ----
+    //
+    // Lo que decide NO es el peso solo. Bajar 800 g pasando hambre y sin
+    // energía no es lo mismo que bajarlos cómodo, y subir 300 g después de
+    // una semana de fiesta no significa que sobren calorías.
+    //
+    // Y hay un caso que no es un ajuste: cuando la persona apenas registró.
+    // Ahí no se toca nada. No por castigo -eso no sirve para nada- sino
+    // porque con tres días apuntados no hay de dónde deducir. Decirlo sin
+    // regañar es la mitad del trabajo de esta función.
+    if (accion === 'semana') {
+      if (!esPlus) {
+        return json({
+          error: 'El ajuste semanal es parte de IA Plus.',
+          nivel,
+        }, 403);
+      }
+
+      const d = (cuerpo.datos ?? {}) as Record<string, number>;
+      const diasApuntados = Math.max(0, Math.round(Number(d.dias_apuntados) || 0));
+      const pesos = Array.isArray(cuerpo.pesos) ? cuerpo.pesos.slice(-8) : [];
+
+      // El corte está en 4 de 7 y no en 7 de 7: exigir la semana perfecta
+      // dejaría a casi todo el mundo sin ajuste nunca. Con cuatro días hay
+      // una media que significa algo; con menos, no.
+      const hayMaterial = diasApuntados >= 4 && pesos.length >= 2;
+
+      const encuesta = (cuerpo.chequeo ?? {}) as Record<string, number>;
+      const contexto =
+        `\n\nESTA SEMANA:\n` +
+        `- Días que apuntó: ${diasApuntados} de 7\n` +
+        `- Meta diaria actual: ${Math.round(Number(d.meta_cal) || 0)} cal\n` +
+        `- Promedio de lo que comió: ${Math.round(Number(d.media_cal) || 0)} cal\n` +
+        `- Pesos apuntados: ${pesos.length ? pesos.join(', ') + ' kg' : 'ninguno'}\n` +
+        `- Hambre: ${encuesta.hambre ?? '—'}/5 · Energía: ${encuesta.energia ?? '—'}/5 · ` +
+        `Apetito: ${encuesta.apetito ?? '—'}/5  (3 = normal)\n` +
+        (cuerpo.nota ? `- Dice: "${String(cuerpo.nota).slice(0, 300)}"\n` : '') +
+        `- ¿Hay material para ajustar?: ${hayMaterial ? 'sí' : 'NO'}`;
+
+      const r = await ia.messages.create({
+        model: MODELO,
+        max_tokens: 2000,
+        system: SISTEMA_SEMANA + contexto,
+        thinking: { type: 'adaptive' as const },
+        output_config: {
+          effort: 'medium',
+          format: { type: 'json_schema', schema: ESQUEMA_SEMANA },
+        },
+        messages: [{ role: 'user', content: 'Revisa mi semana.' }],
+      });
+
+      const salida = leerJson(r);
+      // El "no hay material" lo decide el código, no el modelo. Un modelo
+      // convencido de que puede ayudar ajusta igual, y ese es justo el
+      // gasto de tokens y de confianza que se quiere evitar.
+      if (!hayMaterial) { salida.ajusto = false; salida.cal_nueva = null; }
+      return json({ ...salida, quedan, nivel });
     }
 
     if (accion === 'plan') {
