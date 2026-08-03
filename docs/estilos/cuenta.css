@@ -201,6 +201,27 @@
 .nivel-ia .opt.active b{color:var(--card-bg);}
 .nivel-ia .opt.active span{color:rgba(255,255,255,.65);}
 
+/* Irse tiene que ser posible, no cómodo. Sin fondo ni borde y en rojo
+   apagado: se encuentra si se busca, no se pulsa de pasada al ir a cerrar
+   sesión, que es el botón de al lado. */
+.borrar-cuenta{
+  display:block;width:100%;margin-top:14px;padding:12px;
+  background:none;border:none;cursor:pointer;
+  font:600 13px/1 sans-serif;color:var(--red);opacity:.75;
+}
+.borrar-cuenta:active{opacity:1;}
+
+/* En el panel va con su raya arriba: separa lo que se puede deshacer de lo
+   que no. */
+.zona-peligro{
+  margin-top:18px;padding-top:14px;border-top:1px solid var(--line);
+}
+.zona-peligro .borrar-cuenta{margin-top:0;}
+.zona-peligro p{
+  margin:2px 0 0;text-align:center;
+  font:500 11px/1.4 sans-serif;color:var(--ink-faint);
+}
+
 .usr-acc{display:flex;gap:5px;flex:none;}
 .usr-acc button{border:none;border-radius:9px;padding:7px 9px;font:700 10.5px/1 sans-serif;cursor:pointer;}
 .usr-acc .b-on{background:var(--green-soft);color:var(--green);}

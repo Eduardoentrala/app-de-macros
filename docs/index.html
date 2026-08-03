@@ -609,6 +609,10 @@
               <button class="opt" data-rol="coach">Coach</button>
               <button class="opt" data-rol="org_admin">Admin org</button>
             </div>
+            <div class="zona-peligro">
+              <button class="borrar-cuenta" id="usrBorrarBtn">Eliminar esta cuenta</button>
+              <p>Borra todo de forma definitiva. No hay papelera.</p>
+            </div>
             <button class="btn-ghost-text" id="usrCerrar">Cerrar</button>
           </div>
         </div>
@@ -1114,6 +1118,9 @@
           </div>
 
           <button class="signout" id="cerrarSesion">Cerrar sesión</button>
+          <!-- Discreto y separado: irse tiene que ser posible, no fácil de
+               tocar sin querer justo debajo de cerrar sesión. -->
+          <button class="borrar-cuenta" id="borrarCuentaBtn">Eliminar mi cuenta</button>
         </div>
         <div class="bottom-tabs">
           <button data-tabbar="diario"><span>▦</span>Diario</button>
@@ -1216,6 +1223,26 @@
 
             <button class="btn-primary" id="chqEnviar">Revisar mi semana</button>
             <button class="btn-ghost-text" id="chqCerrar">Ahora no</button>
+          </div>
+        </div>
+
+        <!-- Borrar la cuenta. Pedir que escriban ELIMINAR no es burocracia:
+             es lo único que separa un impulso de una decisión, y esto no
+             tiene deshacer. -->
+        <div class="sheet-backdrop" id="borrarSheet">
+          <div class="sheet">
+            <h4>¿Eliminar tu cuenta?</h4>
+            <p class="hint">Esto no se puede deshacer. Se borra todo: tu diario,
+              tus pesos, tus fotos, tus rutinas y tus recetas. No queda copia.</p>
+            <div class="cond-aviso" style="background:var(--red-soft);color:var(--red);">
+              Si solo quieres descansar, cierra sesión y vuelve cuando quieras.
+              Tus datos te esperan.
+            </div>
+            <div class="field-label">Escribe <b>ELIMINAR</b> para confirmar</div>
+            <input class="reg-input" id="borrarConfirma" type="text"
+              autocomplete="off" autocapitalize="characters" placeholder="ELIMINAR">
+            <button class="btn-primary" id="borrarConfirmar" disabled>Eliminar mi cuenta</button>
+            <button class="btn-ghost-text" id="borrarCancelar">Cancelar</button>
           </div>
         </div>
 

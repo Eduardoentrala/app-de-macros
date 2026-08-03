@@ -2991,7 +2991,7 @@
       '<ul>' + res.notas.map(function(n){ return '<li>' + n + '</li>'; }).join('') + '</ul>' +
       res.avisos.map(function(a){ return '<p class="cond-choque">' + a + '</p>'; }).join('') +
       '<span>No sustituye a tu médico: son reglas generales y conviene ' +
-      'confirmarlas con quien te lleva.</span>';
+      'confirmarlas con tu médico.</span>';
   }
 
   function calcularMacros(){
@@ -5125,6 +5125,35 @@
       });
   });
 
+  // Borrar la cuenta de otro desde el panel. Se pide escribir el nombre y
+  // no un "¿seguro?": un botón de confirmar se pulsa igual de rápido que el
+  // primero, y esto no tiene deshacer. Escribir el nombre obliga a mirar a
+  // quién se está borrando, que es justo el error que se quiere evitar.
+  document.getElementById('usrBorrarBtn').addEventListener('click', function(){
+    var u = usrActual; if(!u) return;
+    var dicho = prompt('Esto borra a ' + u.n + ' y todo lo suyo, para siempre.\n\n' +
+                       'Escribe su nombre para confirmarlo:');
+    if(dicho === null) return;
+    if(dicho.trim().toLowerCase() !== u.n.trim().toLowerCase()){
+      toast('toastAdmin', 'El nombre no coincide. No se borró nada.');
+      return;
+    }
+    var btn = this;
+    btn.disabled = true; btn.textContent = 'Eliminando…';
+    sbRpc('admin_borrar_cuenta', { p_usuario: u.id })
+      .then(function(){
+        var i = USUARIOS.indexOf(u);
+        if(i >= 0) USUARIOS.splice(i, 1);
+        cerrarFicha();
+        pintarAdmin();
+        toast('toastAdmin', u.n + ' fue eliminado.');
+      })['catch'](function(err){
+        toast('toastAdmin', 'No se pudo eliminar: ' + traducirError(err.message));
+      }).then(function(){
+        btn.disabled = false; btn.textContent = 'Eliminar esta cuenta';
+      });
+  });
+
   document.getElementById('usrRoles').addEventListener('click', function(e){
     var b = e.target.closest('button'); if(!b || !usrActual) return;
     var u = usrActual, antes = u.r, nuevo = b.dataset.rol;
@@ -5779,6 +5808,50 @@
     });
     return total;
   }
+
+  // ---- Eliminar la propia cuenta ----
+  // borrar_mi_cuenta() no lleva parámetro a propósito: el único id que
+  // acepta es el de quien llama. Aquí solo se confirma la intención.
+  var borrarSheet = document.getElementById('borrarSheet');
+  var borrarConfirma = document.getElementById('borrarConfirma');
+  var borrarConfirmar = document.getElementById('borrarConfirmar');
+
+  function cerrarBorrado(){
+    borrarSheet.classList.remove('open');
+    borrarConfirma.value = '';
+    borrarConfirmar.disabled = true;
+    borrarConfirmar.textContent = 'Eliminar mi cuenta';
+  }
+  document.getElementById('borrarCuentaBtn').addEventListener('click', function(){
+    if(!sesion || !sesion.user){ toast('toastPerfil', 'Necesitas sesión.'); return; }
+    cerrarBorrado();
+    borrarSheet.classList.add('open');
+  });
+  document.getElementById('borrarCancelar').addEventListener('click', cerrarBorrado);
+  borrarSheet.addEventListener('click', function(e){
+    if(e.target === borrarSheet) cerrarBorrado();
+  });
+  borrarConfirma.addEventListener('input', function(){
+    borrarConfirmar.disabled = this.value.trim().toUpperCase() !== 'ELIMINAR';
+  });
+
+  borrarConfirmar.addEventListener('click', function(){
+    if(this.disabled) return;
+    this.disabled = true;
+    this.textContent = 'Eliminando…';
+    sbRpc('borrar_mi_cuenta', {})
+      .then(function(){
+        // La sesión ya no vale nada: el usuario no existe. Se limpia todo
+        // lo local antes de recargar o la app arrancaría con los datos de
+        // alguien que ya no está.
+        try{ localStorage.clear(); }catch(e){}
+        location.reload();
+      })['catch'](function(err){
+        borrarConfirmar.disabled = false;
+        borrarConfirmar.textContent = 'Eliminar mi cuenta';
+        toast('toastPerfil', 'No se pudo eliminar: ' + traducirError(err.message));
+      });
+  });
 
   // ---- Chequeo semanal ----
   // El peso solo no basta para decidir. Bajar 800 g pasando hambre y sin
