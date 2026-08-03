@@ -1,6 +1,21 @@
 /* Todo lo que va de cuentas: darse de alta, los roles, el panel de
    super admin y el catalogo de alimentos que solo el ve. */
 
+/* El gasto del asistente, arriba del tablero. En ámbar y no en rojo: es
+   algo que mirar, no una avería. Cuando nadie ha gastado nada se apaga a
+   gris — un cero no merece llamar la atención. */
+.uso-ia{
+  margin:0 16px 12px;padding:12px 14px;border-radius:14px;
+  background:var(--amber-soft);color:var(--amber);
+  font:600 13px/1.35 sans-serif;
+}
+.uso-ia.tranquilo{background:var(--pill-bg);color:var(--ink-soft);}
+.uso-ia b{font:800 20px/1 sans-serif;vertical-align:-1px;}
+.uso-ia span{font-weight:800;}
+.uso-ia small{
+  display:block;margin-top:5px;font:600 11px/1.4 sans-serif;opacity:.75;
+}
+
 /* ---- Condiciones de salud ----
    Píldoras que se marcan y desmarcan. Se pueden elegir varias, así que no
    se parecen a los botones de objetivo (donde solo vale uno): estas tienen

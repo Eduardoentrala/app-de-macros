@@ -3789,6 +3789,28 @@
   // se veían mezcladas con las cuentas reales.
   var FLAGS = [];
   var USUARIOS = [];
+  var USO_IA = null;          // { consultas, personas, tope_por_persona }
+
+  // Lo que cuesta de media una consulta con el modelo de hoy. Vive aquí y
+  // no en la base porque el precio depende del modelo y cambia: guardarlo
+  // en PostgreSQL sería mentira en cuanto se toque la Edge Function.
+  // Es una MEDIA de los tres tipos de llamada, no un precio exacto.
+  var COSTE_MEDIO_CONSULTA = 0.035;   // dólares
+
+  function pintarUsoIA(){
+    if(!USO_IA) return '';
+    var n = Number(USO_IA.consultas) || 0;
+    var gasto = (n * COSTE_MEDIO_CONSULTA).toFixed(2);
+    var techo = (Number(USO_IA.personas) || 0) * (Number(USO_IA.tope_por_persona) || 0);
+    return '<div class="uso-ia' + (n === 0 ? ' tranquilo' : '') + '">' +
+      '<b>' + n + '</b> ' + (n === 1 ? 'consulta hoy' : 'consultas hoy') +
+      ' · <span>~$' + gasto + '</span>' +
+      (techo ? '<small>Con ' + USO_IA.personas + ' ' +
+        (USO_IA.personas === 1 ? 'persona activa' : 'personas activas') +
+        ' el máximo de hoy son ' + techo + ' consultas (~$' +
+        (techo * COSTE_MEDIO_CONSULTA).toFixed(2) + ')</small>' : '') +
+    '</div>';
+  }
   var admVista = 'tablero', admFiltro = '';
 
   function gb(b){ return (b/1073741824).toFixed(2) + ' GB'; }
@@ -3801,7 +3823,7 @@
       ? Math.round(STATS.clientes_activos / STATS.clientes * 100) : 0;
     var kbFoto = STATS.storage_objetos > 0
       ? Math.round(STATS.storage_bytes / STATS.storage_objetos / 1024) : 0;
-    return '<div class="kpi-grid">'+
+    return pintarUsoIA() + '<div class="kpi-grid">'+
       '<div class="kpi"><b>'+mil0(STATS.entrenadores)+'</b><span>Entrenadores</span>'+
         '<div class="sub">'+STATS.entrenadores_activos+' activos</div></div>'+
       '<div class="kpi"><b>'+mil0(STATS.clientes)+'</b><span>Clientes</span>'+
@@ -4569,11 +4591,13 @@
     }
     return Promise.all([
       aparte('las estadísticas', sbRpc('admin_estadisticas'), {}),
+      aparte('el uso de la IA', sbRpc('admin_uso_ia_hoy'), []),
       aparte('los usuarios', sbRpc('admin_buscar_usuarios', { p_texto: '', p_limite: 200 }), []),
       aparte('los ajustes',
         sbFetch('/rest/v1/feature_flags?select=clave,activo,titulo,descripcion,grupo&order=grupo.asc,clave.asc'), [])
     ]).then(function(r){
-      var s = r[0] || {}, us = r[1] || [], fl = r[2] || [];
+      var s = r[0] || {}, uso = (r[1] || [])[0] || null, us = r[2] || [], fl = r[3] || [];
+      USO_IA = uso;
 
       // Las claves que devuelve admin_estadisticas() son las mismas que ya
       // usaba el tablero, así que basta con volcarlas encima.

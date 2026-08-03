@@ -8,7 +8,11 @@ create schema if not exists storage;
 
 create table auth.users (
   id                 uuid primary key default gen_random_uuid(),
-  email              text unique,
+  -- varchar(255) y NO text, porque asi es en Supabase de verdad. Con `text`
+  -- aqui, una funcion que declare `returns table (correo text)` y devuelva
+  -- u.email pasaba las pruebas y reventaba en produccion con "structure of
+  -- query does not match function result type". Paso exactamente eso.
+  email              varchar(255) unique,
   raw_user_meta_data jsonb default '{}'::jsonb,
   created_at         timestamptz not null default now()
 );
