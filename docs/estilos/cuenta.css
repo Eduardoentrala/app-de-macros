@@ -187,6 +187,20 @@
   font-variant-numeric:tabular-nums;
 }
 
+/* Los tres niveles de IA. En columna y no en fila: cada uno lleva su
+   explicación debajo, y tres columnas dejarían el texto en tiras de dos
+   palabras. Lo que se compra hay que poder leerlo. */
+.nivel-ia{display:flex;flex-direction:column;gap:8px;margin-bottom:6px;}
+.nivel-ia .opt{
+  text-align:left;padding:12px 14px;display:block;
+}
+.nivel-ia .opt b{display:block;font:700 14px/1 sans-serif;}
+.nivel-ia .opt span{
+  display:block;margin-top:4px;font:500 11.5px/1.35 sans-serif;color:var(--ink-faint);
+}
+.nivel-ia .opt.active b{color:var(--card-bg);}
+.nivel-ia .opt.active span{color:rgba(255,255,255,.65);}
+
 .usr-acc{display:flex;gap:5px;flex:none;}
 .usr-acc button{border:none;border-radius:9px;padding:7px 9px;font:700 10.5px/1 sans-serif;cursor:pointer;}
 .usr-acc .b-on{background:var(--green-soft);color:var(--green);}

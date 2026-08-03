@@ -130,6 +130,66 @@ check('entra normal, sin entrenador',
   (await db.query(
     `select count(*)::int n from public.coach_clientes where cliente_id='${AJENO}'`)).rows[0].n === 0);
 
+console.log('\n— Los tres niveles de IA (0025) —');
+const nivelDe = async (id) =>
+  (await db.query(`select nivel_ia n from public.profiles where id='${id}'`)).rows[0].n;
+
+check('el super admin sube a alguien a plus',
+  (await falla(U.admin, `select public.admin_nivel_ia('${U.coach}','plus')`)) === null);
+check('y queda en plus', (await nivelDe(U.coach)) === 'plus');
+
+check('tambien puede apagarla del todo',
+  (await falla(U.admin, `select public.admin_nivel_ia('${U.coach}','apagada')`)) === null);
+check('y queda apagada', (await nivelDe(U.coach)) === 'apagada');
+
+// Lo que se paga no se enciende uno mismo.
+check('el interesado NO se sube solo a plus',
+  (await falla(U.coach, `select public.admin_nivel_ia('${U.coach}','plus')`)) !== null);
+check('sigue apagada tras intentarlo', (await nivelDe(U.coach)) === 'apagada');
+// Ni por la puerta de atras: escribir la columna directo tampoco vale.
+await falla(U.coach, `update public.profiles set nivel_ia='plus' where id='${U.coach}'`);
+check('ni escribiendo la columna a mano', (await nivelDe(U.coach)) === 'apagada');
+
+// Un id inventado tiene que reventar. Un UPDATE que no encaja con nada sale
+// bien sin tocar nada, y el panel diria "hecho" sin haber hecho nada.
+check('un id que no existe da error',
+  (await falla(U.admin,
+    `select public.admin_nivel_ia('99999999-9999-9999-9999-999999999999','plus')`)) !== null);
+
+console.log('\n— El interruptor viejo sigue cuadrado —');
+// La Edge Function desplegada todavia lee ia_habilitada. Si los dos se
+// separan, alguien en 'apagada' seguiria gastando tokens.
+for (const [nivel, esperado] of [['apagada', false], ['normal', true], ['plus', true]]) {
+  await db.query(`select public.admin_nivel_ia('${U.coach}','${nivel}')`).catch(() => {});
+  await db.exec(`select set_config('request.jwt.claim.sub','${U.admin}',false)`);
+  await db.exec('set role authenticated');
+  try { await db.query(`select public.admin_nivel_ia('${U.coach}','${nivel}')`); }
+  finally { await db.exec('reset role'); }
+  const f = (await db.query(
+    `select ia_habilitada i from public.profiles where id='${U.coach}'`)).rows[0].i;
+  check(`nivel ${nivel} deja ia_habilitada en ${esperado}`, f === esperado, `salio ${f}`);
+}
+
+console.log('\n— La lista de usuarios trae el nivel —');
+// Esta funcion ya reventó una vez en produccion sin que ninguna prueba la
+// llamara. No vuelve a pasar: se llama de verdad y se mira lo que devuelve.
+await db.exec(`select set_config('request.jwt.claim.sub','${U.admin}',false)`);
+await db.exec('set role authenticated');
+let lista = null, fallo = null;
+try { lista = await db.query(`select * from public.admin_buscar_usuarios('', 50)`); }
+catch (e) { fallo = e.message.split('\n')[0]; }
+finally { await db.exec('reset role'); }
+check('admin_buscar_usuarios corre sin reventar', fallo === null, fallo || '');
+check('devuelve gente', lista && lista.rows.length >= 3,
+  lista ? `devolvio ${lista.rows.length}` : 'no devolvio nada');
+check('trae el correo, que es lo que reventaba antes',
+  lista && lista.rows.every(r => typeof r.correo === 'string' && r.correo.includes('@')),
+  JSON.stringify((lista?.rows || []).map(r => r.correo)));
+// El nivel que se acaba de poner tiene que ser el que sale por aqui.
+const fila = lista && lista.rows.find(r => r.id === U.coach);
+check('y el nivel_ia de cada quien', fila && fila.nivel_ia === 'plus',
+  fila ? `salio ${fila.nivel_ia}` : 'no aparecio el coach');
+
 console.log(`\n${ok} pasan · ${bad} fallan`);
 await db.close();
 process.exit(bad ? 1 : 0);

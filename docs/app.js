@@ -2766,6 +2766,58 @@
   }
   pintarRacha();
 
+  // ---- Apartar calorías para un evento ----
+  // Una boda el sábado no es un fallo: es un dato que se sabe el martes. Lo
+  // que hace cualquiera que sepa comer es dejar sitio antes, y eso es todo
+  // lo que hace esto.
+  //
+  // Quién decide qué:
+  //   · El asistente entiende "el viernes ceno fuera" y saca fecha y cuánto.
+  //     Eso es lenguaje, y ahí un modelo es mejor que cualquier regla.
+  //   · El reparto es esta función. Es aritmética con un suelo de seguridad,
+  //     y eso no se le pregunta a un modelo: tiene que dar lo mismo siempre
+  //     y tiene que poder probarse.
+  //
+  // La reserva sale de CARBOHIDRATOS Y GRASA, nunca de la proteína. Bajar
+  // proteína para hacer sitio a una fiesta es justo lo contrario de lo que
+  // se hace: es lo que sostiene el músculo mientras el resto se mueve.
+  //
+  // Si no cabe, no se fuerza. Se aparta lo que quepa por encima del suelo y
+  // se devuelve cuánto se quedó fuera, para poder decirlo en voz alta en vez
+  // de dejar tres días a 900 calorías sin avisar.
+  function apartarParaEvento(meta, diasRestantes, reserva, piso){
+    var n = Math.max(1, diasRestantes);
+    var calMeta = calDe(meta);
+    var vacio = { P:meta.P, C:meta.C, G:meta.G, apartado:0, sinSitio:Math.max(0, reserva) };
+    if(!(reserva > 0)) return { P:meta.P, C:meta.C, G:meta.G, apartado:0, sinSitio:0 };
+
+    // Lo que se puede quitar sin cruzar el suelo, contando todos los días
+    // que quedan. En el día del evento no se recorta: el recorte lo llevan
+    // los días de ANTES, que son los que tienen margen.
+    var margen = Math.max(0, (calMeta - piso) * n);
+    var apartado = Math.min(reserva, margen);
+    if(apartado <= 0) return vacio;
+
+    var porDia = apartado / n;
+
+    // Se reparte entre carbo y grasa según lo que cada uno aporta hoy. Si
+    // alguien ya come poca grasa, no se le quita casi nada de ahí.
+    var calC = meta.C * 4, calG = meta.G * 9;
+    var base = calC + calG;
+    if(base <= 0) return vacio;      // sin nada que recortar fuera de proteína
+
+    var quitaC = porDia * (calC / base);
+    var quitaG = porDia * (calG / base);
+
+    return {
+      P: meta.P,
+      C: Math.max(0, meta.C - quitaC / 4),
+      G: Math.max(0, meta.G - quitaG / 9),
+      apartado: apartado,
+      sinSitio: reserva - apartado
+    };
+  }
+
   // ---- Registro: de los datos personales salen las calorías y los macros ----
   // Gasto en reposo con Mifflin-St Jeor, por factor de actividad, ajustado al objetivo.
   var reg = {sexo:'h', objetivo:'mantener', dias:3};
@@ -4911,6 +4963,7 @@
           r: u.rol,
           on: u.activo,
           ia: u.ia_habilitada !== false,
+          nivel: u.nivel_ia || (u.ia_habilitada === false ? 'apagada' : 'normal'),
           estado: u.estado || 'activo',
           extra: (u.coach ? 'Coach: ' + u.coach : 'Sin coach') +
                  ' · ' + (u.ultima_actividad ? 'activo ' + u.ultima_actividad : 'sin actividad')
@@ -4958,6 +5011,7 @@
     Array.from(document.querySelectorAll('#usrRoles button')).forEach(function(b){
       b.classList.toggle('active', b.dataset.rol === u.r);
     });
+    pintarNivelIA(u.nivel);
     usrSheet.classList.add('open');
 
     var q = '&user_id=eq.' + u.id;
@@ -5013,6 +5067,40 @@
   function cerrarFicha(){ usrSheet.classList.remove('open'); usrActual = null; }
   document.getElementById('usrCerrar').addEventListener('click', cerrarFicha);
   usrSheet.addEventListener('click', function(e){ if(e.target === usrSheet) cerrarFicha(); });
+
+  // ---- Los tres niveles de IA ----
+  // 'plus' es lo que cuesta tokens de verdad, así que se pinta distinto: no
+  // es un ajuste más, es lo que se paga.
+  var NOMBRE_NIVEL = { apagada:'sin IA', normal:'IA normal', plus:'IA Plus' };
+
+  function pintarNivelIA(nivel){
+    Array.from(document.querySelectorAll('#usrNivelIA button')).forEach(function(b){
+      b.classList.toggle('active', b.dataset.nivel === (nivel || 'normal'));
+    });
+  }
+
+  document.getElementById('usrNivelIA').addEventListener('click', function(e){
+    var b = e.target.closest('button'); if(!b || !usrActual) return;
+    var u = usrActual, antes = u.nivel, nuevo = b.dataset.nivel;
+    if(nuevo === antes) return;
+
+    // Se pinta ya y se deshace si falla: esperar a la red deja el botón
+    // muerto medio segundo y la gente vuelve a picarlo.
+    u.nivel = nuevo;
+    pintarNivelIA(nuevo);
+    pintarAdmin();
+
+    // admin_nivel_ia() vuelve a comprobar el permiso dentro de Postgres, y
+    // revienta si el id no existe en vez de decir que sí sin hacer nada.
+    sbRpc('admin_nivel_ia', { p_usuario: u.id, p_nivel: nuevo })
+      .then(function(){ toast('toastAdmin', u.n + ': ' + NOMBRE_NIVEL[nuevo]); })
+      ['catch'](function(err){
+        u.nivel = antes;
+        pintarNivelIA(antes);
+        pintarAdmin();
+        toast('toastAdmin', 'No se pudo cambiar: ' + traducirError(err.message));
+      });
+  });
 
   document.getElementById('usrRoles').addEventListener('click', function(e){
     var b = e.target.closest('button'); if(!b || !usrActual) return;
