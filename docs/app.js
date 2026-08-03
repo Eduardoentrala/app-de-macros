@@ -2980,6 +2980,45 @@
                 .map(function(b){ return b.dataset.cond; });
   }
 
+  // ---- Devolver el perfil guardado a la pantalla del registro ----
+  // calcularMacros() lee de esos campos, siempre, se haya llegado por el
+  // alta o por el inicio de sesión. Quien iniciaba sesión los encontraba
+  // vacíos: cambiar el objetivo desde Perfil recalculaba sobre ceros y
+  // guardaba 1.200 cal y 0 g de proteína en la base.
+  //
+  // Cada dato solo se restaura si existe. Las seis cuentas de antes de la
+  // migración 0022 no tienen sexo ni días, y en ese caso vale más el valor
+  // por defecto de la pantalla que un null convertido en cero.
+  function marcarUno(caja, valor){
+    var els = document.getElementById(caja);
+    if(!els || valor == null) return;
+    Array.from(els.querySelectorAll('button')).forEach(function(b){
+      var suyo = b.dataset.v !== undefined ? b.dataset.v : Number(b.textContent);
+      b.classList.toggle('active', suyo === valor);
+    });
+  }
+
+  function volcarPerfilEnRegistro(p){
+    if(!p) return;
+    if(p.age       != null) document.getElementById('regEdad').value   = p.age;
+    if(p.height_cm != null) document.getElementById('regAltura').value = p.height_cm;
+    if(p.weight_kg != null) document.getElementById('regPeso').value   = p.weight_kg;
+
+    if(p.sexo){ reg.sexo = p.sexo; marcarUno('regSexo', p.sexo); }
+    if(p.dias_entreno != null){ reg.dias = p.dias_entreno; marcarUno('regDias', p.dias_entreno); }
+
+    // Las condiciones son parte del cálculo, no un adorno del alta: si no
+    // vuelven, un diabético que cambie de objetivo recibe los macros de
+    // alguien sano y nadie se entera.
+    var suyas = p.condiciones || [];
+    Array.from(cajaCond.querySelectorAll('[data-cond]')).forEach(function(b){
+      b.classList.toggle('on', suyas.indexOf(b.dataset.cond) >= 0);
+    });
+    if(p.nota_salud) document.getElementById('regNotaSalud').value = p.nota_salud;
+
+    calcularMacros();          // deja el aviso de salud acorde a lo restaurado
+  }
+
   cajaCond.addEventListener('click', function(e){
     var b = e.target.closest('[data-cond]');
     if(!b) return;
@@ -3136,6 +3175,12 @@
         height_cm:Number(document.getElementById('regAltura').value) || null,
         weight_kg:Number(document.getElementById('regPeso').value)   || null,
         goal: reg.objetivo,                       // 'bajar' | 'mantener' | 'subir'
+        // Las otras dos entradas de la fórmula. Sin ellas, recalcular al
+        // volver a entrar usaba el valor por defecto de la pantalla en vez
+        // del de la persona: 166 cal de error por el sexo y hasta un 11%
+        // por los días de entreno.
+        sexo: reg.sexo,
+        dias_entreno: reg.dias,
         goal_protein_g: m.P, goal_carbs_g: m.C, goal_fat_g: m.G,
         condiciones: condicionesElegidas(),
         nota_salud: document.getElementById('regNotaSalud').value.trim() || null
@@ -5017,6 +5062,11 @@
           if(p.height_cm != null) document.getElementById('profAltura').textContent = Number(p.height_cm).toFixed(1) + ' cm';
           if(p.age != null)       document.getElementById('profEdad').textContent   = p.age + ' años';
           pintarObjetivoPerfil();
+
+          // Los <span> de arriba son solo para leer. Lo que hace falta para
+          // volver a calcular vive en los campos del registro, y hasta ahora
+          // nadie los rellenaba al iniciar sesión.
+          volcarPerfilEnRegistro(p);
 
           goalP.value = p.goal_protein_g;
           goalC.value = p.goal_carbs_g;

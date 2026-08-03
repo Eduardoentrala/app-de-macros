@@ -71,6 +71,24 @@ check('diabetes tipo 1 y tipo 2 a la vez',
 check('una nota larguísima',
   (await falla(YO, `update public.profiles set nota_salud=repeat('x',301) where id='${YO}'`)) !== null);
 
+console.log('\n— Sexo y días de entreno (0022) —');
+// Las otras dos entradas de Mifflin-St Jeor. Sin guardarlas, recalcular al
+// volver a entrar usaba el valor por defecto de la pantalla: 166 calorías
+// de error por el sexo y hasta un 11% por el factor de actividad.
+check('se puede guardar el sexo',
+  (await falla(YO, `update public.profiles set sexo='m' where id='${YO}'`)) === null);
+check('y los días de entreno',
+  (await falla(YO, `update public.profiles set dias_entreno=6 where id='${YO}'`)) === null);
+check('un sexo inventado no entra',
+  (await falla(YO, `update public.profiles set sexo='x' where id='${YO}'`)) !== null);
+check('ocho días de entreno tampoco',
+  (await falla(YO, `update public.profiles set dias_entreno=8 where id='${YO}'`)) !== null);
+// Las cuentas de antes de la 0022 no los tienen y nadie puede adivinarlos:
+// null tiene que seguir siendo válido o la migración rompería lo que ya hay.
+check('null sigue valiendo: nadie se inventa el dato',
+  (await falla(YO, `update public.profiles set sexo=null, dias_entreno=null
+                     where id='${YO}'`)) === null);
+
 console.log('\n— Sigue siendo dato privado —');
 const espia = await as(OTRO, `select condiciones::text[] c, nota_salud n
                                 from public.profiles where id='${YO}'`);
