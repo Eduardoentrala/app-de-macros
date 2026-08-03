@@ -1047,6 +1047,10 @@
               <span>Salud</span>
               <span class="v" id="profSalud">Ninguna<i>›</i></span>
             </button>
+            <button class="info-row info-btn" id="profSemanaBtn">
+              <span>Mi semana</span>
+              <span class="v">Revisar<i>›</i></span>
+            </button>
           </div>
           <div class="card" id="tarjetaPanel" hidden>
             <div class="goal-head">
@@ -1170,6 +1174,48 @@
             <div class="cond-aviso" id="saludPrevia" hidden></div>
             <button class="btn-primary" id="saludGuardar">Guardar</button>
             <button class="btn-ghost-text" id="saludCancelar">Cancelar</button>
+          </div>
+        </div>
+
+        <!-- El chequeo de la semana. Tres preguntas y no diez: un
+             cuestionario largo se contesta en diagonal y deja de medir. -->
+        <div class="sheet-backdrop" id="chequeoSheet">
+          <div class="sheet">
+            <h4>¿Cómo te fue la semana?</h4>
+            <p class="hint">Tres cosas rápidas. Sin esto, cambiarte las calorías sería adivinar.</p>
+
+            <div class="chq-bloque">
+              <div class="chq-tit">Hambre</div>
+              <div class="chq-esc" data-chq="hambre">
+                <button data-v="1">Nada</button><button data-v="2">Poca</button>
+                <button class="on" data-v="3">Normal</button>
+                <button data-v="4">Bastante</button><button data-v="5">Mucha</button>
+              </div>
+            </div>
+            <div class="chq-bloque">
+              <div class="chq-tit">Energía</div>
+              <div class="chq-esc" data-chq="energia">
+                <button data-v="1">Muy baja</button><button data-v="2">Baja</button>
+                <button class="on" data-v="3">Normal</button>
+                <button data-v="4">Buena</button><button data-v="5">Muy buena</button>
+              </div>
+            </div>
+            <div class="chq-bloque">
+              <div class="chq-tit">Antojo</div>
+              <div class="chq-esc" data-chq="apetito">
+                <button data-v="1">Ninguno</button><button data-v="2">Poco</button>
+                <button class="on" data-v="3">Normal</button>
+                <button data-v="4">Bastante</button><button data-v="5">Mucho</button>
+              </div>
+            </div>
+
+            <textarea class="notas-input" id="chqNota" rows="2" maxlength="300"
+              placeholder="Algo más que quieras contarme (opcional)"></textarea>
+
+            <div class="chq-respuesta" id="chqRespuesta" hidden></div>
+
+            <button class="btn-primary" id="chqEnviar">Revisar mi semana</button>
+            <button class="btn-ghost-text" id="chqCerrar">Ahora no</button>
           </div>
         </div>
 

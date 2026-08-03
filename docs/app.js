@@ -1285,6 +1285,14 @@
   // falsea el anillo, la racha y el reparto semanal. Lo llena cargarDatos().
   var REGISTRO = {};
 
+  // Eventos apartados, por fecha: { 'AAAA-MM-DD': {titulo, calorias, ...} }
+  //
+  // Se declara AQUÍ y no junto a las funciones que lo llenan, que están mil
+  // líneas más abajo. `var` iza la declaración pero no la asignación: con
+  // ella abajo, el balance del día se ejecutaba al arrancar con EVENTOS
+  // todavía en undefined y reventaba el arranque entero de la app.
+  var EVENTOS = {};
+
   var iso = isoDe;
   function calDe(m){ return m.P*4 + m.C*4 + m.G*9; }
 
@@ -5175,6 +5183,24 @@
     return sbFetch('/rest/v1/profiles?select=*&id=eq.' + sesion.user.id)
       .then(function(f){ return (f && f[0]) || null; });
   }
+  // Los eventos que quedan por delante. Sin esto, una boda apuntada hoy
+  // dejaba de repartir la semana en cuanto se cerraba la app: EVENTOS
+  // arrancaba vacío y nadie lo rellenaba.
+  //
+  // Solo de hoy en adelante: lo que ya pasó no reparte nada, y traerse el
+  // historial entero para descartarlo en el cliente es pagar por nada.
+  function sbEventos(){
+    return sbFetch('/rest/v1/eventos' +
+      '?select=fecha,titulo,calorias,bebidas,prioridad' +
+      '&fecha=gte.' + isoDe(HOY) +
+      '&cancelado_en=is.null' +
+      '&order=fecha.asc')['catch'](function(){
+        // Que falle esto no puede dejar sin app a nadie: se pierde el
+        // reparto de la semana, no el diario.
+        return [];
+      });
+  }
+
   function sbDiario(desde){
     return sbFetch('/rest/v1/diary_entries' +
       '?select=id,entry_date,meal,food_name,unit,quantity,protein_g,carbs_g,fat_g' +
@@ -5281,11 +5307,28 @@
         sbPesos(UN_ANIO),
         sbCardio(UN_ANIO),
         sbAlimentos(),
-        sbRecetas()
+        sbRecetas(),
+        sbEventos()
       ])
       .then(function(res){
         var p = res[0], filas = res[1] || [], pesos = res[2] || [], cardios = res[3] || [],
-            alimentos = res[4] || [], recetas = res[5] || [];
+            alimentos = res[4] || [], recetas = res[5] || [], eventos = res[6] || [];
+
+        // ---- Eventos ----
+        // Antes que nada: el balance del día se calcula con esto, así que
+        // tiene que estar puesto cuando se pinte, no después.
+        Object.keys(EVENTOS).forEach(function(k){ delete EVENTOS[k]; });
+        eventos.forEach(function(e){
+          EVENTOS[e.fecha] = {
+            titulo: e.titulo,
+            calorias: Number(e.calorias) || 0,
+            bebidas: Number(e.bebidas) || 0,
+            prioridad: e.prioridad || 'ambas'
+          };
+        });
+        // Solo con IA Plus: a quien no la tiene no se le ofrece algo que la
+        // app le va a negar después.
+        if(p && p.nivel_ia === 'plus') ofrecerChequeoSiEsSemanaNueva();
 
         // ---- Perfil ----
         if(p){
@@ -5681,8 +5724,7 @@
   // EVENTOS vive en memoria y en la base. En memoria porque el Diario lo
   // consulta en cada repintado y no puede esperar a la red; en la base
   // porque si no, cerrar la app deshace la semana que ya se repartió.
-  var EVENTOS = {};        // { 'AAAA-MM-DD': {titulo, calorias, bebidas, prioridad} }
-
+  // Se declara arriba del todo, junto a REGISTRO, por el orden de arranque.
   function guardarEventoSiEstaCompleto(ev){
     if(!ev || !ev.fecha) return;
     // Mientras falte algo, el asistente sigue preguntando y aquí no se
@@ -5736,6 +5778,152 @@
       if(f >= isoDe(HOY) && f < isoDe(fin)) total += EVENTOS[f].calorias;
     });
     return total;
+  }
+
+  // ---- Chequeo semanal ----
+  // El peso solo no basta para decidir. Bajar 800 g pasando hambre y sin
+  // energía no es lo mismo que bajarlos cómodo, y con lo primero lo que hay
+  // que hacer es SUBIR calorías, no bajarlas más.
+  var chequeoSheet = document.getElementById('chequeoSheet');
+
+  function respuestasChequeo(){
+    var r = {};
+    Array.from(document.querySelectorAll('#chequeoSheet .chq-esc')).forEach(function(e){
+      var b = e.querySelector('button.on');
+      if(b) r[e.dataset.chq] = Number(b.dataset.v);
+    });
+    return r;
+  }
+
+  chequeoSheet.addEventListener('click', function(e){
+    if(e.target === chequeoSheet){ chequeoSheet.classList.remove('open'); return; }
+    var b = e.target.closest('.chq-esc button');
+    if(!b) return;
+    Array.from(b.parentNode.children).forEach(function(x){ x.classList.remove('on'); });
+    b.classList.add('on');
+  });
+  document.getElementById('chqCerrar').addEventListener('click', function(){
+    chequeoSheet.classList.remove('open');
+  });
+
+  function abrirChequeo(){
+    var caja = document.getElementById('chqRespuesta');
+    caja.hidden = true; caja.textContent = '';
+    var btn = document.getElementById('chqEnviar');
+    btn.disabled = false; btn.textContent = 'Revisar mi semana';
+    chequeoSheet.classList.add('open');
+  }
+  document.getElementById('profSemanaBtn').addEventListener('click', abrirChequeo);
+
+  // Y sale solo al empezar semana nueva, una vez. Preguntarlo cada vez que
+  // se abre la app es como se consigue que nadie lo conteste.
+  var CLAVE_CHEQUEO = 'macros.chequeoSemana';
+  function ofrecerChequeoSiEsSemanaNueva(){
+    if(!sesion || !sesion.user) return;
+    var semana = isoDe(anclaSemana);
+    try{
+      if(localStorage.getItem(CLAVE_CHEQUEO) === semana) return;
+      localStorage.setItem(CLAVE_CHEQUEO, semana);
+    }catch(e){ return; }          // sin almacenamiento, mejor no insistir
+    // Un poco después de abrir: saltarle una hoja en la cara a alguien que
+    // acaba de entrar a apuntar el desayuno es la forma de que la cierre
+    // sin leerla.
+    setTimeout(abrirChequeo, 1200);
+  }
+
+  // Lo que se le manda al asistente para que decida. Los días apuntados son
+  // el dato que decide si hay material o no, así que se cuentan aquí y no
+  // se estiman: contar de menos deja a alguien sin ajuste que sí lo merecía.
+  function datosDeLaSemana(){
+    var meta = leerMetas();
+    var dias = 0, suma = 0;
+    var d = new Date(anclaSemana);
+    while(d < HOY || isoDe(d) === isoDe(HOY)){
+      var r = REGISTRO[isoDe(d)];
+      if(r){ dias++; suma += calDe(r); }
+      d.setDate(d.getDate() + 1);
+    }
+    return {
+      dias_apuntados: dias,
+      meta_cal: calDe(meta),
+      media_cal: dias ? Math.round(suma / dias) : 0
+    };
+  }
+
+  document.getElementById('chqEnviar').addEventListener('click', function(){
+    var btn = this;
+    if(btn.disabled) return;
+    btn.disabled = true;
+    btn.textContent = 'Revisando…';
+
+    var caja = document.getElementById('chqRespuesta');
+    var pesosRecientes = Object.keys(PESOS).sort().slice(-8)
+                               .map(function(k){ return PESOS[k]; });
+
+    iaLlamar({
+      accion: 'semana',
+      datos: datosDeLaSemana(),
+      pesos: pesosRecientes,
+      chequeo: respuestasChequeo(),
+      nota: document.getElementById('chqNota').value.trim() || undefined
+    }).then(function(r){
+      caja.hidden = false;
+      caja.className = 'chq-respuesta' + (r.ajusto ? ' ajusto' : '');
+      caja.textContent = r.mensaje || '';
+
+      if(r.ajusto && r.cal_nueva) aplicarCaloriasNuevas(r.cal_nueva);
+      guardarChequeo(r);
+      btn.textContent = 'Listo';
+    })['catch'](function(e){
+      caja.hidden = false;
+      caja.className = 'chq-respuesta';
+      caja.textContent = traducirError(e.message);
+      btn.disabled = false;
+      btn.textContent = 'Revisar mi semana';
+    });
+  });
+
+  // Se cambian las calorías manteniendo el reparto que ya tenía: subir 150
+  // no es motivo para rehacerle los macros a nadie.
+  function aplicarCaloriasNuevas(nuevas){
+    var m = leerMetas();
+    var antes = calDe(m);
+    if(!antes) return;
+    var f = nuevas / antes;
+    goalP.value = Math.round(m.P * f);
+    goalC.value = Math.round(m.C * f);
+    goalG.value = Math.round(m.G * f);
+    metasVigentes = leerMetas();       // ya lo confirmó: no vuelve a preguntar
+    actualizarMetas();
+
+    if(!sesion || !sesion.user) return;
+    sbActualizarPerfil({
+      goal_protein_g: Number(goalP.value),
+      goal_carbs_g:   Number(goalC.value),
+      goal_fat_g:     Number(goalG.value)
+    })['catch'](function(){});
+  }
+
+  // Se guarda siempre, ajustara o no. Que a alguien no se le tocaran las
+  // calorías tres semanas seguidas por falta de registros es una historia
+  // que tiene que poder leerse.
+  function guardarChequeo(r){
+    if(!sesion || !sesion.user) return;
+    var q = respuestasChequeo();
+    sbFetch('/rest/v1/chequeos_semanales?on_conflict=user_id,semana', {
+      method: 'POST',
+      headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({
+        user_id: sesion.user.id,
+        semana: isoDe(anclaSemana),
+        hambre: q.hambre || null, energia: q.energia || null, apetito: q.apetito || null,
+        nota: document.getElementById('chqNota').value.trim() || null,
+        ajusto: !!r.ajusto,
+        motivo: (r.motivo || '').slice(0, 500) || null,
+        cal_antes: Math.round(datosDeLaSemana().meta_cal) || null,
+        cal_despues: r.ajusto && r.cal_nueva ? Math.round(r.cal_nueva) : null
+      })
+    })['catch'](function(){});
   }
 
   // Lo que lleva y lo que le queda hoy. Sin esto, recomendar sería a

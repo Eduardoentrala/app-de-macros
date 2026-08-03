@@ -165,6 +165,53 @@ console.log('\n— Y todo eso esta enchufado a la app —');
     (APP.match(/guardarEventoSiEstaCompleto\(/g) || []).length >= 2);
 }
 
+console.log('\n— El estado se declara antes de usarse —');
+{
+  // Este fallo tumbó la app entera en produccion y no lo vio ninguna prueba.
+  // `var` iza la declaracion pero NO la asignacion: EVENTOS estaba declarado
+  // mil lineas por debajo del balance diario, asi que al arrancar valia
+  // undefined y EVENTOS[...] reventaba el IIFE completo. No fallaba una
+  // pantalla: no arrancaba ninguna.
+  const declara = APP.indexOf('var EVENTOS = {}');
+  check('EVENTOS se declara una sola vez',
+    (APP.match(/var EVENTOS = \{\}/g) || []).length === 1);
+
+  // Todos los sitios donde se lee o escribe, sin contar la propia
+  // declaracion, tienen que ir despues de ella EN ORDEN DE EJECUCION. Como
+  // aqui no hay orden de ejecucion, se usa el criterio duro: que se declare
+  // antes que el balance diario, que es lo que corre al arrancar.
+  const balance = APP.indexOf('var hoyEsEvento');
+  check('se declara antes del balance diario', declara >= 0 && declara < balance,
+    `declaracion en ${declara}, balance en ${balance}`);
+
+  // Y la regla general, para que el proximo no se cuele: TODO el estado en
+  // mayusculas que la funcion del balance toca tiene que estar declarado
+  // antes que ella. No vale con mirar EVENTOS: el fallo es del patron, no
+  // de esa variable.
+  //
+  // El balance corre al arrancar, asi que ahi `var` de mas abajo vale
+  // undefined. Otras variables pueden declararse despues sin problema
+  // porque solo se usan cuando alguien pulsa algo, y para entonces ya
+  // corrio todo el archivo.
+  const iniFn = APP.lastIndexOf('\n  function ', balance);
+  const finFn = APP.indexOf('\n  function ', balance);
+  const cuerpo = APP.slice(iniFn, finFn);
+
+  const declaradas = new Map();
+  for (const m of APP.matchAll(/\n  var ([A-Z][A-Z_0-9]{2,}) =/g))
+    if (!declaradas.has(m[1])) declaradas.set(m[1], m.index);
+
+  const tarde = [];
+  for (const [nombre, donde] of declaradas)
+    if (donde > balance && new RegExp(`\\b${nombre}\\b`).test(cuerpo))
+      tarde.push(`${nombre} (declarada en ${donde}, usada en el balance)`);
+
+  check('nada que use el balance se declara despues de el', tarde.length === 0,
+    tarde.join(' · '));
+  check('la comprobacion mira algo de verdad', declaradas.size >= 4,
+    `solo encontro ${declaradas.size} variables de estado`);
+}
+
 console.log('\n— Y la Edge Function lo manda —');
 {
   const FN = readFileSync(join(RAIZ, 'supabase', 'functions', 'asistente', 'index.ts'), 'utf8');
