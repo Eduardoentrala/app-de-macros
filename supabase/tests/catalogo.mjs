@@ -149,6 +149,34 @@ const sin = await as(CLI, `select nombre from public.buscar_catalogo('palta')`);
 check('"palta" encuentra Aguacate por sinonimo',
   sin.rows.some(x => x.nombre === 'Aguacate'), JSON.stringify(sin.rows));
 
+console.log('\n— El huevo se cuenta por piezas (0023) —');
+// La busqueda tiene que devolver pieza_g o la app no puede saber que hay
+// pieza: se quedaria ofreciendo 100 g de huevo, que no pide nadie.
+const hv = await as(CLI, `select nombre, pieza_g, proteina
+                            from public.buscar_catalogo('huevo')`);
+check('la busqueda devuelve pieza_g', hv.rows.length > 0 && 'pieza_g' in hv.rows[0],
+  JSON.stringify(hv.rows[0] || null));
+const entero = hv.rows.find(x => x.nombre === 'Huevo entero');
+check('el huevo entero pesa 50 g la pieza', entero && Number(entero.pieza_g) === 50,
+  JSON.stringify(entero || null));
+// El cocido llevaba 136 g de 'cup, chopped'. Una taza de huevo picado no es
+// un huevo, y ofrecerla como "1 pieza" era el fallo que se quiere evitar.
+const cocido = await db.query(`select pieza_g, porcion_g from public.alimentos_catalogo
+                                where nombre = 'Huevo cocido'`);
+check('el cocido ya no hereda los 136 g de la taza',
+  Number(cocido.rows[0].pieza_g) === 50, JSON.stringify(cocido.rows[0]));
+check('pero porcion_g sigue siendo el dato de USDA, sin tocar',
+  Number(cocido.rows[0].porcion_g) === 136, JSON.stringify(cocido.rows[0]));
+// Solo los huevos. Si algun dia se rellena a lo loco, esto salta.
+const conPieza = await db.query(`select count(*)::int n from public.alimentos_catalogo
+                                  where pieza_g is not null`);
+check('solo los seis huevos tienen pieza', conPieza.rows[0].n === 6,
+  `hay ${conPieza.rows[0].n} con pieza_g`);
+const otros = await db.query(`select count(*)::int n from public.alimentos_catalogo
+                               where pieza_g is not null and categoria <> 'huevos'`);
+check('nada fuera de la categoria huevos', otros.rows[0].n === 0,
+  `${otros.rows[0].n} alimentos de otra categoria con pieza_g`);
+
 console.log(`\n${ok} pasan · ${bad} fallan`);
 await db.close();
 process.exit(bad ? 1 : 0);

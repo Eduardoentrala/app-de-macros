@@ -168,6 +168,25 @@
 .usr-row b{display:block;font:700 13.5px/1.2 sans-serif;}
 .usr-row span{display:block;font:600 11px/1.3 sans-serif;color:var(--ink-faint);margin-top:4px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* Las filas de la ficha de un usuario. Antes reutilizaban .calc-line, que
+   existe para UN número grande ("2.400 cal") y pone el valor a 22px en
+   negrita. Con siete filas seguidas de texto el valor se comía la etiqueta
+   y no se leía ninguna de las dos. Aquí la etiqueta manda en el margen
+   izquierdo y el valor se alinea a la derecha, con su raya para que el ojo
+   sepa dónde acaba cada dato. */
+.dato-row{
+  display:flex;justify-content:space-between;align-items:baseline;
+  gap:14px;padding:8px 0;border-bottom:1px solid var(--line);
+}
+.dato-row:first-child{padding-top:0;}
+.dato-row:last-child{padding-bottom:0;border-bottom:none;}
+.dato-row span{flex:none;font:600 12.5px/1.3 sans-serif;color:var(--ink-faint);}
+.dato-row b{
+  flex:1;min-width:0;text-align:right;
+  font:700 13.5px/1.35 sans-serif;color:var(--ink);
+  font-variant-numeric:tabular-nums;
+}
+
 .usr-acc{display:flex;gap:5px;flex:none;}
 .usr-acc button{border:none;border-radius:9px;padding:7px 9px;font:700 10.5px/1 sans-serif;cursor:pointer;}
 .usr-acc .b-on{background:var(--green-soft);color:var(--green);}

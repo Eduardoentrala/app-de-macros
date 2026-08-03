@@ -1036,6 +1036,10 @@
               <span>Objetivo</span>
               <span class="v" id="profObjetivo">Mantener peso<i>›</i></span>
             </button>
+            <button class="info-row info-btn" id="profSaludBtn">
+              <span>Salud</span>
+              <span class="v" id="profSalud">Ninguna<i>›</i></span>
+            </button>
           </div>
           <div class="card" id="tarjetaPanel" hidden>
             <div class="goal-head">
@@ -1143,6 +1147,22 @@
             <p class="wc-safe">✓ Tus comidas registradas no se borran — siguen en el historial de cada día.</p>
             <button class="btn-primary" id="objGuardar">Guardar objetivo</button>
             <button class="btn-ghost-text" id="objCancelar">Cancelar</button>
+          </div>
+        </div>
+
+        <!-- Las mismas píldoras del alta. Hasta ahora las condiciones solo se
+             podían declarar al registrarse: quien ya tenía cuenta no podía
+             ponerlas y quien se equivocaba no podía corregirlo. -->
+        <div class="sheet-backdrop" id="saludSheet">
+          <div class="sheet">
+            <h4>¿Alguna condición de salud?</h4>
+            <p class="hint">Cambia cómo se reparten tus calorías. Recalcula al guardar.</p>
+            <div class="cond-opts" id="saludOpts"></div>
+            <textarea class="notas-input" id="saludNota" rows="2" maxlength="300"
+              placeholder="Otra cosa que debamos saber (opcional)"></textarea>
+            <div class="cond-aviso" id="saludPrevia" hidden></div>
+            <button class="btn-primary" id="saludGuardar">Guardar</button>
+            <button class="btn-ghost-text" id="saludCancelar">Cancelar</button>
           </div>
         </div>
 

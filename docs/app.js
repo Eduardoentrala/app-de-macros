@@ -2150,8 +2150,10 @@
       // Si mientras llegaba la respuesta ya se escribió otra cosa, esta sobra
       if(mealSearch.value.trim() !== texto) return;
 
-      // El catálogo va SIEMPRE en gramos, tal y como viene de USDA: por
-      // 100 g y sin convertir.
+      // El catálogo va en gramos, tal y como viene de USDA: por 100 g y sin
+      // convertir. La excepción son los alimentos con `pieza_g`, que dicen
+      // cuánto pesa UNA unidad de comer de verdad. Hoy solo los huevos:
+      // nadie pesa un huevo, se dicen "dos huevos".
       //
       // Antes, si el alimento traía peso de porción se ofrecía en "piezas"
       // y los macros se multiplicaban por ese peso. La idea era acercarse a
@@ -2165,11 +2167,19 @@
       // ofrecer piezas, tiene que salir de un peso por pieza de verdad, no
       // de reinterpretar el texto de la porción.
       var cat = (r[0] || []).map(function(x){
-        return {
-          fuente: 'catalogo', n: x.nombre, estado: x.estado,
-          u: 'Gramos', cant: 100,
-          P: Number(x.proteina) || 0, C: Number(x.carbos) || 0, G: Number(x.grasas) || 0
-        };
+        var P = Number(x.proteina) || 0,
+            C = Number(x.carbos)   || 0,
+            G = Number(x.grasas)   || 0;
+        // La pieza sale de `pieza_g`, un peso medido, y nunca del texto de
+        // la porción: de ahí venía que "1 Pieza" de espagueti fuese una taza.
+        var pz = Number(x.pieza_g) || 0;
+        if(pz > 0){
+          var por = function(v){ return Math.round(v * pz / 100 * 10) / 10; };
+          return { fuente:'catalogo', n:x.nombre, estado:x.estado,
+                   u:'Pieza', cant:1, P:por(P), C:por(C), G:por(G) };
+        }
+        return { fuente:'catalogo', n:x.nombre, estado:x.estado,
+                 u:'Gramos', cant:100, P:P, C:C, G:G };
       });
 
       var gente = (r[1] || []).map(function(x){
@@ -3017,6 +3027,7 @@
     if(p.nota_salud) document.getElementById('regNotaSalud').value = p.nota_salud;
 
     calcularMacros();          // deja el aviso de salud acorde a lo restaurado
+    pintarSaludPerfil();
   }
 
   cajaCond.addEventListener('click', function(e){
@@ -3036,6 +3047,127 @@
     }
     calcularMacros();          // las calorías se mueven al momento, no al guardar
   });
+
+  // ---- Las mismas condiciones, pero desde Perfil ----
+  // Hasta ahora solo se podían declarar al darse de alta: quien ya tenía
+  // cuenta no podía ponerlas y quien se equivocaba se quedaba con los macros
+  // mal para siempre. Las píldoras se clonan de las del alta: dos listas
+  // escritas a mano se desincronizan el día que se añada una condición.
+  var saludSheet = document.getElementById('saludSheet');
+  var cajaSalud  = document.getElementById('saludOpts');
+
+  Array.from(cajaCond.querySelectorAll('[data-cond]')).forEach(function(b){
+    var c = document.createElement('button');
+    c.dataset.cond = b.dataset.cond;
+    c.textContent  = b.textContent;
+    cajaSalud.appendChild(c);
+  });
+
+  function elegidasEn(caja){
+    return Array.from(caja.querySelectorAll('button.on'))
+                .map(function(b){ return b.dataset.cond; });
+  }
+  function marcarEn(caja, lista){
+    Array.from(caja.querySelectorAll('[data-cond]')).forEach(function(b){
+      b.classList.toggle('on', lista.indexOf(b.dataset.cond) >= 0);
+    });
+  }
+  function nombreCond(c){
+    var b = cajaCond.querySelector('[data-cond="' + c + '"]');
+    return b ? b.textContent : c;
+  }
+
+  // La fila de Perfil dice lo que hay puesto sin tener que abrir la hoja.
+  function pintarSaludPerfil(){
+    var el = document.getElementById('profSalud');
+    if(!el) return;
+    var n = condicionesElegidas();
+    el.innerHTML = (n.length === 0 ? 'Ninguna' :
+                    n.length <= 2  ? n.map(nombreCond).join(' · ') :
+                    n.length + ' condiciones') + '<i>›</i>';
+  }
+
+  // Calcula con OTRA selección sin dejar rastro. Las condiciones de verdad
+  // viven en las píldoras del alta, que es de donde lee calcularMacros();
+  // aquí se prestan un momento y se devuelven como estaban.
+  function comoSiTuviera(lista, fn){
+    var antes = condicionesElegidas();
+    marcarEn(cajaCond, lista);
+    var r = fn();
+    marcarEn(cajaCond, antes);
+    calcularMacros();
+    return r;
+  }
+
+  function pintarPreviaSalud(){
+    var elegidas = elegidasEn(cajaSalud);
+    var m = comoSiTuviera(elegidas, calcularMacros);
+    var caja = document.getElementById('saludPrevia');
+    caja.hidden = false;
+    caja.innerHTML =
+      '<b>' + mil(m.cal) + ' cal · P ' + m.P + ' · C ' + m.C + ' · G ' + m.G + '</b>' +
+      (elegidas.length
+        ? '<ul>' + elegidas.map(function(c){
+            var r = REGLAS_SALUD[c];
+            return '<li>' + (r && r.nota ? r.nota : nombreCond(c)) + '</li>';
+          }).join('') + '</ul>'
+        : '<span>Sin ninguna marcada, el reparto es el de la fórmula.</span>');
+  }
+
+  document.getElementById('profSaludBtn').addEventListener('click', function(){
+    marcarEn(cajaSalud, condicionesElegidas());
+    document.getElementById('saludNota').value =
+      document.getElementById('regNotaSalud').value;
+    pintarPreviaSalud();
+    saludSheet.classList.add('open');
+  });
+
+  cajaSalud.addEventListener('click', function(e){
+    var b = e.target.closest('[data-cond]');
+    if(!b) return;
+    var seEnciende = !b.classList.contains('on');
+    b.classList.toggle('on', seEnciende);
+    if(seEnciende){
+      CONDICIONES_EXCLUYENTES.forEach(function(par){
+        if(par.indexOf(b.dataset.cond) < 0) return;
+        par.forEach(function(otra){
+          if(otra === b.dataset.cond) return;
+          var el = cajaSalud.querySelector('[data-cond="' + otra + '"]');
+          if(el) el.classList.remove('on');
+        });
+      });
+    }
+    pintarPreviaSalud();
+  });
+
+  function cerrarSalud(){ saludSheet.classList.remove('open'); }
+  document.getElementById('saludCancelar').addEventListener('click', cerrarSalud);
+  saludSheet.addEventListener('click', function(e){ if(e.target === saludSheet) cerrarSalud(); });
+
+  document.getElementById('saludGuardar').addEventListener('click', function(){
+    marcarEn(cajaCond, elegidasEn(cajaSalud));
+    document.getElementById('regNotaSalud').value =
+      document.getElementById('saludNota').value;
+
+    var m = calcularMacros();
+    goalP.value = m.P; goalC.value = m.C; goalG.value = m.G;
+    // Igual que al cambiar de objetivo: esto ya lo confirmó la persona, no
+    // debe volver a preguntarle si quiere guardar sus macros.
+    metasVigentes = leerMetas();
+    actualizarMetas();
+    pintarSaludPerfil();
+    cerrarSalud();
+    toast('toastPeso', 'Salud guardada · ' + mil(m.cal) + ' cal al día');
+
+    sbActualizarPerfil({
+      condiciones: condicionesElegidas(),
+      nota_salud: document.getElementById('regNotaSalud').value.trim() || null,
+      goal_protein_g: m.P, goal_carbs_g: m.C, goal_fat_g: m.G
+    })['catch'](function(e){
+      toast('toastPeso', 'No se pudo guardar: ' + traducirError(e.message));
+    });
+  });
+
   grupoOpciones('regDias', 'dias');
   ['regEdad','regAltura','regPeso'].forEach(function(id){
     document.getElementById(id).addEventListener('input', calcularMacros);
@@ -4855,9 +4987,11 @@
         '<div class="calc-box">' +
           fila('Estado',    (p.estado || '—') + (u.on ? '' : ' · cuenta desactivada')) +
           fila('Objetivo',  NOMBRE_OBJ[p.goal] || '—') +
-          fila('Físico',    (p.weight_kg != null ? Number(p.weight_kg).toFixed(1) + ' kg' : '—') + ' · ' +
-                            (p.height_cm != null ? Number(p.height_cm).toFixed(0) + ' cm' : '—') + ' · ' +
-                            (p.age != null ? p.age + ' años' : '—')) +
+          // Espacios duros dentro de cada dato: si tiene que partirse que
+          // parta por los puntos, no dejando "años" solo en la línea de abajo.
+          fila('Físico',    (p.weight_kg != null ? Number(p.weight_kg).toFixed(1) + '&nbsp;kg' : '—') + ' · ' +
+                            (p.height_cm != null ? Number(p.height_cm).toFixed(0) + '&nbsp;cm' : '—') + ' · ' +
+                            (p.age != null ? p.age + '&nbsp;años' : '—')) +
           fila('Peso',      linea) +
           fila('Última comida',  haceCuanto(comida && comida.entry_date)) +
           fila('Último entreno', haceCuanto(sesion && sesion.session_date)) +
@@ -4870,8 +5004,10 @@
         '<p class="cmp-aviso">No se pudo cargar: ' + traducirError(e.message) + '</p>';
     });
   }
+  // Clase propia y no .calc-line: esa está hecha para UN número grande y
+  // pone el valor a 22px. Con siete filas de texto se amontonaba todo.
   function fila(k, v){
-    return '<div class="calc-line"><span>' + k + '</span><b>' + v + '</b></div>';
+    return '<div class="dato-row"><span>' + k + '</span><b>' + v + '</b></div>';
   }
 
   function cerrarFicha(){ usrSheet.classList.remove('open'); usrActual = null; }
