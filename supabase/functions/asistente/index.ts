@@ -43,7 +43,11 @@ const CORS = {
 
 // Tope diario por persona. Es la única defensa contra que un solo usuario
 // -o un token robado- vacíe la cuenta en una noche con un bucle.
-const TOPE_DIARIO = 40;
+// Cinco al dia. Con 10 personas, el peor caso posible pasa de ~$12 diarios
+// a ~$1.50: es lo que convierte "se me pueden ir los 5 dolares en una
+// tarde" en "no puede pasar". Un uso normal no llega ni de lejos — apuntar
+// un par de comidas y preguntar algo cabe de sobra.
+const TOPE_DIARIO = 5;
 
 const MODELO = 'claude-opus-5';
 
