@@ -2790,6 +2790,125 @@
            k.toFixed(2).replace('.', ',') + ' kg por semana';
   }
 
+  // ---- Lo que cambia una condición de salud ----
+  // Reglas escritas, no IA. Tres motivos:
+  //   · Tiene que dar lo mismo siempre. Un modelo que hoy diga 1.800 y mañana
+  //     2.100 para la misma persona no es ciencia, es ruido.
+  //   · Se puede leer y discutir. La regla está aquí con su motivo al lado, y
+  //     quien sepa de esto puede decir si está bien sin abrir la app.
+  //   · Es gratis y no se cae. Justo al registrarse no es momento de depender
+  //     de que responda una API.
+  // El asistente entra después, en el recálculo semanal, que es donde de
+  // verdad hace falta interpretar una tendencia y no aplicar una constante.
+  //
+  // Cuando se marcan varias gana la más restrictiva: los topes se quedan con
+  // el menor y los extras de calorías se suman.
+  var REGLAS_SALUD = {
+    // Los carbohidratos no se prohíben, se acotan. En tipo 1 lo que manda es
+    // que sean CONSTANTES, porque la dosis de insulina se calcula sobre
+    // ellos; un tope muy bajo ahí complica más de lo que ayuda.
+    diabetes_1:      { topeCarbPct:0.45,
+      nota:'Carbohidratos parejos entre comidas, para que la insulina cuadre.' },
+    diabetes_2:      { topeCarbPct:0.40,
+      nota:'Menos carbohidratos y más proteína: es lo que mejor controla la glucosa.' },
+    prediabetes:     { topeCarbPct:0.45,
+      nota:'Menos carbohidratos para frenar la resistencia a la insulina.' },
+    higado_graso:    { topeCarbPct:0.45,
+      nota:'Bajar azúcares y harinas es lo que más mueve la grasa del hígado.' },
+    colesterol_alto: { topeGrasaPct:0.30,
+      nota:'Grasa por debajo del 30%, y que venga de aceite, aguacate, frutos secos y pescado.' },
+    // El único tope que no se negocia: 2 g/kg en un riñón tocado hace daño.
+    enfermedad_renal:{ topeProtGkg:0.8,
+      nota:'Proteína limitada a 0,8 g por kilo: pasarse carga el riñón.' },
+    // Estas no mueven ni calorías ni macros. Salen igual para que quien las
+    // marcó vea que se le leyó, en vez de encontrarse un silencio.
+    hipertension:    { nota:'Las calorías no cambian. Lo que importa aquí es la sal: menos de 5 g al día.' },
+    celiaquia:       { nota:'Las calorías no cambian. Todo el cereal tiene que ser sin gluten.' },
+    // Con tratamiento el gasto vuelve al normal. Recortar "por si acaso"
+    // sería inventarse un déficit que nadie ha medido.
+    hipotiroidismo:  { nota:'Con el tratamiento puesto el gasto es el de siempre: no se recorta nada por esto.' },
+    embarazo:        { extraCal:340, sinDeficit:true,
+      nota:'+340 cal al día (segundo trimestre) y nunca en déficit.' },
+    lactancia:       { extraCal:450, sinDeficit:true,
+      nota:'+450 cal al día mientras des pecho, y nunca en déficit.' }
+  };
+
+  // Mueve lo que salió de la fórmula y devuelve además los por qués: un
+  // número que cambia sin decir de dónde viene no se lo cree nadie.
+  function ajustarPorSalud(base, conds){
+    var cal = base.cal, P = base.P, C = base.C, G = base.G;
+    var notas = [], avisos = [];
+    if(!conds || !conds.length) return {cal:cal, P:P, C:C, G:G, notas:notas, avisos:avisos};
+
+    var extra = 0, sinDeficit = false;
+    var topeCarb = null, topeGrasa = null, topeProt = null;
+    function menor(a, b){ return a === null ? b : Math.min(a, b); }
+
+    conds.forEach(function(c){
+      var r = REGLAS_SALUD[c];
+      if(!r) return;
+      if(r.nota) notas.push(r.nota);
+      if(r.extraCal) extra += r.extraCal;
+      if(r.sinDeficit) sinDeficit = true;
+      if(r.topeCarbPct  != null) topeCarb  = menor(topeCarb,  r.topeCarbPct);
+      if(r.topeGrasaPct != null) topeGrasa = menor(topeGrasa, r.topeGrasaPct);
+      if(r.topeProtGkg  != null) topeProt  = menor(topeProt,  r.topeProtGkg);
+    });
+
+    // 1. Calorías: primero se borra el déficit si no toca, luego el extra.
+    if(sinDeficit && cal < base.gasto) cal = Math.round(base.gasto);
+    cal += extra;
+
+    // 2. Proteína: el tope renal manda sobre los 2 g/kg de siempre.
+    if(topeProt !== null && base.peso > 0) P = Math.min(P, Math.round(base.peso * topeProt));
+
+    // 3. Grasa: se queda en el 25% de siempre, con su tope si lo hay. El
+    //    techo (35% si nadie lo baja) solo se usa para recolocar sobrantes.
+    var techoG = Math.round(cal * (topeGrasa === null ? 0.35 : topeGrasa) / 9);
+    G = Math.min(Math.round(cal * 0.25 / 9), techoG);
+
+    // 4. Los carbohidratos son el resto; si se pasan del tope, se recortan.
+    C = Math.max(0, Math.round((cal - P*4 - G*9) / 4));
+    if(topeCarb !== null){
+      var techoC = Math.round(cal * topeCarb / 4);
+      if(C > techoC){
+        C = techoC;
+        // Lo recortado tiene que ir a algún sitio o las cuentas no cuadran:
+        // primero a la grasa hasta su techo, y lo que quede a la proteína.
+        var sobra = cal - C*4 - P*4 - G*9;
+        var aGrasa = Math.min(Math.max(0, techoG - G), Math.round(sobra / 9));
+        G += aGrasa; sobra -= aGrasa * 9;
+        if(sobra > 0 && topeProt === null){ P += Math.round(sobra / 4); sobra = 0; }
+        // Riñón limitado y carbohidrato limitado a la vez: no hay dónde
+        // meterlo. Se devuelve al carbohidrato y se dice en voz alta, porque
+        // el tope del riñón es el que no se puede tocar.
+        if(sobra > 0){
+          C += Math.round(sobra / 4);
+          avisos.push('Con enfermedad renal no se puede bajar tanto el carbohidrato ' +
+                      'sin subir la proteína, y ahí manda el riñón. Esto en concreto ' +
+                      'tiene que verlo tu médico.');
+        }
+      }
+    }
+    return {cal:cal, P:P, C:C, G:G, notas:notas, avisos:avisos};
+  }
+
+  // El aviso deja de ser un texto fijo y dice qué se movió exactamente. Un
+  // "consulta a tu médico" a secas no informa de nada.
+  function pintarAvisoSalud(res){
+    var caja = document.getElementById('regAvisoSalud');
+    if(!caja) return;
+    if(!res || (!res.notas.length && !res.avisos.length)){ caja.hidden = true; return; }
+    caja.hidden = false;
+    caja.innerHTML =
+      // Sin icono: el simbolo medico no lo tiene esta fuente y salia un § roto.
+      '<b>Qué cambia por lo que marcaste</b>' +
+      '<ul>' + res.notas.map(function(n){ return '<li>' + n + '</li>'; }).join('') + '</ul>' +
+      res.avisos.map(function(a){ return '<p class="cond-choque">' + a + '</p>'; }).join('') +
+      '<span>No sustituye a tu médico: son reglas generales y conviene ' +
+      'confirmarlas con quien te lleva.</span>';
+  }
+
   function calcularMacros(){
     var edad = Number(document.getElementById('regEdad').value) || 0;
     var alt  = Number(document.getElementById('regAltura').value) || 0;
@@ -2808,14 +2927,21 @@
       Math.round(tmb),
       1200
     );
-    // El ritmo se calcula del déficit REAL, no del que se pidió: si el
-    // suelo recortó el déficit, la cifra que se enseña tiene que reflejarlo.
-    var kgSemana = (cal - gasto) * 7 / KCAL_POR_KG;
-
     // Proteína 2 g/kg · grasas 25% de las calorías · el resto en carbos
     var P = Math.round(peso * 2);
     var G = Math.round(cal * 0.25 / 9);
     var C = Math.max(0, Math.round((cal - P*4 - G*9) / 4));
+
+    // Y encima de eso, lo que pida la salud declarada.
+    var salud = ajustarPorSalud(
+      {cal:cal, P:P, C:C, G:G, gasto:gasto, peso:peso}, condicionesElegidas());
+    cal = salud.cal; P = salud.P; C = salud.C; G = salud.G;
+    pintarAvisoSalud(salud);
+
+    // El ritmo se calcula del déficit REAL, no del que se pidió: si el suelo
+    // recortó el déficit —o si el embarazo lo borró entero— la cifra que se
+    // enseña tiene que reflejarlo. Por eso va después de la salud y no antes.
+    var kgSemana = (cal - gasto) * 7 / KCAL_POR_KG;
 
     document.getElementById('regCal').textContent = mil(cal);
     document.getElementById('regP').textContent = P;
@@ -2854,10 +2980,6 @@
                 .map(function(b){ return b.dataset.cond; });
   }
 
-  function pintarAvisoSalud(){
-    document.getElementById('regAvisoSalud').hidden = condicionesElegidas().length === 0;
-  }
-
   cajaCond.addEventListener('click', function(e){
     var b = e.target.closest('[data-cond]');
     if(!b) return;
@@ -2873,7 +2995,7 @@
         });
       });
     }
-    pintarAvisoSalud();
+    calcularMacros();          // las calorías se mueven al momento, no al guardar
   });
   grupoOpciones('regDias', 'dias');
   ['regEdad','regAltura','regPeso'].forEach(function(id){
