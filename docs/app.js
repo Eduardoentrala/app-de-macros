@@ -1591,6 +1591,7 @@
       metaHoy = { P: conEvento.P, C: conEvento.C, G: conEvento.G };
     }
 
+    pintarEventos();
     var calHoyMeta = calDe(metaHoy);
 
     // El Diario usa estas metas y lo que realmente se ha registrado
@@ -4697,7 +4698,40 @@
             '<span>' + (c.tienePlan ? 'con plan' : 'sin plan todavía') + '</span></div>' +
             '<span style="color:var(--ink-faint)">›</span></div>';
         }).join('')
-      : '<p class="calc-note" style="padding:4px 20px 0;">Todavía no tienes a nadie asignado.</p>';
+      : '<p class="calc-note" style="padding:4px 20px 0;">Aquí solo sale quien lleva plan. ' +
+        'Inscribe a alguien por su correo para empezar.</p>';
+  }
+
+  // Inscribir a alguien en Plan. Se pide el correo porque es lo único que
+  // distingue de verdad a dos personas que se llamen igual, y porque
+  // escribirlo obliga a saber a quién estás metiendo.
+  document.getElementById('planInscribir').addEventListener('click', function(){
+    var correo = prompt('¿Qué correo? Tiene que ser alguien ya registrado en la app.');
+    if(correo === null) return;
+    correo = correo.trim();
+    if(!correo) return;
+
+    var btn = this;
+    btn.disabled = true; btn.textContent = 'Inscribiendo…';
+    sbRpc('plan_inscribir', { p_correo: correo })
+      .then(function(){ return cargarPlan(); })
+      .then(function(){ toast('toastPlan', 'Listo, ya aparece en tu lista.'); })
+      ['catch'](function(e){ toast('toastPlan', traducirError(e.message)); })
+      .then(function(){
+        btn.disabled = false; btn.textContent = '+ Inscribir por correo';
+      });
+  });
+
+  // Dar de baja. Va con pulsación larga y no con una equis: la lista se
+  // toca para abrir el plan de alguien, y una equis al lado del nombre se
+  // pulsa sin querer al ir a entrar.
+  function darDeBajaDePlan(c){
+    if(!confirm('¿Quitar a ' + c.nombre + ' de Plan?\n\n' +
+                'Su plan actual no se borra: deja de aparecer en tu lista.')) return;
+    sbRpc('plan_dar_baja', { p_cliente: c.id })
+      .then(function(){ return cargarPlan(); })
+      .then(function(){ toast('toastPlan', c.nombre + ' ya no está en tu lista.'); })
+      ['catch'](function(e){ toast('toastPlan', traducirError(e.message)); });
   }
 
   function cargarPlan(){
@@ -4705,45 +4739,34 @@
 
     var tareas = [ sbPlanDe(sesion.user.id).then(function(p){ MI_PLAN = p; }) ];
 
-    // Un entrenador ve a sus asignados; el super admin, a todo el mundo
-    if(ROL === 'coach' || ROL === 'org_admin'){
+    // Una sola llamada para los dos roles. Antes eran dos caminos —el coach
+    // por `mis_clientes`, el super admin por `admin_buscar_usuarios`— y
+    // salían TODOS los registrados. Ahora Plan solo enseña a quien se
+    // inscribió: no todo el mundo lleva plan de comidas, y la lista crecía
+    // con cada alta hasta que encontrar a alguien costaba más que armarle
+    // la semana.
+    //
+    // plan_lista() ya filtra por dentro: el super admin recibe a todos los
+    // inscritos y el coach solo a los suyos. Y trae el correo, que un
+    // entrenador nunca había podido ver.
+    if(ROL === 'coach' || ROL === 'org_admin' || ROL === 'super_admin'){
       tareas.push(
-        sbFetch('/rest/v1/mis_clientes?select=id,full_name&order=full_name.asc')
-          .then(function(cs){
-            PLAN_CLIENTES = (cs || []).map(function(c){
-              return { id:c.id, nombre:(c.full_name || '').trim() || '(sin nombre)' };
-            });
-          }));
-    } else if(ROL === 'super_admin'){
-      // Por admin_buscar_usuarios y no por profiles: el correo no está en
-      // profiles -vive en auth.users, que la app no puede leer- y esa
-      // función sí lo devuelve. Es la misma que ya alimenta el panel.
-      tareas.push(
-        sbRpc('admin_buscar_usuarios', { p_texto: '', p_limite: 200 })
-          .then(function(us){
-            PLAN_CLIENTES = (us || [])
-              .filter(function(u){ return u.rol !== 'super_admin'; })
-              .map(function(u){
-                return { id:u.id, nombre:(u.nombre || '').trim() || '(sin nombre)',
-                         correo:u.correo || '' };
-              })
-              .sort(function(a,b){ return a.nombre.localeCompare(b.nombre, 'es'); });
-          }));
+        sbRpc('plan_lista', {}).then(function(us){
+          PLAN_CLIENTES = (us || []).map(function(u){
+            return { id:u.id, nombre:(u.nombre || '').trim() || '(sin nombre)',
+                     correo:u.correo || '', tienePlan: !!u.tiene_plan };
+          });
+        })['catch'](function(){ PLAN_CLIENTES = []; }));
     } else {
       PLAN_CLIENTES = [];
     }
 
     return Promise.all(tareas).then(function(){
-      // Marcar quién ya tiene plan, para no tener que entrar a comprobarlo
-      if(!PLAN_CLIENTES.length){ pintarMiPlan(); pintarPlanClientes(); return; }
-      var ids = PLAN_CLIENTES.map(function(c){ return c.id; }).join(',');
-      return sbFetch('/rest/v1/planes?select=user_id&activo=is.true&user_id=in.(' + ids + ')')
-        .then(function(ps){
-          var con = {};
-          (ps || []).forEach(function(p){ con[p.user_id] = true; });
-          PLAN_CLIENTES.forEach(function(c){ c.tienePlan = !!con[c.id]; });
-        })['catch'](function(){})
-        .then(function(){ pintarMiPlan(); pintarPlanClientes(); });
+      // Quién tiene plan ya viene en plan_lista(): antes hacía falta una
+      // segunda consulta a `planes` con todos los ids metidos en la URL,
+      // que además se rompía sola en cuanto la lista crecía.
+      pintarMiPlan();
+      pintarPlanClientes();
     })['catch'](function(e){
       toast('toastPlan', 'No se pudo cargar: ' + traducirError(e.message));
     });
@@ -4756,11 +4779,33 @@
     pintarMiPlan();
   });
 
-  document.getElementById('planClientes').addEventListener('click', function(e){
-    var f = e.target.closest('[data-plan-cli]');
-    if(!f) return;
-    abrirEditorPlan(PLAN_CLIENTES[Number(f.dataset.planCli)]);
-  });
+  (function(){
+    var caja = document.getElementById('planClientes');
+    var reloj = null, salioLarga = false;
+
+    function quien(e){
+      var f = e.target.closest('[data-plan-cli]');
+      return f ? PLAN_CLIENTES[Number(f.dataset.planCli)] : null;
+    }
+    function empezar(e){
+      var c = quien(e); if(!c) return;
+      salioLarga = false;
+      reloj = setTimeout(function(){ salioLarga = true; darDeBajaDePlan(c); }, 600);
+    }
+    function soltar(){ if(reloj){ clearTimeout(reloj); reloj = null; } }
+
+    caja.addEventListener('pointerdown', empezar);
+    ['pointerup','pointerleave','pointercancel'].forEach(function(ev){
+      caja.addEventListener(ev, soltar);
+    });
+    caja.addEventListener('click', function(e){
+      // Si acaba de salir el menú de baja, este clic es el final de la
+      // pulsación larga y no una intención de abrir el plan.
+      if(salioLarga){ salioLarga = false; return; }
+      var c = quien(e);
+      if(c) abrirEditorPlan(c);
+    });
+  })();
 
   // ---- Editor ----
   // planComidas guarda TODO el plan (un día o los siete). El editor pinta
@@ -5796,6 +5841,60 @@
     });
   }
 
+  // Quitar un evento. Se cancela, no se borra: si a alguien se le repartió
+  // la semana por una boda y luego la quita, hay que poder explicar por qué
+  // sus calorías del miércoles fueron las que fueron.
+  function cancelarEvento(fecha){
+    if(!EVENTOS[fecha]) return Promise.resolve();
+    var titulo = EVENTOS[fecha].titulo;
+    delete EVENTOS[fecha];
+    actualizarSemana();                 // la meta de hoy vuelve al momento
+    toast('toastDiario', titulo + ' quitado · tus calorías vuelven a la normalidad');
+
+    if(!sesion || !sesion.user) return Promise.resolve();
+    return sbFetch('/rest/v1/eventos?user_id=eq.' + sesion.user.id +
+                   '&fecha=eq.' + fecha + '&cancelado_en=is.null', {
+      method: 'PATCH',
+      headers: { 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ cancelado_en: new Date().toISOString() })
+    })['catch'](function(){});
+  }
+
+  // La tira de eventos del Diario. Solo aparece si hay alguno: una sección
+  // vacía permanente es ruido en una pantalla que ya está llena.
+  function pintarEventos(){
+    var caja = document.getElementById('eventosTira');
+    if(!caja) return;
+    var fin = new Date(anclaSemana); fin.setDate(fin.getDate() + 7);
+    var proximos = Object.keys(EVENTOS).sort().filter(function(f){
+      return f >= isoDe(HOY) && f < isoDe(fin);
+    });
+    caja.hidden = proximos.length === 0;
+    caja.innerHTML = proximos.map(function(f){
+      var e = EVENTOS[f];
+      var d = new Date(f + 'T12:00:00');
+      var cuando = f === isoDe(HOY) ? 'hoy'
+                 : DIAS[d.getDay()];
+      return '<div class="evento-chip">' +
+               '<div class="txt"><b>' + e.titulo + '</b>' +
+               '<span>' + cuando + ' · ' + mil(e.calorias) + ' cal apartadas</span></div>' +
+               '<button data-quitar="' + f + '" aria-label="Quitar">✕</button>' +
+             '</div>';
+    }).join('');
+  }
+
+  // Delegado en el contenedor: la tira se repinta en cada repintado del
+  // Diario, así que un listener por chip se perdería en cuanto cambiara
+  // cualquier otra cosa.
+  (function(){
+    var caja = document.getElementById('eventosTira');
+    if(!caja) return;
+    caja.addEventListener('click', function(e){
+      var b = e.target.closest('[data-quitar]');
+      if(b) cancelarEvento(b.dataset.quitar);
+    });
+  })();
+
   // Lo que hay apartado de hoy en adelante, dentro de esta semana. Los
   // eventos de más allá no tocan la semana en curso: cada semana reparte
   // lo suyo.
@@ -5815,6 +5914,30 @@
   var borrarSheet = document.getElementById('borrarSheet');
   var borrarConfirma = document.getElementById('borrarConfirma');
   var borrarConfirmar = document.getElementById('borrarConfirmar');
+
+  // Se piden TODAS, archivadas incluidas: una foto archivada sigue siendo
+  // una foto suya en un servidor. Y si esto falla, el borrado sigue igual:
+  // dejar la cuenta viva porque no se pudo limpiar el bucket sería atrapar
+  // a alguien que ya dijo que se iba.
+  function borrarMisFotosDelBucket(){
+    if(!sesion || !sesion.user) return Promise.resolve();
+    return sbFetch('/rest/v1/progress_photos?select=storage_path' +
+                   '&user_id=eq.' + sesion.user.id)
+      .then(function(filas){
+        var rutas = (filas || []).map(function(f){ return f.storage_path; })
+                                 .filter(Boolean);
+        if(!rutas.length) return;
+        return fetch(SB_URL + '/storage/v1/object/' + BUCKET, {
+          method: 'DELETE',
+          headers: {
+            'apikey': SB_KEY,
+            'Authorization': 'Bearer ' + sesion.access_token,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ prefixes: rutas })
+        });
+      })['catch'](function(){ /* que no detenga el borrado */ });
+  }
 
   function cerrarBorrado(){
     borrarSheet.classList.remove('open');
@@ -5839,7 +5962,14 @@
     if(this.disabled) return;
     this.disabled = true;
     this.textContent = 'Eliminando…';
-    sbRpc('borrar_mi_cuenta', {})
+    // Las fotos primero, y desde aquí. Borrar la fila de `storage.objects`
+    // en SQL suelta la referencia pero NO borra el archivo del bucket: se
+    // queda ahí, accesible con su ruta, después de que la persona pidiera
+    // que no quedara nada. La única forma de borrarlo de verdad es la API
+    // de Storage, y esa necesita la sesión de su dueño —que es justo lo
+    // que hay en este momento y no habrá dentro de un segundo.
+    borrarMisFotosDelBucket()
+      .then(function(){ return sbRpc('borrar_mi_cuenta', {}); })
       .then(function(){
         // La sesión ya no vale nada: el usuario no existe. Se limpia todo
         // lo local antes de recargar o la app arrancaría con los datos de

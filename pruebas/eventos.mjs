@@ -165,6 +165,54 @@ console.log('\n— Y todo eso esta enchufado a la app —');
     (APP.match(/guardarEventoSiEstaCompleto\(/g) || []).length >= 2);
 }
 
+console.log('\n— La tira del Diario —');
+{
+  // pintarEventos toca el DOM, asi que se le da uno de mentira: lo que se
+  // prueba es QUE decide enseñar y como lo escribe, no el navegador.
+  const ini = APP.indexOf('function pintarEventos(');
+  const fin = APP.indexOf('\n  // Delegado en el contenedor', ini);
+  const caja = { hidden: null, innerHTML: '' };
+  const hoy = new Date('2026-08-05T12:00:00');
+  const lunes = new Date('2026-08-03T12:00:00');
+  const isoDe = (d) => d.toISOString().slice(0, 10);
+
+  const ctx2 = vm.createContext({
+    document: { getElementById: (id) => (id === 'eventosTira' ? caja : null) },
+    EVENTOS: {}, HOY: hoy, anclaSemana: lunes, isoDe, Date,
+    DIAS: ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'],
+    mil: (n) => String(n)
+  });
+  vm.runInContext(APP.slice(ini, fin), ctx2);
+
+  ctx2.pintarEventos();
+  check('sin eventos, la tira se esconde', caja.hidden === true);
+
+  // Boda el sabado 8, y una cena el 20 que cae fuera de esta semana.
+  ctx2.EVENTOS['2026-08-08'] = { titulo: 'Boda de Ana', calorias: 1500 };
+  ctx2.EVENTOS['2026-08-20'] = { titulo: 'Cena lejana', calorias: 800 };
+  ctx2.pintarEventos();
+  check('con uno de esta semana, se enseña', caja.hidden === false);
+  check('sale el evento de esta semana', caja.innerHTML.includes('Boda de Ana'));
+  check('y NO el de la semana que viene', !caja.innerHTML.includes('Cena lejana'),
+    'cada semana reparte lo suyo');
+  check('dice que dia es', caja.innerHTML.includes('sábado'), caja.innerHTML);
+  check('y cuanto se aparto', caja.innerHTML.includes('1500 cal apartadas'));
+  check('la equis lleva la fecha para poder quitarlo',
+    caja.innerHTML.includes('data-quitar="2026-08-08"'));
+
+  // Un evento de ayer no reparte nada: lo que ya paso, paso.
+  ctx2.EVENTOS = { '2026-08-04': { titulo: 'Ayer', calorias: 900 } };
+  ctx2.pintarEventos();
+  check('un evento pasado no sale', caja.hidden === true, caja.innerHTML);
+
+  // Hoy si, y con su palabra en vez del dia de la semana.
+  ctx2.EVENTOS = { '2026-08-05': { titulo: 'Comida de hoy', calorias: 600 } };
+  ctx2.pintarEventos();
+  check('el de hoy dice "hoy", no "miércoles"',
+    caja.innerHTML.includes('hoy ·') && !caja.innerHTML.includes('miércoles'),
+    caja.innerHTML);
+}
+
 console.log('\n— El estado se declara antes de usarse —');
 {
   // Este fallo tumbó la app entera en produccion y no lo vio ninguna prueba.

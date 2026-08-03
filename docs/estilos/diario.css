@@ -71,6 +71,31 @@
 /* Solo la etiqueta: si no, la regla también encogería el emoji del círculo */
 .quick-item > span:not(.quick-circle){font:700 13px/1.15 sans-serif;color:var(--ink);}
 
+/* La tira de eventos apartados. En ámbar suave y no en verde: no es un
+   logro ni una alerta, es un aviso de que esta semana está repartida
+   distinto y que eso está previsto. */
+.eventos-tira{display:flex;flex-direction:column;gap:7px;padding:2px 16px 8px;}
+.evento-chip{
+  display:flex;align-items:center;gap:10px;
+  background:var(--amber-soft);border-radius:13px;padding:11px 13px;
+}
+.evento-chip .txt{flex:1;min-width:0;}
+.evento-chip b{
+  display:block;font:700 13.5px/1.2 sans-serif;color:var(--amber);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.evento-chip span{
+  display:block;margin-top:3px;font:600 11px/1.3 sans-serif;
+  color:var(--amber);opacity:.8;
+}
+/* La equis, discreta: quitar un evento se puede, pero no es la acción
+   principal de la tarjeta. */
+.evento-chip button{
+  flex:none;border:none;background:none;cursor:pointer;
+  font:400 15px/1 sans-serif;color:var(--amber);opacity:.6;padding:4px 2px;
+}
+.evento-chip button:active{opacity:1;}
+
 .section-label{
   display:flex;justify-content:space-between;align-items:baseline;
   padding:9px 20px 6px;font:800 15px/1 sans-serif;color:var(--ink);

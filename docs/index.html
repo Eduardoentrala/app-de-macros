@@ -133,6 +133,10 @@
               <div class="dots" id="ringDots"><span class="on"></span><span></span></div>
             </div>
 
+            <!-- Solo sale si hay algo apartado. Una sección vacía
+                 permanente es ruido en una pantalla que ya está llena. -->
+            <div class="eventos-tira" id="eventosTira" hidden></div>
+
             <div class="section-label">Mis comidas</div>
             <div class="meals-wrap">
               <div class="meal-row" data-push="mealadd" data-meal="Desayuno">
@@ -637,6 +641,10 @@
           <div id="planCoach" hidden>
             <div class="section-label">Planes que escribes <small id="planCuenta"></small></div>
             <div id="planClientes"></div>
+            <!-- Por correo y no por un desplegable de todos: un desplegable
+                 con la lista entera es el mismo problema en otro sitio. -->
+            <button class="btn-sec" id="planInscribir"
+              style="margin:6px 16px 0;width:calc(100% - 32px);">+ Inscribir por correo</button>
           </div>
 
           <div style="height:24px;"></div>
