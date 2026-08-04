@@ -3682,11 +3682,13 @@
   // ================= FOTOS DE PROGRESO =================
   // 4 poses por semana. La imagen se comprime en el teléfono ANTES de subirse:
   // máximo 1080 px, calidad 80–85%, objetivo 200–500 KB. El original nunca se guarda.
+  // Las claves (`k`) son las que están guardadas en la base y en las rutas
+  // de Storage: no se tocan. Lo que cambia es cómo se llaman en pantalla.
   var POSES = [
     {k:'frente',  t:'Frente'},
     {k:'espalda', t:'Espalda'},
-    {k:'izq',     t:'Perfil izquierdo'},
-    {k:'der',     t:'Perfil derecho'}
+    {k:'izq',     t:'Lado izquierdo'},
+    {k:'der',     t:'Lado derecho'}
   ];
   var MAX_LADO = 1080, CAL_MAX = 0.85, CAL_MIN = 0.80;
   var OBJ_MIN = 200*1024, OBJ_MAX = 500*1024;
@@ -3924,10 +3926,19 @@
       return '<div class="foto-slot'+(f?' llena':'')+'" data-pose="'+p.k+'">'+
         '<div class="foto-lienzo">'+
           (f ? '<img src="'+f.src+'" alt="'+p.t+'">'
-             : '<div class="foto-vacia"><b>＋</b><span>Subir foto</span></div>')+
+             : '<div class="foto-vacia"><b>＋</b></div>')+
+          // Dentro del recuadro, no debajo: es lo que dice qué foto va en
+          // ese hueco, y ahí es donde se mira antes de subirla.
+          '<span class="foto-rotulo">'+p.t+'</span>'+
         '</div>'+
-        '<div class="foto-pie"><b>'+p.t+'</b><span>'+
-          (f ? kb(f.bytes) + ' · ' + f.w + '×' + f.h : 'Sin foto') + '</span></div>'+
+        // Aquí había un pie con el nombre de la pose y el tamaño del
+        // archivo. Nunca se vio: la rejilla reparte el alto disponible, el
+        // lienzo se lo lleva entero y el pie caía 25 px por debajo del
+        // recuadro, recortado. Por eso no había etiquetas en ningún hueco.
+        //
+        // No se le hace sitio: Fotos cabe en una pantalla y eso costó
+        // trabajo. El nombre ya va dentro, y el peso del archivo es un
+        // detalle que la tarjeta de abajo ya explica.
         (f ? '<button class="foto-quitar" data-quitar-foto="'+p.k+'" aria-label="Quitar">✕</button>' : '')+
       '</div>';
     }).join('');

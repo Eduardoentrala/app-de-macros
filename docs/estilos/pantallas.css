@@ -36,7 +36,9 @@
 /* Sin `aspect-ratio`: el alto lo manda ahora la rejilla, que se reparte lo
    que sobra de la pantalla. Con la proporción fija las fotos crecían por su
    cuenta y empujaban el botón fuera de la vista. */
-.foto-lienzo{height:100%;min-height:0;display:flex;align-items:center;justify-content:center;background:var(--app-bg);}
+/* `relative` para que el rótulo se ancle al recuadro y no al slot entero:
+   sin esto caía sobre el pie, fuera de la foto. */
+.foto-lienzo{height:100%;min-height:0;display:flex;align-items:center;justify-content:center;background:var(--app-bg);position:relative;overflow:hidden;}
 .foto-lienzo img{width:100%;height:100%;object-fit:cover;display:block;}
 /* El hueco vacío ES el botón de subir: se toca y abre la galería. Antes
    era un "+" gris clarísimo sobre fondo gris claro y no se leía como algo
@@ -48,12 +50,27 @@
   background:var(--ink);color:var(--card-bg);
   align-items:center;justify-content:center;font:400 26px/1 sans-serif;
 }
-.foto-vacia span{display:block;font:700 12px/1.3 sans-serif;margin-top:9px;color:var(--ink);}
 .foto-slot:active .foto-vacia b{transform:scale(.92);}
 .foto-vacia b{transition:transform .15s ease;}
-.foto-pie{padding:9px 11px 11px;}
-.foto-pie b{display:block;font:700 12.5px/1 sans-serif;color:var(--ink);}
-.foto-pie span{display:block;font:600 10.5px/1 sans-serif;color:var(--ink-faint);margin-top:5px;}
+
+/* El nombre de la pose, DENTRO del recuadro: es lo que dice qué foto va en
+   ese hueco, y se mira justo antes de subirla. Debajo llegaba tarde.
+   En letra suave a propósito: guía, no compite con la foto. */
+.foto-rotulo{
+  position:absolute;left:0;right:0;bottom:0;
+  padding:16px 10px 8px;
+  font:600 11px/1.2 sans-serif;letter-spacing:.01em;
+  color:var(--ink-faint);text-align:center;
+  pointer-events:none;
+}
+/* Sobre una foto hace falta contraste, y un fondo sólido taparía justo la
+   parte de abajo. Un degradado deja ver la imagen y aun así se lee. */
+.foto-slot.llena .foto-rotulo{
+  color:rgba(255,255,255,.92);
+  background:linear-gradient(to top, rgba(0,0,0,.55), rgba(0,0,0,0));
+  text-shadow:0 1px 3px rgba(0,0,0,.4);
+}
+
 .foto-quitar{
   position:absolute;top:7px;right:7px;width:26px;height:26px;border-radius:50%;border:none;
   background:rgba(0,0,0,.55);color:#fff;font-size:14px;cursor:pointer;display:flex;
