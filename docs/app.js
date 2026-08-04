@@ -3420,13 +3420,40 @@
 
   // Vuelca en `profiles` lo que el registro ya preguntó. El perfil lo creó
   // solo un trigger al darse de alta, así que aquí basta con actualizarlo.
+  // Si la base va por detrás de la app, se reintenta sin los campos que no
+  // existen todavía.
+  //
+  // Esto no es teoría: al subir el consentimiento antes que su migración,
+  // el registro entero dejó de guardar. Perder la cuenta de alguien porque
+  // una columna nueva aún no está es un precio absurdo, y la app se
+  // despliega sola al empujar mientras que las migraciones van a mano, así
+  // que ese desfase va a repetirse.
+  //
+  // 42703 es "column ... does not exist". Solo se reintenta ante ESE error:
+  // ante cualquier otro se falla, porque tragarse un fallo de permisos o de
+  // restricción sería mucho peor que un registro perdido.
+  function patchPerfilTolerante(datos, opcionales){
+    var url = '/rest/v1/profiles?id=eq.' + sesion.user.id;
+    var opciones = { method:'PATCH', headers:{ 'Prefer':'return=minimal' } };
+    var todo = {};
+    Object.keys(datos).forEach(function(k){ todo[k] = datos[k]; });
+    Object.keys(opcionales).forEach(function(k){ todo[k] = opcionales[k]; });
+
+    opciones.body = JSON.stringify(todo);
+    return sbFetch(url, opciones)['catch'](function(e){
+      if(String(e.message || '').indexOf('42703') < 0 &&
+         !/does not exist/i.test(String(e.message || ''))) throw e;
+      return sbFetch(url, {
+        method:'PATCH', headers:{ 'Prefer':'return=minimal' },
+        body: JSON.stringify(datos)
+      });
+    });
+  }
+
   function sbGuardarPerfil(){
     if(!sesion || !sesion.user) return Promise.resolve();
     var m = calcularMacros();
-    return sbFetch('/rest/v1/profiles?id=eq.' + sesion.user.id, {
-      method:'PATCH',
-      headers:{ 'Prefer':'return=minimal' },
-      body: JSON.stringify({
+    return patchPerfilTolerante({
         full_name:      document.getElementById('regNombre').value.trim(),
         age:      Number(document.getElementById('regEdad').value)   || null,
         height_cm:Number(document.getElementById('regAltura').value) || null,
@@ -3440,15 +3467,19 @@
         dias_entreno: reg.dias,
         goal_protein_g: m.P, goal_carbs_g: m.C, goal_fat_g: m.G,
         condiciones: condicionesElegidas(),
-        nota_salud: document.getElementById('regNotaSalud').value.trim() || null,
+        nota_salud: document.getElementById('regNotaSalud').value.trim() || null
+      }, {
         // La constancia. La versión va con la fecha porque el texto va a
         // cambiar, y "aceptó" sin decir qué aceptó no sirve de nada.
+        //
+        // Va en el segundo grupo —el que se puede caer— solo mientras la
+        // migración 0031 no esté aplicada. En cuanto lo esté, sube al
+        // primero: un consentimiento que se pierde en silencio no vale.
         consentimiento_en: new Date().toISOString(),
         consentimiento_version: VERSION_LEGAL,
         consentimiento_salud_en: condicionesElegidas().length
           ? new Date().toISOString() : null
-      })
-    });
+      });
   }
 
   // Los mensajes de Supabase vienen en inglés y de cara al usuario no sirven.
