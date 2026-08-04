@@ -450,7 +450,7 @@
       '<button data-act="bajar" title="Bajar ejercicio">▼</button>'+
       '<button class="danger" data-act="quitar" title="Quitar ejercicio">×</button></span></div></div>'+
       '<table class="sets-table"><tr><th>set</th><th class="num">reps</th><th class="num">peso</th><th></th></tr>'+
-      '<tr><td>1</td><td class="num"><input class="set-input" value="10"></td><td class="num"><input class="set-input" value="0"></td>'+
+      '<tr><td>1</td><td class="num"><input class="set-input" type="number" inputmode="decimal" step="any" value="10"></td><td class="num"><input class="set-input" type="number" inputmode="decimal" step="any" value="0"></td>'+
       '<td><div class="set-row-actions"><div class="set-check">✓</div><button class="clock-btn">⏰</button><button class="rm-set">×</button></div></td></tr></table>'+
       '<div class="add-set-row"><button class="add-set">+ set</button></div>';
     return card;
@@ -521,8 +521,8 @@
       var n = table.querySelectorAll('tr').length; // encabezado cuenta como 1
       var tr = document.createElement('tr');
       tr.innerHTML = '<td>'+n+'</td>'+
-        '<td class="num"><input class="set-input" value="'+reps+'"></td>'+
-        '<td class="num"><input class="set-input" value="'+peso+'"></td>'+
+        '<td class="num"><input class="set-input" type="number" inputmode="decimal" step="any" value="'+reps+'"></td>'+
+        '<td class="num"><input class="set-input" type="number" inputmode="decimal" step="any" value="'+peso+'"></td>'+
         '<td><div class="set-row-actions"><div class="set-check">✓</div>'+
         '<button class="clock-btn">⏰</button><button class="rm-set">×</button></div></td>';
       table.appendChild(tr);
@@ -655,8 +655,8 @@
   function htmlSerie(s, n){
     return '<tr' + (s.id ? ' data-id="' + s.id + '"' : '') + '>' +
       '<td>' + n + '</td>' +
-      '<td class="num"><input class="set-input" value="' + s.reps + '"></td>' +
-      '<td class="num"><input class="set-input" value="' + s.peso + '"></td>' +
+      '<td class="num"><input class="set-input" type="number" inputmode="decimal" step="any" value="' + s.reps + '"></td>' +
+      '<td class="num"><input class="set-input" type="number" inputmode="decimal" step="any" value="' + s.peso + '"></td>' +
       '<td><div class="set-row-actions"><div class="set-check' + (s.hecho ? ' done' : '') + '">✓</div>' +
       '<button class="clock-btn">⏰</button><button class="rm-set">×</button></div></td></tr>';
   }
@@ -1001,8 +1001,26 @@
   function vibrar(ms){ if(navigator.vibrate) try{ navigator.vibrate(ms); }catch(e){} }
 
   function stopTick(){ if(ticking){ clearInterval(ticking); ticking = null; } }
+  // ---- Por qué el cronómetro se congelaba ----
+  // Contaba restando uno por tick. Al salir de la app, iOS congela los
+  // temporizadores: al volver, seguía marcando el segundo en que te fuiste.
+  //
+  // Ahora se guarda CUÁNDO termina y cada tick calcula lo que falta contra
+  // el reloj del sistema. Los ticks siguen congelándose —eso no se puede
+  // evitar en una web— pero el número deja de ser mentira: al volver ya está
+  // puesto al día, y si terminó mientras estabas fuera, lo dice.
+  //
+  // Lo que sigue sin poder hacerse: sonar o vibrar con la app cerrada. Eso
+  // necesita notificaciones del sistema, no un temporizador.
+  var finRest = 0;
+
+  function segundosQueFaltan(){
+    return Math.max(0, Math.ceil((finRest - Date.now()) / 1000));
+  }
+
   function startRest(secs, label){
     stopTick();
+    finRest = Date.now() + secs * 1000;
     total = secs; remaining = secs; paused = false;
     restBar.classList.remove('done');
     restPause.textContent = 'Pausar';
@@ -1012,27 +1030,51 @@
     tono(523.25, 0.22, 0, 0.18);   // confirma que arrancó
     ticking = setInterval(function(){
       if(paused) return;
-      remaining--;
+      var antes = remaining;
+      remaining = segundosQueFaltan();
       paintRest();
+      // Si se saltaron segundos —estuvo en segundo plano— no se disparan
+      // los avisos de los que se pasó: sonar cinco pitidos de golpe al
+      // volver es peor que no sonar.
+      if(antes - remaining > 1){
+        if(remaining <= 0) terminarRest();
+        return;
+      }
       // Aviso doble a los 10 s, y cuenta atrás en los tres últimos
       if(remaining === 10){ bipAviso(); vibrar([90,90,90]); }
       if(remaining === 3 || remaining === 2 || remaining === 1){ bipCuenta(); vibrar(45); }
-      if(remaining <= 0){
-        stopTick();
-        restBar.classList.add('done');
-        restWho.textContent = '¡Descanso terminado! A la siguiente serie';
-        restTime.textContent = '0:00';
-        bipFinal(); vibrar([150,90,150,90,260]);
-      }
+      if(remaining <= 0) terminarRest();
     }, 1000);
   }
+
+  function terminarRest(){
+    stopTick();
+    restBar.classList.add('done');
+    restWho.textContent = '¡Descanso terminado! A la siguiente serie';
+    restTime.textContent = '0:00';
+    bipFinal(); vibrar([150,90,150,90,260]);
+  }
+
+  // Al volver a la app se pone al día de golpe, sin esperar al siguiente
+  // tick: ver el número viejo aunque sea un segundo es lo que hace pensar
+  // que se quedó parado.
+  document.addEventListener('visibilitychange', function(){
+    if(document.hidden || !ticking || paused) return;
+    remaining = segundosQueFaltan();
+    paintRest();
+    if(remaining <= 0) terminarRest();
+  });
   restPause.addEventListener('click', function(){
     if(remaining <= 0) return;
     paused = !paused;
+    // Al reanudar se corre la hora de fin: si no, el tiempo pausado habría
+    // seguido corriendo por dentro y volvería con menos del que dejó.
+    if(!paused) finRest = Date.now() + remaining * 1000;
     restPause.textContent = paused ? 'Seguir' : 'Pausar';
   });
   document.getElementById('restPlus').addEventListener('click', function(){
     remaining += 30; total = Math.max(total, remaining);
+    finRest = Date.now() + remaining * 1000;   // +30 s de verdad, no solo en pantalla
     restBar.classList.remove('done');
     if(!ticking) startRest(remaining, restWho.textContent);
     paintRest();
@@ -1710,15 +1752,124 @@
   function pedirFoto(){ avatarInput.click(); }
   avatarBox.addEventListener('click', pedirFoto);
   document.getElementById('editPhotoBtn').addEventListener('click', pedirFoto);
+  // ---- Encuadrar y guardar la foto de perfil ----
+  // Antes solo se pintaba en pantalla: no se guardaba en ningún sitio, así
+  // que al cerrar la app desaparecía. Y el recorte automático corta la cara
+  // de casi todo el mundo, porque las fotos se toman con la cabeza arriba
+  // y no en el centro.
+  //
+  // Se guarda YA RECORTADA, a 256 px. Así no hay que guardar también la
+  // posición ni volver a recortar cada vez que se pinta: lo que se guardó
+  // es exactamente lo que se ve.
+  var LADO_AVATAR = 256;
+  var avaSheet = document.getElementById('avatarSheet');
+  var avaImg   = document.getElementById('avaImg');
+  var avaZoom  = document.getElementById('avaZoom');
+  var ava = { x:0, y:0, escala:1, natW:0, natH:0 };
+
+  function pintarAva(){
+    avaImg.style.transform =
+      'translate(' + ava.x + 'px,' + ava.y + 'px) scale(' + ava.escala + ')';
+  }
+
   avatarInput.addEventListener('change', function(){
     var file = avatarInput.files && avatarInput.files[0];
+    avatarInput.value = '';            // deja volver a elegir la misma
     if(!file) return;
     var reader = new FileReader();
     reader.onload = function(ev){
-      avatarBox.innerHTML = '<img alt="Foto de perfil" src="' + ev.target.result + '">';
+      avaImg.onload = function(){
+        ava.natW = avaImg.naturalWidth;
+        ava.natH = avaImg.naturalHeight;
+        ava.x = 0; ava.y = 0; ava.escala = 1;
+        avaZoom.value = 100;
+        pintarAva();
+        avaSheet.classList.add('open');
+      };
+      avaImg.src = ev.target.result;
     };
     reader.readAsDataURL(file);
   });
+
+  avaZoom.addEventListener('input', function(){
+    ava.escala = Number(this.value) / 100;
+    pintarAva();
+  });
+
+  // Arrastrar con el dedo o con el ratón, sin librerías: son diez líneas.
+  (function(){
+    var marco = document.getElementById('avaMarco');
+    var arrastrando = false, x0 = 0, y0 = 0, ax = 0, ay = 0;
+    marco.addEventListener('pointerdown', function(e){
+      arrastrando = true; x0 = e.clientX; y0 = e.clientY; ax = ava.x; ay = ava.y;
+      marco.setPointerCapture(e.pointerId);
+    });
+    marco.addEventListener('pointermove', function(e){
+      if(!arrastrando) return;
+      e.preventDefault();            // o el móvil desplaza la hoja entera
+      ava.x = ax + (e.clientX - x0);
+      ava.y = ay + (e.clientY - y0);
+      pintarAva();
+    });
+    ['pointerup','pointercancel'].forEach(function(ev){
+      marco.addEventListener(ev, function(){ arrastrando = false; });
+    });
+  })();
+
+  document.getElementById('avaCancelar').addEventListener('click', function(){
+    avaSheet.classList.remove('open');
+  });
+  avaSheet.addEventListener('click', function(e){
+    if(e.target === avaSheet) avaSheet.classList.remove('open');
+  });
+
+  document.getElementById('avaGuardar').addEventListener('click', function(){
+    var marco = document.getElementById('avaMarco');
+    var lado = marco.clientWidth;
+
+    // El tamaño se lee de la imagen AHORA, no de lo guardado al abrir. Con
+    // un 0 ahí las cuentas dan NaN, drawImage no pinta nada y el JPEG sale
+    // negro —sin alfa, lo transparente se vuelve negro— sin ningún error.
+    // Una foto negra guardada en silencio es de lo peor que puede pasar.
+    var natW = avaImg.naturalWidth || ava.natW;
+    var natH = avaImg.naturalHeight || ava.natH;
+    if(!natW || !natH || !lado){
+      toast('toastPerfil', 'No se pudo leer la foto. Inténtalo otra vez.');
+      return;
+    }
+
+    // La imagen se pinta con `object-fit:cover`, así que primero se calcula
+    // a qué escala la puso el navegador y desde ahí se traduce el arrastre
+    // a coordenadas de la imagen original.
+    var cubrir = Math.max(lado / natW, lado / natH) * ava.escala;
+    var anchoP = natW * cubrir, altoP = natH * cubrir;
+    var izq = (lado - anchoP) / 2 + ava.x;
+    var arr = (lado - altoP) / 2 + ava.y;
+
+    var c = document.createElement('canvas');
+    c.width = c.height = LADO_AVATAR;
+    var g = c.getContext('2d');
+    // Fondo blanco antes de pintar: si la foto trae transparencia (un PNG
+    // recortado), el JPEG la convertiría en negro.
+    g.fillStyle = '#ffffff';
+    g.fillRect(0, 0, LADO_AVATAR, LADO_AVATAR);
+    var f = LADO_AVATAR / lado;
+    g.drawImage(avaImg, izq * f, arr * f, anchoP * f, altoP * f);
+
+    var url = c.toDataURL('image/jpeg', 0.85);
+    avatarBox.innerHTML = '<img alt="Foto de perfil" src="' + url + '">';
+    avaSheet.classList.remove('open');
+
+    if(!sesion || !sesion.user) return;
+    sbActualizarPerfil({ avatar_url: url })['catch'](function(e){
+      toast('toastPerfil', 'No se pudo guardar la foto: ' + traducirError(e.message));
+    });
+  });
+
+  function pintarAvatarGuardado(url){
+    if(!url) return;
+    avatarBox.innerHTML = '<img alt="Foto de perfil" src="' + url + '">';
+  }
 
   // ---- Flujo de agregar comida (Desayuno / Comida / Cena) ----
   // Base de alimentos del usuario. Todo es entrada manual: macros por 100 g o por pieza.
@@ -2096,7 +2247,8 @@
   // Listas de Frecuentes y Mis alimentos
   function tarjeta(a, conAcciones){
     return '<div class="food-card" data-alim="'+a.n+'">'+
-      (conAcciones ? '<div class="fc-arrows"><button>▲</button><button>▼</button></div>' : '')+
+      // Sin flechas de subir/bajar: no hacían nada. Eran dos botones cuya
+      // única función era no agregar el alimento al tocarlos.
       '<div class="fc-main"><div class="fc-name">'+a.n+'</div>'+
       '<div class="fc-sub">'+lineaMacros(a)+'</div></div>'+
       (conAcciones ? '<div class="fc-actions"><button class="btn-mini edit">Editar</button>'+
@@ -2137,7 +2289,6 @@
       // además la hoja de cantidad.
       if(e.target.closest('.btn-mini.edit')){ editarGuardado(a); return; }
       if(e.target.closest('.btn-mini.del')){ borrarGuardado(a); return; }
-      if(e.target.closest('.fc-arrows')) return;     // las flechas no agregan
 
       // Copia: la hoja va a fijarle cantidad y porción base, y no debe
       // tocar la ficha que vive en la lista.
@@ -5667,6 +5818,7 @@
             document.getElementById('profNombre').textContent = nom;
           }
           if(sesion.user.email) document.getElementById('profEmail').textContent = sesion.user.email;
+          pintarAvatarGuardado(p.avatar_url);
 
           if(p.goal) reg.objetivo = p.goal;
           if(p.weight_kg != null) document.getElementById('profPeso').textContent   = Number(p.weight_kg).toFixed(1) + ' kg';

@@ -311,11 +311,6 @@
 .food-card .fc-main{flex:1;min-width:0;}
 .food-card .fc-name{font:700 15px/1.25 sans-serif;}
 .food-card .fc-sub{font:500 12.5px/1.3 sans-serif;color:var(--ink-faint);margin-top:5px;}
-.food-card .fc-arrows{display:flex;flex-direction:column;gap:3px;flex:none;}
-.food-card .fc-arrows button{
-  background:var(--pill-bg);border:none;border-radius:7px;width:26px;height:20px;
-  color:var(--ink-soft);font-size:9px;cursor:pointer;
-}
 .fc-actions{display:flex;gap:6px;flex:none;}
 
 .share-row{

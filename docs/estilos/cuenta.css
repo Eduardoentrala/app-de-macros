@@ -238,6 +238,25 @@
   font:500 11.5px/1.45 sans-serif;color:var(--ink-faint);
 }
 
+/* ---- Encuadrar la foto de perfil ----
+   Redondo y del tamaño real en que se va a ver: encuadrar en un cuadrado
+   para luego recortar en círculo es como se corta la barbilla de la gente. */
+.ava-marco{
+  width:220px;height:220px;margin:4px auto 14px;border-radius:50%;
+  overflow:hidden;background:var(--pill-bg);cursor:grab;
+  touch-action:none;              /* o el móvil desplaza la hoja al arrastrar */
+  position:relative;
+}
+.ava-marco:active{cursor:grabbing;}
+.ava-marco img{
+  width:100%;height:100%;object-fit:cover;display:block;
+  transform-origin:center;user-select:none;-webkit-user-drag:none;
+  pointer-events:none;            /* los gestos los recoge el marco */
+}
+.ava-zoom{display:flex;align-items:center;gap:11px;margin-bottom:4px;}
+.ava-zoom span{font:700 16px/1 sans-serif;color:var(--ink-faint);flex:none;}
+.ava-zoom input{flex:1;min-width:0;accent-color:var(--ink);}
+
 /* ---- Consentimiento ----
    La casilla con su texto al lado, y el texto tocable entero: un objetivo
    de dedo de 14 píxeles es como se marca sin querer lo que no se quería. */
