@@ -5416,7 +5416,10 @@
         // app le va a negar después.
         MI_NIVEL_IA = (p && p.nivel_ia) || 'normal';
         pintarPlanIA();
-        if(MI_NIVEL_IA === 'plus') ofrecerChequeoSiEsSemanaNueva();
+        if(MI_NIVEL_IA === 'plus'){
+          ofrecerChequeoSiEsSemanaNueva();
+          revisarAvisoDelCoach();
+        }
 
         // ---- Perfil ----
         if(p){
@@ -5890,6 +5893,65 @@
     if(!texto || !sesion || !sesion.user) return;
     sbActualizarPerfil({ memoria_ia: String(texto).slice(0, 1200) })
       ['catch'](function(){});   // en silencio: no es cosa del usuario
+  }
+
+  // ---- Cuando el entrenador escribe primero ----
+  // Se pinta en el Diario y no como notificación del sistema: eso es un
+  // canal más y llega después. Lo que hace falta primero es que TENGA algo
+  // que decir; entregarlo por push es un envoltorio.
+  function pintarAvisoCoach(texto, id){
+    var caja = document.getElementById('avisoCoach');
+    if(!caja) return;
+    if(!texto){ caja.hidden = true; caja.innerHTML = ''; return; }
+    caja.hidden = false;
+    caja.innerHTML = '<p>' + escapar(texto) + '</p>' +
+                     '<button data-visto="' + id + '">Entendido</button>';
+  }
+
+  // Marcar como visto es lo único que la app puede hacer con un aviso: el
+  // texto lo escribe el modelo y lo guarda una función que comprueba antes
+  // que el motivo sea de verdad el que toca.
+  (function(){
+    var caja = document.getElementById('avisoCoach');
+    if(!caja) return;
+    caja.addEventListener('click', function(e){
+      var b = e.target.closest('[data-visto]');
+      if(!b) return;
+      pintarAvisoCoach(null);
+      if(!sesion || !sesion.user) return;
+      sbFetch('/rest/v1/avisos_coach?id=eq.' + b.dataset.visto, {
+        method: 'PATCH',
+        headers: { 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ visto_en: new Date().toISOString() })
+      })['catch'](function(){});
+    });
+  })();
+
+  function revisarAvisoDelCoach(){
+    if(!sesion || !sesion.user || MI_NIVEL_IA !== 'plus') return;
+
+    // Primero lo que ya esté escrito y sin leer: eso no cuesta un céntimo.
+    sbFetch('/rest/v1/avisos_coach?select=id,texto&visto_en=is.null' +
+            '&user_id=eq.' + sesion.user.id + '&order=creado_en.desc&limit=1')
+      .then(function(filas){
+        if(filas && filas.length){
+          pintarAvisoCoach(filas[0].texto, filas[0].id);
+          return null;
+        }
+        // Y si no hay ninguno, ¿toca uno nuevo? Lo decide Postgres, gratis.
+        return sbRpc('aviso_pendiente', { p_usuario: sesion.user.id });
+      })
+      .then(function(motivo){
+        if(!motivo) return;
+        // Solo aquí se gasta una consulta, y solo cuando de verdad hay algo
+        // que decir. Son cuatro o cinco al mes por persona.
+        return iaLlamar({ accion: 'aviso', motivo: motivo })
+          .then(function(r){
+            if(!r || !r.texto) return;
+            return sbRpc('guardar_aviso', { p_motivo: motivo, p_texto: r.texto })
+              .then(function(id){ pintarAvisoCoach(r.texto, id); });
+          });
+      })['catch'](function(){});   // en silencio: nadie pidió esto
   }
 
   // ---- Eventos que el asistente detectó en la conversación ----

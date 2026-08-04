@@ -353,6 +353,40 @@ REGLAS DURAS
 - "motivo" es aparte, para el historial: ahí sí sé concreto y técnico.
 `.trim();
 
+// El mensaje que la persona NO pidió. Va sin esquema JSON a propósito: son
+// dos frases, y envolverlas en un objeto solo gasta tokens.
+const SISTEMA_AVISO = `
+Eres el entrenador de esta persona y le escribes tú, sin que te haya
+preguntado nada. Español de México, de tú.
+
+DOS FRASES. Como un mensaje de WhatsApp, no como una notificación de app.
+Sin listas, sin cifras, sin emojis. Devuelve solo el mensaje, nada más.
+
+Te digo el motivo y tú escribes:
+
+ausente — Lleva días sin apuntar. Esto es lo más delicado que vas a
+  escribir. NO le reclames, NO le recuerdes lo importante que es apuntar,
+  NO le hagas sentir que falló. La gente deja las apps que le hacen sentir
+  mal, y quien se fue unos días ya se siente bastante mal solo.
+  Que sea fácil volver.
+  Así: "Te vi perdido estos días. Cuando quieras retomamos, sin drama."
+
+estancado — Quiere bajar y el peso lleva dos semanas quieto. Es información,
+  no un reproche: lo normal es que el cuerpo se acomode, y para eso estás
+  tú. Dile que lo viste y que lo vas a mover.
+  Así: "El peso lleva dos semanas plantado. Es normal, pasa. Cuéntame cómo
+  te sientes y te lo ajusto."
+
+racha — Siete días seguidos apuntando. Díselo y ya. No lo conviertas en una
+  charla motivacional ni le pidas nada más.
+  Así: "Siete días seguidos. Eso es lo difícil y ya lo estás haciendo."
+
+semana_buena — Cerró bien la semana. Corto y sincero.
+  Así: "Buena semana. Se nota."
+
+Nunca hables de enfermedades ni des consejo médico.
+`.trim();
+
 // Solo para IA Plus, igual que los eventos.
 const SISTEMA_MEMORIA = `
 
@@ -713,6 +747,45 @@ Deno.serve(async (req) => {
         salida.memoria = salida.memoria.trim().slice(0, 1200) || null;
       }
       return json({ ...salida, quedan, nivel, tope: TOPE_DIARIO });
+    }
+
+    // ---- El asistente escribe primero ----
+    //
+    // El MOTIVO no se decide aquí: lo decide SQL, gratis y siempre igual.
+    // Esto solo pone las palabras, que es lo que un modelo hace bien.
+    //
+    // Y no hace falta comprobar que el motivo sea cierto: guardar_aviso()
+    // lo vuelve a verificar en Postgres antes de dejar escribir nada. Un
+    // cliente que mienta aquí se gasta una consulta y no guarda nada.
+    if (accion === 'aviso') {
+      if (!esPlus) return json({ error: 'Esto es parte de IA Plus.', nivel }, 403);
+
+      const motivo = String(cuerpo.motivo || '');
+      if (!['ausente', 'racha', 'semana_buena', 'estancado'].includes(motivo)) {
+        return json({ error: 'Motivo desconocido.' }, 400);
+      }
+
+      const { data: mem } = await admin
+        .from('profiles').select('memoria_ia, full_name').eq('id', userId).single();
+      const nombre = String(mem?.full_name ?? '').trim().split(' ')[0];
+      const notas = String(mem?.memoria_ia ?? '').trim();
+
+      const r = await ia.messages.create({
+        model: MODELO,
+        max_tokens: 600,
+        system: SISTEMA_AVISO +
+          (nombre ? `\n\nSe llama ${nombre}.` : '') +
+          (notas ? `\n\nLO QUE SABES DE ELLA:\n${notas.slice(0, 1200)}` : ''),
+        output_config: { effort: 'low' },
+        messages: [{ role: 'user', content: `Motivo: ${motivo}` }],
+      });
+
+      const texto = r.content
+        .filter((c: { type: string }) => c.type === 'text')
+        .map((c: { text?: string }) => c.text ?? '')
+        .join('').trim().slice(0, 400);
+
+      return json({ motivo, texto, quedan, nivel });
     }
 
     // ---- Ajuste semanal de calorías ----

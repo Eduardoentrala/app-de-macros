@@ -71,6 +71,24 @@
 /* Solo la etiqueta: si no, la regla también encogería el emoji del círculo */
 .quick-item > span:not(.quick-circle){font:700 13px/1.15 sans-serif;color:var(--ink);}
 
+/* Lo que el entrenador dijo sin que se lo pidieran.
+   Fondo de tarjeta y no de aviso: no es una alerta del sistema, es alguien
+   hablándole. En cuanto parece una notificación, se lee como spam. */
+.aviso-coach{
+  margin:0 16px 10px;padding:14px 16px;border-radius:15px;
+  background:var(--card-bg);box-shadow:var(--shadow);
+  border-left:3px solid var(--ink);
+}
+.aviso-coach p{
+  margin:0;font:500 13.5px/1.5 sans-serif;color:var(--ink);
+}
+/* Discreto: cerrar un mensaje no es la acción principal, leerlo sí. */
+.aviso-coach button{
+  margin-top:9px;padding:0;border:none;background:none;cursor:pointer;
+  font:700 12px/1 sans-serif;color:var(--ink-faint);
+}
+.aviso-coach button:active{color:var(--ink);}
+
 /* La tira de eventos apartados. En ámbar suave y no en verde: no es un
    logro ni una alerta, es un aviso de que esta semana está repartida
    distinto y que eso está previsto. */
