@@ -814,6 +814,7 @@
   function sbCargarSesiones(){
     if(!sesion || !sesion.user) return Promise.resolve();
     return sbFetch('/rest/v1/workout_sessions?select=session_date,exercises,total_volume' +
+                   '&user_id=eq.' + sesion.user.id +
                    '&order=session_date.asc')
       .then(function(ss){
         Object.keys(SESIONES).forEach(function(k){ delete SESIONES[k]; });
@@ -833,9 +834,9 @@
   function sbCargarRutina(){
     if(!sesion || !sesion.user) return Promise.resolve();
     return Promise.all([
-      sbFetch('/rest/v1/routine_days?select=id,name,sort_order&order=sort_order.asc,created_at.asc'),
-      sbFetch('/rest/v1/routine_exercises?select=id,routine_day_id,name,sort_order&order=sort_order.asc,created_at.asc'),
-      sbFetch('/rest/v1/exercise_sets?select=id,routine_exercise_id,sort_order,reps,weight_kg,done&order=sort_order.asc')
+      sbFetch('/rest/v1/routine_days?select=id,name,sort_order&user_id=eq.' + sesion.user.id + '&order=sort_order.asc,created_at.asc'),
+      sbFetch('/rest/v1/routine_exercises?select=id,routine_day_id,name,sort_order&user_id=eq.' + sesion.user.id + '&order=sort_order.asc,created_at.asc'),
+      sbFetch('/rest/v1/exercise_sets?select=id,routine_exercise_id,sort_order,reps,weight_kg,done&user_id=eq.' + sesion.user.id + '&order=sort_order.asc')
     ]).then(function(r){
       var dias = r[0] || [], ejs = r[1] || [], sets = r[2] || [];
       if(!dias.length) return;    // sin rutina guardada: se queda el "Día 1" de arranque
@@ -5667,6 +5668,7 @@
   function sbEventos(){
     return sbFetch('/rest/v1/eventos' +
       '?select=fecha,titulo,calorias,bebidas,prioridad' +
+      '&user_id=eq.' + sesion.user.id +
       '&fecha=gte.' + isoDe(HOY) +
       '&cancelado_en=is.null' +
       '&order=fecha.asc')['catch'](function(){
@@ -5679,6 +5681,7 @@
   function sbDiario(desde){
     return sbFetch('/rest/v1/diary_entries' +
       '?select=id,entry_date,meal,food_name,unit,quantity,protein_g,carbs_g,fat_g' +
+      '&user_id=eq.' + sesion.user.id +
       '&entry_date=gte.' + desde + '&order=created_at.asc');
   }
   function sbAgregarAlimento(a, comida){
@@ -5705,10 +5708,12 @@
   // base, así que aquí no hay que acordarse de excluirlos.
   function sbAlimentos(){
     return sbFetch('/rest/v1/saved_foods?select=id,name,unit,protein_g,carbs_g,fat_g,veces_usado' +
+                   '&user_id=eq.' + sesion.user.id +
                    '&order=veces_usado.desc,name.asc');
   }
   function sbRecetas(){
     return sbFetch('/rest/v1/recipes?select=id,name,servings,calories,is_public' +
+                   '&user_id=eq.' + sesion.user.id +
                    '&order=created_at.desc');
   }
   function sbGuardarAlimento(a){
@@ -5723,10 +5728,12 @@
   }
   function sbPesos(desde){
     return sbFetch('/rest/v1/weight_logs?select=log_date,weight_kg' +
+                   '&user_id=eq.' + sesion.user.id +
                    '&log_date=gte.' + desde + '&order=log_date.asc');
   }
   function sbCardio(desde){
     return sbFetch('/rest/v1/cardio_logs?select=log_date,minutes' +
+                   '&user_id=eq.' + sesion.user.id +
                    '&log_date=gte.' + desde + '&order=log_date.asc');
   }
   function sbActualizarPerfil(campos){
