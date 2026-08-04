@@ -3101,6 +3101,7 @@
       b.classList.toggle('on', suyas.indexOf(b.dataset.cond) >= 0);
     });
     if(p.nota_salud) document.getElementById('regNotaSalud').value = p.nota_salud;
+    CONSENTIMIENTO_SALUD = p.consentimiento_salud_en || null;
 
     calcularMacros();          // deja el aviso de salud acorde a lo restaurado
     pintarSaludPerfil();
@@ -3122,7 +3123,30 @@
       });
     }
     calcularMacros();          // las calorías se mueven al momento, no al guardar
+    revisarConsentimiento();   // marcar una condición pide la casilla de salud
   });
+
+  // ---- Las dos casillas del registro ----
+  // La de salud solo sale si declararon algo: pedirle consentimiento para
+  // datos médicos a quien no dio ninguno es una casilla que no significa
+  // nada, y las casillas que no significan nada se marcan sin leer.
+  function revisarConsentimiento(){
+    var hayCondiciones = condicionesElegidas().length > 0;
+    var caja = document.getElementById('regAceptoSaludCaja');
+    var salud = document.getElementById('regAceptoSalud');
+    var terminos = document.getElementById('regAceptoTerminos');
+    var boton = document.getElementById('regEmpezar');
+    if(!caja || !boton) return;
+
+    caja.hidden = !hayCondiciones;
+    if(!hayCondiciones) salud.checked = false;
+    boton.disabled = !terminos.checked || (hayCondiciones && !salud.checked);
+  }
+  ['regAceptoTerminos', 'regAceptoSalud'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.addEventListener('change', revisarConsentimiento);
+  });
+  revisarConsentimiento();
 
   // ---- Las mismas condiciones, pero desde Perfil ----
   // Hasta ahora solo se podían declarar al darse de alta: quien ya tenía
@@ -3175,7 +3199,27 @@
     return r;
   }
 
+  // La casilla expresa, también aquí. Declarar una condición desde Perfil
+  // es exactamente lo mismo que declararla al registrarse: dato sensible y
+  // consentimiento aparte. Si ya lo dio antes, no se le vuelve a pedir.
+  function revisarConsentimientoSalud(){
+    var hay = elegidasEn(cajaSalud).length > 0;
+    var caja = document.getElementById('saludAceptoCaja');
+    var chk = document.getElementById('saludAcepto');
+    var btn = document.getElementById('saludGuardar');
+    if(!caja) return;
+    var hacefalta = hay && !CONSENTIMIENTO_SALUD;
+    caja.hidden = !hacefalta;
+    if(!hacefalta) chk.checked = false;
+    btn.disabled = hacefalta && !chk.checked;
+  }
+  (function(){
+    var c = document.getElementById('saludAcepto');
+    if(c) c.addEventListener('change', revisarConsentimientoSalud);
+  })();
+
   function pintarPreviaSalud(){
+    revisarConsentimientoSalud();
     var elegidas = elegidasEn(cajaSalud);
     var m = comoSiTuviera(elegidas, calcularMacros);
     var caja = document.getElementById('saludPrevia');
@@ -3235,10 +3279,15 @@
     cerrarSalud();
     toast('toastPeso', 'Salud guardada · ' + mil(m.cal) + ' cal al día');
 
+    var tiene = condicionesElegidas().length > 0;
+    if(tiene && !CONSENTIMIENTO_SALUD) CONSENTIMIENTO_SALUD = new Date().toISOString();
     sbActualizarPerfil({
       condiciones: condicionesElegidas(),
       nota_salud: document.getElementById('regNotaSalud').value.trim() || null,
-      goal_protein_g: m.P, goal_carbs_g: m.C, goal_fat_g: m.G
+      goal_protein_g: m.P, goal_carbs_g: m.C, goal_fat_g: m.G,
+      // Se manda siempre: si quitó todas, se retira también el
+      // consentimiento. Dejar de dar un dato no puede costar más que darlo.
+      consentimiento_salud_en: tiene ? CONSENTIMIENTO_SALUD : null
     })['catch'](function(e){
       toast('toastPeso', 'No se pudo guardar: ' + traducirError(e.message));
     });
@@ -3391,7 +3440,13 @@
         dias_entreno: reg.dias,
         goal_protein_g: m.P, goal_carbs_g: m.C, goal_fat_g: m.G,
         condiciones: condicionesElegidas(),
-        nota_salud: document.getElementById('regNotaSalud').value.trim() || null
+        nota_salud: document.getElementById('regNotaSalud').value.trim() || null,
+        // La constancia. La versión va con la fecha porque el texto va a
+        // cambiar, y "aceptó" sin decir qué aceptó no sirve de nada.
+        consentimiento_en: new Date().toISOString(),
+        consentimiento_version: VERSION_LEGAL,
+        consentimiento_salud_en: condicionesElegidas().length
+          ? new Date().toISOString() : null
       })
     });
   }
@@ -6067,6 +6122,109 @@
     });
     return total;
   }
+
+  // ---- Aviso de privacidad y términos ----
+  // La versión viaja con el consentimiento: sin ella, "acepto" no significa
+  // nada dentro de un año, porque el texto habrá cambiado y no habrá forma
+  // de saber qué leyó esa persona. Al tocar legal.md hay que subirla aquí.
+  var VERSION_LEGAL = '1';
+  var legalCargado = false;
+  // Si ya lo dio, no se le vuelve a pedir. Se rellena al cargar el perfil.
+  var CONSENTIMIENTO_SALUD = null;
+
+  // Un markdown mínimo, solo lo que legal.md usa. Una librería entera para
+  // esto serían 40 KB en cada teléfono para pintar cuatro encabezados.
+  function comoHtml(md){
+    var filas = md.replace(/\r/g, '').split('\n');
+    var out = [], enLista = false, enTabla = false, parrafo = [];
+
+    // Un párrafo de markdown sigue hasta la línea en blanco, no hasta el
+    // salto. Tratando cada línea como un párrafo se parten las frases por
+    // la mitad y, peor, una **negrita** que cruce el salto sale literal
+    // porque la expresión no la encuentra entera.
+    function soltarParrafo(){
+      if(!parrafo.length) return;
+      out.push('<p>' + enLinea(parrafo.join(' ')) + '</p>');
+      parrafo = [];
+    }
+    function cerrar(){
+      soltarParrafo();
+      if(enLista){ out.push('</ul>'); enLista = false; }
+      if(enTabla){ out.push('</tbody></table></div>'); enTabla = false; }
+    }
+    function enLinea(t){
+      // El orden importa: primero se escapa, y solo después se meten las
+      // etiquetas. Al revés, cualquier < del texto rompería el resultado.
+      return escapar(t)
+        .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/`(.+?)`/g, '<code>$1</code>');
+    }
+
+    filas.forEach(function(f){
+      var t = f.trim();
+      if(!t){ cerrar(); return; }
+      if(t === '---'){ cerrar(); out.push('<hr>'); return; }
+
+      var h = t.match(/^(#{1,3})\s+(.*)$/);
+      if(h){ cerrar(); out.push('<h' + h[1].length + '>' + enLinea(h[2]) + '</h' + h[1].length + '>'); return; }
+
+      // La raya de separación de la tabla: no se pinta, solo cambia de modo.
+      if(/^\|[\s:|-]+\|$/.test(t)) return;
+
+      if(t.indexOf('|') === 0){
+        var celdas = t.split('|').slice(1, -1).map(function(c){ return enLinea(c.trim()); });
+        if(!enTabla){
+          soltarParrafo();
+          if(enLista){ out.push('</ul>'); enLista = false; }
+          out.push('<div class="tabla-legal"><table><thead><tr>' +
+                   celdas.map(function(c){ return '<th>' + c + '</th>'; }).join('') +
+                   '</tr></thead><tbody>');
+          enTabla = true;
+        } else {
+          out.push('<tr>' + celdas.map(function(c){ return '<td>' + c + '</td>'; }).join('') + '</tr>');
+        }
+        return;
+      }
+      if(enTabla){ out.push('</tbody></table></div>'); enTabla = false; }
+
+      if(t.indexOf('- ') === 0){
+        soltarParrafo();
+        if(!enLista){ out.push('<ul>'); enLista = true; }
+        out.push('<li>' + enLinea(t.slice(2)) + '</li>');
+        return;
+      }
+      // Dentro de una lista, una línea suelta continúa el punto anterior.
+      if(enLista){ out[out.length - 1] = out[out.length - 1]
+        .replace('</li>', ' ' + enLinea(t) + '</li>'); return; }
+      parrafo.push(t);
+    });
+    cerrar();
+    return out.join('');
+  }
+
+  function abrirLegal(){
+    // Apilada, con su botón de regresar: se abre desde el registro y desde
+    // Perfil, y hay que poder volver a donde se estaba.
+    goto('legal', true);
+    if(legalCargado) return;
+    fetch('legal.md', { cache: 'no-cache' })
+      .then(function(r){ return r.text(); })
+      .then(function(md){
+        document.getElementById('textoLegal').innerHTML = comoHtml(md);
+        legalCargado = true;
+      })['catch'](function(){
+        // Sin el texto no se puede aceptar nada a ciegas: se dice y punto.
+        document.getElementById('textoLegal').innerHTML =
+          '<p>No se pudo cargar el aviso. Revisa tu conexión e inténtalo otra vez.</p>';
+      });
+  }
+
+  // Se abre desde el registro y desde Perfil. Delegado en el documento
+  // porque el del registro vive dentro de una tarjeta que se repinta.
+  document.addEventListener('click', function(e){
+    if(e.target.closest('[data-ver-legal]')) abrirLegal();
+  });
 
   // ---- Qué plan tiene esta persona ----
   // Se escribe una sola vez y lo leen los tres sitios que lo enseñan: la

@@ -353,9 +353,26 @@
           </div>
 
           <p class="reg-aviso">Son estimaciones basadas en fórmulas estándar. Ajusta tus metas cuando quieras desde Perfil.</p>
+
+          <!-- Dos casillas y no una. La ley pide consentimiento EXPRESO y
+               distinguible para datos sensibles: una sola que mezcle "acepto
+               los términos" con "y que guarden mis datos médicos" no vale.
+               La segunda solo aparece si marcó alguna condición. -->
+          <div class="card" id="regLegal">
+            <label class="acepto">
+              <input type="checkbox" id="regAceptoTerminos">
+              <span>He leído y acepto el <b data-ver-legal>aviso de privacidad y los
+                términos</b>.</span>
+            </label>
+            <label class="acepto" id="regAceptoSaludCaja" hidden>
+              <input type="checkbox" id="regAceptoSalud">
+              <span>Doy mi consentimiento <b>expreso</b> para que se guarden y usen
+                mis datos de salud con el fin de ajustar mis calorías.</span>
+            </label>
+          </div>
         </div>
         <div class="bottom-bar">
-          <button class="btn-primary" id="regEmpezar">Empezar con estos macros</button>
+          <button class="btn-primary" id="regEmpezar" disabled>Empezar con estos macros</button>
           <button class="btn-ghost-text" id="regSaltar">Ya tengo cuenta</button>
         </div>
       </div>
@@ -422,6 +439,19 @@
           </div>
         </div>
         <div class="toast" id="toastIA2">Listo</div>
+      </div>
+
+      <!-- AVISO DE PRIVACIDAD Y TÉRMINOS
+           El texto vive en legal.md y se trae al abrir: un solo sitio que
+           editar, y así el que se revisa es el que se enseña. -->
+      <div class="app-view" data-view="legal">
+        <div class="back-header stacked">
+          <div class="back-header-inner">
+            <button class="back-btn" data-back>‹ Regresar</button>
+            <span class="back-title">Privacidad y términos</span>
+          </div>
+        </div>
+        <div class="scroll"><div class="texto-legal" id="textoLegal">Cargando…</div></div>
       </div>
 
       <!-- FRECUENTES -->
@@ -1132,6 +1162,7 @@
           </div>
 
           <button class="signout" id="cerrarSesion">Cerrar sesión</button>
+          <button class="enlace-legal" data-ver-legal>Privacidad y términos</button>
           <!-- Discreto y separado: irse tiene que ser posible, no fácil de
                tocar sin querer justo debajo de cerrar sesión. -->
           <button class="borrar-cuenta" id="borrarCuentaBtn">Eliminar mi cuenta</button>
@@ -1193,6 +1224,11 @@
             <textarea class="notas-input" id="saludNota" rows="2" maxlength="300"
               placeholder="Otra cosa que debamos saber (opcional)"></textarea>
             <div class="cond-aviso" id="saludPrevia" hidden></div>
+            <label class="acepto" id="saludAceptoCaja" hidden>
+              <input type="checkbox" id="saludAcepto">
+              <span>Doy mi consentimiento <b>expreso</b> para que se guarden y usen
+                mis datos de salud. Ver <b data-ver-legal>aviso de privacidad</b>.</span>
+            </label>
             <button class="btn-primary" id="saludGuardar">Guardar</button>
             <button class="btn-ghost-text" id="saludCancelar">Cancelar</button>
           </div>

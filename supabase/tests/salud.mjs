@@ -37,9 +37,12 @@ await db.exec(`insert into auth.users(id,email) values
   ('${YO}','yo@x.com'),('${OTRO}','otro@x.com')`);
 
 console.log('— Se guardan y se leen —');
+// Desde la 0031 hace falta consentimiento expreso para guardar datos de
+// salud: son datos sensibles y la base ya no los acepta a secas.
 await as(YO, `update public.profiles
                  set condiciones = '{diabetes_2,hipertension}'::public.condicion_salud[],
-                     nota_salud  = 'Metformina por las mañanas'
+                     nota_salud  = 'Metformina por las mañanas',
+                     consentimiento_salud_en = now()
                where id = '${YO}'`);
 const mio = (await as(YO, `select condiciones::text[] c, nota_salud n
                              from public.profiles where id='${YO}'`)).rows[0];
@@ -70,6 +73,29 @@ check('diabetes tipo 1 y tipo 2 a la vez',
                      where id='${YO}'`)) !== null);
 check('una nota larguísima',
   (await falla(YO, `update public.profiles set nota_salud=repeat('x',301) where id='${YO}'`)) !== null);
+
+console.log('\n— Sin consentimiento no se guardan datos de salud (0031) —');
+// La pantalla no es la unica puerta: la app habla por PostgREST y se puede
+// llamar directo. La regla tiene que vivir en la base o no vale nada.
+check('OTRO no puede declarar condiciones sin haber aceptado',
+  (await falla(OTRO, `update public.profiles
+                         set condiciones='{prediabetes}'::public.condicion_salud[]
+                       where id='${OTRO}'`)) !== null);
+check('y no se le quedo nada guardado',
+  (await db.query(`select cardinality(condiciones) n from public.profiles
+                    where id='${OTRO}'`)).rows[0].n === 0);
+check('con consentimiento si entra',
+  (await falla(OTRO, `update public.profiles
+                         set consentimiento_salud_en = now(),
+                             condiciones='{prediabetes}'::public.condicion_salud[]
+                       where id='${OTRO}'`)) === null);
+// Quitarselas todas no requiere nada: dejar de dar un dato nunca puede
+// estar mas restringido que darlo.
+check('quitarlas siempre se puede',
+  (await falla(OTRO, `update public.profiles
+                         set condiciones='{}'::public.condicion_salud[],
+                             consentimiento_salud_en = null
+                       where id='${OTRO}'`)) === null);
 
 console.log('\n— Sexo y días de entreno (0022) —');
 // Las otras dos entradas de Mifflin-St Jeor. Sin guardarlas, recalcular al
