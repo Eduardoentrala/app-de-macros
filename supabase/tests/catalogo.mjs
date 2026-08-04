@@ -167,15 +167,45 @@ check('el cocido ya no hereda los 136 g de la taza',
   Number(cocido.rows[0].pieza_g) === 50, JSON.stringify(cocido.rows[0]));
 check('pero porcion_g sigue siendo el dato de USDA, sin tocar',
   Number(cocido.rows[0].porcion_g) === 136, JSON.stringify(cocido.rows[0]));
-// Solo los huevos. Si algun dia se rellena a lo loco, esto salta.
-const conPieza = await db.query(`select count(*)::int n from public.alimentos_catalogo
-                                  where pieza_g is not null`);
-check('solo los seis huevos tienen pieza', conPieza.rows[0].n === 6,
-  `hay ${conPieza.rows[0].n} con pieza_g`);
-const otros = await db.query(`select count(*)::int n from public.alimentos_catalogo
-                               where pieza_g is not null and categoria <> 'huevos'`);
-check('nada fuera de la categoria huevos', otros.rows[0].n === 0,
-  `${otros.rows[0].n} alimentos de otra categoria con pieza_g`);
+console.log('\n— La tortilla también (0028) —');
+const tor = await db.query(`select nombre, pieza_g, porcion, porcion_g
+                              from public.alimentos_catalogo
+                             where nombre like 'Tortilla%' order by nombre`);
+check('la de harina pesa 48 g la pieza',
+  Number(tor.rows.find(r => r.nombre === 'Tortilla de harina')?.pieza_g) === 48,
+  JSON.stringify(tor.rows));
+check('la de maiz pesa 30 g la pieza',
+  Number(tor.rows.find(r => r.nombre === 'Tortilla de maíz')?.pieza_g) === 30,
+  JSON.stringify(tor.rows));
+// La de maiz tenia 'oz' de porcion: una onza no es una tortilla, y ese es
+// justo el error que `pieza_g` existe para no cometer.
+check('la de maiz no hereda la onza de USDA',
+  Number(tor.rows.find(r => r.nombre === 'Tortilla de maíz')?.porcion_g) === 28 &&
+  Number(tor.rows.find(r => r.nombre === 'Tortilla de maíz')?.pieza_g) !== 28,
+  JSON.stringify(tor.rows));
+// Una tortilla de maiz ronda las 67 calorias. Si algun dia alguien toca el
+// peso, esto salta antes de que la app empiece a mentir por 20 cal.
+const calTor = await db.query(`select round(kcal * pieza_g / 100) c
+                                 from public.alimentos_catalogo
+                                where nombre = 'Tortilla de maíz'`);
+check('y sale a ~67 cal la pieza', Math.abs(Number(calTor.rows[0].c) - 67) <= 4,
+  `salieron ${calTor.rows[0].c} cal`);
+
+// La lista de lo que se cuenta por piezas, entera. Si algun dia se rellena
+// a lo loco -o se olvida rellenar algo que se anadio- esto salta.
+const conPieza = await db.query(`select nombre from public.alimentos_catalogo
+                                  where pieza_g is not null order by nombre`);
+const esperados = ['Clara de huevo', 'Huevo cocido', 'Huevo entero', 'Huevo estrellado',
+                   'Huevo revuelto', 'Tortilla de harina', 'Tortilla de maíz',
+                   'Yema de huevo'];
+check('solo se cuentan por pieza los huevos y las tortillas',
+  JSON.stringify(conPieza.rows.map(r => r.nombre)) === JSON.stringify(esperados),
+  JSON.stringify(conPieza.rows.map(r => r.nombre)));
+// Nada con pieza puede quedarse sin peso: seria ofrecer "1 pieza" de algo
+// que no se sabe cuanto pesa, que es de donde venia el fallo del espagueti.
+const cero = await db.query(`select count(*)::int n from public.alimentos_catalogo
+                              where pieza_g is not null and pieza_g <= 0`);
+check('ninguna pieza pesa cero', cero.rows[0].n === 0);
 
 console.log(`\n${ok} pasan · ${bad} fallan`);
 await db.close();
