@@ -410,6 +410,9 @@
           <div id="iaFotoZona"></div>
           <div class="ia-entrada">
             <button class="ia-icono" id="iaTomarFoto" title="Tomar foto">📷</button>
+            <!-- Se esconde solo si el teléfono no sabe transcribir, y solo
+                 aparece con IA Plus. -->
+            <button class="ia-icono" id="iaHablar" title="Dictar" hidden>🎙️</button>
             <textarea id="iaTexto" rows="1" maxlength="500"
               placeholder="Escribe tu mensaje…"></textarea>
             <button class="ia-enviar" id="iaEnviar" title="Enviar">➤</button>

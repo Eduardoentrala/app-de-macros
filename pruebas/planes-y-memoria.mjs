@@ -108,5 +108,44 @@ console.log('\n— No se guarda lo que ya esta en otro sitio —');
     'acumular la vuelve un ladrillo que se paga cada mensaje');
 }
 
+console.log('\n— Dictar, en Plus —');
+{
+  const HTML = readFileSync(join(RAIZ, 'docs', 'index.html'), 'utf8');
+  check('hay boton de microfono', HTML.includes('id="iaHablar"'));
+  // Nace escondido: si el navegador no sabe transcribir, nunca aparece.
+  check('nace escondido', /id="iaHablar"[^>]*hidden/.test(HTML),
+    'ensenarlo y que no haga nada es peor que no tenerlo');
+
+  const i = APP.indexOf('function pintarBotonHablar(');
+  const p = APP.slice(i, i + 400);
+  check('solo se enseña con soporte del navegador', /!Reconocedor/.test(p));
+  check('y solo con Plus', /MI_NIVEL_IA !== 'plus'/.test(p));
+  check('se repinta al saber el plan',
+    (APP.match(/pintarBotonHablar\(\)/g) || []).length >= 2,
+    'si no se llama, el boton se queda escondido para siempre');
+
+  // Lo unico que puede hacer dano de verdad aqui: dejar el microfono
+  // abierto escuchando de fondo despues de salir del asistente.
+  check('se para al cerrar el asistente',
+    /getElementById\('iaCerrar'\)\.addEventListener\('click', pararDeOir\)/.test(APP));
+  check('y al terminar solo', /r\.onend = function\(\)\{ pararDeOir\(\); \}/.test(APP));
+  check('volver a pulsar lo apaga', /if\(oyendo\)\{ pararDeOir\(\); return; \}/.test(APP));
+
+  // Callarse o volver a pulsar no son errores que haya que anunciar.
+  check('no avisa de los silencios', /'no-speech' \|\| e\.error === 'aborted'/.test(APP));
+  check('habla en español de Mexico', /r\.lang = 'es-MX'/.test(APP));
+  // Sin resultados parciales parece que no hace nada y se vuelve a pulsar.
+  check('enseña el texto mientras hablas', /r\.interimResults = true/.test(APP));
+
+  const CSS = readFileSync(join(RAIZ, 'docs', 'estilos', 'pantallas.css'), 'utf8');
+  check('se nota que esta escuchando', /\.ia-icono\.oyendo/.test(CSS));
+  check('y se respeta a quien no quiere animaciones',
+    /prefers-reduced-motion[\s\S]{0,120}\.ia-icono\.oyendo\{animation:none/.test(CSS));
+
+  // No viaja audio a ningun sitio: eso es lo que lo hace gratis.
+  check('no manda el audio a ningun servidor',
+    !/MediaRecorder|audio\/webm|\/transcribe/.test(APP));
+}
+
 console.log(`\n${ok} pasan · ${mal} fallan`);
 process.exit(mal ? 1 : 0);

@@ -5627,6 +5627,76 @@
     });
   }
 
+  // ---- Dictar en vez de escribir ----
+  // "Me comí unos tacos de suadero y una coca" se dice en tres segundos y
+  // se teclea en treinta. Los entrenadores mandan audios; esto es lo más
+  // parecido que puede hacer una app web.
+  //
+  // Transcribe el PROPIO TELÉFONO con la API del navegador. No viaja audio
+  // a ningún servidor, no cuesta un céntimo y funciona sin conexión al
+  // asistente. De las cosas que más caras parecen y menos cuestan.
+  var Reconocedor = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var oyendo = null;
+
+  function pintarBotonHablar(){
+    var b = document.getElementById('iaHablar');
+    if(!b) return;
+    // Sin soporte no se enseña un botón que no va a hacer nada. Y solo con
+    // Plus: es parte de lo que se paga.
+    b.hidden = !Reconocedor || MI_NIVEL_IA !== 'plus';
+  }
+
+  function pararDeOir(){
+    if(!oyendo) return;
+    try{ oyendo.stop(); }catch(e){}
+    oyendo = null;
+    document.getElementById('iaHablar').classList.remove('oyendo');
+  }
+
+  if(Reconocedor){
+    document.getElementById('iaHablar').addEventListener('click', function(){
+      if(oyendo){ pararDeOir(); return; }
+
+      var r = new Reconocedor();
+      r.lang = 'es-MX';
+      // Resultados parciales para que se vea aparecer el texto mientras se
+      // habla: sin eso parece que no está haciendo nada y se pulsa otra vez.
+      r.interimResults = true;
+      r.continuous = false;
+
+      var yaEstaba = iaTexto.value.trim();
+      r.onresult = function(e){
+        var dicho = '';
+        for(var i = 0; i < e.results.length; i++) dicho += e.results[i][0].transcript;
+        iaTexto.value = (yaEstaba ? yaEstaba + ' ' : '') + dicho.trim();
+        // El textarea crece con el contenido, igual que al teclear.
+        iaTexto.dispatchEvent(new Event('input', {bubbles:true}));
+      };
+      r.onerror = function(e){
+        pararDeOir();
+        // 'no-speech' y 'aborted' son cosas normales -se calló, o volvió a
+        // pulsar-. Avisar de eso sería ruido.
+        if(e.error === 'no-speech' || e.error === 'aborted') return;
+        toast('toastIA2', e.error === 'not-allowed'
+          ? 'Tienes que darle permiso al micrófono.'
+          : 'No te entendí. Prueba otra vez.');
+      };
+      r.onend = function(){ pararDeOir(); };
+
+      try{
+        r.start();
+        oyendo = r;
+        this.classList.add('oyendo');
+      }catch(e){
+        toast('toastIA2', 'No se pudo abrir el micrófono.');
+      }
+    });
+
+    // Salir del asistente con el micro abierto lo dejaría escuchando de
+    // fondo. Eso no se hace.
+    document.getElementById('iaCerrar').addEventListener('click', pararDeOir);
+  }
+
   // ---- La foto ----
   // Una foto de teléfono son 3-6 MB. Para reconocer un plato sobran 1024
   // píxeles: mandarla entera costaría muchos más tokens -o sea, dinero-
@@ -5989,6 +6059,7 @@
     var fila = document.getElementById('profPlanIa');
     if(fila) fila.innerHTML = p.nombre + '<i>›</i>';
     pintarQuedanIA();
+    pintarBotonHablar();
   }
 
   var iaQuedanNum = null;

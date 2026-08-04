@@ -206,6 +206,19 @@
   display:flex;align-items:center;justify-content:center;font-size:18px;
 }
 .ia-icono{background:var(--pill-bg);}
+/* Mientras escucha. El latido no es adorno: es lo único que distingue
+   "te estoy oyendo" de "no pasó nada al pulsar", y sin eso la gente vuelve
+   a picar el botón y lo apaga. */
+.ia-icono.oyendo{background:var(--red-soft);animation:latido 1.2s ease-in-out infinite;}
+@keyframes latido{
+  0%,100%{transform:scale(1);}
+  50%{transform:scale(1.12);}
+}
+/* A quien pida no moverle la pantalla se le respeta: el color solo ya dice
+   que está escuchando. */
+@media (prefers-reduced-motion: reduce){
+  .ia-icono.oyendo{animation:none;}
+}
 .ia-enviar{background:var(--ink);color:var(--card-bg);font-size:16px;}
 .ia-enviar:disabled{opacity:.4;}
 
