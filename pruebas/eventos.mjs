@@ -266,10 +266,13 @@ console.log('\n— Y la Edge Function lo manda —');
   check('el esquema del chat lleva evento', /evento: \{ anyOf:/.test(FN));
   check('con la lista de lo que falta por preguntar', FN.includes("enum: ['calorias', 'bebidas', 'prioridad']"));
   // Prometer algo que la app va a negar despues es peor que no ofrecerlo.
+  // Se comprueba la intencion y no el renglon exacto: ese `esPlus ? ... :`
+  // va creciendo segun se añaden cosas de Plus, y fijar el texto literal
+  // hace que la prueba falle por escribir mas codigo correcto.
   check('las reglas de eventos solo se mandan a Plus',
-    /esPlus \? SISTEMA_EVENTOS : ''/.test(FN));
+    /esPlus \?[^:]*SISTEMA_EVENTOS[^:]*: ''/.test(FN));
   check('y el evento se borra en la salida si no es Plus',
-    /if \(!esPlus\) salida\.evento = null/.test(FN));
+    /if \(!esPlus\)[^\n]*salida\.evento = null/.test(FN));
   check('el ajuste semanal exige Plus', /if \(!esPlus\) \{[\s\S]{0,200}IA Plus/.test(FN));
   // Que no ajusta cuando no hay datos lo decide el codigo, no el modelo.
   check('sin material no se ajusta, y lo decide el codigo',

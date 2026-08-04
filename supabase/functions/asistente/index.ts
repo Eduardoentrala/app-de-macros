@@ -47,7 +47,22 @@ const CORS = {
 // a ~$1.50: es lo que convierte "se me pueden ir los 5 dolares en una
 // tarde" en "no puede pasar". Un uso normal no llega ni de lejos — apuntar
 // un par de comidas y preguntar algo cabe de sobra.
-const TOPE_DIARIO = 5;
+// Un tope por plan, y no uno solo para todos.
+//
+// Con un tope único de 5 para los dos planes, quien paga 99 puede gastar
+// exactamente lo mismo que quien paga 199. Con los costes reales medidos
+// —$0.024 el chat, $0.046 con foto— cinco consultas con foto al día son
+// unos $7 al mes. De 99 pesos quedan ~$4.75 netos: cada usuario intenso
+// del plan barato daba PÉRDIDAS, y cuanto más le gustaba la app, más.
+//
+// Con 3 y 15 las cuentas cambian:
+//   normal  3 × $0.046 × 30 = $4.14 de coste sobre $4.75  → justo, pero no pierde
+//   plus   15 × $0.046 × 30 = $20.7 en el peor caso absoluto
+//
+// El tope de Plus es alto a propósito: nadie manda quince fotos al día
+// treinta días seguidos. El uso real ronda las 3-4, y el tope está para que
+// un token robado no vacíe la cuenta en una noche, no para racionar.
+const TOPES = { apagada: 0, normal: 3, plus: 15 } as const;
 
 const MODELO = 'claude-opus-5';
 
@@ -174,8 +189,11 @@ const ESQUEMA_CHAT = {
     alimentos: ESQUEMA_ALIMENTOS.properties.alimentos,
     // null casi siempre: solo se llena cuando de verdad hay un plan futuro.
     evento: { anyOf: [{ type: 'null' }, ESQUEMA_EVENTO] },
+    // La memoria COMPLETA reescrita, o null si no hay nada nuevo que
+    // recordar. Completa y no un añadido: ver SISTEMA_MEMORIA.
+    memoria: { anyOf: [{ type: 'null' }, { type: 'string' }] },
   },
-  required: ['respuesta', 'alimentos', 'evento'],
+  required: ['respuesta', 'alimentos', 'evento', 'memoria'],
   additionalProperties: false,
 } as const;
 
@@ -335,6 +353,43 @@ REGLAS DURAS
 - "motivo" es aparte, para el historial: ahí sí sé concreto y técnico.
 `.trim();
 
+// Solo para IA Plus, igual que los eventos.
+const SISTEMA_MEMORIA = `
+
+LO QUE RECUERDAS DE ESTA PERSONA
+
+Tienes memoria entre conversaciones. Es lo que te separa de un buscador.
+
+Cuando aprendas algo que vaya a servirte MÁS ADELANTE, devuelve en
+"memoria" la versión completa y actualizada de tus notas. Completa: no un
+añadido, sino todo lo que quieres seguir sabiendo, ya reescrito. Si no hay
+nada nuevo, devuelve null.
+
+Máximo 1200 caracteres. El límite es a propósito: te obliga a quedarte con
+lo que importa y a soltar lo que dejó de importar.
+
+Sirve para recordar:
+- Qué no come, y por qué (no le gusta, alergia, religión)
+- Cómo vive: a qué hora entrena, si cocina o come fuera, si viaja
+- Qué le funciona y qué abandona
+- Lesiones o molestias que ha mencionado
+- Cómo prefiere que le hables
+
+NO sirve para:
+- Lo que ya está en la base: su peso, sus macros, lo que comió ayer. Eso lo
+  tienes cada vez, no lo dupliques.
+- Lo de un solo día ("hoy desayunó tarde").
+- Diagnósticos. Sus condiciones de salud vienen aparte y no son cosa tuya.
+
+Escríbelo en frases cortas, como apuntes para ti:
+  "Vegetariana. Odia el brócoli. Entrena de noche, cena tardísimo.
+   Cocina domingos y congela. Dejó dos veces por aburrirse del pollo."
+
+Y ÚSALO. Recordar sin que se note no vale de nada:
+  "Te propongo pescado, que del pollo ya te cansaste otras veces."
+Sin presumir de que te acuerdas. Un entrenador no dice "según mis notas".
+`.trim();
+
 // Solo para IA Plus. Va aparte y no dentro de SISTEMA_CHAT porque a quien
 // no lo tiene contratado no se le puede ni insinuar: si el modelo lo lee,
 // acaba ofreciéndolo, y prometer algo que la app va a negar después es peor
@@ -480,6 +535,7 @@ Deno.serve(async (req) => {
   const esPlus = nivel === 'plus';
 
   // --- Tope diario ---
+  const TOPE_DIARIO = TOPES[nivel as keyof typeof TOPES] ?? TOPES.normal;
   const { data: quedan, error: errTope } = await admin.rpc('gastar_consulta_ia', {
     usuario: userId,
     tope: TOPE_DIARIO,
@@ -578,6 +634,18 @@ Deno.serve(async (req) => {
           `G${Math.round((m.meta_g || 0) - (m.hoy_g || 0))}`
         : '';
 
+      // Lo que ya sabe de esta persona. Se lee de la base y no de lo que
+      // manda la app: la memoria la escribe el modelo y la guarda el
+      // cliente, así que si viniera por el cuerpo, cualquiera podría
+      // inyectar en el sistema lo que quisiera desde la consola.
+      let loQueSe = '';
+      if (esPlus) {
+        const { data: mem } = await admin
+          .from('profiles').select('memoria_ia').eq('id', userId).single();
+        const texto = String(mem?.memoria_ia ?? '').trim();
+        if (texto) loQueSe = `\n\nLO QUE YA SABES DE ESTA PERSONA:\n${texto.slice(0, 1200)}`;
+      }
+
       // "El viernes" no significa nada sin saber qué día es hoy, y el
       // modelo no lo sabe. La zona la manda el cliente porque el servidor
       // corre en UTC: a las 8 de la noche en México allí ya es mañana, y
@@ -622,8 +690,8 @@ Deno.serve(async (req) => {
       const r = await ia.messages.create({
         model: MODELO,
         max_tokens: imagen ? 4000 : 2000,
-        system: SISTEMA_CHAT + (esPlus ? SISTEMA_EVENTOS : '') +
-                SISTEMA_APUNTAR_REGLAS + hoyEs + contexto,
+        system: SISTEMA_CHAT + (esPlus ? SISTEMA_EVENTOS + SISTEMA_MEMORIA : '') +
+                SISTEMA_APUNTAR_REGLAS + hoyEs + contexto + loQueSe,
         ...(imagen ? { thinking: { type: 'adaptive' as const } } : {}),
         output_config: {
           effort: imagen ? 'medium' : 'low',
@@ -637,8 +705,14 @@ Deno.serve(async (req) => {
       // Cinturón además de tirantes: a quien no tiene Plus no se le manda
       // evento aunque el modelo se lo invente. Quitarlo aquí es una línea;
       // confiar en que el prompt siempre se respete no es una garantía.
-      if (!esPlus) salida.evento = null;
-      return json({ ...salida, quedan, nivel });
+      if (!esPlus) { salida.evento = null; salida.memoria = null; }
+      // Se recorta aquí y no solo en la base: el CHECK de la columna haría
+      // fallar el guardado entero por un carácter de más, y perder la
+      // conversación por eso sería absurdo.
+      if (typeof salida.memoria === 'string') {
+        salida.memoria = salida.memoria.trim().slice(0, 1200) || null;
+      }
+      return json({ ...salida, quedan, nivel, tope: TOPE_DIARIO });
     }
 
     // ---- Ajuste semanal de calorías ----

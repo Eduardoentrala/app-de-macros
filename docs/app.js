@@ -5798,6 +5798,7 @@
       // asistente siga conversando, `falta` trae algo y aquí no pasa nada:
       // en pantalla solo se ve su pregunta, que es lo que se quería.
       guardarEventoSiEstaCompleto(r.evento);
+      guardarMemoriaIA(r.memoria);
       pintarChat();
     })['catch'](function(e){
       IA_MSGS.pop();
@@ -5807,6 +5808,18 @@
       iaOcupado = false;
       document.getElementById('iaEnviar').disabled = false;
     });
+  }
+
+  // Lo que el asistente ha aprendido de esta persona. Lo escribe él y lo
+  // guarda la app, como los alimentos y los eventos: la Edge Function no
+  // escribe en la base, y así no necesita permisos ni puede saltarse RLS.
+  //
+  // Llega la memoria ENTERA reescrita, no un añadido. Si llegara por trozos
+  // acabaría siendo un ladrillo que se paga en tokens en cada mensaje.
+  function guardarMemoriaIA(texto){
+    if(!texto || !sesion || !sesion.user) return;
+    sbActualizarPerfil({ memoria_ia: String(texto).slice(0, 1200) })
+      ['catch'](function(){});   // en silencio: no es cosa del usuario
   }
 
   // ---- Eventos que el asistente detectó en la conversación ----
@@ -5946,7 +5959,7 @@
         'Chat con el asistente: qué comer con lo que te queda',
         'Foto del platillo: lo reconoce y lo apunta por ti',
         'Lista del súper para comer así una semana',
-        'Cinco consultas al día'
+        'Tres consultas al día'
       ],
       no:['No reparte la semana por eventos',
           'No te ajusta las calorías cada semana'] },
@@ -5954,10 +5967,12 @@
       resumen:'Como tener un entrenador encima',
       incluye:[
         'Todo lo del plan normal',
+        'Se acuerda de ti: lo que no comes, cómo vives, qué te funciona',
         'Le cuentas tus planes ("el sábado hay boda") y te hace sitio antes',
         'Chequeo semanal: hambre, energía y antojo',
         'Te ajusta las calorías cada semana según cómo te fue y cómo te sientes',
-        'Y si no hay datos suficientes, te lo dice en vez de ajustar a ciegas'
+        'Y si no hay datos suficientes, te lo dice en vez de ajustar a ciegas',
+        'Quince consultas al día'
       ],
       no:[] }
   ];
