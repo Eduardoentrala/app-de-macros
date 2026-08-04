@@ -388,6 +388,14 @@
             </div>
           </div>
         </div>
+        <!-- Para lo que se comió ayer y no se apuntó. Arranca en hoy siempre;
+             un selector que recuerda el día anterior acaba apuntando la cena
+             de hoy en el martes pasado sin que nadie se dé cuenta. -->
+        <div class="apunte-dia">
+          <span>Apuntar en</span>
+          <input type="date" id="mealFecha">
+          <button id="mealFechaHoy" hidden>Volver a hoy</button>
+        </div>
         <div class="search-wrap">
           <div class="searchbox"><span>🔍</span><input id="mealSearch" placeholder="Busca un alimento..."></div>
           <div class="src-pills">

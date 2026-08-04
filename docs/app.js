@@ -96,6 +96,13 @@
     var push = e.target.closest('[data-push]');
     if(push){
       if(push.dataset.meal){ comidaActual = push.dataset.meal; pintarComida(); }
+      // Entrar a apuntar SIEMPRE empieza en hoy. Un selector que recuerda el
+      // día anterior acaba metiendo la cena de hoy en el martes pasado, y
+      // nadie revisa una fecha que ya estaba puesta.
+      if(push.dataset.push === 'mealadd'){
+        DIA_APUNTE = null;
+        if(typeof pintarSelectorDia === 'function') pintarSelectorDia();
+      }
       goto(push.dataset.push, true);
       return;
     }
@@ -1285,6 +1292,22 @@
   // falsea el anillo, la racha y el reparto semanal. Lo llena cargarDatos().
   var REGISTRO = {};
 
+  // ---- En qué día se está apuntando ----
+  // Normalmente hoy. Pero "ayer comí esto y no lo registré" es de las cosas
+  // que más pasan, y hasta ahora no había forma: `HOY` estaba fijo dentro
+  // de las dos funciones que guardan.
+  //
+  // Se guarda la FECHA, no un desfase en días: si alguien deja la pantalla
+  // abierta y cruza la medianoche, un "-1 día" apuntaría en el día
+  // equivocado sin avisar.
+  //
+  // null = hoy. Se declara aquí arriba, junto a REGISTRO, porque las
+  // funciones que lo leen corren al arrancar: un `var` mil líneas más abajo
+  // vale undefined en ese momento y tumba el arranque entero.
+  var DIA_APUNTE = null;
+  function diaDeApunte(){ return DIA_APUNTE || HOY; }
+  function apuntandoEnHoy(){ return isoDe(diaDeApunte()) === isoDe(HOY); }
+
   // Eventos apartados, por fecha: { 'AAAA-MM-DD': {titulo, calorias, ...} }
   //
   // Se declara AQUÍ y no junto a las funciones que lo llenan, que están mil
@@ -1800,14 +1823,60 @@
     document.getElementById('mealAddCal').textContent = mil(cal) + ' cal';
   }
 
+  // ---- El selector de día ----
+  // Se limita a los últimos 14 días: más atrás ya no es "se me olvidó
+  // apuntar", es reescribir la historia, y eso descuadra semanas que la app
+  // ya dio por cerradas y sobre las que quizá ya ajustó calorías.
+  var DIAS_ATRAS_APUNTE = 14;
+
+  function pintarSelectorDia(){
+    var inp = document.getElementById('mealFecha');
+    var btn = document.getElementById('mealFechaHoy');
+    if(!inp) return;
+    inp.max = isoDe(HOY);
+    inp.min = isoDe(haceDias(DIAS_ATRAS_APUNTE));
+    inp.value = isoDe(diaDeApunte());
+    // El aviso solo aparece cuando NO es hoy: en el caso normal no hay nada
+    // que decir, y una advertencia permanente deja de leerse.
+    var fuera = !apuntandoEnHoy();
+    inp.classList.toggle('otro-dia', fuera);
+    btn.hidden = !fuera;
+  }
+
+  (function(){
+    var inp = document.getElementById('mealFecha');
+    if(!inp) return;
+    inp.addEventListener('change', function(){
+      if(!this.value){ DIA_APUNTE = null; pintarSelectorDia(); return; }
+      // Mediodía y no medianoche: con las horas a cero, una zona horaria
+      // por detrás de UTC convierte la fecha en el día anterior.
+      var d = new Date(this.value + 'T12:00:00');
+      d.setHours(0,0,0,0);
+      DIA_APUNTE = isoDe(d) === isoDe(HOY) ? null : d;
+      pintarSelectorDia();
+    });
+    document.getElementById('mealFechaHoy').addEventListener('click', function(){
+      DIA_APUNTE = null;
+      pintarSelectorDia();
+    });
+  })();
+
   function agregarAlimento(a){
     var comida = comidaActual;      // se fija: la pantalla puede cambiar mientras se guarda
+    var enHoy = apuntandoEnHoy();
+    var dia = diaDeApunte();
     prepararAlimento(a);            // deja lista la cantidad y la porción base
-    COMIDAS[comida].push(a);
+
+    // COMIDAS es la lista de HOY. Meter ahí lo de ayer lo haría aparecer en
+    // el desayuno de hoy y contaría dos veces en el anillo.
+    if(enHoy) COMIDAS[comida].push(a);
     if(typeof sumarAlRegistro === 'function') sumarAlRegistro(a, +1);
-    pintarComida();
+    if(enHoy) pintarComida();
+    else actualizarSemana();        // el día pasado ya cuenta para la semana
+
     volverA('mealadd', 'diario');   // conserva el camino: diario › mealadd
-    toast('toastComida', a.n + ' agregado a ' + comida);
+    toast('toastComida', a.n + ' agregado a ' + comida +
+          (enHoy ? '' : ' del ' + fmtFecha(dia)));
 
     // Se guarda en segundo plano: la pantalla ya respondió, que es lo que
     // hace que la app se sienta rápida. Pero si el guardado falla hay que
@@ -1817,12 +1886,17 @@
       sbAgregarAlimento(a, comida)
         .then(function(fila){ if(fila) a.id = fila.id; })
         ['catch'](function(e){
-          var i = COMIDAS[comida].indexOf(a);
-          if(i >= 0){
-            COMIDAS[comida].splice(i, 1);
-            sumarAlRegistro(a, -1);
-            pintarComida();
-          }
+          // Se deshace sobre el MISMO día en que se sumó. Para cuando falla
+          // la red, la persona ya puede haber cambiado la fecha, y restar
+          // del día equivocado dejaría dos días mal en vez de uno.
+          var eraDia = DIA_APUNTE;
+          DIA_APUNTE = enHoy ? null : dia;
+          var i = enHoy ? COMIDAS[comida].indexOf(a) : -1;
+          if(enHoy && i >= 0) COMIDAS[comida].splice(i, 1);
+          if(enHoy ? i >= 0 : true) sumarAlRegistro(a, -1);
+          DIA_APUNTE = eraDia;
+
+          if(enHoy) pintarComida(); else actualizarSemana();
           toast('toastComida', 'No se pudo guardar: ' + traducirError(e.message));
         });
     }
@@ -2769,7 +2843,7 @@
 
   // Lo que agregas o quitas de una comida se refleja en el día (anillos, barras y racha)
   function sumarAlRegistro(a, signo){
-    var k = isoDe(HOY);
+    var k = isoDe(diaDeApunte());
     var r = REGISTRO[k];
     if(!r){ r = REGISTRO[k] = {P:0, C:0, G:0}; }
     r.P = Math.max(0, r.P + signo * a.P);
@@ -2783,10 +2857,15 @@
     //
     // Antes se miraba la suma, así que apuntar solo agua rompía la racha en
     // silencio y el día no contaba para compensar.
-    var hayAlgoApuntado = Object.keys(COMIDAS).some(function(m){
-      return COMIDAS[m].length > 0;
-    });
-    if(!hayAlgoApuntado) delete REGISTRO[k];
+    //
+    // Solo vale para HOY: COMIDAS es la lista de hoy, y usarla para juzgar
+    // un día pasado borraría lo que se acaba de apuntar en él.
+    if(apuntandoEnHoy()){
+      var hayAlgoApuntado = Object.keys(COMIDAS).some(function(m){
+        return COMIDAS[m].length > 0;
+      });
+      if(!hayAlgoApuntado) delete REGISTRO[k];
+    }
 
     actualizarMetas();
     pintarRacha();
@@ -5398,7 +5477,7 @@
       headers:{ 'Prefer':'return=representation' },
       body: JSON.stringify({
         user_id: sesion.user.id,
-        entry_date: isoDe(HOY),
+        entry_date: isoDe(diaDeApunte()),
         meal: comida,
         food_name: a.n,
         // Cuánto se comió, en su unidad. Los macros van ya multiplicados por

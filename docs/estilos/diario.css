@@ -71,6 +71,29 @@
 /* Solo la etiqueta: si no, la regla también encogería el emoji del círculo */
 .quick-item > span:not(.quick-circle){font:700 13px/1.15 sans-serif;color:var(--ink);}
 
+/* ---- En qué día se apunta ----
+   Discreto cuando es hoy —que es casi siempre— y evidente cuando no. Una
+   fila que grite todo el rato deja de leerse justo el día que importa. */
+.apunte-dia{
+  display:flex;align-items:center;gap:9px;padding:0 16px 10px;
+}
+.apunte-dia > span{font:600 12px/1 sans-serif;color:var(--ink-faint);flex:none;}
+.apunte-dia input{
+  flex:1;min-width:0;padding:9px 11px;border-radius:11px;
+  border:1.5px solid var(--line);background:var(--app-bg);color:var(--ink);
+  font:700 13px/1.1 sans-serif;font-family:inherit;
+}
+/* Apuntar en otro día es la excepción, y tiene que verse como tal: si se
+   confunde con lo normal, alguien apunta una semana entera en la fecha
+   equivocada sin notarlo. */
+.apunte-dia input.otro-dia{
+  border-color:var(--amber);background:var(--amber-soft);color:var(--amber);
+}
+.apunte-dia button{
+  flex:none;border:none;background:none;cursor:pointer;padding:6px 2px;
+  font:700 11.5px/1 sans-serif;color:var(--amber);
+}
+
 /* Lo que el entrenador dijo sin que se lo pidieran.
    Fondo de tarjeta y no de aviso: no es una alerta del sistema, es alguien
    hablándole. En cuanto parece una notificación, se lee como spam. */
