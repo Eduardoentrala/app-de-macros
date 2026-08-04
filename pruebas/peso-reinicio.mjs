@@ -58,7 +58,7 @@ console.log('\n— La carga vacía el campo si no hay peso de hoy —');
 console.log('\n— Reiniciar vacía la pantalla y la base —');
 {
   const i = APP.indexOf("getElementById('pesoReinicioOk')");
-  const f = APP.slice(i, i + 1400);
+  const f = APP.slice(i, i + 2400);
   check('borra el historial en memoria', /delete PESOS\[k\]/.test(f));
   check('y vacía el campo', /pesoInput'\)\.value = '';/.test(f));
   check('y borra en la base de verdad',
@@ -73,7 +73,7 @@ console.log('\n— Reiniciar vacía la pantalla y la base —');
 console.log('\n— Y si el borrado falla, se deshace entero —');
 {
   const i = APP.indexOf("getElementById('pesoReinicioOk')");
-  const f = APP.slice(i, i + 1400);
+  const f = APP.slice(i, i + 2400);
   check('se guarda lo que había', /var antes = Object\.assign\(\{\}, PESOS\)/.test(f));
   check('y también lo que decía el campo', /var antesInput = /.test(f));
   check('se restauran los pesos', /PESOS\[k\] = antes\[k\]/.test(f));
@@ -81,6 +81,32 @@ console.log('\n— Y si el borrado falla, se deshace entero —');
   // grafica volveria y el numero de hoy no.
   check('y el campo, con su valor', /pesoInput'\)\.value = antesInput/.test(f));
   check('y se dice que no se pudo', /No se pudo borrar/.test(f));
+
+  // Un DELETE que no encaja con ninguna fila NO da error: sale bien sin
+  // tocar nada. Sin releer despues, un borrado que no borro se ve igual que
+  // uno que si, y la persona solo se entera al recargar.
+  check('se relee para comprobar que de verdad se borró',
+    /select=log_date&limit=1/.test(f));
+  check('y si quedan filas, se trata como fallo',
+    /quedaron registros sin borrar/.test(f));
+}
+
+console.log('\n— El token vencido no se confunde con falta de permisos —');
+{
+  // Storage responde 403 con «"exp" claim timestamp check failed» cuando el
+  // token vence, no 401. Mirando solo el 401, subir una foto a la hora de
+  // sesion fallaba para siempre y parecia un problema de permisos.
+  check('un 403 por caducidad cuenta como vencido',
+    /r\.status === 403 && \/exp\.\{0,3\} claim\|jwt expired\/i/.test(APP));
+  check('y Storage refresca y reintenta', /function sbStorage\(/.test(APP));
+  check('subir la foto va por ahí', /sbStorage\('\/storage\/v1\/object\/' \+ BUCKET/.test(APP));
+  check('y los enlaces firmados también',
+    /sbStorage\('\/storage\/v1\/object\/sign\/' \+ BUCKET/.test(APP));
+  // Ya no queda ninguna llamada cruda a Storage sin refresco.
+  check('no queda fetch crudo a Storage',
+    !/fetch\(SB_URL \+ '\/storage\/v1/.test(APP));
+  // El cuerpo se lee de una copia o la Response llega vacia a quien llamo.
+  check('la respuesta se clona para leerla', /r\.clone\(\)\.text\(\)/.test(APP));
 }
 
 console.log('\n— El peso del perfil NO se borra —');
@@ -89,7 +115,7 @@ console.log('\n— El peso del perfil NO se borra —');
   // alimenta el cálculo de macros, y limpiarlo dejaría a esa persona con
   // 1.200 calorías y 0 g de proteína la próxima vez que recalcule.
   const i = APP.indexOf("getElementById('pesoReinicioOk')");
-  const f = APP.slice(i, i + 1400);
+  const f = APP.slice(i, i + 2400);
   check('no toca profiles', !/rest\/v1\/profiles/.test(f),
     'borrar el peso del perfil rompería el cálculo de macros');
 }

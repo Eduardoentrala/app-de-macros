@@ -2786,7 +2786,20 @@
     toast('toastPeso', 'Historial de peso borrado');
 
     if(!sesion || !sesion.user) return;
+    // Se borra y SE COMPRUEBA. Un DELETE que no encaja con ninguna fila no
+    // da error: sale bien sin tocar nada. Sin releer después, un borrado
+    // que no borró se ve exactamente igual que uno que sí, y la persona
+    // solo se entera al recargar y ver su peso de vuelta.
     sbFetch('/rest/v1/weight_logs?user_id=eq.' + sesion.user.id, { method:'DELETE' })
+      .then(function(){
+        return sbFetch('/rest/v1/weight_logs?select=log_date&limit=1' +
+                       '&user_id=eq.' + sesion.user.id);
+      })
+      .then(function(quedan){
+        if(quedan && quedan.length){
+          throw new Error('quedaron registros sin borrar');
+        }
+      })
       ['catch'](function(e){
         Object.keys(antes).forEach(function(k){ PESOS[k] = antes[k]; });
         document.getElementById('pesoInput').value = antesInput;
@@ -3469,7 +3482,14 @@
           // 401 seguidos se llamen en bucle.
           // Las rutas /auth/v1/ quedan fuera: ahí un 401 significa
           // "contraseña incorrecta", y refrescar no arregla eso.
-          if(r.status === 401 && !reintento && sesion && sesion.refresh_token &&
+          // Storage no responde 401 cuando el token vence: responde 403 con
+          // «"exp" claim timestamp check failed». Mirando solo el 401, esa
+          // petición no se reintentaba nunca y la persona veía un error de
+          // permisos por algo que era simplemente una hora de sesión.
+          var vencido = r.status === 401 ||
+            (r.status === 403 && /exp.{0,3} claim|jwt expired/i.test(t || ''));
+
+          if(vencido && !reintento && sesion && sesion.refresh_token &&
              ruta.indexOf('/auth/v1/') !== 0){
             return sbRefrescar()
               .then(function(){ return sbFetch(ruta, op, true); })
@@ -3481,6 +3501,36 @@
                             || ('Error ' + r.status));
           }
           return d;
+        });
+      });
+  }
+
+  // Storage no puede ir por sbFetch: sube archivos binarios y necesita su
+  // propio Content-Type, no JSON. Pero sí necesita lo mismo que sbFetch
+  // hace bien —refrescar el token vencido y reintentar una vez—, y por
+  // usar `fetch` a pelo no lo tenía: a la hora de sesión, subir una foto
+  // devolvía 403 y ahí se quedaba.
+  //
+  // Devuelve la Response tal cual: cada llamada la interpreta a su manera
+  // (una sube un archivo, otra pide enlaces firmados).
+  function sbStorage(ruta, op, reintento){
+    op = op || {};
+    var h = { 'apikey': SB_KEY };
+    for(var k in (op.headers || {})) h[k] = op.headers[k];
+    h['Authorization'] = 'Bearer ' + ((sesion && sesion.access_token) || SB_KEY);
+
+    return fetch(SB_URL + ruta, { method: op.method || 'GET', headers: h, body: op.body })
+      .then(function(r){
+        if(r.ok || reintento || !sesion || !sesion.refresh_token) return r;
+        // El cuerpo se lee de una copia: `r` tiene que llegar intacta a
+        // quien llamó si al final no era el token.
+        return r.clone().text().then(function(t){
+          var vencido = r.status === 401 ||
+            (r.status === 403 && /exp.{0,3} claim|jwt expired/i.test(t || ''));
+          if(!vencido) return r;
+          return sbRefrescar()
+            .then(function(){ return sbStorage(ruta, op, true); })
+            ['catch'](function(){ sesionCaducada(); throw new Error('Sesión caducada'); });
         });
       });
   }
@@ -3891,13 +3941,9 @@
     // y además chocaría con el índice único de storage_path.
     var ruta = sesion.user.id + '/' + clave + '/' + pose + '-' + Date.now() + '.' + ext;
 
-    return fetch(SB_URL + '/storage/v1/object/' + BUCKET + '/' + ruta, {
+    return sbStorage('/storage/v1/object/' + BUCKET + '/' + ruta, {
       method: 'POST',
-      headers: {
-        'apikey': SB_KEY,
-        'Authorization': 'Bearer ' + sesion.access_token,
-        'Content-Type': res.tipo
-      },
+      headers: { 'Content-Type': res.tipo },
       body: res.blob
     }).then(function(r){
       if(!r.ok) return r.text().then(function(t){ throw new Error(t.slice(0,140)); });
@@ -3937,10 +3983,9 @@
   // fotos y una petición por cada una tardaría una eternidad.
   function sbFirmar(rutas){
     if(!rutas.length || !sesion) return Promise.resolve({});
-    return fetch(SB_URL + '/storage/v1/object/sign/' + BUCKET, {
+    return sbStorage('/storage/v1/object/sign/' + BUCKET, {
       method:'POST',
-      headers:{ 'apikey': SB_KEY, 'Authorization':'Bearer ' + sesion.access_token,
-                'Content-Type':'application/json' },
+      headers:{ 'Content-Type':'application/json' },
       body: JSON.stringify({ expiresIn: 3600, paths: rutas })
     }).then(function(r){ return r.ok ? r.json() : []; })
       .then(function(arr){
@@ -6514,13 +6559,12 @@
         var rutas = (filas || []).map(function(f){ return f.storage_path; })
                                  .filter(Boolean);
         if(!rutas.length) return;
-        return fetch(SB_URL + '/storage/v1/object/' + BUCKET, {
+        // Por sbStorage y no por fetch: si el token venció justo aquí, las
+        // fotos se quedarían en el bucket después de que alguien pidiera
+        // que no quedara nada suyo. Es el peor momento para no reintentar.
+        return sbStorage('/storage/v1/object/' + BUCKET, {
           method: 'DELETE',
-          headers: {
-            'apikey': SB_KEY,
-            'Authorization': 'Bearer ' + sesion.access_token,
-            'Content-Type': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ prefixes: rutas })
         });
       })['catch'](function(){ /* que no detenga el borrado */ });
