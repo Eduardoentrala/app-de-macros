@@ -1831,16 +1831,18 @@
 
   function pintarSelectorDia(){
     var inp = document.getElementById('mealFecha');
-    var btn = document.getElementById('mealFechaHoy');
-    if(!inp) return;
+    var btn = document.getElementById('mealFechaBtn');
+    var txt = document.getElementById('mealFechaTxt');
+    if(!inp || !btn) return;
     inp.max = isoDe(HOY);
     inp.min = isoDe(haceDias(DIAS_ATRAS_APUNTE));
     inp.value = isoDe(diaDeApunte());
-    // El aviso solo aparece cuando NO es hoy: en el caso normal no hay nada
-    // que decir, y una advertencia permanente deja de leerse.
+
+    // "Hoy" en vez de la fecha cuando es hoy: es lo que la persona espera
+    // leer, y una fecha completa ahí obliga a comprobarla cada vez.
     var fuera = !apuntandoEnHoy();
-    inp.classList.toggle('otro-dia', fuera);
-    btn.hidden = !fuera;
+    txt.textContent = fuera ? fmtFecha(diaDeApunte()) : 'Hoy';
+    btn.classList.toggle('otro-dia', fuera);
   }
 
   (function(){
@@ -1855,9 +1857,10 @@
       DIA_APUNTE = isoDe(d) === isoDe(HOY) ? null : d;
       pintarSelectorDia();
     });
-    document.getElementById('mealFechaHoy').addEventListener('click', function(){
-      DIA_APUNTE = null;
-      pintarSelectorDia();
+    // El input está encima de la píldora y transparente, así que el toque
+    // ya cae en él. Este listener es para cuando el foco llega por teclado.
+    document.getElementById('mealFechaBtn').addEventListener('click', function(){
+      try{ inp.showPicker ? inp.showPicker() : inp.focus(); }catch(e){ inp.focus(); }
     });
   })();
 
@@ -2511,6 +2514,17 @@
         total += vol;
       }
     });
+    // Las palomitas se apagan al guardar. Marcan "esta serie ya la hice
+    // HOY", no "este ejercicio lleva palomita para siempre": si se quedan
+    // puestas, la próxima sesión empieza con todo dado por hecho y dejan de
+    // significar nada.
+    //
+    // Va DESPUÉS de leer `detalle` -que necesita saber cuáles estaban
+    // marcadas- y ANTES de saveCurrentDay, que es quien las persiste.
+    Array.from(exList.querySelectorAll('.set-check.done')).forEach(function(v){
+      v.classList.remove('done');
+    });
+
     saveCurrentDay();
     pintarEjercicio();
     // Después de repintar, para que el veredicto recién decidido se vea.
@@ -6700,6 +6714,40 @@
     };
   }
 
+  // Lo que se entrenó, para que el ajuste semanal no confunda dos cosas
+  // muy distintas:
+  //
+  //   · Peso plano y volumen SUBIENDO  → está funcionando. Ganó músculo y
+  //     perdió grasa a la vez, y tocarle las calorías sería estropearlo.
+  //   · Peso plano y volumen plano     → ahí sí hay estancamiento de verdad.
+  //   · Peso plano y sin entrenar      → no hay nada que ajustar: falta el
+  //     estímulo, no las calorías.
+  //
+  // Se pide a la base y no a HISTORIAL, que solo guarda volúmenes sueltos
+  // sin fecha: aquí hacen falta las dos semanas para poder compararlas.
+  function datosDeEntreno(){
+    if(!sesion || !sesion.user) return Promise.resolve(null);
+    var desde = isoDe(haceDias(13));
+    return sbFetch('/rest/v1/workout_sessions' +
+        '?select=session_date,total_volume&session_date=gte.' + desde +
+        '&user_id=eq.' + sesion.user.id + '&order=session_date.asc')
+      .then(function(filas){
+        var corte = isoDe(haceDias(6));
+        var estaSemana = [], anterior = [];
+        (filas || []).forEach(function(f){
+          (f.session_date >= corte ? estaSemana : anterior)
+            .push(Number(f.total_volume) || 0);
+        });
+        var suma = function(a){ return a.reduce(function(x, y){ return x + y; }, 0); };
+        return {
+          sesiones: estaSemana.length,
+          sesiones_antes: anterior.length,
+          volumen: Math.round(suma(estaSemana)),
+          volumen_antes: Math.round(suma(anterior))
+        };
+      })['catch'](function(){ return null; });   // sin esto, igual se ajusta
+  }
+
   document.getElementById('chqEnviar').addEventListener('click', function(){
     var btn = this;
     if(btn.disabled) return;
@@ -6710,12 +6758,18 @@
     var pesosRecientes = Object.keys(PESOS).sort().slice(-8)
                                .map(function(k){ return PESOS[k]; });
 
-    iaLlamar({
-      accion: 'semana',
-      datos: datosDeLaSemana(),
-      pesos: pesosRecientes,
-      chequeo: respuestasChequeo(),
-      nota: document.getElementById('chqNota').value.trim() || undefined
+    datosDeEntreno().then(function(entreno){
+      return iaLlamar({
+        accion: 'semana',
+        datos: datosDeLaSemana(),
+        pesos: pesosRecientes,
+        // Sin esto, el peso plano siempre parece estancamiento. Con el
+        // entreno delante se distingue lo que de verdad son dos cosas
+        // distintas: no avanzar, y avanzar sin que la báscula lo enseñe.
+        entreno: entreno,
+        chequeo: respuestasChequeo(),
+        nota: document.getElementById('chqNota').value.trim() || undefined
+      });
     }).then(function(r){
       caja.hidden = false;
       caja.className = 'chq-respuesta' + (r.ajusto ? ' ajusto' : '');

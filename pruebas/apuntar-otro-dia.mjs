@@ -86,7 +86,14 @@ console.log('\n— Siempre empieza en hoy —');
   check('entrar a apuntar lo reinicia',
     /push\.dataset\.push === 'mealadd'\)\{[\s\S]{0,120}DIA_APUNTE = null/.test(APP));
   check('hay selector en pantalla', HTML.includes('id="mealFecha"'));
-  check('y un atajo para volver a hoy', HTML.includes('id="mealFechaHoy"'));
+  // Antes había un botón aparte de "Volver a hoy". Se quitó: la fila con
+  // etiqueta, control nativo a ancho completo y botón pesaba demasiado para
+  // algo que el 99% de las veces dice "hoy". Ahora es una píldora que
+  // muestra el estado y abre el selector.
+  check('la píldora dice "Hoy" cuando es hoy',
+    /txt\.textContent = fuera \? fmtFecha\(diaDeApunte\(\)\) : 'Hoy'/.test(APP),
+    'una fecha completa ahí obliga a comprobarla cada vez');
+  check('y ya no queda el botón viejo', !HTML.includes('mealFechaHoy'));
 }
 
 console.log('\n— Con límites —');

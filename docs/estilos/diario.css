@@ -74,24 +74,29 @@
 /* ---- En qué día se apunta ----
    Discreto cuando es hoy —que es casi siempre— y evidente cuando no. Una
    fila que grite todo el rato deja de leerse justo el día que importa. */
+/* A la derecha y pequeña: es un ajuste, no el asunto de la pantalla. Quien
+   entra a apuntar el desayuno viene a buscar comida, no a elegir un día. */
 .apunte-dia{
-  display:flex;align-items:center;gap:9px;padding:0 16px 10px;
-}
-.apunte-dia > span{font:600 12px/1 sans-serif;color:var(--ink-faint);flex:none;}
-.apunte-dia input{
-  flex:1;min-width:0;padding:9px 11px;border-radius:11px;
-  border:1.5px solid var(--line);background:var(--app-bg);color:var(--ink);
-  font:700 13px/1.1 sans-serif;font-family:inherit;
-}
-/* Apuntar en otro día es la excepción, y tiene que verse como tal: si se
-   confunde con lo normal, alguien apunta una semana entera en la fecha
-   equivocada sin notarlo. */
-.apunte-dia input.otro-dia{
-  border-color:var(--amber);background:var(--amber-soft);color:var(--amber);
+  position:relative;display:flex;justify-content:flex-end;padding:0 16px 8px;
 }
 .apunte-dia button{
-  flex:none;border:none;background:none;cursor:pointer;padding:6px 2px;
-  font:700 11.5px/1 sans-serif;color:var(--amber);
+  border:1.5px solid var(--line);background:var(--app-bg);color:var(--ink-faint);
+  border-radius:999px;padding:6px 13px;cursor:pointer;
+  font:700 12px/1 sans-serif;
+}
+.apunte-dia button::after{content:' ▾';font-size:9px;opacity:.6;}
+/* Apuntar en otro día es la excepción y tiene que verse como tal: si se
+   confunde con lo normal, alguien apunta una semana entera en la fecha
+   equivocada sin notarlo. */
+.apunte-dia button.otro-dia{
+  border-color:var(--amber);background:var(--amber-soft);color:var(--amber);
+}
+/* El input nativo, encima de la píldora y transparente: al tocarla se abre
+   el selector del sistema, que en iPhone es el bueno. Ocultarlo con
+   `display:none` haría que .click() no abriera nada en Safari. */
+.apunte-dia input{
+  position:absolute;right:16px;top:0;height:100%;width:120px;
+  opacity:0;border:none;padding:0;cursor:pointer;
 }
 
 /* Lo que el entrenador dijo sin que se lo pidieran.

@@ -391,10 +391,13 @@
         <!-- Para lo que se comió ayer y no se apuntó. Arranca en hoy siempre;
              un selector que recuerda el día anterior acaba apuntando la cena
              de hoy en el martes pasado sin que nadie se dé cuenta. -->
+        <!-- El control nativo de fecha a ancho completo pesaba demasiado
+             para algo que el 99% de las veces dice "hoy". Ahora es una
+             píldora discreta que abre el selector del teléfono; el input
+             va oculto detrás. -->
         <div class="apunte-dia">
-          <span>Apuntar en</span>
-          <input type="date" id="mealFecha">
-          <button id="mealFechaHoy" hidden>Volver a hoy</button>
+          <button id="mealFechaBtn"><span id="mealFechaTxt">Hoy</span></button>
+          <input type="date" id="mealFecha" tabindex="-1" aria-label="Día en que se apunta">
         </div>
         <div class="search-wrap">
           <div class="searchbox"><span>🔍</span><input id="mealSearch" placeholder="Busca un alimento..."></div>

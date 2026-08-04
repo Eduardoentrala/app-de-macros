@@ -82,5 +82,46 @@ console.log('\n— No salta encima de nadie —');
   check('y solo con sesion', /if\(!sesion \|\| !sesion\.user\) return/.test(fn));
 }
 
+console.log('\n— Las palomitas se apagan al guardar la sesión —');
+{
+  // Marcan "esta serie ya la hice HOY", no "este ejercicio lleva palomita
+  // para siempre". Si sobreviven, la próxima sesión empieza con todo dado
+  // por hecho y dejan de significar nada.
+  const i = APP.indexOf("getElementById('saveSessionBtn')");
+  const f = APP.slice(i, i + 3000);
+  check('se quitan al guardar', /querySelectorAll\('\.set-check\.done'\)[\s\S]{0,120}classList\.remove\('done'\)/.test(f));
+
+  // El orden importa en los dos sentidos.
+  const leer = f.indexOf(".set-check.done')");        // dentro de `detalle`
+  const limpiar = f.indexOf("querySelectorAll('.set-check.done')");
+  const guardar = f.indexOf('saveCurrentDay()');
+  check('después de leer cuáles estaban marcadas', leer < limpiar,
+    'limpiar antes perdería el dato que se guarda en el historial');
+  check('y antes de persistir la plantilla', limpiar < guardar,
+    'saveCurrentDay es quien las guarda: limpiar después no serviría de nada');
+}
+
+console.log('\n— El entreno entra en el ajuste semanal —');
+{
+  check('se piden las sesiones', /function datosDeEntreno\(/.test(APP));
+  check('de dos semanas, para poder comparar', /haceDias\(13\)/.test(APP));
+  check('separadas por semana', /f\.session_date >= corte \? estaSemana : anterior/.test(APP));
+  check('y se mandan al asistente', /entreno: entreno/.test(APP));
+  // Si falla la consulta, el ajuste sigue: quedarse sin ajuste por no poder
+  // leer el gimnasio seria peor que ajustar sin ese dato.
+  check('si falla, no bloquea el ajuste', /\['catch'\]\(function\(\)\{ return null; \}\)/.test(APP));
+
+  const FN = readFileSync(
+    join(RAIZ, 'supabase', 'functions', 'asistente', 'index.ts'), 'utf8');
+  check('la función lo recibe', /cuerpo\.entreno/.test(FN));
+  check('y solo lo menciona si llega', /const entreno = e[\s\S]{0,40}\?/.test(FN));
+  // Lo que de verdad se quiere que aprenda: peso plano NO significa lo
+  // mismo segun lo que pase en el gimnasio.
+  check('sabe que subir volumen con peso plano es bueno',
+    /volumen SUBIENDO[\s\S]{0,120}NO le toques nada/.test(FN));
+  check('y que sin entrenar no faltan calorías',
+    /le falta[\s\S]{0,30}est[ií]mulo/.test(FN));
+}
+
 console.log(`\n${ok} pasan · ${mal} fallan`);
 process.exit(mal ? 1 : 0);

@@ -312,6 +312,16 @@ QUÉ MIRAS, EN ESTE ORDEN
    Bajarle más calorías a alguien así es como se abandona una dieta.
 3. El peso, y la TENDENCIA, no el último número. Un kilo arriba de un día
    para otro es agua, no grasa.
+4. El entreno, si te lo paso. Un peso plano NO significa lo mismo según lo
+   que pase en el gimnasio, y confundirlo es el error más caro que puedes
+   cometer aquí:
+
+   - Peso plano y volumen SUBIENDO → está funcionando. Ganó músculo y
+     perdió grasa a la vez, y la báscula no lo enseña. NO le toques nada, y
+     dile por qué: mucha gente abandona justo aquí creyendo que falló.
+   - Peso plano y volumen plano → ahí sí hay estancamiento de verdad.
+   - Peso plano y entrenó poco o nada → no le faltan calorías, le falta
+     estímulo. Ajustar aquí no arregla nada.
 
 CUÁNTO MUEVES
 
@@ -816,12 +826,22 @@ Deno.serve(async (req) => {
       const hayMaterial = diasApuntados >= 4 && pesos.length >= 2;
 
       const encuesta = (cuerpo.chequeo ?? {}) as Record<string, number>;
+      const e = (cuerpo.entreno ?? null) as Record<string, number> | null;
+      // Un peso plano no significa lo mismo si el volumen sube que si no se
+      // movió. Sin esta línea, el modelo trata los dos casos igual y ajusta
+      // calorías donde no hacía falta.
+      const entreno = e
+        ? `\n- Entrenó ${e.sesiones} veces (${e.sesiones_antes} la semana anterior)\n` +
+          `- Volumen: ${e.volumen} kg esta semana, ${e.volumen_antes} kg la anterior`
+        : '';
+
       const contexto =
         `\n\nESTA SEMANA:\n` +
         `- Días que apuntó: ${diasApuntados} de 7\n` +
         `- Meta diaria actual: ${Math.round(Number(d.meta_cal) || 0)} cal\n` +
         `- Promedio de lo que comió: ${Math.round(Number(d.media_cal) || 0)} cal\n` +
-        `- Pesos apuntados: ${pesos.length ? pesos.join(', ') + ' kg' : 'ninguno'}\n` +
+        `- Pesos apuntados: ${pesos.length ? pesos.join(', ') + ' kg' : 'ninguno'}` +
+        entreno + `\n` +
         `- Hambre: ${encuesta.hambre ?? '—'}/5 · Energía: ${encuesta.energia ?? '—'}/5 · ` +
         `Apetito: ${encuesta.apetito ?? '—'}/5  (3 = normal)\n` +
         (cuerpo.nota ? `- Dice: "${String(cuerpo.nota).slice(0, 300)}"\n` : '') +
