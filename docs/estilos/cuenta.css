@@ -201,6 +201,43 @@
 .nivel-ia .opt.active b{color:var(--card-bg);}
 .nivel-ia .opt.active span{color:rgba(255,255,255,.65);}
 
+/* ---- Los tres planes, en Perfil ----
+   Uno debajo de otro y plegados. Enseñar las tres listas a la vez son
+   quince líneas que nadie lee; así se ve lo que se pregunta. */
+.plan-ia{
+  border:1.5px solid var(--line);border-radius:14px;
+  padding:13px 15px;margin-bottom:9px;cursor:pointer;
+  background:var(--app-bg);
+}
+/* El suyo, marcado sin gritar: borde y no fondo negro, porque no es un
+   botón que haya que pulsar sino un estado. */
+.plan-ia.mio{border-color:var(--ink);background:var(--card-bg);}
+.plan-ia-cab{display:flex;align-items:center;gap:10px;}
+.plan-ia-cab > div{flex:1;min-width:0;}
+.plan-ia-cab b{display:block;font:800 14.5px/1.2 sans-serif;color:var(--ink);}
+.plan-ia-cab span{
+  display:block;margin-top:3px;font:500 11.5px/1.35 sans-serif;color:var(--ink-faint);
+}
+.plan-ia-cab em{
+  flex:none;font:800 9.5px/1 sans-serif;text-transform:uppercase;letter-spacing:.06em;
+  background:var(--ink);color:var(--card-bg);padding:5px 8px;border-radius:6px;
+  font-style:normal;
+}
+.plan-ia-cab i{
+  flex:none;font:400 17px/1 sans-serif;color:var(--ink-faint);font-style:normal;
+}
+.plan-ia ul{margin:11px 0 0;padding-left:17px;}
+.plan-ia li{
+  margin-bottom:5px;font:500 12.5px/1.45 sans-serif;color:var(--ink);
+}
+/* Lo que NO trae, en gris y tachado el punto: es tan importante como lo
+   que sí, y esconderlo es como se venden cosas que decepcionan. */
+.plan-ia li.no{color:var(--ink-faint);list-style-type:'– ';}
+.plan-ia-como{
+  margin:11px 0 0;padding-top:9px;border-top:1px solid var(--line);
+  font:500 11.5px/1.45 sans-serif;color:var(--ink-faint);
+}
+
 /* Irse tiene que ser posible, no cómodo. Sin fondo ni borde y en rojo
    apagado: se encuentra si se busca, no se pulsa de pasada al ir a cerrar
    sesión, que es el botón de al lado. */

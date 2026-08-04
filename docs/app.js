@@ -5414,7 +5414,9 @@
         });
         // Solo con IA Plus: a quien no la tiene no se le ofrece algo que la
         // app le va a negar después.
-        if(p && p.nivel_ia === 'plus') ofrecerChequeoSiEsSemanaNueva();
+        MI_NIVEL_IA = (p && p.nivel_ia) || 'normal';
+        pintarPlanIA();
+        if(MI_NIVEL_IA === 'plus') ofrecerChequeoSiEsSemanaNueva();
 
         // ---- Perfil ----
         if(p){
@@ -5787,10 +5789,11 @@
           });
         })
       });
-      if(typeof r.quedan === 'number'){
-        document.getElementById('iaQuedan').textContent =
-          r.quedan + (r.quedan === 1 ? ' consulta hoy' : ' consultas hoy');
-      }
+      // El plan lo pinta pintarQuedanIA: la cabecera dice qué tienes y
+      // cuánto te queda, y las dos cosas salen del mismo sitio.
+      if(typeof r.quedan === 'number'){ iaQuedanNum = r.quedan; }
+      if(r.nivel){ MI_NIVEL_IA = r.nivel; }
+      pintarQuedanIA();
       // Solo se guarda cuando ya no falta nada por preguntar. Mientras el
       // asistente siga conversando, `falta` trae algo y aquí no pasa nada:
       // en pantalla solo se ve su pregunta, que es lo que se quería.
@@ -5919,6 +5922,112 @@
     });
     return total;
   }
+
+  // ---- Qué plan tiene esta persona ----
+  // Se escribe una sola vez y lo leen los tres sitios que lo enseñan: la
+  // fila de Perfil, la hoja de detalle y la cabecera del asistente. Tres
+  // textos sueltos se separan en cuanto se retoque uno.
+  var MI_NIVEL_IA = 'normal';
+  var PLANES_IA = [
+    { id:'apagada', nombre:'Sin IA',
+      resumen:'La app entera, sin asistente',
+      incluye:[
+        'Apuntar comida a mano y con la base de datos',
+        'Tus alimentos y recetas guardados',
+        'Rutinas, series y cronómetro',
+        'Peso, gráfica y fotos de progreso',
+        'El anillo y el reparto de la semana'
+      ],
+      no:['El asistente no está disponible'] },
+    { id:'normal', nombre:'IA normal',
+      resumen:'Todo lo anterior, y el asistente del día a día',
+      incluye:[
+        'Todo lo del plan sin IA',
+        'Chat con el asistente: qué comer con lo que te queda',
+        'Foto del platillo: lo reconoce y lo apunta por ti',
+        'Lista del súper para comer así una semana',
+        'Cinco consultas al día'
+      ],
+      no:['No reparte la semana por eventos',
+          'No te ajusta las calorías cada semana'] },
+    { id:'plus', nombre:'IA Plus',
+      resumen:'Como tener un entrenador encima',
+      incluye:[
+        'Todo lo del plan normal',
+        'Le cuentas tus planes ("el sábado hay boda") y te hace sitio antes',
+        'Chequeo semanal: hambre, energía y antojo',
+        'Te ajusta las calorías cada semana según cómo te fue y cómo te sientes',
+        'Y si no hay datos suficientes, te lo dice en vez de ajustar a ciegas'
+      ],
+      no:[] }
+  ];
+  function planPorId(id){
+    for(var i = 0; i < PLANES_IA.length; i++)
+      if(PLANES_IA[i].id === id) return PLANES_IA[i];
+    return PLANES_IA[1];
+  }
+
+  // La fila de Perfil y la cabecera del asistente dicen lo mismo, desde el
+  // mismo sitio.
+  function pintarPlanIA(){
+    var p = planPorId(MI_NIVEL_IA);
+    var fila = document.getElementById('profPlanIa');
+    if(fila) fila.innerHTML = p.nombre + '<i>›</i>';
+    pintarQuedanIA();
+  }
+
+  var iaQuedanNum = null;
+  function pintarQuedanIA(){
+    var el = document.getElementById('iaQuedan');
+    if(!el) return;
+    var p = planPorId(MI_NIVEL_IA);
+    // El plan primero: es lo que explica por qué el asistente puede o no
+    // puede hacer algo. El contador va detrás, y solo si se sabe.
+    el.textContent = p.nombre + (iaQuedanNum === null ? '' :
+      ' · ' + iaQuedanNum + (iaQuedanNum === 1 ? ' consulta hoy' : ' consultas hoy'));
+  }
+
+  var planIaSheet = document.getElementById('planIaSheet');
+  var planIaAbierto = null;          // el que está desplegado
+
+  function pintarHojaPlanes(){
+    document.getElementById('planIaOpts').innerHTML = PLANES_IA.map(function(p){
+      var mio = p.id === MI_NIVEL_IA;
+      var abierto = p.id === planIaAbierto;
+      return '<div class="plan-ia' + (mio ? ' mio' : '') + (abierto ? ' abierto' : '') +
+             '" data-plan-ia="' + p.id + '">' +
+        '<div class="plan-ia-cab">' +
+          '<div><b>' + p.nombre + '</b><span>' + p.resumen + '</span></div>' +
+          (mio ? '<em>Tu plan</em>' : '<i>' + (abierto ? '−' : '+') + '</i>') +
+        '</div>' +
+        (abierto
+          ? '<ul>' + p.incluye.map(function(x){ return '<li>' + x + '</li>'; }).join('') +
+            p.no.map(function(x){ return '<li class="no">' + x + '</li>'; }).join('') +
+            '</ul>' +
+            (mio ? '' : '<p class="plan-ia-como">Para cambiar de plan, habla con quien ' +
+                        'te lleva: se activa desde su panel.</p>')
+          : '') +
+      '</div>';
+    }).join('');
+  }
+
+  document.getElementById('profPlanIaBtn').addEventListener('click', function(){
+    // Arranca con el suyo desplegado: lo primero que quiere saber alguien
+    // que entra aquí es qué tiene, no qué le falta.
+    planIaAbierto = MI_NIVEL_IA;
+    pintarHojaPlanes();
+    planIaSheet.classList.add('open');
+  });
+  document.getElementById('planIaCerrar').addEventListener('click', function(){
+    planIaSheet.classList.remove('open');
+  });
+  planIaSheet.addEventListener('click', function(e){
+    if(e.target === planIaSheet){ planIaSheet.classList.remove('open'); return; }
+    var c = e.target.closest('[data-plan-ia]');
+    if(!c) return;
+    planIaAbierto = planIaAbierto === c.dataset.planIa ? null : c.dataset.planIa;
+    pintarHojaPlanes();
+  });
 
   // ---- Eliminar la propia cuenta ----
   // borrar_mi_cuenta() no lleva parámetro a propósito: el único id que

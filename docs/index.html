@@ -1063,6 +1063,10 @@
               <span>Mi semana</span>
               <span class="v">Revisar<i>›</i></span>
             </button>
+            <button class="info-row info-btn" id="profPlanIaBtn">
+              <span>Tu plan</span>
+              <span class="v" id="profPlanIa">IA normal<i>›</i></span>
+            </button>
           </div>
           <div class="card" id="tarjetaPanel" hidden>
             <div class="goal-head">
@@ -1251,6 +1255,17 @@
               autocomplete="off" autocapitalize="characters" placeholder="ELIMINAR">
             <button class="btn-primary" id="borrarConfirmar" disabled>Eliminar mi cuenta</button>
             <button class="btn-ghost-text" id="borrarCancelar">Cancelar</button>
+          </div>
+        </div>
+
+        <!-- Los tres planes. Se toca uno y se abre su detalle: enseñarlo
+             todo a la vez son tres listas largas que nadie lee. -->
+        <div class="sheet-backdrop" id="planIaSheet">
+          <div class="sheet">
+            <h4>Tu plan</h4>
+            <p class="hint">Toca uno para ver qué incluye.</p>
+            <div id="planIaOpts"></div>
+            <button class="btn-ghost-text" id="planIaCerrar">Cerrar</button>
           </div>
         </div>
 
