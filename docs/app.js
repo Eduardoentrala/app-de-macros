@@ -5185,7 +5185,19 @@
     }
     var btn = this;
     btn.disabled = true; btn.textContent = 'Eliminando…';
-    sbRpc('admin_borrar_cuenta', { p_usuario: u.id })
+    // Por la Edge Function y no por el RPC directo: desde aquí no existe la
+    // sesión de esa persona, y sin ella la API de Storage no deja borrar
+    // sus fotos. La función tiene la clave de servicio; el permiso lo
+    // sigue comprobando Postgres con TU token.
+    sbFetch('/functions/v1/borrar-cuenta', {
+      method: 'POST', body: JSON.stringify({ usuario: u.id })
+    })
+      .then(function(r){
+        if(r && r.sueltos){
+          toast('toastAdmin', 'Cuenta borrada, pero ' + r.sueltos +
+                              ' fotos no se pudieron quitar del servidor.');
+        }
+      })
       .then(function(){
         var i = USUARIOS.indexOf(u);
         if(i >= 0) USUARIOS.splice(i, 1);
