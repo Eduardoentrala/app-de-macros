@@ -128,11 +128,21 @@ console.log('\n— Dictar, en Plus —');
   // abierto escuchando de fondo despues de salir del asistente.
   check('se para al cerrar el asistente',
     /getElementById\('iaCerrar'\)\.addEventListener\('click', pararDeOir\)/.test(APP));
-  check('y al terminar solo', /r\.onend = function\(\)\{ pararDeOir\(\); \}/.test(APP));
+  check('y al terminar solo', /r\.onend = function\(\)\{[\s\S]{0,120}pararDeOir\(\)/.test(APP));
   check('volver a pulsar lo apaga', /if\(oyendo\)\{ pararDeOir\(\); return; \}/.test(APP));
 
-  // Callarse o volver a pulsar no son errores que haya que anunciar.
-  check('no avisa de los silencios', /'no-speech' \|\| e\.error === 'aborted'/.test(APP));
+  // Esta prueba fijaba lo contrario y pasaba con la función rota: daba por
+  // bueno silenciar 'no-speech' porque parecía ruido. Y era LA señal cuando
+  // el teléfono abre el micro y no transcribe -dictado del sistema apagado-.
+  // Callarla dejaba a la persona mirando un botón que late sin decir nada.
+  check('el silencio SÍ se avisa', /if\(e\.error === 'no-speech'\)\{ avisarSinVoz\(\)/.test(APP));
+  check('y el aviso dice dónde mirar', /dictado est[eé] activado/.test(APP),
+    '"no te entendí" no ayuda a nadie a arreglarlo');
+  check('volver a pulsar sigue sin avisar', /if\(e\.error === 'aborted'\) return;/.test(APP));
+  // Si el micro se abre y no llega nada, el botón no puede latir para
+  // siempre: hay un reloj que corta y lo dice.
+  check('hay reloj para el micro mudo', /ESPERA_MUDA/.test(APP));
+  check('y se cancela al parar', /if\(relojOido\)\{ clearTimeout\(relojOido\)/.test(APP));
   check('habla en español de Mexico', /r\.lang = 'es-MX'/.test(APP));
   // Sin resultados parciales parece que no hace nada y se vuelve a pulsar.
   check('enseña el texto mientras hablas', /r\.interimResults = true/.test(APP));

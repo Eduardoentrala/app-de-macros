@@ -5753,11 +5753,28 @@
     b.hidden = !Reconocedor || MI_NIVEL_IA !== 'plus';
   }
 
+  var relojOido = null, algoOido = false;
+  // Diez segundos sin una sola palabra. En iPhone la sesión puede abrirse
+  // -el botón late, el micro se enciende- y no llegar NADA: pasa cuando el
+  // dictado del sistema está apagado, porque el navegador se apoya en él.
+  // Sin este reloj el botón se queda latiendo para siempre y la persona no
+  // sabe si la está oyendo o no.
+  var ESPERA_MUDA = 10000;
+
   function pararDeOir(){
+    if(relojOido){ clearTimeout(relojOido); relojOido = null; }
     if(!oyendo) return;
     try{ oyendo.stop(); }catch(e){}
     oyendo = null;
     document.getElementById('iaHablar').classList.remove('oyendo');
+  }
+
+  // El mensaje cuando no se entendió nada. Dice DÓNDE mirar: "no te
+  // entendí" no ayuda a nadie a arreglarlo, y el 90% de las veces es el
+  // dictado del sistema apagado.
+  function avisarSinVoz(){
+    toast('toastIA2', 'No se escuchó nada. Si se repite, revisa que el ' +
+                      'dictado esté activado en los ajustes del teléfono.');
   }
 
   if(Reconocedor){
@@ -5772,28 +5789,43 @@
       r.continuous = false;
 
       var yaEstaba = iaTexto.value.trim();
+      algoOido = false;
+
       r.onresult = function(e){
         var dicho = '';
         for(var i = 0; i < e.results.length; i++) dicho += e.results[i][0].transcript;
+        if(dicho.trim()) algoOido = true;
         iaTexto.value = (yaEstaba ? yaEstaba + ' ' : '') + dicho.trim();
         // El textarea crece con el contenido, igual que al teclear.
         iaTexto.dispatchEvent(new Event('input', {bubbles:true}));
       };
       r.onerror = function(e){
         pararDeOir();
-        // 'no-speech' y 'aborted' son cosas normales -se calló, o volvió a
-        // pulsar-. Avisar de eso sería ruido.
-        if(e.error === 'no-speech' || e.error === 'aborted') return;
+        if(e.error === 'aborted') return;      // volvió a pulsar: normal
+        // 'no-speech' se silenciaba por considerarlo ruido, y resulta que es
+        // JUSTO la señal que hace falta cuando el teléfono abre el micro y
+        // no transcribe nada. Callarlo dejaba a la persona sin saber nada.
+        if(e.error === 'no-speech'){ avisarSinVoz(); return; }
         toast('toastIA2', e.error === 'not-allowed'
           ? 'Tienes que darle permiso al micrófono.'
-          : 'No te entendí. Prueba otra vez.');
+          : 'No se pudo dictar (' + e.error + '). Prueba otra vez.');
       };
-      r.onend = function(){ pararDeOir(); };
+      r.onend = function(){
+        var hubo = algoOido;
+        pararDeOir();
+        if(!hubo) avisarSinVoz();
+      };
 
       try{
         r.start();
         oyendo = r;
         this.classList.add('oyendo');
+        relojOido = setTimeout(function(){
+          if(!oyendo) return;
+          var hubo = algoOido;
+          pararDeOir();
+          if(!hubo) avisarSinVoz();
+        }, ESPERA_MUDA);
       }catch(e){
         toast('toastIA2', 'No se pudo abrir el micrófono.');
       }
