@@ -1045,7 +1045,10 @@
             <div class="field-label" style="margin-top:0;">Fecha del registro</div>
             <div class="field-value" id="pesoFecha">—</div>
             <div class="field-label">Peso (kg)</div>
-            <input class="field-value big" id="pesoInput" type="number" step="0.1" style="border:none;width:100%;font-family:inherit;color:var(--ink);background:var(--app-bg);" value="83.8">
+            <!-- Sin `value`: lo llena la app con el peso de hoy si lo hay.
+                 Traía un 83.8 del maquetado, y ese número sobrevivía a
+                 borrar el historial porque nadie lo tocaba nunca. -->
+            <input class="field-value big" id="pesoInput" type="number" step="0.1" style="border:none;width:100%;font-family:inherit;color:var(--ink);background:var(--app-bg);" placeholder="—">
             <button class="btn-primary" style="width:100%;margin-top:16px;" id="saveWeightBtn">Guardar</button>
           </div>
           <div class="card">

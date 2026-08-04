@@ -2704,7 +2704,9 @@
     // de tiempo cuando no la había y el botón se quedaba mudo: confirmabas
     // el borrado y no pasaba nada, sin siquiera un aviso.
     var antes = Object.assign({}, PESOS);
+    var antesInput = document.getElementById('pesoInput').value;
     Object.keys(PESOS).forEach(function(k){ delete PESOS[k]; });
+    document.getElementById('pesoInput').value = '';
     cerrarReinicio();
     pintarPeso();
     toast('toastPeso', 'Historial de peso borrado');
@@ -2713,6 +2715,7 @@
     sbFetch('/rest/v1/weight_logs?user_id=eq.' + sesion.user.id, { method:'DELETE' })
       ['catch'](function(e){
         Object.keys(antes).forEach(function(k){ PESOS[k] = antes[k]; });
+        document.getElementById('pesoInput').value = antesInput;
         pintarPeso();
         toast('toastPeso', 'No se pudo borrar: ' + traducirError(e.message));
       });
@@ -5593,7 +5596,11 @@
         PESOS = {};
         pesos.forEach(function(f){ PESOS[f.log_date] = Number(f.weight_kg); });
         var hoyPeso = PESOS[hoy];
-        if(hoyPeso != null) document.getElementById('pesoInput').value = hoyPeso;
+        // El `else` importa tanto como el `if`: sin él, el campo se quedaba
+        // con lo que hubiera antes —el 83.8 del maquetado, o el peso de la
+        // sesión anterior— y parecía que borrar el historial no había hecho
+        // nada. Vaciarlo aquí es lo que hace visible que sí.
+        document.getElementById('pesoInput').value = hoyPeso != null ? hoyPeso : '';
 
         // ---- Cardio ----
         // La base admite varias sesiones por día; aquí se suman, que es
