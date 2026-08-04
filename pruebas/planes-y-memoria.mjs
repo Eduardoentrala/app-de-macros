@@ -157,5 +157,20 @@ console.log('\n— Dictar, en Plus —');
     !/MediaRecorder|audio\/webm|\/transcribe/.test(APP));
 }
 
+console.log('\n— La foto se puede tomar O elegir —');
+{
+  const HTML = readFileSync(join(RAIZ, 'docs', 'index.html'), 'utf8');
+  // `capture` abre la camara DIRECTO y quita la opcion de la galeria. Es un
+  // atributo que parece una mejora y en realidad es una restriccion.
+  const entradas = [...HTML.matchAll(/<input[^>]*type="file"[^>]*>/g)].map(m => m[0]);
+  const conCaptura = entradas.filter(e => /\scapture=/.test(e));
+  check('ninguna subida fuerza la cámara', conCaptura.length === 0,
+    conCaptura.join(' | '));
+  check('la del asistente sigue aceptando imágenes',
+    /id="iaArchivo"[^>]*accept="image\/\*"/.test(HTML));
+  check('y las tres subidas siguen existiendo', entradas.length === 3,
+    `hay ${entradas.length}`);
+}
+
 console.log(`\n${ok} pasan · ${mal} fallan`);
 process.exit(mal ? 1 : 0);

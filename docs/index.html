@@ -434,10 +434,17 @@
         <div class="scroll" id="iaChat"></div>
 
         <div class="ia-barra">
-          <input type="file" id="iaArchivo" accept="image/*" capture="environment" hidden>
+          <!-- Sin `capture`: ese atributo abre la cámara DIRECTO y quita la
+               opción de elegir de la galería. Sin él, el teléfono ofrece
+               las dos —tomar foto o buscar en fotos— en su propio menú, que
+               es lo que la gente ya sabe usar.
+               Las otras dos subidas de la app nunca lo tuvieron; era solo
+               esta. -->
+          <input type="file" id="iaArchivo" accept="image/*" hidden>
           <div id="iaFotoZona"></div>
           <div class="ia-entrada">
-            <button class="ia-icono" id="iaTomarFoto" title="Tomar foto">📷</button>
+            <button class="ia-icono" id="iaTomarFoto" title="Foto del platillo"
+              aria-label="Tomar foto o elegir de la galería">📷</button>
             <!-- Se esconde solo si el teléfono no sabe transcribir, y solo
                  aparece con IA Plus. -->
             <button class="ia-icono" id="iaHablar" title="Dictar" hidden>🎙️</button>
