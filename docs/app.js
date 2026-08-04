@@ -6137,22 +6137,38 @@
     btn.disabled = false; btn.textContent = 'Revisar mi semana';
     chequeoSheet.classList.add('open');
   }
-  document.getElementById('profSemanaBtn').addEventListener('click', abrirChequeo);
+  // Sale al empezar la semana y deja de salir cuando lo CONTESTAN, no
+  // cuando se les enseña. Que alguien cierre la hoja sin llenarla no es
+  // haberla contestado, y darlo por bueno significaba que esa semana no se
+  // le podía ajustar nada.
+  //
+  // Quien manda es la base y no el navegador: si contestó desde el teléfono
+  // no tiene que volver a salirle en la tablet, y reinstalar la app no
+  // puede resucitar un cuestionario ya llenado.
+  //
+  // El localStorage se queda, pero solo para no insistir el mismo día. Si
+  // hoy la cerró, mañana vuelve; en cuanto la llene, no vuelve hasta el
+  // lunes que viene.
+  var CLAVE_CHEQUEO = 'macros.chequeoVisto';
 
-  // Y sale solo al empezar semana nueva, una vez. Preguntarlo cada vez que
-  // se abre la app es como se consigue que nadie lo conteste.
-  var CLAVE_CHEQUEO = 'macros.chequeoSemana';
   function ofrecerChequeoSiEsSemanaNueva(){
     if(!sesion || !sesion.user) return;
     var semana = isoDe(anclaSemana);
     try{
-      if(localStorage.getItem(CLAVE_CHEQUEO) === semana) return;
-      localStorage.setItem(CLAVE_CHEQUEO, semana);
-    }catch(e){ return; }          // sin almacenamiento, mejor no insistir
-    // Un poco después de abrir: saltarle una hoja en la cara a alguien que
-    // acaba de entrar a apuntar el desayuno es la forma de que la cierre
-    // sin leerla.
-    setTimeout(abrirChequeo, 1200);
+      if(localStorage.getItem(CLAVE_CHEQUEO) === semana + '|' + isoDe(HOY)) return;
+    }catch(e){}
+
+    sbFetch('/rest/v1/chequeos_semanales?select=semana' +
+            '&user_id=eq.' + sesion.user.id +
+            '&semana=eq.' + semana + '&limit=1')
+      .then(function(filas){
+        if(filas && filas.length) return;      // ya lo contestó esta semana
+        try{ localStorage.setItem(CLAVE_CHEQUEO, semana + '|' + isoDe(HOY)); }catch(e){}
+        // Un poco después de abrir: saltarle una hoja en la cara a alguien
+        // que acaba de entrar a apuntar el desayuno es la forma de que la
+        // cierre sin leerla.
+        setTimeout(abrirChequeo, 1200);
+      })['catch'](function(){});   // si falla la consulta, no molestar
   }
 
   // Lo que se le manda al asistente para que decida. Los días apuntados son
