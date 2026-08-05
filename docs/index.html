@@ -1336,4 +1336,30 @@
   </div>
 </div>
 
-<script src="app.js"></script>
+<script>
+  // ---- Por qué esto no es un <script src="app.js"> normal ----
+  // Instalada en el teléfono, la app se quedaba con su copia de app.js y
+  // la servía durante días. Para el móvil siempre era "el mismo archivo":
+  // la dirección no cambiaba nunca, así que ni cerrándola del todo se
+  // enteraba de que había versión nueva. Se publicaba un arreglo y en el
+  // celular no aparecía.
+  //
+  // El sello de abajo cambia con cada versión publicada, así que la
+  // dirección también cambia y no hay caché que valga. Lo pone solo
+  // `herramientas/sellar.mjs` a partir del propio contenido de app.js;
+  // a mano no se toca, y hay una prueba que salta si se quedó viejo.
+  //
+  // Abierto a doble clic (file://) se carga sin sello a propósito: ahí no
+  // hay caché de servidor que burlar, y hay navegadores que con una
+  // consulta en la dirección no encuentran el archivo. Abrir el index sin
+  // servidor tiene que seguir funcionando.
+  (function(){
+    var SELLO = 'f244073d05';
+    var s = document.createElement('script');
+    s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
+    // Al final del body: cuando esto corre, la página ya está montada, que
+    // es lo que app.js da por hecho. No usa DOMContentLoaded, así que
+    // cargarlo aquí se comporta igual que el <script src> de siempre.
+    document.body.appendChild(s);
+  })();
+</script>
