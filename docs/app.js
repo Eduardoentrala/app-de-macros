@@ -1692,11 +1692,19 @@
       var esSemana = box.dataset.scope === 'semana';
       var metasBox = esSemana ? {P:P*7, C:C*7, G:G*7} : metaHoy;
       var comidoBox = esSemana ? sem : hoy;
-      // En "restantes" cambia la CIFRA -lo que falta en vez de lo que va-,
-      // pero la barra no: siempre se llena según se come y se queda llena al
-      // llegar a la meta. Estuvo vaciándose en este modo y se leía al revés.
-      // Lo que uno sobrepasa no se pinta: la barra dice cuánto de la meta
-      // llevas, y ese tope es 100.
+      // Cada modo pinta la barra en su sentido, y la barra dice lo mismo
+      // que la cifra que tiene al lado:
+      //
+      //   consumido → se LLENA según comes. Cuánto llevas.
+      //   restantes → se VACÍA según comes. Cuánto te queda.
+      //
+      // Estuvieron las dos llenándose igual, con la idea de que una barra
+      // que baja se lee al revés. Se cambia a petición: teniendo la cifra
+      // de "te faltan 120 g" al lado, una barra que se llena mientras el
+      // número baja es lo que de verdad se contradice.
+      //
+      // Pasarse deja la barra a cero en este modo: no queda nada, y eso es
+      // exactamente lo que hay que ver.
       var restando = vistaAnillo === 'restantes';
       Array.from(box.querySelectorAll('.val')).forEach(function(el){
         var k = el.dataset.macro;
@@ -1711,7 +1719,8 @@
           el.textContent = mil(comido) + '/' + mil(meta) + 'g';
         }
         el.classList.toggle('exc', pasado);
-        var pct = meta > 0 ? Math.min(100, comido / meta * 100) : 0;
+        var llevado = meta > 0 ? Math.min(100, comido / meta * 100) : 0;
+        var pct = restando ? 100 - llevado : llevado;
         el.closest('.macro-row').querySelector('.bar-fill').style.width = pct + '%';
       });
     });
@@ -2700,6 +2709,11 @@
     Array.from(exList.querySelectorAll('.set-check.done')).forEach(function(v){
       v.classList.remove('done');
     });
+    // Y se avisa de que hay algo que subir. Quitar la clase por código no
+    // dispara ningún evento, así que `volcarRutina` no tenía nada pendiente
+    // y salía sin guardar: la pantalla quedaba limpia y la base seguía con
+    // las palomitas puestas. Al reabrir la app volvían todas.
+    if(typeof programarGuardado === 'function') programarGuardado();
 
     saveCurrentDay();
     pintarEjercicio();

@@ -99,6 +99,28 @@ console.log('\n— Las palomitas se apagan al guardar la sesión —');
     'limpiar antes perdería el dato que se guarda en el historial');
   check('y antes de persistir la plantilla', limpiar < guardar,
     'saveCurrentDay es quien las guarda: limpiar después no serviría de nada');
+
+  // Y la otra mitad, que faltaba: quitar la clase por código NO dispara
+  // ningún evento, así que `volcarRutina` no tenía nada pendiente y salía
+  // sin guardar. La pantalla quedaba limpia y la base seguía con las
+  // palomitas puestas; al reabrir la app volvían todas.
+  check('se avisa de que hay algo que subir a la base',
+    /programarGuardado\(\);\s*\n\s*saveCurrentDay\(\)/.test(f),
+    'sin esto se limpian en pantalla pero no en el servidor');
+  const avisar = f.indexOf('programarGuardado()');
+  check('el aviso va después de limpiar', limpiar < avisar);
+}
+
+console.log('\n— Las barras siguen a su cifra —');
+{
+  // Cada modo pinta en su sentido: "consumido" se llena, "restantes" se
+  // vacía. Una barra que se llena mientras el número de al lado baja es lo
+  // que de verdad se contradice.
+  const i = APP.indexOf('var llevado = meta > 0');
+  const t = APP.slice(i, i + 220);
+  check('se calcula lo llevado', /var llevado = meta > 0/.test(t));
+  check('y en "restantes" se invierte', /var pct = restando \? 100 - llevado : llevado/.test(t),
+    'sin esto las dos vistas pintan igual y una de las dos miente');
 }
 
 console.log('\n— El entreno entra en el ajuste semanal —');
