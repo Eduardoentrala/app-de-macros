@@ -247,7 +247,7 @@
   display:flex;border-top:1px solid var(--line);background:var(--card-bg);flex:none;
   /* La barra de gestos del teléfono se come esta franja. En escritorio
      env() vale 0 y quedan los 6px de siempre. */
-  padding-bottom:calc(6px + env(safe-area-inset-bottom));
+  padding-bottom:calc(6px + var(--sab));
 }
 .bottom-tabs button{
   flex:1;background:none;border:none;display:flex;flex-direction:column;align-items:center;gap:4px;

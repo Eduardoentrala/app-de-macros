@@ -26,6 +26,27 @@
     if(dir === 'izq') v.classList.add('desde-izq');
   }
 
+  // ---- Que la interfaz no se quede desfasada ----
+  // En iOS, enfocar un campo desplaza la VENTANA para hacerle sitio al
+  // teclado. Con la carcasa en `position:fixed` ya no puede pasar, pero
+  // esto es el cinturón: si algo lo consigue igual —un `scrollIntoView`,
+  // un autofocus—, la ventana vuelve a su sitio en cuanto se suelta.
+  function enderezarVentana(){
+    if(window.scrollY || window.scrollX) window.scrollTo(0, 0);
+  }
+  ['focusout', 'orientationchange'].forEach(function(ev){
+    window.addEventListener(ev, function(){ setTimeout(enderezarVentana, 50); });
+  });
+  document.addEventListener('visibilitychange', function(){
+    if(!document.hidden) setTimeout(enderezarVentana, 50);
+  });
+
+  function arribaDelTodo(id){
+    var v = document.querySelector('[data-view="' + id + '"]');
+    if(!v) return;
+    Array.from(v.querySelectorAll('.scroll')).forEach(function(s){ s.scrollTop = 0; });
+  }
+
   function goto(id, push){
     if(push){ stack.push(id); } else { stack = [id]; }
     // La librería siempre se abre apilada, con su botón de regresar: ya no
@@ -33,6 +54,9 @@
     // "+ agregar ejercicio" dentro de Mi Rutina.
     if(id === 'library') renderBottom();
     show(id);
+    // Entrar a una pantalla nueva empieza arriba. Al VOLVER no se toca: la
+    // posición donde estabas es justo lo que se espera encontrar.
+    if(push) arribaDelTodo(id);
     animarVista(push ? 'der' : null);   // solo al entrar en una subpantalla
 
     // Los paneles traen sus datos al abrirse, no al arrancar la app

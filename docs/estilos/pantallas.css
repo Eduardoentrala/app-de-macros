@@ -604,7 +604,7 @@
   padding:14px 16px;display:flex;flex-direction:column;gap:8px;
   /* Igual que .bottom-tabs: 22px en escritorio, y en el teléfono lo que
      haga falta para que el botón no quede bajo la barra de gestos. */
-  padding-bottom:calc(14px + max(8px, env(safe-area-inset-bottom)));
+  padding-bottom:calc(14px + max(8px, var(--sab)));
 }
 .btn-primary{background:var(--ink);color:var(--card-bg);border:none;border-radius:14px;padding:15px;font:800 15px/1 sans-serif;cursor:pointer;}
 .btn-ghost-text{background:none;border:none;color:var(--ink-faint);font:600 13px/1 sans-serif;cursor:pointer;padding:4px;}

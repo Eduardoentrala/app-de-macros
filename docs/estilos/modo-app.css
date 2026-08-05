@@ -14,15 +14,18 @@
    app y vuelva a mostrar el teléfono dibujado dentro del teléfono.
    =================================================================== */
 @media (max-width:700px), (hover:none) and (pointer:coarse){
-  body{
+  html, body{
     display:block;
     padding:0;
     gap:0;
     background:var(--app-bg);
-    height:100vh;
-    height:100dvh;          /* descuenta la barra del navegador al aparecer */
+    height:100%;
     overflow:hidden;        /* scrollean los .scroll de dentro, no la página */
     overscroll-behavior:none;  /* corta el "tirar para recargar" */
+    /* La ventana no se puede mover ni con el gesto: es la otra mitad del
+       arreglo del desfase, junto al `position:fixed` de abajo. */
+    position:fixed;
+    inset:0;
   }
 
   /* Lo que es del estudio y no de la app. La barra de arriba se oculta
@@ -38,11 +41,20 @@
 
   .stage{ display:block; gap:0; }
 
+  /* ---- Por qué la interfaz se iba desfasando ----
+     Al enfocar un campo, iOS desplaza la VENTANA para dejar sitio al
+     teclado. Con `body{overflow:hidden}` no hay barra que devolver a su
+     sitio, así que ese desplazamiento se queda: cada vez que escribías
+     algo, la app subía un poco más y ya no bajaba. Recargar la arreglaba
+     y volvía a pasar.
+     Con la carcasa en `position:fixed` no hay nada que desplazar: la
+     ventana no se mueve porque no puede. */
   .phone{
+    position:fixed;
+    inset:0;
     width:100%;
     max-width:none;
-    height:100vh;
-    height:100dvh;
+    height:100%;
     border-radius:0;
     padding:0;
     background:var(--app-bg);
@@ -50,8 +62,20 @@
   }
   .phone-screen{
     border-radius:0;
-    /* Deja libre la muesca / isla dinámica. En un teléfono sin muesca
-       env() vale 0 y esto no hace nada. */
-    padding-top:env(safe-area-inset-top);
+    height:100%;
+    /* Deja libre la isla dinámica y la barra de gestos. En un teléfono sin
+       muesca valen 0 y esto no hace nada.
+       Los laterales importan en horizontal: sin ellos, el texto queda
+       debajo de la esquina redondeada. */
+    padding-top:var(--sat);
+    padding-left:var(--sal);
+    padding-right:var(--sar);
+    /* Abajo NO se pone aquí: la barra de pestañas y las barras de acción
+       ya lo llevan, y así su fondo llega hasta el borde de la pantalla en
+       vez de quedarse flotando sobre una franja. Ponerlo en los dos sitios
+       lo contaría dos veces. */
+    /* Blanco y no gris: encima siempre hay una cabecera o una tarjeta
+       blanca, y una franja gris ahí se ve como un fallo de pintado. */
+    background:var(--card-bg);
   }
 }

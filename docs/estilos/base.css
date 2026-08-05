@@ -70,12 +70,27 @@
 }
 
 *{box-sizing:border-box;}
+
+/* Los huecos que se come el teléfono: la isla dinámica arriba y la barra
+   de gestos abajo. En un sitio y con valor por defecto, para que puedan
+   usarse en cualquier hoja sin repetir el `env()` ni acordarse del 0px.
+   En un teléfono sin muesca valen 0 y no hacen nada. */
+:root{
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+}
+
 html,body{margin:0;padding:0;}
 body{
   background:var(--chrome-bg);
   color:var(--chrome-ink);
   font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-  min-height:100vh;
+  /* dvh y no vh: en iPhone `100vh` cuenta la pantalla ENTERA, incluida la
+     parte que tapan las barras del navegador, así que la página queda más
+     alta de lo que se ve y aparece un desplazamiento fantasma. */
+  min-height:100dvh;
   display:flex;
   flex-direction:column;
   align-items:center;
