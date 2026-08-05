@@ -5,9 +5,6 @@
 
   function show(id){
     views.forEach(function(v){ v.classList.toggle('active', v.dataset.view === id); });
-    Array.from(document.querySelectorAll('#toolbar button[data-go]')).forEach(function(b){
-      b.classList.toggle('active', b.dataset.go === id);
-    });
     // Al mostrarse la pantalla ya se puede medir el ancho: revisar las flechas
     if(typeof refrescarFlechas === 'function') setTimeout(refrescarFlechas, 0);
   }
@@ -109,12 +106,6 @@
       back();
     }, {passive:true});
   })();
-
-  document.getElementById('toolbar').addEventListener('click', function(e){
-    var btn = e.target.closest('button[data-go]');
-    if(!btn) return;
-    goto(btn.dataset.go, false);
-  });
 
   document.getElementById('phoneScreen').addEventListener('click', function(e){
     var push = e.target.closest('[data-push]');
@@ -4475,11 +4466,6 @@
     pintarPanel();
   }
 
-  document.getElementById('rolDemo').addEventListener('change', function(){
-    ROL = this.value;
-    aplicarRol();
-    if(document.querySelector('.app-view.active').dataset.view === 'panel') pintarPanel();
-  });
   document.getElementById('abrirPanel').addEventListener('click', function(){
     goto(ROL === 'super_admin' ? 'admin' : 'panel', true);
   });

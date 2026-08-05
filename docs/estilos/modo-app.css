@@ -32,12 +32,11 @@
      pero NO se quita del DOM: el JS le sigue hablando, y la app ya tiene
      su propia navegación (.bottom-tabs) y su propio ajuste de tema, en
      una fila del Perfil. */
-  .studio-head,
-  .toolbar,
-  .note-callout,
-  .notch,
-  .home-indicator,
-  .statusbar{ display:none; }
+  /* Aquí se ocultaban la cabecera de estudio, la barra de navegación de
+     desarrollo, las notas, la muesca dibujada, la barra de estado falsa y
+     el indicador de inicio. Ya no existen: se quitaron del HTML.
+     El marco del teléfono SÍ se queda, pero solo en pantalla ancha: sirve
+     para ver la app mientras se trabaja y aquí abajo no pinta nada. */
 
   .stage{ display:block; gap:0; }
 

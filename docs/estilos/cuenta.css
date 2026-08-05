@@ -132,13 +132,6 @@
 .cliente-card .info span{display:block;font:600 11.5px/1 sans-serif;color:var(--ink-faint);margin-top:5px;}
 .panel-seccion{padding:14px 20px 8px;font:800 14px/1 sans-serif;display:flex;justify-content:space-between;align-items:baseline;}
 .panel-seccion small{font:600 11.5px/1 sans-serif;color:var(--ink-faint);}
-.demo-rol{
-  display:flex;align-items:center;gap:6px;background:#fdf3d7;border:1px solid #e8d9a8;
-  border-radius:10px;padding:6px 8px;
-}
-.demo-rol span{font:700 10px/1 sans-serif;color:#8a6d1f;text-transform:uppercase;letter-spacing:.05em;}
-.demo-rol select{border:none;background:none;font:700 11.5px/1 sans-serif;color:#5f4a12;cursor:pointer;}
-
 /* ---- Panel de super admin ---- */
 .adm-tabs{grid-template-columns:repeat(3,1fr);background:var(--card-bg);padding:0 16px 12px;margin:0;flex:none;border-bottom:1px solid var(--line);}
 .adm-tabs button{padding:10px 4px;font-size:12.5px;}

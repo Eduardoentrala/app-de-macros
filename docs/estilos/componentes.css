@@ -205,7 +205,3 @@ table.week-table tr.today td{font-weight:800;}
 .placeholder-view h3{margin:0;font-size:17px;}
 .placeholder-view p{margin:0;color:var(--ink-faint);font-size:13.5px;max-width:240px;}
 
-.note-callout{
-  max-width:900px;font:500 12.5px/1.5 sans-serif;color:color-mix(in srgb, var(--chrome-ink) 65%, transparent);
-  text-align:center;
-}
