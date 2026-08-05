@@ -2132,7 +2132,13 @@
   // Elegir un alimento ya no lo apunta: primero se dice cuánto. Antes se
   // agregaba una porción base de golpe y había que entrar a corregirla,
   // que es un paso de más para algo que casi nunca es justo 100 g.
-  function elegirAlimento(a){
+  // `guardado` es la ficha ORIGINAL de la lista, no la copia que se apunta.
+  // Tiene que venir de fuera y no deducirse aquí: por el `id` no vale
+  // —sbAgregarAlimento se lo pisa con el de la fila del diario, y un
+  // alimento recién creado sin conexión todavía no tiene—, y por el nombre
+  // tampoco, porque el catálogo trae nombres que pueden coincidir con los
+  // tuyos. Quien llama sabe si esto salió de tus guardados; aquí no.
+  function elegirAlimento(a, guardado){
     abrirCantidad(a, {
       etiqueta: 'Agregar',
       alConfirmar: function(){
@@ -2140,8 +2146,50 @@
         aplicarCantidad(elegido, cantValor.value);
         cerrarCantidad();
         agregarAlimento(elegido);
+        if(guardado) contarUso(guardado);
       }
     });
+  }
+
+  // ---- Frecuentes ----
+  // No es una lista aparte que haya que mantener: son tus mismos alimentos
+  // guardados, los que ya has repetido lo bastante como para que valga la
+  // pena tenerlos a un toque.
+  var VECES_PARA_FRECUENTE = 5;
+
+  function recalcularFrecuentes(){
+    // En sitio: conectarLista() guarda una referencia a este array y
+    // reasignarlo le haría perder el hilo de los clics.
+    FRECUENTES.length = 0;
+    MIS_ALIMENTOS.forEach(function(a){
+      if((Number(a.veces) || 0) >= VECES_PARA_FRECUENTE) FRECUENTES.push(a);
+    });
+    // El que más repites, primero.
+    FRECUENTES.sort(function(x, y){ return (y.veces || 0) - (x.veces || 0); });
+  }
+
+  function contarUso(a){
+    a.veces = (Number(a.veces) || 0) + 1;
+    var acabaDeEntrar = a.veces === VECES_PARA_FRECUENTE;
+    recalcularFrecuentes();
+    pintarListas();
+    // Que se entere: si no, el alimento aparece en Frecuentes sin más y
+    // nadie sabe por qué ni desde cuándo.
+    if(acabaDeEntrar) toast('toastComida', a.n + ' ya está en tus frecuentes');
+
+    // El contador vive en la base porque tiene que sobrevivir a cerrar la
+    // app y seguir igual en el teléfono y en el ordenador. Se suma allí y
+    // no aquí para que dos dispositivos a la vez no se pisen la cuenta.
+    if(a.id && sesion && sesion.user){
+      sbFetch('/rest/v1/rpc/registrar_uso_alimento', {
+        method: 'POST',
+        body: JSON.stringify({ p_alimento: a.id })
+      })['catch'](function(){
+        // Sin ruido: el contador de pantalla ya subió y la próxima carga
+        // lo pondrá en su sitio. Fallar aquí no le estropea la comida a
+        // nadie, y un aviso por esto sería puro estorbo.
+      });
+    }
   }
 
   cantValor.addEventListener('input', function(){
@@ -2281,24 +2329,71 @@
   // Se pintan desde una función para poder repintarlas cuando lleguen los
   // datos del usuario. Cada lista dice qué hacer cuando está vacía: una
   // pantalla en blanco parece un error, y quien empieza las tendrá vacías.
+  // Lo que hay escrito en cada buscador. Los campos existían desde el
+  // maquetado pero no tenían id ni nadie los escuchaba: escribías y no
+  // pasaba absolutamente nada, que es peor que no tener buscador.
+  function textoDe(id){
+    var e = document.getElementById(id);
+    return e ? normalizarBusqueda(e.value.trim()) : '';
+  }
+  function filtrar(lista, texto, campo){
+    if(!texto) return lista;
+    return lista.filter(function(x){
+      return normalizarBusqueda(x[campo] || '').indexOf(texto) >= 0;
+    });
+  }
+  // Dos vacíos distintos: no es lo mismo no tener nada guardado que tener
+  // cosas y que ninguna se llame así. El primero se arregla creando; el
+  // segundo, borrando lo que escribiste.
+  function vacio(hayTexto, texto, sinNada, sinCoincidencia){
+    // El reemplazo va con función a propósito: en la forma de cadena, un
+    // `$` de lo tecleado se interpreta como referencia y el mensaje sale
+    // roto. Buscar "$5" no debería enseñar cualquier cosa.
+    return '<div class="sin-datos">' +
+      (hayTexto ? sinCoincidencia.replace('%s', function(){ return escapar(texto); }) : sinNada) +
+      '</div>';
+  }
+
   function pintarListas(){
+    // Frecuentes no lleva buscador: es una lista corta de lo que más
+    // repites, no un archivo donde haya que buscar.
     document.getElementById('frecList').innerHTML = FRECUENTES.length
       ? FRECUENTES.map(function(a){ return tarjeta(a, false); }).join('')
-      : '<div class="sin-datos">Aquí aparecerán los alimentos que más repitas.</div>';
+      : '<div class="sin-datos">Aquí aparecerán tus alimentos guardados en cuanto los apuntes ' +
+        VECES_PARA_FRECUENTE + ' veces.</div>';
 
-    document.getElementById('misAlimList').innerHTML = MIS_ALIMENTOS.length
-      ? MIS_ALIMENTOS.map(function(a){ return tarjeta(a, true); }).join('')
-      : '<div class="sin-datos">Todavía no has guardado alimentos. Créalos en la pestaña «Crear».</div>';
+    var qMios = textoDe('buscarMisAlim');
+    var mios = filtrar(MIS_ALIMENTOS, qMios, 'n');
+    var escritoMios = document.getElementById('buscarMisAlim')
+      ? document.getElementById('buscarMisAlim').value.trim() : '';
+    document.getElementById('misAlimList').innerHTML = mios.length
+      ? mios.map(function(a){ return tarjeta(a, true); }).join('')
+      : vacio(!!qMios, escritoMios,
+              'Todavía no has guardado alimentos. Créalos en la pestaña «Crear».',
+              'No tienes «%s» entre tus alimentos guardados. Créalo en la pestaña «Crear» y quedará aquí.');
 
-    document.getElementById('recetaList').innerHTML = RECETAS.length
-      ? RECETAS.map(function(r){
+    var qRec = textoDe('buscarRecetas');
+    var recs = filtrar(RECETAS, qRec, 'n');
+    var escritoRec = document.getElementById('buscarRecetas')
+      ? document.getElementById('buscarRecetas').value.trim() : '';
+    document.getElementById('recetaList').innerHTML = recs.length
+      ? recs.map(function(r){
           return '<div class="food-card"><div class="fc-main"><div class="fc-name">'+r.n+'</div>'+
             '<div class="fc-sub">'+r.cal+' kcal por porción · '+r.vis+'</div></div>'+
             '<span style="color:var(--ink-faint)">›</span></div>';
         }).join('')
-      : '<div class="sin-datos">Todavía no tienes recetas.</div>';
+      : vacio(!!qRec, escritoRec,
+              'Todavía no tienes recetas.',
+              'No tienes ninguna receta que se llame «%s».');
   }
   pintarListas();
+
+  // Al escribir se repinta la lista. `input` y no `change`: filtra mientras
+  // se teclea, que es lo que espera cualquiera.
+  ['buscarMisAlim', 'buscarRecetas'].forEach(function(id){
+    var e = document.getElementById(id);
+    if(e) e.addEventListener('input', pintarListas);
+  });
 
   function conectarLista(id, datos){
     document.getElementById(id).addEventListener('click', function(e){
@@ -2315,7 +2410,10 @@
 
       // Copia: la hoja va a fijarle cantidad y porción base, y no debe
       // tocar la ficha que vive en la lista.
-      elegirAlimento(Object.assign({}, a));
+      // Se manda la copia para apuntar y la ficha original para contarle el
+      // uso: las dos listas que pasan por aquí -frecuentes y guardados- son
+      // tuyas, así que todo lo que se elija desde ellas cuenta.
+      elegirAlimento(Object.assign({}, a), a);
     });
   }
   conectarLista('frecList', FRECUENTES);
@@ -2344,8 +2442,10 @@
     var i = MIS_ALIMENTOS.indexOf(a);
     if(i < 0) return;
     MIS_ALIMENTOS.splice(i, 1);
-    var j = FRECUENTES.indexOf(a);
-    if(j >= 0) FRECUENTES.splice(j, 1);
+    // Frecuentes sale de MIS_ALIMENTOS, así que se recalcula en vez de
+    // andar buscando la posición: al ir ordenado por usos, el índice de
+    // una lista no vale para la otra.
+    recalcularFrecuentes();
     pintarListas();
     toast('toastGuardados', a.n + ' borrado');
 
@@ -2355,7 +2455,7 @@
       sbFetch('/rest/v1/saved_foods?id=eq.' + a.id, { method:'DELETE' })
         ['catch'](function(e){
           MIS_ALIMENTOS.splice(i, 0, a);
-          if(j >= 0) FRECUENTES.splice(j, 0, a);
+          recalcularFrecuentes();
           pintarListas();
           toast('toastGuardados', 'No se pudo borrar: ' + traducirError(e.message));
         });
@@ -5834,9 +5934,10 @@
                     P:Number(f.protein_g)||0, C:Number(f.carbs_g)||0, G:Number(f.fat_g)||0,
                     veces:Number(f.veces_usado)||0 };
           MIS_ALIMENTOS.push(a);
-          // "Frecuentes" no es otra lista: son los mismos, los que ya usaste.
-          if(a.veces > 0) FRECUENTES.push(a);
         });
+        // "Frecuentes" no es otra lista: son los mismos, los que ya repetiste
+        // lo bastante. El corte lo pone recalcularFrecuentes().
+        recalcularFrecuentes();
 
         RECETAS.length = 0;
         recetas.forEach(function(r){
