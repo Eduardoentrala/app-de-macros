@@ -193,8 +193,15 @@ console.log('\n— La suma la hace la base —');
   // RLS dice lo que PUEDES tocar; el where dice lo que QUIERES tocar. Un
   // coach ve a sus clientes: sin esto, un id ajeno le subiría el contador.
   check('solo toca lo tuyo', /user_id = auth\.uid\(\)/.test(SQL));
-  check('no se la puede llamar sin sesión',
-    /revoke all on function public\.registrar_uso_alimento/.test(SQL) &&
+  // `from public` NO basta y esto se vio en la base, no se supuso: Supabase
+  // le da execute a `anon` por permisos por defecto del esquema, y esa
+  // concesión es suya, no la hereda de PUBLIC. Con solo el primer revoke,
+  // has_function_privilege('anon', ...) seguía diciendo true.
+  check('se le quita el permiso a PUBLIC',
+    /revoke all on function public\.registrar_uso_alimento\(uuid\) from public;/.test(SQL));
+  check('y también a anon, que lo tiene por su cuenta',
+    /revoke all on function public\.registrar_uso_alimento\(uuid\) from anon;/.test(SQL));
+  check('solo la usa quien tiene sesión',
     /grant execute on function public\.registrar_uso_alimento\(uuid\) to authenticated/.test(SQL));
   check('si el alimento ya no está, devuelve 0 en vez de reventar',
     /coalesce\(v_veces, 0\)/.test(SQL));

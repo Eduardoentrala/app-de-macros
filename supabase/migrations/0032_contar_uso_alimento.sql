@@ -43,5 +43,15 @@ comment on function public.registrar_uso_alimento(uuid) is
   'Suma uno a veces_usado del alimento guardado, si es de quien llama. '
   'Devuelve el total; 0 si no era suyo.';
 
+-- `from public` NO basta, y esto se comprobó mirándolo, no suponiéndolo:
+-- Supabase le da execute a `anon` por permisos por defecto del esquema, y
+-- esa concesión es suya, no la hereda de PUBLIC. Quitando solo PUBLIC, un
+-- has_function_privilege('anon', ...) seguía diciendo `true`.
+--
+-- No llegaba a abrir nada -sin sesión auth.uid() es null, ningún user_id
+-- casa con null, y encima RLS corta antes-, pero un permiso que no hace
+-- falta es un permiso que sobra: el día que alguien toque el `where`, la
+-- puerta ya estaría abierta.
 revoke all on function public.registrar_uso_alimento(uuid) from public;
+revoke all on function public.registrar_uso_alimento(uuid) from anon;
 grant execute on function public.registrar_uso_alimento(uuid) to authenticated;
