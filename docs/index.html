@@ -1000,41 +1000,15 @@
               </div>
             </div>
           </div>
-          <div class="card">
-            <div class="ring-label" style="margin-bottom:2px;">CARDIO ESTA SEMANA</div>
-            <div class="cardio-top">
-              <div class="cardio-min"><span id="ejCardio">0</span> <span>min</span></div>
-              <div class="cardio-goal">Meta<b>120 min</b></div>
-            </div>
-            <div class="bar-track" style="margin-top:12px;height:8px;"><div class="bar-fill" id="ejCardioBar" style="width:0%"></div></div>
-            <div class="cardio-pct" id="ejCardioPct">0%</div>
-          </div>
 
           <table class="week-table">
-            <tr><th>Día</th><th>Fecha</th><th>Fuerza</th><th>Cardio</th></tr>
+            <tr><th>Día</th><th>Fecha</th><th>Fuerza</th></tr>
             <tbody id="ejFilas"></tbody>
           </table>
 
         </div>
         <div class="toast" id="toastEjercicio">Listo</div>
 
-        <div class="sheet-backdrop" id="cardioSheet">
-          <div class="sheet">
-            <h4>Cardio del <span id="csDia">día</span></h4>
-            <p class="hint">¿Cuántos minutos hiciste?</p>
-            <div class="preset-grid" id="csPresets">
-              <button class="preset" data-min="15">15<small>minutos</small></button>
-              <button class="preset" data-min="30">30<small>minutos</small></button>
-              <button class="preset" data-min="45">45<small>minutos</small></button>
-              <button class="preset" data-min="60">60<small>minutos</small></button>
-            </div>
-            <div class="custom-row">
-              <input id="csMin" type="number" min="0" max="600" step="5" value="30" inputmode="numeric">
-              <span class="unit">minutos</span>
-            </div>
-            <button class="btn-primary" id="csSave">Guardar cardio</button>
-          </div>
-        </div>
       </div>
 
       <!-- MI PESO -->
@@ -1131,19 +1105,6 @@
 
           <div class="card">
             <div class="goal-head">
-              <div style="font:800 14.5px/1 sans-serif;">Cardio semanal</div>
-              <span class="goal-hint" id="perfCardioMeta">meta 120 min</span>
-            </div>
-            <div class="calc-box" style="margin-top:8px;">
-              <div class="calc-line"><span>Llevas esta semana</span><b id="perfCardioHecho">0 min</b></div>
-              <div class="bar-track" style="margin-top:10px;height:6px;"><div class="bar-fill" id="perfCardioBar" style="width:0%"></div></div>
-            </div>
-            <div class="day-actions" style="margin:12px 0 0;">
-              <button class="btn-rename" id="perfCardioMetaBtn">Cambiar meta</button>
-            </div>
-          </div>
-          <div class="card">
-            <div class="goal-head">
               <div style="font:800 14.5px/1 sans-serif;">Metas de macros</div>
               <span class="goal-hint">Edita los gramos</span>
             </div>
@@ -1196,23 +1157,6 @@
           <button class="active" data-tabbar="perfil"><span>👤</span>Perfil</button>
         </div>
 
-        <div class="sheet-backdrop" id="metaCardioSheet">
-          <div class="sheet">
-            <h4>Meta de cardio semanal</h4>
-            <p class="hint">Cuántos minutos de cardio quieres hacer por semana.</p>
-            <div class="preset-grid" id="mcPresets">
-              <button class="preset" data-min="60">60<small>minutos</small></button>
-              <button class="preset" data-min="90">90<small>minutos</small></button>
-              <button class="preset active" data-min="120">120<small>minutos</small></button>
-              <button class="preset" data-min="180">180<small>minutos</small></button>
-            </div>
-            <div class="custom-row">
-              <input id="mcMin" type="number" min="0" max="1200" step="10" value="120" inputmode="numeric">
-              <span class="unit">min/semana</span>
-            </div>
-            <button class="btn-primary" id="mcSave">Guardar meta</button>
-          </div>
-        </div>
 
         <div class="sheet-backdrop" id="objSheet">
           <div class="sheet">

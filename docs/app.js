@@ -1337,8 +1337,6 @@
   // entrenamientos de ejemplo a quien acaba de registrarse le falsea la
   // racha y el resumen de la semana en Progreso.
   var SESIONES = {};
-  var CARDIO   = {};                     // minutos de cardio por día
-  var META_CARDIO = 120;
 
   function fmtFecha(d){ return d.getDate() + ' ' + MESES[d.getMonth()]; }
 
@@ -2627,23 +2625,19 @@
     if(!filas || !SESIONES) return;
     var ini = new Date(anclaSemana);
 
-    var diasFuerza = 0, minCardio = 0, html = '';
+    var diasFuerza = 0, html = '';
     for(var i = 0; i < 7; i++){
       var d = new Date(ini); d.setDate(d.getDate() + i);
       var k = iso(d);
       var esFuturo = d > HOY;
       var esHoy = k === iso(HOY);
       var hizo = !!SESIONES[k];
-      var min = CARDIO[k] || 0;
       if(hizo) diasFuerza++;
-      minCardio += min;
 
       html += '<tr'+(esHoy ? ' class="today"' : '')+'>'+
         '<td>Día ' + (i+1) + (esHoy ? ' · hoy' : '') + '</td>'+
         '<td>' + d.getDate() + '/' + (d.getMonth()+1) + '</td>'+
         '<td>' + (hizo ? '<span class="pill-si">SI</span>' : '<span class="pill-dash">—</span>') + '</td>'+
-        '<td>' + (esFuturo ? '<span class="pill-dash">—</span>'
-                 : '<button class="pill-cardio" data-fecha="'+k+'">' + (min ? min + ' min' : '+ cardio') + '</button>') + '</td>'+
         '</tr>';
     }
     filas.innerHTML = html;
@@ -2654,10 +2648,6 @@
     var fin = new Date(ini); fin.setDate(fin.getDate() + 6);
     document.getElementById('ejWeekRange').textContent = 'Del ' + fmtFecha(ini) + ' al ' + fmtFecha(fin);
 
-    var pct = Math.min(100, Math.round(minCardio / META_CARDIO * 100));
-    document.getElementById('ejCardio').textContent = minCardio;
-    document.getElementById('ejCardioBar').style.width = pct + '%';
-    document.getElementById('ejCardioPct').textContent = pct + '%';
   }
 
   // Guardar sesión = queda registrado el día de hoy como día de fuerza
@@ -2748,83 +2738,6 @@
     });
   });
 
-  // Cardio por día
-  var cardioSheet = document.getElementById('cardioSheet');
-  var csMin = document.getElementById('csMin');
-  var fechaCardio = null;
-
-  document.getElementById('ejFilas').addEventListener('click', function(e){
-    var b = e.target.closest('.pill-cardio');
-    if(!b) return;
-    fechaCardio = b.dataset.fecha;
-    var d = new Date(fechaCardio + 'T00:00:00');
-    document.getElementById('csDia').textContent = fmtFecha(d);
-    csMin.value = CARDIO[fechaCardio] || 30;
-    cardioSheet.classList.add('open');
-  });
-  document.getElementById('csPresets').addEventListener('click', function(e){
-    var p = e.target.closest('.preset');
-    if(p) csMin.value = p.dataset.min;
-  });
-  document.getElementById('csSave').addEventListener('click', function(){
-    if(!fechaCardio) return;
-    var v = Math.max(0, Math.min(600, Number(csMin.value) || 0));
-    var fecha = fechaCardio, antes = CARDIO[fecha];
-    if(v) CARDIO[fecha] = v; else delete CARDIO[fecha];
-    cardioSheet.classList.remove('open');
-    pintarEjercicio();
-    if(typeof pintarCardioPerfil === 'function') pintarCardioPerfil();
-    toast('toastEjercicio', v ? v + ' min de cardio guardados' : 'Cardio quitado');
-
-    sbGuardarCardio(fecha, v)['catch'](function(e){
-      if(antes == null) delete CARDIO[fecha]; else CARDIO[fecha] = antes;
-      pintarEjercicio();
-      if(typeof pintarCardioPerfil === 'function') pintarCardioPerfil();
-      toast('toastEjercicio', 'No se pudo guardar: ' + traducirError(e.message));
-    });
-  });
-  cardioSheet.addEventListener('click', function(e){
-    if(e.target === cardioSheet) cardioSheet.classList.remove('open');
-  });
-
-  // ---- Cardio también desde Perfil, contra la misma semana ----
-  function pintarCardioPerfil(){
-    var ini = new Date(anclaSemana), total = 0;
-    for(var i=0;i<7;i++){ var d=new Date(ini); d.setDate(d.getDate()+i); total += CARDIO[isoDe(d)] || 0; }
-    var pct = META_CARDIO > 0 ? Math.min(100, Math.round(total/META_CARDIO*100)) : 0;
-    document.getElementById('perfCardioMeta').textContent = 'meta ' + META_CARDIO + ' min';
-    document.getElementById('perfCardioHecho').textContent = total + ' min';
-    document.getElementById('perfCardioBar').style.width = pct + '%';
-    var metaEj = document.querySelector('[data-view="ejercicio"] .cardio-goal b');
-    if(metaEj) metaEj.textContent = META_CARDIO + ' min';
-  }
-
-  var metaCardioSheet = document.getElementById('metaCardioSheet');
-  var mcMin = document.getElementById('mcMin');
-  document.getElementById('perfCardioMetaBtn').addEventListener('click', function(){
-    mcMin.value = META_CARDIO;
-    Array.from(document.querySelectorAll('#mcPresets .preset')).forEach(function(p){
-      p.classList.toggle('active', Number(p.dataset.min) === META_CARDIO);
-    });
-    metaCardioSheet.classList.add('open');
-  });
-  document.getElementById('mcPresets').addEventListener('click', function(e){
-    var p = e.target.closest('.preset'); if(p) mcMin.value = p.dataset.min;
-  });
-  document.getElementById('mcSave').addEventListener('click', function(){
-    META_CARDIO = Math.max(0, Math.min(1200, Number(mcMin.value) || 0));
-    metaCardioSheet.classList.remove('open');
-    pintarEjercicio(); pintarCardioPerfil();
-    toast('toastPeso', 'Meta de cardio: ' + META_CARDIO + ' min');
-    sbActualizarPerfil({ cardio_goal_min: META_CARDIO })['catch'](function(){});
-  });
-  metaCardioSheet.addEventListener('click', function(e){ if(e.target===this) this.classList.remove('open'); });
-
-  // El cardio se registra desde Progreso, que es donde está el calendario
-  // de la semana. En Perfil solo se ve el avance y se cambia la meta.
-
-  pintarEjercicio();
-  pintarCardioPerfil();
 
   // ---- Todas las fechas visibles salen de la fecha real del dispositivo ----
   function pintarFechas(){
@@ -5769,11 +5682,6 @@
                    '&user_id=eq.' + sesion.user.id +
                    '&log_date=gte.' + desde + '&order=log_date.asc');
   }
-  function sbCardio(desde){
-    return sbFetch('/rest/v1/cardio_logs?select=log_date,minutes' +
-                   '&user_id=eq.' + sesion.user.id +
-                   '&log_date=gte.' + desde + '&order=log_date.asc');
-  }
   function sbActualizarPerfil(campos){
     if(!sesion || !sesion.user) return Promise.resolve();
     return sbFetch('/rest/v1/profiles?id=eq.' + sesion.user.id, {
@@ -5791,22 +5699,6 @@
       body: JSON.stringify({ user_id: sesion.user.id, log_date: fecha, weight_kg: kg })
     });
   }
-  // La base permite varias sesiones de cardio el mismo día, pero la
-  // pantalla maneja un único total por fecha. Se traduce una cosa en la
-  // otra: se borra lo de ese día y se guarda el total como una sola fila.
-  function sbGuardarCardio(fecha, minutos){
-    if(!sesion || !sesion.user) return Promise.resolve();
-    return sbFetch('/rest/v1/cardio_logs?user_id=eq.' + sesion.user.id +
-                   '&log_date=eq.' + fecha, { method:'DELETE' })
-      .then(function(){
-        if(!minutos) return null;
-        return sbFetch('/rest/v1/cardio_logs', {
-          method:'POST', headers:{ 'Prefer':'return=minimal' },
-          body: JSON.stringify({ user_id: sesion.user.id, log_date: fecha, minutes: minutos })
-        });
-      });
-  }
-
   function cargarDatos(){
     if(!sesion || !sesion.user) return Promise.resolve();
 
@@ -5817,7 +5709,7 @@
     // consulta se iba con `entry_date=gte.NaN-NaN-NaN`.
     var DIAS_ATRAS = 60;   // de sobra para la racha y la semana en curso
 
-    // El peso y el cardio se traen de un año atrás porque la gráfica de
+    // El peso se trae de un año atrás porque la gráfica de
     // peso tiene un rango "el año"; el diario no lo necesita.
     var UN_ANIO = isoDe(haceDias(365));
 
@@ -5825,14 +5717,13 @@
         sbPerfil(),
         sbDiario(isoDe(haceDias(DIAS_ATRAS))),
         sbPesos(UN_ANIO),
-        sbCardio(UN_ANIO),
         sbAlimentos(),
         sbRecetas(),
         sbEventos()
       ])
       .then(function(res){
-        var p = res[0], filas = res[1] || [], pesos = res[2] || [], cardios = res[3] || [],
-            alimentos = res[4] || [], recetas = res[5] || [], eventos = res[6] || [];
+        var p = res[0], filas = res[1] || [], pesos = res[2] || [],
+            alimentos = res[3] || [], recetas = res[4] || [], eventos = res[5] || [];
 
         // ---- Eventos ----
         // Antes que nada: el balance del día se calcula con esto, así que
@@ -5894,7 +5785,6 @@
             aplicarRol();
           }
 
-          if(p.cardio_goal_min != null) META_CARDIO = Number(p.cardio_goal_min);
           if(p.week_start_dow != null){
             inicioSemana = Number(p.week_start_dow);
             anclaSemana  = ultimoDia(inicioSemana);   // el ancla depende del día elegido
@@ -5948,14 +5838,6 @@
         // nada. Vaciarlo aquí es lo que hace visible que sí.
         document.getElementById('pesoInput').value = hoyPeso != null ? hoyPeso : '';
 
-        // ---- Cardio ----
-        // La base admite varias sesiones por día; aquí se suman, que es
-        // lo que la pantalla muestra.
-        CARDIO = {};
-        cardios.forEach(function(f){
-          CARDIO[f.log_date] = (CARDIO[f.log_date] || 0) + (Number(f.minutes) || 0);
-        });
-
         // ---- Alimentos guardados y recetas ----
         // En sitio, no reasignando: conectarLista() guarda una referencia
         // a estos arrays y perdería el hilo si les cambio la identidad.
@@ -5985,7 +5867,6 @@
         pintarComida();
         pintarRacha();
         pintarPeso();
-        if(typeof pintarCardioPerfil === 'function') pintarCardioPerfil();
         if(typeof pintarEjercicio    === 'function') pintarEjercicio();
         // Repintar Fotos: ya se sabe desde cuándo contar las semanas
         if(typeof pintarFotos        === 'function') pintarFotos();

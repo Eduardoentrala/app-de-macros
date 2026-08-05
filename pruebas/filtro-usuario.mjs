@@ -28,7 +28,7 @@ const check = (n, cond, extra = '') => {
 // Tablas donde cada fila es de una persona. Las comunes -catálogo,
 // feature_flags, vistas de coach- quedan fuera a propósito.
 const PERSONALES = [
-  'weight_logs', 'cardio_logs', 'diary_entries', 'saved_foods', 'recipes',
+  'weight_logs', 'diary_entries', 'saved_foods', 'recipes',
   'routine_days', 'routine_exercises', 'exercise_sets', 'workout_sessions',
   'progress_photos', 'eventos', 'chequeos_semanales', 'avisos_coach'
 ];
@@ -72,7 +72,8 @@ console.log('\n— Las que dieron el problema, una por una —');
     // Con `order=log_date.asc`: sin eso encuentra antes la consulta de la
     // ficha del panel, que es otra cosa y sí debe llevar el id de otro.
     ['la gráfica de peso',      "function sbPesos(desde)"],
-    ['el cardio',               "cardio_logs?select=log_date,minutes"],
+    // El cardio se quitó: era un campo que pedía trabajo al usuario y no
+    // alimentaba nada —ni el cálculo de calorías, ni el ajuste semanal—.
     ['el diario',               "?select=id,entry_date,meal,food_name"],
     ['los alimentos guardados', "saved_foods?select=id,name,unit"],
     ['las recetas',             "recipes?select=id,name,servings"],
