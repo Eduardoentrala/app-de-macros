@@ -27,7 +27,12 @@ const check = (n, cond, extra = '') => {
   else { mal++; console.log(`  FALLA ${n}${extra ? '\n        ' + extra : ''}`); }
 };
 
-const MUERTAS = ['exercise_library', 'exercise_notes', 'consentimientos'];
+const MUERTAS = ['exercise_library', 'consentimientos'];
+
+// exercise_notes estuvo en esta lista y se sacó: las notas por ejercicio se
+// quedan en la app. Su tabla está vacía porque hoy viven en memoria, pero es
+// donde acabarían si algún día se guardan de verdad.
+const SE_QUEDA = 'exercise_notes';
 
 console.log('\n— Primero se niega, después borra —');
 {
@@ -79,7 +84,6 @@ console.log('\n— Se borra en el orden que no rompe nada —');
   const orden = [
     ['la columna que apunta', 'alter table public.routine_exercises drop column if exists exercise_id'],
     ['la función que leía consentimientos', 'drop function if exists public.acepto(text, text)'],
-    ['exercise_notes', 'drop table if exists public.exercise_notes'],
     ['consentimientos', 'drop table if exists public.consentimientos'],
     ['exercise_library', 'drop table if exists public.exercise_library']
   ];
@@ -94,6 +98,18 @@ console.log('\n— Se borra en el orden que no rompe nada —');
   check('la columna se suelta antes que su tabla',
     SQL.indexOf('drop column if exists exercise_id') <
     SQL.indexOf('drop table if exists public.exercise_library'));
+}
+
+console.log('\n— Y exercise_notes NO se toca —');
+{
+  // Estuvo en la lista y se sacó: las notas por ejercicio se quedan en la
+  // app. Soltar su tabla sería quitarle el sitio a una función viva.
+  const ordenes = SQL.split('\n').filter(l => !l.trim().startsWith('--')).join('\n');
+  check('ninguna orden la suelta',
+    !new RegExp('drop table[^;]*' + SE_QUEDA).test(ordenes),
+    (ordenes.match(new RegExp('.*' + SE_QUEDA + '.*')) || [''])[0]);
+  check('ni la cuenta la guarda', !new RegExp("'" + SE_QUEDA + "'").test(ordenes));
+  check('y está escrito por qué se quedó', new RegExp(SE_QUEDA + ' NO SE VA').test(SQL));
 }
 
 console.log('\n— Nada de CASCADE —');

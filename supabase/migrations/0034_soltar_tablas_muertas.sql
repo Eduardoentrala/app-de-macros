@@ -1,4 +1,4 @@
--- Soltar tres tablas que no usa nadie, y lo que las sujetaba.
+-- Soltar dos tablas que no usa nadie, y lo que las sujetaba.
 --
 --  ESTO BORRA COSAS Y NO SE DESHACE. Por eso empieza con una guarda que
 --  cuenta filas y ABORTA si encuentra una sola. No es desconfianza del
@@ -11,9 +11,11 @@
 --    lleva 36 ejercicios escritos en el codigo, con sus mapas musculares.
 --    La tabla se creo en la 0001 para eso y se quedo vacia.
 --
---  exercise_notes  — las notas por ejercicio se quitaron de la app. Vivian
---    en memoria (`var NOTAS = {}`) y no llegaban a esta tabla: al cerrar la
---    app desaparecian. La tabla nunca vio una fila.
+--  exercise_notes NO SE VA, y estuvo a punto. Se quito de esta lista al
+--    volver atras con las notas por ejercicio: siguen en la app. Hoy viven
+--    en memoria y esa tabla esta vacia, pero es exactamente donde acabarian
+--    si algun dia se guardan de verdad. Soltarla seria quitarle el sitio a
+--    una funcion que acabamos de decidir que se queda.
 --
 --  consentimientos — la sustituyo la 0031, que puso el consentimiento en
 --    columnas de `profiles`. Se queda el dato donde se lee y se va la tabla
@@ -43,7 +45,8 @@ declare
   con_dato   bigint;
 begin
   -- ---- Las tablas, una por una ----
-  foreach t in array array['exercise_library', 'exercise_notes', 'consentimientos'] loop
+  -- exercise_notes no esta: las notas por ejercicio se quedan.
+  foreach t in array array['exercise_library', 'consentimientos'] loop
     if to_regclass('public.' || t) is null then
       raise notice 'public.% ya no existe, nada que hacer', t;
       continue;
@@ -85,12 +88,11 @@ alter table public.routine_exercises drop column if exists exercise_id;
 
 drop function if exists public.acepto(text, text);
 
-drop table if exists public.exercise_notes;
 drop table if exists public.consentimientos;
 drop table if exists public.exercise_library;
 
 -- Aviso para quien monte un proyecto nuevo: `supabase/instalar.sql` sigue
--- creando estas tres tablas, porque es la foto de la 0001 en adelante. Un
+-- creando estas tablas, porque es la foto de la 0001 en adelante. Un
 -- proyecto nuevo las creara y esta migracion volvera a soltarlas, que es
 -- el comportamiento correcto de una cadena de migraciones. No se toca
 -- instalar.sql para no reescribir historia que ya se ejecuto.

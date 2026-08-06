@@ -60,7 +60,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = 'db75254264';
+    var SELLO = '0e754ce2e9';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -910,6 +910,17 @@
           </div>
         </div>
 
+        <div class="sheet-backdrop" id="notasSheet">
+          <div class="sheet">
+            <h4 id="notasTitulo">Notas del ejercicio</h4>
+            <p class="hint">Apunta lo que quieras recordar la próxima vez: altura del banco, agarre, sensaciones.</p>
+            <textarea class="notas-input" id="notasTexto" rows="5" maxlength="400"
+              placeholder="Ej. Banco en el hoyo 3. Bajar despacio, me molesta el hombro si abro mucho."></textarea>
+            <button class="btn-primary" id="notasGuardar">Guardar nota</button>
+            <button class="btn-ghost-text" id="notasBorrar">Borrar nota</button>
+          </div>
+        </div>
+
         <div class="sheet-backdrop" id="addExSheet">
           <div class="sheet">
             <h4>Agregar ejercicio</h4>
@@ -1390,7 +1401,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = 'db75254264';
+    var SELLO = '0e754ce2e9';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que

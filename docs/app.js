@@ -268,6 +268,7 @@
     exList.innerHTML = dayContent[tab.dataset.day] || '';
     recalcAll();
     syncEmptyState();
+    if(typeof marcarTodasLasNotas === 'function') marcarTodasLasNotas();
   }
 
   function openNameSheet(opts){
@@ -454,10 +455,11 @@
     var card = document.createElement('div');
     card.className = 'exercise-card';
     card.innerHTML = '<div class="ex-head"><div class="ex-top">'+
-      '<div><div class="ex-name">'+name+'</div><div class="ex-delta"></div></div>'+
+      '<div><div class="ex-name">'+name+' <span class="nota-badge" hidden title="Tiene notas">📝</span></div><div class="ex-delta"></div></div>'+
       '<div class="ex-vol">vol<br><b class="vol-num">0</b><span class="prev"></span></div></div>'+
       '<div class="ex-pills">'+
       '<button class="chip" data-act="grafica">📈 gráfica</button>'+
+      '<button class="chip" data-act="notas">notas</button>'+
       '<span class="icon-mini">'+
       '<button data-act="subir" title="Subir ejercicio">▲</button>'+
       '<button data-act="bajar" title="Bajar ejercicio">▼</button>'+
@@ -579,7 +581,54 @@
       else toast('toastRutina', 'Ya es el último');
       return;
     }
+    if(act.dataset.act === 'notas'){ abrirNotas(card, nombre); return; }
     if(act.dataset.act === 'grafica'){ abrirGrafica(card, nombre); return; }
+  });
+
+  // ---- Notas por ejercicio ----
+  // Se guardan por nombre de ejercicio, así reaparecen la próxima vez que lo hagas.
+  // Notas por ejercicio, las escribe cada quien. Vacío al empezar.
+  var NOTAS = {};
+  var cardNotas = null, nombreNotas = '';
+
+  function marcaNotas(card, nombre){
+    var tiene = !!(NOTAS[nombre] && NOTAS[nombre].trim());
+    var badge = card.querySelector('.nota-badge');
+    var pill = card.querySelector('[data-act="notas"]');
+    if(badge) badge.hidden = !tiene;
+    if(pill){
+      pill.classList.toggle('con-nota', tiene);
+      pill.textContent = tiene ? '📝 notas' : 'notas';
+    }
+  }
+  function marcarTodasLasNotas(){
+    Array.from(exList.querySelectorAll('.exercise-card')).forEach(function(c){
+      marcaNotas(c, c.querySelector('.ex-name').childNodes[0].textContent.trim());
+    });
+  }
+  function abrirNotas(card, nombre){
+    cardNotas = card; nombreNotas = nombre;
+    document.getElementById('notasTitulo').textContent = 'Notas · ' + nombre;
+    document.getElementById('notasTexto').value = NOTAS[nombre] || '';
+    document.getElementById('notasSheet').classList.add('open');
+    setTimeout(function(){ document.getElementById('notasTexto').focus(); }, 60);
+  }
+  document.getElementById('notasGuardar').addEventListener('click', function(){
+    var txt = document.getElementById('notasTexto').value.trim();
+    if(txt) NOTAS[nombreNotas] = txt; else delete NOTAS[nombreNotas];
+    if(cardNotas) marcaNotas(cardNotas, nombreNotas);
+    document.getElementById('notasSheet').classList.remove('open');
+    toast('toastRutina', txt ? 'Nota guardada' : 'Nota borrada');
+  });
+  document.getElementById('notasBorrar').addEventListener('click', function(){
+    delete NOTAS[nombreNotas];
+    document.getElementById('notasTexto').value = '';
+    if(cardNotas) marcaNotas(cardNotas, nombreNotas);
+    document.getElementById('notasSheet').classList.remove('open');
+    toast('toastRutina', 'Nota borrada');
+  });
+  document.getElementById('notasSheet').addEventListener('click', function(e){
+    if(e.target === this) this.classList.remove('open');
   });
 
   // ================= RUTINA GUARDADA EN LA BASE =================
@@ -634,10 +683,11 @@
     return '<div class="exercise-card" data-id="' + ej.id + '">' +
       '<div class="ex-head"><div class="ex-top">' +
       '<div><div class="ex-name">' + ej.nombre +
-        '</div><div class="ex-delta"></div></div>' +
+        ' <span class="nota-badge" hidden title="Tiene notas">📝</span></div><div class="ex-delta"></div></div>' +
       '<div class="ex-vol">vol<br><b class="vol-num">0</b><span class="prev"></span></div></div>' +
       '<div class="ex-pills">' +
       '<button class="chip" data-act="grafica">📈 gráfica</button>' +
+      '<button class="chip" data-act="notas">notas</button>' +
       '<span class="icon-mini">' +
       '<button data-act="subir" title="Subir ejercicio">▲</button>' +
       '<button data-act="bajar" title="Bajar ejercicio">▼</button>' +
@@ -903,6 +953,7 @@
   document.getElementById('graficaSheet').addEventListener('click', function(e){
     if(e.target === this) this.classList.remove('open');
   });
+  marcarTodasLasNotas();
 
   // ---- Cronómetro de descanso ----
   var restSeconds = 180;
@@ -1247,6 +1298,7 @@
     selected.clear(); renderGrid();
     recalcAll();
     syncEmptyState();
+    if(typeof marcarTodasLasNotas === 'function') marcarTodasLasNotas();
 
     // Solo se llega aquí desde "+ agregar ejercicio", así que regresar
     // siempre devuelve a Mi Rutina, que es de donde se vino.

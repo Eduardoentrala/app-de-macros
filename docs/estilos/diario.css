@@ -355,8 +355,10 @@
 .nf-cal{text-align:center;font:700 15px/1 sans-serif;margin-top:18px;color:var(--ink);}
 .nf-cal b{font-size:19px;font-variant-numeric:tabular-nums;}
 
-/* Píldoras accionables del ejercicio */
+/* Marca de notas y píldoras accionables del ejercicio */
+.nota-badge{font-size:12px;vertical-align:middle;}
 .ex-pills .chip{cursor:pointer;}
+.ex-pills .chip.con-nota{background:var(--green-soft);color:var(--green);}
 .notas-input{
   width:100%;border:1.5px solid var(--line);background:var(--app-bg);border-radius:12px;
   padding:13px;font:500 16px/1.5 sans-serif;color:var(--ink);resize:vertical;outline:none;
