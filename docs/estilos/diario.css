@@ -266,7 +266,7 @@
 }
 .searchbox span{font-size:15px;opacity:.6;}
 .searchbox input{
-  flex:1;border:none;background:none;font:500 14.5px/1 sans-serif;color:var(--ink);outline:none;min-width:0;
+  flex:1;border:none;background:none;font:500 16px/1 sans-serif;color:var(--ink);outline:none;min-width:0;
 }
 /* Los cuatro accesos caben completos en el ancho del teléfono */
 .src-pills{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px;}
@@ -361,7 +361,7 @@
 .ex-pills .chip.con-nota{background:var(--green-soft);color:var(--green);}
 .notas-input{
   width:100%;border:1.5px solid var(--line);background:var(--app-bg);border-radius:12px;
-  padding:13px;font:500 14px/1.5 sans-serif;color:var(--ink);resize:vertical;outline:none;
+  padding:13px;font:500 16px/1.5 sans-serif;color:var(--ink);resize:vertical;outline:none;
 }
 .notas-input:focus{border-color:var(--ink);}
 

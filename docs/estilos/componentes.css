@@ -78,7 +78,7 @@ table.week-table tr.today td{font-weight:800;}
 .empty-note b{display:block;font-size:14px;margin-bottom:3px;}
 .empty-note span{font:500 12.5px/1.4 sans-serif;color:var(--ink-faint);}
 .field-label{font:700 12.5px/1 sans-serif;color:var(--ink-soft);margin:14px 0 8px;}
-.field-value{background:var(--app-bg);border-radius:12px;padding:14px;font:700 15px/1 sans-serif;text-align:center;}
+.field-value{background:var(--app-bg);border-radius:12px;padding:14px;font:700 16px/1 sans-serif;text-align:center;}
 .field-value.big{font-size:26px;text-align:left;padding:16px;}
 .chart-title-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;}
 .chart-delta{font:700 12.5px/1 sans-serif;color:var(--ink-soft);}
@@ -126,7 +126,7 @@ table.week-table tr.today td{font-weight:800;}
 .goal-field{display:flex;align-items:center;gap:7px;}
 .goal-field input{
   width:86px;text-align:right;border:1.5px solid var(--line);background:var(--app-bg);border-radius:11px;
-  padding:10px 11px;font:800 15px/1 sans-serif;color:var(--ink);font-variant-numeric:tabular-nums;
+  padding:10px 11px;font:800 16px/1 sans-serif;color:var(--ink);font-variant-numeric:tabular-nums;
 }
 .goal-field input:focus{outline:2px solid var(--ink);outline-offset:1px;}
 .goal-field span{font:600 13px/1 sans-serif;color:var(--ink-faint);width:12px;}

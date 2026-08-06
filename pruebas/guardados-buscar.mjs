@@ -207,6 +207,55 @@ console.log('\n— La suma la hace la base —');
     /coalesce\(v_veces, 0\)/.test(SQL));
 }
 
+console.log('\n— Al registrar, los buscadores se vacían —');
+{
+  // Escribir "huevo", apuntarlo y tener que borrarlo a mano para buscar lo
+  // siguiente es trabajo que la app puede ahorrarse.
+  const i = APP.indexOf('function limpiarBuscadoresDeAlimento(');
+  const trozo = i > 0 ? APP.slice(i, i + 900) : '';
+  check('existe el vaciado', i > 0);
+  check('vacía el de la comida', /mealSearch\.value = '';/.test(trozo));
+  check('y también los de guardados y recetas',
+    /\['buscarMisAlim', 'buscarRecetas'\]\.forEach/.test(trozo));
+  check('quita las sugerencias que quedaban',
+    /mealSugeridos\.innerHTML = '';/.test(trozo) && /SUGERIDOS = \[\];/.test(trozo));
+  // Sin esto, una búsqueda ya lanzada llega tarde y repinta lo que se
+  // acaba de quitar.
+  check('corta la búsqueda que venía en camino', /clearTimeout\(relojBusqueda\);/.test(trozo));
+  // Si no, las listas se quedan filtradas por una palabra que ya no está
+  // escrita en ningún sitio.
+  check('devuelve las listas enteras', /pintarListas\(\);/.test(trozo));
+}
+
+console.log('\n— Pero cancelar NO borra lo escrito —');
+{
+  // Entre tocar el alimento y registrarlo está la hoja de la cantidad.
+  // Antes el buscador de comida se vaciaba al TOCAR, así que cancelar te
+  // dejaba sin la búsqueda sin haber apuntado nada.
+  const j = APP.indexOf('function elegirAlimento(');
+  const elegir = APP.slice(j, j + 1200);
+  check('se vacía al confirmar', /limpiarBuscadoresDeAlimento\(\);/.test(elegir));
+  // Y va DESPUÉS de contar el uso: contarUso() repinta las listas y
+  // dejarlas filtradas por el texto viejo sería el mismo fallo al revés.
+  check('después de contar el uso',
+    elegir.indexOf('contarUso(guardado)') < elegir.indexOf('limpiarBuscadoresDeAlimento()'));
+
+  // El vaciado al tocar ya no debe existir en el click de las sugerencias.
+  const k = APP.indexOf('mealSugeridos.addEventListener');
+  const click = APP.slice(k, k + 900);
+  check('el click de una sugerencia ya no lo vacía',
+    !/mealSearch\.value = '';/.test(click), click.slice(0, 200));
+}
+
+console.log('\n— El del panel de admin se queda como estaba —');
+{
+  // No es el mismo caso: ahí se navega por el catálogo para editarlo, no
+  // se registra nada. Vaciarlo al abrir un alimento perdería el sitio.
+  const i = APP.indexOf('function limpiarBuscadoresDeAlimento(');
+  check('no toca el buscador del catálogo',
+    !/catBuscar/.test(APP.slice(i, i + 900)));
+}
+
 console.log('\n— Y la lista vacía explica la regla —');
 {
   check('el mensaje dice cuántas veces hacen falta',

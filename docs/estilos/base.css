@@ -83,6 +83,24 @@
 }
 
 html,body{margin:0;padding:0;}
+
+/* ---- Nada de zoom ----
+   El que molestaba de verdad no era el pellizco: iOS hace zoom él solo al
+   tocar un campo cuya letra mide menos de 16px, y al salir no siempre
+   vuelve. Escribías el peso de una serie y la app se quedaba torcida.
+   No hay ajuste que lo apague: la única forma es que ningún campo baje de
+   16px. Esta regla es la red de seguridad para los que se añadan mañana;
+   cada campo lleva además su tamaño en su propia hoja.
+
+   Los botones se quedan fuera a propósito: no provocan ese zoom -solo lo
+   hacen los campos donde se escribe- y en la app hay pastillas de 11.5px
+   que subirlas descuadraría.
+
+   `touch-action:manipulation` quita el zoom del doble toque, que además
+   hacía que cada botón respondiera con retraso mientras el navegador
+   esperaba a ver si venía el segundo toque. */
+input, select, textarea{ font-size:max(16px, 1em); }
+html{ touch-action:manipulation; -webkit-text-size-adjust:100%; }
 body{
   background:var(--chrome-bg);
   color:var(--chrome-ink);

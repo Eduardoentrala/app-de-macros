@@ -5,7 +5,14 @@
 <!-- Sin esta línea el teléfono asume ancho de escritorio y dibuja todo
      diminuto. `viewport-fit=cover` deja que la app llegue hasta los bordes
      y es lo que hace que env(safe-area-inset-*) devuelva algo distinto de 0. -->
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- `user-scalable=no` quita el pellizco para hacer zoom. En una app de
+     pantalla completa no aporta nada y sí estorba: se hacía zoom sin querer
+     al desplazar con dos dedos y la interfaz quedaba descuadrada.
+     Aviso para quien lea esto: Safari lo ignora al navegar normal (lo hace
+     a propósito, por accesibilidad) y solo lo respeta con la app instalada.
+     El zoom que de verdad molestaba —el que salta al tocar un campo— no se
+     arregla aquí sino con la letra a 16px; está explicado en base.css. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
 
 <!-- Color de la barra de estado del teléfono: que no corte con el encabezado -->
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
@@ -598,9 +605,32 @@
             </div>
             <div class="calc-box"><div class="calc-line"><span>Calorías por 100 g</span><b id="catCal">0</b></div></div>
 
+            <!-- Cómo se le pide la cantidad a la persona al apuntarlo. Los
+                 macros de arriba siguen siendo por 100 g pase lo que pase:
+                 esto solo cambia la forma de contarlo, no el dato. -->
             <div class="cat-fila2">
               <div>
-                <div class="field-label">Porción casera</div>
+                <div class="field-label">Se registra en</div>
+                <select class="big-input" id="catUnidad">
+                  <option value="Gramos">Gramos</option>
+                  <option value="Pieza">Piezas</option>
+                  <option value="Servicio">Servicios</option>
+                </select>
+              </div>
+              <div id="catPesoUnidad" hidden>
+                <div class="field-label" id="catPesoUnidadLabel">Pesa una (g)</div>
+                <input class="big-input" id="catPiezaG" type="number" step="1" min="1" inputmode="numeric" placeholder="50">
+              </div>
+            </div>
+            <p class="hint" id="catUnidadNota">Se apunta en gramos.</p>
+
+            <!-- Esto es OTRA cosa y por eso va separado: es la porción de
+                 referencia de USDA («cup, chopped», «1 oz»), el dato con el
+                 que se audita la fila contra la fuente. No es la unidad en
+                 la que se apunta. -->
+            <div class="cat-fila2">
+              <div>
+                <div class="field-label">Porción de USDA</div>
                 <input class="big-input" id="catPorcion" maxlength="40" placeholder="1 pieza mediana">
               </div>
               <div>
@@ -1354,7 +1384,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = 'f244073d05';
+    var SELLO = '8764be0d45';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que

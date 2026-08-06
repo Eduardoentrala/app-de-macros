@@ -2147,6 +2147,9 @@
         cerrarCantidad();
         agregarAlimento(elegido);
         if(guardado) contarUso(guardado);
+        // Después de contar el uso: contarUso() repinta las listas, y si se
+        // vaciara antes las volvería a dejar filtradas por el texto viejo.
+        limpiarBuscadoresDeAlimento();
       }
     });
   }
@@ -2545,13 +2548,21 @@
         var P = Number(x.proteina) || 0,
             C = Number(x.carbos)   || 0,
             G = Number(x.grasas)   || 0;
-        // La pieza sale de `pieza_g`, un peso medido, y nunca del texto de
-        // la porción: de ahí venía que "1 Pieza" de espagueti fuese una taza.
+        // La unidad la dice la fila, no se deduce del dato. Antes se
+        // asumía "si hay pieza_g, es una pieza", y eso valía mientras la
+        // pieza fuese la única forma de contar que no era gramos. Desde que
+        // el panel puede dar de alta servicios, cuánto pesa una unidad y
+        // cómo se llama esa unidad son dos cosas distintas.
+        //
+        // El peso sigue saliendo de `pieza_g`, un peso medido, y nunca del
+        // texto de la porción: de ahí venía que "1 Pieza" de espagueti
+        // acabara siendo una taza.
         var pz = Number(x.pieza_g) || 0;
-        if(pz > 0){
+        var uni = x.unidad || 'Gramos';
+        if(uni !== 'Gramos' && pz > 0){
           var por = function(v){ return Math.round(v * pz / 100 * 10) / 10; };
           return { fuente:'catalogo', n:x.nombre, estado:x.estado,
-                   u:'Pieza', cant:1, P:por(P), C:por(C), G:por(G) };
+                   u:uni, cant:1, P:por(P), C:por(C), G:por(G) };
         }
         return { fuente:'catalogo', n:x.nombre, estado:x.estado,
                  u:'Gramos', cant:100, P:P, C:C, G:G };
@@ -2607,14 +2618,40 @@
     if(!c) return;
     var a = SUGERIDOS[Number(c.dataset.sug)];
     if(!a) return;
-    mealSearch.value = '';
-    mealSugeridos.innerHTML = '';
+    // Aquí se vaciaba el buscador nada más tocar el alimento. Se quitó: en
+    // medio está la hoja de la cantidad, y quien la cancela se encontraba
+    // la búsqueda borrada sin haber apuntado nada. Ahora se vacía al
+    // registrarlo de verdad, en limpiarBuscadoresDeAlimento().
     // El nombre lleva el estado cuando lo tiene: en el diario hay que
     // poder distinguir el arroz crudo del cocido de un vistazo, que es
     // toda la razón de que sean registros separados.
     var nombre = (a.estado && a.estado !== 'unico') ? a.n + ' (' + a.estado + ')' : a.n;
     elegirAlimento({ n:nombre, u:a.u, cant:a.cant || undefined, P:a.P, C:a.C, G:a.G });
   });
+
+  // ---- Al registrar un alimento, los buscadores se vacían ----
+  // Escribir "huevo", apuntarlo, y tener que borrar "huevo" a mano para
+  // buscar lo siguiente es trabajo que la app puede ahorrarse: cuando ya lo
+  // apuntaste, esa palabra no le sirve a nadie.
+  //
+  // Se llama al CONFIRMAR, no al tocar el alimento: entre una cosa y otra
+  // está la hoja de la cantidad, y quien la cancela quiere volver a su
+  // búsqueda, no encontrarla borrada.
+  function limpiarBuscadoresDeAlimento(){
+    // Lo primero: si hay una búsqueda esperando su turno, al llegar
+    // repintaría las sugerencias que acabamos de quitar.
+    clearTimeout(relojBusqueda);
+    mealSearch.value = '';
+    mealSugeridos.innerHTML = '';
+    SUGERIDOS = [];
+    ['buscarMisAlim', 'buscarRecetas'].forEach(function(id){
+      var e = document.getElementById(id);
+      if(e) e.value = '';
+    });
+    // Y las listas vuelven a salir enteras, que si no quedarían filtradas
+    // por una palabra que ya no está escrita en ningún sitio.
+    pintarListas();
+  }
 
   // Crear alimento: las calorías salen solas de los macros
   var unitPills = document.getElementById('unitPills');
@@ -4786,6 +4823,26 @@
     document.getElementById(id).addEventListener('input', calcularCalCatalogo);
   });
 
+  // ---- En qué se registra el alimento ----
+  // Los macros de la ficha van SIEMPRE por 100 g, venga de USDA o lo escriba
+  // un admin. Esto solo decide cómo se le pide la cantidad a la persona:
+  // "150 g de arroz" o "2 huevos" o "1 servicio de batido". La conversión
+  // la hace la app con el peso de una unidad, así que en cuanto la unidad
+  // no es gramos ese peso deja de ser opcional.
+  function pintarUnidadCatalogo(){
+    var u = document.getElementById('catUnidad').value;
+    var enGramos = u === 'Gramos';
+    var nombreUnidad = u === 'Pieza' ? 'una pieza' : 'un servicio';
+    document.getElementById('catPesoUnidad').hidden = enGramos;
+    document.getElementById('catPesoUnidadLabel').textContent =
+      u === 'Pieza' ? 'Pesa una (g)' : 'Pesa uno (g)';
+    document.getElementById('catUnidadNota').textContent = enGramos
+      ? 'Se apunta en gramos.'
+      : 'Se apunta por ' + (u === 'Pieza' ? 'piezas' : 'servicios') +
+        '. Di cuánto pesa ' + nombreUnidad + ' para poder calcular sus macros.';
+  }
+  document.getElementById('catUnidad').addEventListener('change', pintarUnidadCatalogo);
+
   function abrirCatalogo(a){
     catEditando = a || null;
     var nuevo = !a;
@@ -4804,6 +4861,9 @@
     document.getElementById('catG').value = a ? a.grasas : '';
     document.getElementById('catPorcion').value  = (a && a.porcion) || '';
     document.getElementById('catPorcionG').value = (a && a.porcion_g) || '';
+    document.getElementById('catUnidad').value = (a && a.unidad) || 'Gramos';
+    document.getElementById('catPiezaG').value  = (a && a.pieza_g) || '';
+    pintarUnidadCatalogo();
     document.getElementById('catOcultar').hidden = nuevo;
     document.getElementById('catOcultar').textContent =
       (a && !a.activo) ? 'Volver a mostrarlo' : 'Ocultar del buscador';
@@ -4819,6 +4879,17 @@
     var nombre = document.getElementById('catNombre').value.trim();
     if(!nombre){ toast('toastAdmin', 'Ponle nombre'); return; }
 
+    var unidad = document.getElementById('catUnidad').value;
+    var piezaG = Number(document.getElementById('catPiezaG').value) || 0;
+    // Se avisa aquí y no se deja que lo rechace la base: el mensaje de un
+    // check de Postgres no le dice a nadie qué campo le falta. La base lo
+    // impide igualmente -es su trabajo-, pero esto es lo que se lee.
+    if(unidad !== 'Gramos' && piezaG <= 0){
+      toast('toastAdmin', 'Di cuánto pesa ' +
+        (unidad === 'Pieza' ? 'una pieza' : 'un servicio') + ' en gramos');
+      return;
+    }
+
     var cuerpo = {
       nombre: nombre,
       categoria: document.getElementById('catCategoria').value,
@@ -4827,7 +4898,12 @@
       carbos:   Number(document.getElementById('catC').value) || 0,
       grasas:   Number(document.getElementById('catG').value) || 0,
       porcion:   document.getElementById('catPorcion').value.trim() || null,
-      porcion_g: Number(document.getElementById('catPorcionG').value) || null
+      porcion_g: Number(document.getElementById('catPorcionG').value) || null,
+      unidad:    unidad,
+      // En gramos se limpia a null en vez de dejar el número escrito: si
+      // alguien pone 50, cambia a gramos y guarda, un peso por pieza
+      // colgando ahí no significa nada y confunde al siguiente que lo abra.
+      pieza_g:   unidad === 'Gramos' ? null : piezaG
     };
     // Las calorías no se piden: se calculan. Pedirlas invita a que un día
     // no cuadren con los macros de su propia fila.
