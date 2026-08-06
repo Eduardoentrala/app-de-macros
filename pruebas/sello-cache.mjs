@@ -26,15 +26,41 @@ const check = (n, cond, extra = '') => {
 
 console.log('\n— El sello está y está al día —');
 {
-  const m = HTML.match(PATRON_SELLO);
-  check('index.html lleva sello', !!m);
-  const esperado = selloDe(APP);
-  check('el sello corresponde al app.js de ahora',
-    m && m[2] === esperado,
-    m ? `pone ${m[2]}, toca ${esperado} — ejecuta: node herramientas/sellar.mjs` : '');
+  const sellos = HTML.match(PATRON_SELLO) || [];
+  check('index.html lleva sello', sellos.length > 0);
+  // Dos: uno para las hojas de estilo (en el <head>) y otro para app.js.
+  check('hay uno para el CSS y otro para el JS', sellos.length === 2,
+    `hay ${sellos.length}`);
+  const valores = [...HTML.matchAll(/var SELLO = '([^']*)';/g)].map(x => x[1]);
+  check('los dos llevan el mismo', new Set(valores).size === 1, valores.join(' / '));
   // Que no se quedara el marcador de relleno del primer día.
-  check('no es el valor de relleno', m && m[2] !== '0000000000');
-  check('sellar() dice que no hay nada pendiente', sellar({ escribir: false }).cambio === false);
+  check('no es el valor de relleno', valores.every(v => v !== '0000000000'));
+  // La comprobación de verdad: que corresponda a lo que hay AHORA en el
+  // disco. Si no, salta aquí y no en el móvil de alguien tres días después.
+  check('sellar() dice que no hay nada pendiente', sellar({ escribir: false }).cambio === false,
+    'ejecuta: node herramientas/sellar.mjs');
+}
+
+console.log('\n— Y el sello cubre también las hojas de estilo —');
+{
+  // Esto se aprendió por las malas: el arreglo del zoom -que ningún campo
+  // baje de 16px- vive en el CSS. Se publicó, se comprobó que el servidor
+  // lo servía... y la app instalada siguió con su copia de siempre, porque
+  // el sello solo miraba app.js.
+  check('cambiar una hoja cambia el sello',
+    selloDe(APP + '\nbody{}') !== selloDe(APP + '\nbody{color:red}'));
+  check('las hojas se piden con sello',
+    /'estilos\/' \+ HOJAS\[i\] \+ '\.css' \+ \(suelto \? '' : '\?v=' \+ SELLO\)/.test(HTML));
+  // El orden es la cascada: modo-app va el último porque apaga el marco de
+  // maqueta. Escribirlas desde JS no puede alterarlo.
+  const lista = (HTML.match(/var HOJAS = \[([^\]]*)\]/) || [, ''])[1]
+    .split(',').map(s => s.trim().replace(/'/g, ''));
+  check('están las ocho', lista.length === 8, lista.join(','));
+  check('base va primero y modo-app el último',
+    lista[0] === 'base' && lista[lista.length - 1] === 'modo-app', lista.join(','));
+  // Ya no deben quedar <link> fijos, o se cargarían dos veces.
+  check('no quedan <link> sueltos sin sello',
+    !/<link rel="stylesheet" href="estilos\//.test(HTML));
 }
 
 console.log('\n— Y se carga como debe —');

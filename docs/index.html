@@ -46,16 +46,33 @@
 
 <!-- EL ORDEN IMPORTA. Es la cascada: lo de abajo pisa a lo de arriba.
      base define los colores que usan los demás; modo-app va el último
-     porque apaga el teléfono dibujado de maqueta. Reordenar estas líneas
-     cambia cómo se ve la app aunque no se toque ni un archivo. -->
-  <link rel="stylesheet" href="estilos/base.css">
-  <link rel="stylesheet" href="estilos/maqueta.css">
-  <link rel="stylesheet" href="estilos/vistas.css">
-  <link rel="stylesheet" href="estilos/diario.css">
-  <link rel="stylesheet" href="estilos/cuenta.css">
-  <link rel="stylesheet" href="estilos/pantallas.css">
-  <link rel="stylesheet" href="estilos/componentes.css">
-  <link rel="stylesheet" href="estilos/modo-app.css">
+     porque apaga el marco de maqueta. Reordenar esta lista cambia cómo se
+     ve la app aunque no se toque ni un archivo.
+
+     Van con sello, por lo mismo que app.js: la app instalada se quedaba
+     con su copia de cada hoja y no se enteraba de que había versión nueva.
+     Esto no era teórico: el arreglo del zoom -que ningún campo baje de
+     16px- vive en el CSS, así que sin sello se publicaba y no llegaba.
+
+     Se escriben desde aquí en vez de dejarlas puestas para poder omitir el
+     sello en file://, igual que con app.js. Y va en el <head>, antes del
+     body: el navegador espera igual a las hojas que se añaden aquí, así
+     que no hay parpadeo. -->
+<script>
+  (function(){
+    var SELLO = 'db75254264';
+    var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
+                 'cuenta', 'pantallas', 'componentes', 'modo-app'];
+    var suelto = location.protocol === 'file:';
+    for(var i = 0; i < HOJAS.length; i++){
+      var l = document.createElement('link');
+      l.rel = 'stylesheet';
+      l.href = 'estilos/' + HOJAS[i] + '.css' + (suelto ? '' : '?v=' + SELLO);
+      // En orden: el orden del DOM es el de la cascada.
+      document.head.appendChild(l);
+    }
+  })();
+</script>
 
 <div class="stage">
   <div class="phone">
@@ -893,17 +910,6 @@
           </div>
         </div>
 
-        <div class="sheet-backdrop" id="notasSheet">
-          <div class="sheet">
-            <h4 id="notasTitulo">Notas del ejercicio</h4>
-            <p class="hint">Apunta lo que quieras recordar la próxima vez: altura del banco, agarre, sensaciones.</p>
-            <textarea class="notas-input" id="notasTexto" rows="5" maxlength="400"
-              placeholder="Ej. Banco en el hoyo 3. Bajar despacio, me molesta el hombro si abro mucho."></textarea>
-            <button class="btn-primary" id="notasGuardar">Guardar nota</button>
-            <button class="btn-ghost-text" id="notasBorrar">Borrar nota</button>
-          </div>
-        </div>
-
         <div class="sheet-backdrop" id="addExSheet">
           <div class="sheet">
             <h4>Agregar ejercicio</h4>
@@ -1384,7 +1390,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '8764be0d45';
+    var SELLO = 'db75254264';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que

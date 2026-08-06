@@ -1,25 +1,50 @@
+/* Cómo se ve la app en una pantalla ancha.
+   En un teléfono no manda nada de aquí: modo-app.css va después y lo pisa
+   entero para ocupar la pantalla completa. */
+
 .stage{
   display:flex;
-  gap:28px;
-  align-items:flex-start;
-  flex-wrap:wrap;
   justify-content:center;
+  align-items:flex-start;
 }
 
+/* Aquí había un teléfono dibujado: marco negro, esquinas de 54px y sombra
+   de catálogo. Servía cuando esto era una maqueta y había que imaginarse
+   el resultado. Ahora la app es de verdad y está publicada, así que quien
+   la abre en un portátil no debería encontrarse el dibujo de un móvil: se
+   encuentra la app.
+
+   Lo que NO se quita, y no por descuido: sigue centrada y con un ancho de
+   teléfono. Toda la interfaz está pensada para el pulgar -barra de
+   pestañas abajo, hojas que suben, una columna-, y estirarla a lo ancho de
+   un monitor no la haría más de escritorio, la dejaría rota y vacía por
+   los lados. El marco sobraba; la anchura no. */
 .phone{
-  width:390px;
-  height:844px;
-  background:#000;
-  border-radius:54px;
-  padding:14px;
-  box-shadow:0 30px 60px -20px rgba(0,0,0,.45);
-  position:relative;
+  width:100%;
+  max-width:420px;
+  /* Se acaba donde se acaba la ventana. Con la altura fija de antes, en una
+     ventana baja la app se salía por abajo y había que desplazar la página
+     entera para llegar a la barra de pestañas.
+     Los 88px son el relleno que el body pone arriba y abajo (28 + 60, en
+     base.css). Sin descontarlos, la cuenta salía justa por la altura de la
+     ventana pero la página seguía siendo más alta que la pantalla. */
+  height:min(860px, calc(100dvh - 88px));
   flex:none;
+  border-radius:20px;
+  overflow:hidden;
+  /* Un borde fino en vez del marco: separa la app del fondo sin fingir que
+     hay un aparato. */
+  border:1px solid var(--line);
+  box-shadow:0 12px 32px -18px rgba(0,0,0,.35);
+  background:var(--app-bg);
 }
+
 .phone-screen{
   width:100%;height:100%;
   background:var(--app-bg);
-  border-radius:40px;
+  /* Esto NO es decoración: la app entera cuelga de esta columna, y el
+     recorte es lo que hace que scrolleen los .scroll de dentro y no la
+     página. Quitarlo desmonta la disposición. */
   overflow:hidden;
   position:relative;
   display:flex;
