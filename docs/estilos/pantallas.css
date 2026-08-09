@@ -550,7 +550,19 @@
 .exercise-card{background:var(--card-bg);margin:0 16px 14px;border-radius:18px;box-shadow:var(--shadow);overflow:hidden;}
 .ex-head{padding:14px 16px 12px;border-bottom:1px solid var(--line);}
 .ex-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+/* Sin esto no hay puntos suspensivos que valgan. Un elemento flex trae
+   `min-width:auto`, o sea que se niega a encoger por debajo de lo que mide
+   su contenido: la columna del nombre se estiraba a 413px dentro de una
+   tarjeta de 335 y la nota se salía por el lado, cortada en seco. */
+.ex-top > div:first-child{min-width:0;}
 .ex-name{font:800 15.5px/1.2 sans-serif;}
+/* El adelanto de la nota. En una sola línea y con puntos suspensivos: es
+   un recordatorio de un vistazo, no la nota entera. Para leerla completa
+   está la hoja, que es donde además se edita. */
+.nota-previa{
+  font:500 12.5px/1.35 sans-serif;color:var(--ink-soft);margin-top:4px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;
+}
 .ex-delta{font:700 12.5px/1 sans-serif;margin-top:4px;display:none;}
 .ex-delta.show{display:block;}
 .ex-delta.up{color:var(--green);}

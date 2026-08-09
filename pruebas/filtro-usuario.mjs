@@ -30,7 +30,11 @@ const check = (n, cond, extra = '') => {
 const PERSONALES = [
   'weight_logs', 'diary_entries', 'saved_foods', 'recipes',
   'routine_days', 'routine_exercises', 'exercise_sets', 'workout_sessions',
-  'progress_photos', 'eventos', 'chequeos_semanales', 'avisos_coach'
+  'progress_photos', 'eventos', 'chequeos_semanales', 'avisos_coach',
+  // Las notas por ejercicio pasaron a guardarse de verdad, así que entran
+  // aquí: un coach ve a sus clientes, y sin filtro sus notas saldrían
+  // marcadas en la rutina de otro.
+  'exercise_notes'
 ];
 
 console.log('\n— Toda lectura personal dice de quién —');

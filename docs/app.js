@@ -455,7 +455,8 @@
     var card = document.createElement('div');
     card.className = 'exercise-card';
     card.innerHTML = '<div class="ex-head"><div class="ex-top">'+
-      '<div><div class="ex-name">'+name+' <span class="nota-badge" hidden title="Tiene notas">📝</span></div><div class="ex-delta"></div></div>'+
+      '<div><div class="ex-name">'+name+' <span class="nota-badge" hidden title="Tiene notas">📝</span></div>'+
+      '<div class="nota-previa" hidden title="Toca «notas» para verla entera"></div><div class="ex-delta"></div></div>'+
       '<div class="ex-vol">vol<br><b class="vol-num">0</b><span class="prev"></span></div></div>'+
       '<div class="ex-pills">'+
       '<button class="chip" data-act="grafica">📈 gráfica</button>'+
@@ -586,15 +587,70 @@
   });
 
   // ---- Notas por ejercicio ----
-  // Se guardan por nombre de ejercicio, así reaparecen la próxima vez que lo hagas.
-  // Notas por ejercicio, las escribe cada quien. Vacío al empezar.
+  // Van por NOMBRE de ejercicio, no por la tarjeta: la nota es de "press
+  // banca", no de la fila del lunes. Así reaparece al hacerlo otro día, y
+  // sigue ahí aunque quites el ejercicio de la rutina y lo vuelvas a poner.
+  //
+  // Se guardan en la base y no solo aquí. Antes vivían en esta variable y
+  // nada más: escribías "banco en el hoyo 3", cerrabas la app y no volvías
+  // a verlo. Una nota que no sobrevive a cerrar la app no es una nota.
+  //
+  // Se borran cuando se pide y no antes: al borrar desaparece de verdad, y
+  // no reaparece hasta que se escriba otra.
   var NOTAS = {};
   var cardNotas = null, nombreNotas = '';
+
+  // Traer las de esta persona. El `user_id` va aunque RLS ya lo exija: RLS
+  // dice lo que PUEDES ver y un coach ve a sus clientes, así que sin esto
+  // se colarían notas ajenas en la rutina propia.
+  function cargarNotas(){
+    if(!sesion || !sesion.user) return Promise.resolve();
+    return sbFetch('/rest/v1/exercise_notes?select=exercise_name,body' +
+                   '&user_id=eq.' + sesion.user.id)
+      .then(function(filas){
+        NOTAS = {};
+        (filas || []).forEach(function(f){
+          if(f.body && f.body.trim()) NOTAS[f.exercise_name] = f.body;
+        });
+        marcarTodasLasNotas();
+      })['catch'](function(){
+        // Sin ruido: quedarse sin notas no debe impedir entrenar. Lo que no
+        // se hace es inventarlas: si no llegaron, no hay marca de que las
+        // haya, y así nadie cree que su nota se perdió cuando sigue ahí.
+      });
+  }
+
+  function guardarNota(nombre, texto){
+    if(!sesion || !sesion.user) return Promise.resolve();
+    // Uno por persona y ejercicio: la tabla tiene unique(user_id,
+    // exercise_name), así que esto pisa la nota anterior en vez de dejar
+    // dos. Sin `on_conflict` daría error de duplicado a la segunda vez.
+    return sbFetch('/rest/v1/exercise_notes?on_conflict=user_id,exercise_name', {
+      method: 'POST',
+      headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({
+        user_id: sesion.user.id, exercise_name: nombre, body: texto
+      })
+    });
+  }
+
+  function borrarNota(nombre){
+    if(!sesion || !sesion.user) return Promise.resolve();
+    return sbFetch('/rest/v1/exercise_notes?user_id=eq.' + sesion.user.id +
+                   '&exercise_name=eq.' + encodeURIComponent(nombre), { method: 'DELETE' });
+  }
 
   function marcaNotas(card, nombre){
     var tiene = !!(NOTAS[nombre] && NOTAS[nombre].trim());
     var badge = card.querySelector('.nota-badge');
     var pill = card.querySelector('[data-act="notas"]');
+    // Un adelanto de lo escrito debajo del nombre. La marca sola dice que
+    // hay algo; esto dice QUÉ, y evita abrir la hoja para acordarte.
+    var previa = card.querySelector('.nota-previa');
+    if(previa){
+      previa.textContent = tiene ? NOTAS[nombre].replace(/\s+/g, ' ').trim() : '';
+      previa.hidden = !tiene;
+    }
     if(badge) badge.hidden = !tiene;
     if(pill){
       pill.classList.toggle('con-nota', tiene);
@@ -613,19 +669,35 @@
     document.getElementById('notasSheet').classList.add('open');
     setTimeout(function(){ document.getElementById('notasTexto').focus(); }, 60);
   }
-  document.getElementById('notasGuardar').addEventListener('click', function(){
-    var txt = document.getElementById('notasTexto').value.trim();
-    if(txt) NOTAS[nombreNotas] = txt; else delete NOTAS[nombreNotas];
-    if(cardNotas) marcaNotas(cardNotas, nombreNotas);
+  // Se aplica en pantalla y se manda a la base en segundo plano: la hoja se
+  // cierra al momento, que es lo que hace que la app se sienta rápida. Pero
+  // si el guardado falla hay que deshacerlo — enseñar como guardada una nota
+  // que no está es peor que no guardarla, porque nadie la vuelve a escribir.
+  function aplicarNota(nombre, texto, card){
+    var antes = NOTAS[nombre];
+    if(texto) NOTAS[nombre] = texto; else delete NOTAS[nombre];
+    if(card) marcaNotas(card, nombre);
     document.getElementById('notasSheet').classList.remove('open');
-    toast('toastRutina', txt ? 'Nota guardada' : 'Nota borrada');
+    toast('toastRutina', texto ? 'Nota guardada' : 'Nota borrada');
+
+    var p = texto ? guardarNota(nombre, texto) : borrarNota(nombre);
+    p['catch'](function(e){
+      if(antes === undefined) delete NOTAS[nombre]; else NOTAS[nombre] = antes;
+      if(card) marcaNotas(card, nombre);
+      toast('toastRutina', 'No se pudo guardar la nota: ' + traducirError(e.message));
+    });
+  }
+
+  document.getElementById('notasGuardar').addEventListener('click', function(){
+    // Guardar con el campo vacío borra: es lo que espera quien acaba de
+    // seleccionar todo y darle a suprimir.
+    aplicarNota(nombreNotas, document.getElementById('notasTexto').value.trim(), cardNotas);
   });
   document.getElementById('notasBorrar').addEventListener('click', function(){
-    delete NOTAS[nombreNotas];
     document.getElementById('notasTexto').value = '';
-    if(cardNotas) marcaNotas(cardNotas, nombreNotas);
-    document.getElementById('notasSheet').classList.remove('open');
-    toast('toastRutina', 'Nota borrada');
+    // Se va de la base, no solo de la pantalla: al volver a entrar no
+    // reaparece, y no vuelve a haber nota hasta que se escriba otra.
+    aplicarNota(nombreNotas, '', cardNotas);
   });
   document.getElementById('notasSheet').addEventListener('click', function(e){
     if(e.target === this) this.classList.remove('open');
@@ -683,7 +755,8 @@
     return '<div class="exercise-card" data-id="' + ej.id + '">' +
       '<div class="ex-head"><div class="ex-top">' +
       '<div><div class="ex-name">' + ej.nombre +
-        ' <span class="nota-badge" hidden title="Tiene notas">📝</span></div><div class="ex-delta"></div></div>' +
+        ' <span class="nota-badge" hidden title="Tiene notas">📝</span></div>' +
+        '<div class="nota-previa" hidden title="Toca «notas» para verla entera"></div><div class="ex-delta"></div></div>' +
       '<div class="ex-vol">vol<br><b class="vol-num">0</b><span class="prev"></span></div></div>' +
       '<div class="ex-pills">' +
       '<button class="chip" data-act="grafica">📈 gráfica</button>' +
@@ -889,7 +962,13 @@
       var primera = dayTabs.querySelector('.day-tab:not(.add)');
       if(primera) loadDay(primera);
       refrescarFlechas();
-    });
+    })
+    // Las notas al final y no dentro del Promise.all de arriba: marcan las
+    // tarjetas, y ahí todavía no existen. Van encadenadas para que la marca
+    // encuentre dónde ponerse.
+    // Fuera del `if(!dias.length) return` a propósito: aunque no haya rutina
+    // guardada está el "Día 1" de arranque, y sus notas son igual de tuyas.
+    .then(cargarNotas);
   }
 
   // ---- Gráfica de progreso por ejercicio ----

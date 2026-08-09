@@ -11,11 +11,16 @@
 --    lleva 36 ejercicios escritos en el codigo, con sus mapas musculares.
 --    La tabla se creo en la 0001 para eso y se quedo vacia.
 --
---  exercise_notes NO SE VA, y estuvo a punto. Se quito de esta lista al
---    volver atras con las notas por ejercicio: siguen en la app. Hoy viven
---    en memoria y esa tabla esta vacia, pero es exactamente donde acabarian
---    si algun dia se guardan de verdad. Soltarla seria quitarle el sitio a
---    una funcion que acabamos de decidir que se queda.
+--  exercise_notes NO SE VA, y estuvo a punto de irse. Se saco de la lista
+--    al volver atras con las notas por ejercicio, y ahora ademas se USA: la
+--    app las guarda aqui en vez de en memoria, asi que la tabla se va a
+--    llenar. No hizo falta migracion para eso -la tabla y sus cuatro
+--    politicas estan desde la 0001 y la 0002, solo estaban sin usar-.
+--
+--    Vale la pena quedarse con esto: la tabla estaba vacia el dia que se
+--    escribio esta migracion, y una guarda que solo mira si esta vacia
+--    habria dicho que si. Vacia no significa muerta; significa que todavia
+--    nadie la ha usado.
 --
 --  consentimientos — la sustituyo la 0031, que puso el consentimiento en
 --    columnas de `profiles`. Se queda el dato donde se lee y se va la tabla
