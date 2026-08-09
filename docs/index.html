@@ -60,7 +60,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '6c8e28edbb';
+    var SELLO = 'e729ac0343';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -917,7 +917,16 @@
             <textarea class="notas-input" id="notasTexto" rows="5" maxlength="400"
               placeholder="Ej. Banco en el hoyo 3. Bajar despacio, me molesta el hombro si abro mucho."></textarea>
             <button class="btn-primary" id="notasGuardar">Guardar nota</button>
-            <button class="btn-ghost-text" id="notasBorrar">Borrar nota</button>
+            <!-- Rojo y con marco, como «Borrar día»: es lo único de esta hoja
+                 que no se deshace. Iba como texto gris y se perdía debajo del
+                 botón negro; nadie encontraba por dónde quitar la nota.
+                 Solo sale cuando hay nota guardada: en una nota que aún no
+                 existe, un botón de borrar no borra nada y confunde. -->
+            <button class="btn-outline btn-delete-day" id="notasBorrar" hidden
+              style="width:100%;margin-top:8px;">Eliminar esta nota</button>
+            <p class="hint" id="notasAviso" hidden>Se borrará del todo: no volverá
+              a aparecer la marca, ni al cerrar y abrir la app.</p>
+            <button class="btn-ghost-text" id="notasCerrar">Cancelar</button>
           </div>
         </div>
 
@@ -1401,7 +1410,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '6c8e28edbb';
+    var SELLO = 'e729ac0343';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que

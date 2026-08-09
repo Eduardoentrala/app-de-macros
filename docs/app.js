@@ -666,9 +666,22 @@
     cardNotas = card; nombreNotas = nombre;
     document.getElementById('notasTitulo').textContent = 'Notas · ' + nombre;
     document.getElementById('notasTexto').value = NOTAS[nombre] || '';
+
+    // El botón de eliminar solo cuando hay algo que eliminar. En una nota
+    // que todavía no existe no borra nada, y ofrecerlo hace dudar de si se
+    // escribió algo o no.
+    var hayNota = !!(NOTAS[nombre] && NOTAS[nombre].trim());
+    document.getElementById('notasBorrar').hidden = !hayNota;
+    document.getElementById('notasAviso').hidden = !hayNota;
+
     document.getElementById('notasSheet').classList.add('open');
     setTimeout(function(){ document.getElementById('notasTexto').focus(); }, 60);
   }
+  // Cerrar sin tocar nada. Antes solo se podía tocando fuera de la hoja, que
+  // en un teléfono es un blanco pequeño y con el teclado abierto casi no hay.
+  document.getElementById('notasCerrar').addEventListener('click', function(){
+    document.getElementById('notasSheet').classList.remove('open');
+  });
   // Se aplica en pantalla y se manda a la base en segundo plano: la hoja se
   // cierra al momento, que es lo que hace que la app se sienta rápida. Pero
   // si el guardado falla hay que deshacerlo — enseñar como guardada una nota

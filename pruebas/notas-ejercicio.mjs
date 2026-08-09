@@ -76,8 +76,12 @@ console.log('\n— Y se borran de verdad —');
   // Un nombre con espacios o acentos rompe la URL si no se codifica.
   check('el nombre va codificado', /encodeURIComponent\(nombre\)/.test(trozo));
 
-  const j = APP.indexOf("document.getElementById('notasBorrar')");
+  // Se busca el MANEJADOR, no la primera vez que se nombra el botón: desde
+  // que abrirNotas() lo muestra u oculta, un indexOf a secas encuentra esa
+  // línea y no la que interesa.
+  const j = APP.indexOf("document.getElementById('notasBorrar').addEventListener");
   const borrar = APP.slice(j, j + 500);
+  check('el botón tiene manejador', j > 0);
   check('el botón de borrar pasa por aplicarNota', /aplicarNota\(nombreNotas, '', cardNotas\)/.test(borrar));
 
   // Y que aplicarNota llegue de verdad a la base. Esto se añadió porque
@@ -135,6 +139,43 @@ console.log('\n— Se ve que hay nota sin abrirla —');
   // La marca de siempre sigue: el adelanto la acompaña, no la sustituye.
   check('sigue la marca 📝', /nota-badge/.test(APP));
   check('y la píldora se resalta', /pill\.classList\.toggle\('con-nota', tiene\)/.test(APP));
+}
+
+console.log('\n— Se puede eliminar desde dentro de la nota —');
+{
+  // Ya existía el botón, pero iba como texto gris debajo del botón negro de
+  // guardar y no se veía. Ahora va rojo y con marco, igual que «Borrar día»,
+  // que es lo otro de la app que no se deshace.
+  check('el botón dice lo que hace', /id="notasBorrar"[^>]*>Eliminar esta nota</s.test(HTML) ||
+    /Eliminar esta nota/.test(HTML));
+  check('va marcado como algo que no se deshace',
+    /id="notasBorrar"[^>]*class="[^"]*btn-delete-day|class="[^"]*btn-delete-day[^"]*"[^>]*id="notasBorrar"/.test(HTML),
+    'debería llevar la clase roja de «Borrar día»');
+  // Y que esa clase sea de verdad la roja.
+  check('esa clase es la roja',
+    /\.btn-delete-day\{[^}]*color:var\(--red\)/s.test(
+      readFileSync(join(RAIZ, 'docs', 'estilos', 'pantallas.css'), 'utf8')));
+
+  // Sólo cuando hay algo que borrar: en una nota que aún no existe, un botón
+  // de borrar no borra nada y hace dudar de si se escribió algo.
+  check('empieza oculto', /id="notasBorrar"[^>]*\shidden/.test(HTML));
+  const i = APP.indexOf('function abrirNotas(');
+  const abrir = APP.slice(i, i + 900);
+  check('se muestra solo si hay nota guardada',
+    /var hayNota = !!\(NOTAS\[nombre\] && NOTAS\[nombre\]\.trim\(\)\);/.test(abrir) &&
+    /notasBorrar'\)\.hidden = !hayNota/.test(abrir));
+  check('y el aviso lo acompaña', /notasAviso'\)\.hidden = !hayNota/.test(abrir));
+
+  // El aviso dice justo lo que preguntaba: que no vuelve al reabrir la app.
+  check('el aviso dice que es para siempre',
+    /no volverá\s*\n?\s*a aparecer la marca, ni al cerrar y abrir la app/.test(HTML) ||
+    /ni al cerrar y abrir la app/.test(HTML));
+
+  // Cerrar sin tocar nada. Antes solo se podía tocando fuera de la hoja, que
+  // en un teléfono es un blanco pequeño y con el teclado abierto casi no hay.
+  check('hay forma de salir sin borrar', /id="notasCerrar"/.test(HTML));
+  check('y cierra la hoja',
+    /getElementById\('notasCerrar'\)\.addEventListener\('click', function\(\)\{[\s\S]{0,140}notasSheet'\)\.classList\.remove\('open'\)/.test(APP));
 }
 
 console.log('\n— La hoja sigue donde estaba —');
