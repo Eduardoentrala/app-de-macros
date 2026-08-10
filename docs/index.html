@@ -60,7 +60,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '1188c8fca4';
+    var SELLO = '803d68f282';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -1064,6 +1064,17 @@
                  Traía un 83.8 del maquetado, y ese número sobrevivía a
                  borrar el historial porque nadie lo tocaba nunca. -->
             <input class="field-value big" id="pesoInput" type="number" inputmode="decimal" step="0.1" style="border:none;width:100%;font-family:inherit;color:var(--ink);background:var(--app-bg);" placeholder="—">
+
+            <!-- Opcional y de vez en cuando, no cada día. Es lo único que
+                 distingue perder grasa de perder peso: la báscula baja igual
+                 por agua, por músculo o por grasa, y la cintura no.
+                 Va aquí y no en el chequeo semanal porque es una medida del
+                 cuerpo, no una sensación, y se toma a la vez que el peso. -->
+            <div class="field-label">Cintura (cm) · opcional</div>
+            <input class="field-value" id="cinturaInput" type="number" inputmode="decimal" step="0.5" min="40" max="200" style="border:none;width:100%;font-family:inherit;color:var(--ink);background:var(--app-bg);" placeholder="—">
+            <p class="hint" style="margin-top:6px;">A la altura del ombligo, sin apretar
+              y soltando el aire. Con medirla una vez al mes basta.</p>
+
             <button class="btn-primary" style="width:100%;margin-top:16px;" id="saveWeightBtn">Guardar</button>
           </div>
           <div class="card">
@@ -1245,12 +1256,22 @@
                 <button data-v="4">Buena</button><button data-v="5">Muy buena</button>
               </div>
             </div>
+            <!-- Aquí estaba "Antojo". Se quitó porque medía casi lo mismo que
+                 "Hambre" -la gente contestaba las dos igual- y ocupaba una de
+                 las tres preguntas, que son todo el presupuesto: un
+                 cuestionario largo se contesta en diagonal.
+
+                 En su hueco va el sueño, que es lo que faltaba de verdad.
+                 Hambre alta con energía baja puede ser un déficit excesivo o
+                 pueden ser cinco horas de sueño, y son problemas distintos
+                 con soluciones opuestas. Sin esta pregunta se acababa
+                 moviendo las calorías por un problema de descanso. -->
             <div class="chq-bloque">
-              <div class="chq-tit">Antojo</div>
-              <div class="chq-esc" data-chq="apetito">
-                <button data-v="1">Ninguno</button><button data-v="2">Poco</button>
+              <div class="chq-tit">Sueño</div>
+              <div class="chq-esc" data-chq="sueno">
+                <button data-v="1">Muy mal</button><button data-v="2">Mal</button>
                 <button class="on" data-v="3">Normal</button>
-                <button data-v="4">Bastante</button><button data-v="5">Mucho</button>
+                <button data-v="4">Bien</button><button data-v="5">Muy bien</button>
               </div>
             </div>
 
@@ -1410,7 +1431,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '1188c8fca4';
+    var SELLO = '803d68f282';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que

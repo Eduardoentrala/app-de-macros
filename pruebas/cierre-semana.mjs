@@ -45,10 +45,99 @@ console.log('\n— Primero pregunta, y sale solo al entrar —');
 
 console.log('\n— Las tres preguntas son las que deciden —');
 {
-  for (const q of ['hambre', 'energia', 'apetito'])
+  for (const q of ['hambre', 'energia', 'sueno'])
     check(`pregunta por ${q}`, new RegExp(`data-chq="${q}"`).test(HTML));
   check('y deja contar algo más', /id="chqNota"/.test(HTML));
   check('dice para qué sirve', /Sin esto, cambiarte las calorías sería adivinar/.test(HTML));
+
+  // Siguen siendo TRES. El presupuesto es el que es: un cuestionario largo
+  // se contesta en diagonal y entonces no mide nada.
+  check('siguen siendo tres, no cuatro',
+    (HTML.match(/class="chq-esc" data-chq=/g) || []).length === 3);
+  // "Antojo" medía casi lo mismo que "Hambre" -la gente contestaba las dos
+  // igual- y ocupaba una de las tres.
+  check('ya no se pregunta el antojo', !/data-chq="apetito"/.test(HTML));
+  check('y se guarda el sueño en su lugar', /sueno: q\.sueno \|\| null/.test(APP));
+  check('la columna vieja se deja de mandar', !/apetito: q\.apetito/.test(APP));
+}
+
+console.log('\n— La IA ve las semanas de antes, no una suelta —');
+{
+  // Esto es lo que más cambia lo que el entrenador puede ver, y no le pide
+  // nada más a la persona: los datos ya se guardaban y no se mandaban.
+  const i = APP.indexOf('function chequeosDeAntes(');
+  const trozo = i > 0 ? APP.slice(i, i + 900) : '';
+  check('se traen los chequeos anteriores', i > 0);
+  check('con el sueño incluido', /select=semana,hambre,energia,sueno/.test(trozo));
+  check('filtra por usuario', /user_id=eq\.' \+ sesion\.user\.id/.test(trozo));
+  check('cuatro semanas, de la vieja a la nueva',
+    /slice\(0, 4\)\.reverse\(\)/.test(trozo));
+  // La de ahora se manda aparte y todavía no está guardada.
+  check('descarta la semana en curso', /x\.semana !== isoDe\(anclaSemana\)/.test(trozo));
+  check('sin historial se decide igual', /\['catch'\]\(function\(\)\{ return \[\]; \}\)/.test(trozo));
+
+  const j = APP.indexOf("accion: 'semana'");
+  const envio = APP.slice(j, j + 900);
+  check('y se le manda', /historial: extra\[1\]/.test(envio));
+  // Tres consultas en paralelo: en fila, la persona miraría "Revisando…"
+  // el triple de tiempo.
+  check('las tres consultas van a la vez',
+    /Promise\.all\(\[datosDeEntreno\(\), chequeosDeAntes\(\), cinturasRecientes\(\)\]\)/.test(APP));
+}
+
+console.log('\n— Y la cintura, que es lo que mide el cambio físico —');
+{
+  check('hay campo de cintura', /id="cinturaInput"/.test(HTML));
+  check('es opcional', /Cintura \(cm\) · opcional/.test(HTML));
+  // Se mide una vez al mes: el error de la cinta es mayor que lo que
+  // cambia una cintura en una semana.
+  check('dice cada cuánto medirla', /Con medirla una vez al mes basta/.test(HTML));
+  check('y cómo medirla', /A la altura del ombligo, sin apretar/.test(HTML));
+  check('con teclado de números', /id="cinturaInput"[^>]*inputmode="decimal"/.test(HTML));
+
+  const i = APP.indexOf('function sbGuardarPeso(');
+  const guardar = APP.slice(i, i + 700);
+  check('se guarda junto al peso', /if\(cintura != null\) fila\.cintura_cm = cintura;/.test(guardar));
+  // Mandar null la borraría: el upsert pisa la fila entera, y quien apunta
+  // el peso a diario no se mide la cintura cada día.
+  check('no se borra al apuntar el peso sin medirla',
+    !/cintura_cm: cintura \|\| null/.test(guardar));
+
+  // Un dedazo en la cintura no puede costarle el peso del día.
+  check('un valor absurdo se ignora, no rechaza el peso',
+    /if\(cin != null && \(cin < 40 \|\| cin > 200\)\) cin = null;/.test(APP));
+
+  const j = APP.indexOf('function cinturasRecientes(');
+  const cin = APP.slice(j, j + 700);
+  check('se traen las medidas para la revisión', j > 0);
+  check('solo las que existen', /cintura_cm=not\.is\.null/.test(cin));
+  check('y se le mandan', /cinturas: extra\[2\]/.test(APP));
+}
+
+console.log('\n— La IA sabe qué hacer con lo nuevo —');
+{
+  check('mira la racha, no una semana suelta',
+    /Hambre alta DOS O TRES seguidas/.test(FN));
+  check('y no mueve nada por una sola', /Hambre alta UNA semana → no muevas nada/.test(FN));
+  // Dormir mal da las mismas respuestas que un déficit excesivo. Sin esta
+  // regla, se bajan calorías por un problema de descanso.
+  check('distingue dormir mal de déficit excesivo',
+    /sueño MALO → el problema es el descanso/.test(FN));
+  check('y no toca calorías por falta de sueño',
+    /NO le muevas las calorías: no arreglan dormir cinco/.test(FN));
+  // El caso que hace abandonar a la gente creyendo que falló.
+  check('peso plano con cintura bajando es progreso',
+    /Peso plano y cintura BAJANDO → está perdiendo grasa/.test(FN));
+  check('compara meses, no días sueltos',
+    /Se mide una vez al mes, así que compara meses/.test(FN));
+  check('con una sola medida no concluye',
+    /Si solo hay una medida, no saques conclusiones/.test(FN));
+
+  // Y que el contexto se lo lleve de verdad.
+  check('el historial llega al contexto', /SEMANAS ANTERIORES/.test(FN));
+  check('la cintura llega al contexto', /`\\nCINTURA:\\n`/.test(FN) || /CINTURA:/.test(FN));
+  check('el sueño llega al contexto', /Sueño: \$\{encuesta\.sueno/.test(FN));
+  check('y ya no manda el antojo', !/Apetito: \$\{encuesta\.apetito/.test(FN));
 }
 
 console.log('\n— Y solo DESPUÉS se deciden las calorías —');
@@ -60,7 +149,7 @@ console.log('\n— Y solo DESPUÉS se deciden las calorías —');
   check('manda el peso', /pesos: pesosRecientes/.test(trozo));
   check('manda la semana', /datos: datosDeLaSemana\(\)/.test(trozo));
   // Sin el entreno, un peso plano siempre parece estancamiento.
-  check('y manda el entreno', /entreno: entreno/.test(trozo));
+  check('y manda el entreno', /entreno: extra\[0\]/.test(trozo));
   check('aplica las calorías si ajusta', /if\(r\.ajusto && r\.cal_nueva\) aplicarCaloriasNuevas\(r\.cal_nueva\)/.test(trozo));
 
   // LO QUE NO DEBE HABER: un camino que decida calorías al entrar, sin

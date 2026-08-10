@@ -3080,12 +3080,17 @@
   document.getElementById('saveWeightBtn').addEventListener('click', function(){
     var v = Number(document.getElementById('pesoInput').value);
     if(!v || v <= 0) return;
+    var cin = Number(document.getElementById('cinturaInput').value) || null;
+    // Fuera de rango se ignora en vez de rechazar el peso: quien se
+    // equivoca tecleando la cintura no deberia perder el peso de hoy.
+    if(cin != null && (cin < 40 || cin > 200)) cin = null;
     var k = isoDe(HOY), antes = PESOS[k];
     PESOS[k] = Math.round(v * 10) / 10;
     pintarPeso();
-    toast('toastPeso', 'Peso guardado: ' + PESOS[k] + ' kg');
+    toast('toastPeso', 'Peso guardado: ' + PESOS[k] + ' kg' +
+                       (cin != null ? ' · cintura ' + cin + ' cm' : ''));
 
-    sbGuardarPeso(k, PESOS[k])['catch'](function(e){
+    sbGuardarPeso(k, PESOS[k], cin)['catch'](function(e){
       if(antes == null) delete PESOS[k]; else PESOS[k] = antes;
       pintarPeso();
       toast('toastPeso', 'No se pudo guardar: ' + traducirError(e.message));
@@ -5943,7 +5948,7 @@
     }).then(function(f){ return (f && f[0]) || null; });
   }
   function sbPesos(desde){
-    return sbFetch('/rest/v1/weight_logs?select=log_date,weight_kg' +
+    return sbFetch('/rest/v1/weight_logs?select=log_date,weight_kg,cintura_cm' +
                    '&user_id=eq.' + sesion.user.id +
                    '&log_date=gte.' + desde + '&order=log_date.asc');
   }
@@ -5956,12 +5961,17 @@
   }
   // Un peso por día: si ya hay uno en esa fecha se pisa, no se duplica.
   // Eso lo garantiza el índice único (user_id, log_date) de la 0001.
-  function sbGuardarPeso(fecha, kg){
+  function sbGuardarPeso(fecha, kg, cintura){
     if(!sesion || !sesion.user) return Promise.resolve();
+    var fila = { user_id: sesion.user.id, log_date: fecha, weight_kg: kg };
+    // Solo si la midio. Mandar null la borraria: el upsert pisa la fila
+    // entera, y quien apunta el peso a diario no vuelve a medirse la
+    // cintura cada dia.
+    if(cintura != null) fila.cintura_cm = cintura;
     return sbFetch('/rest/v1/weight_logs?on_conflict=user_id,log_date', {
       method:'POST',
       headers:{ 'Prefer':'resolution=merge-duplicates,return=minimal' },
-      body: JSON.stringify({ user_id: sesion.user.id, log_date: fecha, weight_kg: kg })
+      body: JSON.stringify(fila)
     });
   }
   function cargarDatos(){
@@ -6096,6 +6106,13 @@
         // Se sustituye la serie de ejemplo entera, no se mezcla con ella.
         PESOS = {};
         pesos.forEach(function(f){ PESOS[f.log_date] = Number(f.weight_kg); });
+        // La ultima cintura medida, para que el campo no salga vacio y
+        // parezca que no se guardo. No se borra al cambiar de dia: no se
+        // mide a diario y un hueco no significa que haya desaparecido.
+        var conCintura = pesos.filter(function(f){ return f.cintura_cm != null; });
+        var campoCin = document.getElementById('cinturaInput');
+        if(campoCin) campoCin.value = conCintura.length
+          ? conCintura[conCintura.length - 1].cintura_cm : '';
         var hoyPeso = PESOS[hoy];
         // El `else` importa tanto como el `if`: sin él, el campo se quedaba
         // con lo que hubiera antes —el 83.8 del maquetado, o el peso de la
@@ -7113,7 +7130,10 @@
     var pesosRecientes = Object.keys(PESOS).sort().slice(-8)
                                .map(function(k){ return PESOS[k]; });
 
-    datosDeEntreno().then(function(entreno){
+    // Las tres a la vez: son tres consultas independientes y esperarlas en
+    // fila haria que la persona mirase "Revisando..." el triple de tiempo.
+    Promise.all([datosDeEntreno(), chequeosDeAntes(), cinturasRecientes()])
+    .then(function(extra){
       return iaLlamar({
         accion: 'semana',
         datos: datosDeLaSemana(),
@@ -7121,8 +7141,13 @@
         // Sin esto, el peso plano siempre parece estancamiento. Con el
         // entreno delante se distingue lo que de verdad son dos cosas
         // distintas: no avanzar, y avanzar sin que la báscula lo enseñe.
-        entreno: entreno,
+        entreno: extra[0],
         chequeo: respuestasChequeo(),
+        // Lo que convierte un dato suelto en una tendencia: hambre alta una
+        // semana no dice nada, tres seguidas si.
+        historial: extra[1],
+        // La bascula no distingue grasa de agua de musculo; la cintura si.
+        cinturas: extra[2],
         nota: document.getElementById('chqNota').value.trim() || undefined
       });
     }).then(function(r){
@@ -7174,6 +7199,44 @@
   // Se guarda siempre, ajustara o no. Que a alguien no se le tocaran las
   // calorías tres semanas seguidas por falta de registros es una historia
   // que tiene que poder leerse.
+  // ---- Las semanas de antes ----
+  // Una semana suelta no dice casi nada: hambre 4 de 5 pudo ser una mala
+  // semana. Hambre 4 de 5 TRES SEMANAS SEGUIDAS es la señal de que el
+  // déficit es demasiado, y es justo cuando la gente abandona.
+  //
+  // Estos datos ya se guardaban y no se le mandaban nunca: la IA juzgaba
+  // cada semana como si fuera la primera. Traerlos no le cuesta nada a
+  // quien usa la app -no hay que preguntarle nada más- y es lo que más
+  // cambia lo que el entrenador es capaz de ver.
+  function chequeosDeAntes(){
+    if(!sesion || !sesion.user) return Promise.resolve([]);
+    return sbFetch('/rest/v1/chequeos_semanales' +
+                   '?select=semana,hambre,energia,sueno,ajusto,cal_despues' +
+                   '&user_id=eq.' + sesion.user.id +
+                   '&order=semana.desc&limit=5')
+      // Cuatro semanas antes de esta. La de ahora se manda aparte y todavía
+      // no está guardada, así que se descarta si aparece.
+      .then(function(f){
+        return (f || []).filter(function(x){ return x.semana !== isoDe(anclaSemana); })
+                        .slice(0, 4).reverse();
+      })
+      ['catch'](function(){ return []; });   // sin historial se decide igual
+  }
+
+  // Las cinturas que haya. Van con su fecha porque lo que importa es la
+  // direccion, no el numero: 88 no significa nada solo; 91 -> 88 en dos
+  // meses significa que esta perdiendo grasa aunque la bascula no se mueva.
+  function cinturasRecientes(){
+    if(!sesion || !sesion.user) return Promise.resolve([]);
+    return sbFetch('/rest/v1/weight_logs?select=log_date,cintura_cm' +
+                   '&user_id=eq.' + sesion.user.id +
+                   '&cintura_cm=not.is.null&order=log_date.desc&limit=6')
+      .then(function(f){ return (f || []).reverse(); })
+      // Si aun no se ha medido nunca, esto va vacio y se decide igual: la
+      // cintura suma, no es un requisito.
+      ['catch'](function(){ return []; });
+  }
+
   function guardarChequeo(r){
     if(!sesion || !sesion.user) return;
     var q = respuestasChequeo();
@@ -7183,7 +7246,7 @@
       body: JSON.stringify({
         user_id: sesion.user.id,
         semana: isoDe(anclaSemana),
-        hambre: q.hambre || null, energia: q.energia || null, apetito: q.apetito || null,
+        hambre: q.hambre || null, energia: q.energia || null, sueno: q.sueno || null,
         nota: document.getElementById('chqNota').value.trim() || null,
         ajusto: !!r.ajusto,
         motivo: (r.motivo || '').slice(0, 500) || null,

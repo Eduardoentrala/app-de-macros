@@ -307,9 +307,31 @@ QUÉ MIRAS, EN ESTE ORDEN
 
 1. Si hay material. Si te digo que NO hay material para ajustar, NO
    ajustas. Punto. Pon ajusto en false y cal_nueva en null.
-2. Cómo se siente. Hambre alta y energía baja durante una semana entera
-   significa que el déficit es demasiado, aunque el peso vaya bien.
-   Bajarle más calorías a alguien así es como se abandona una dieta.
+2. Cómo se siente, Y DESDE CUÁNDO. Esto es lo que más se equivoca.
+
+   Una semana suelta casi no dice nada: hambre 4 de 5 pudo ser una mala
+   semana, una fiesta o un mal día. Lo que significa algo es la RACHA. Si
+   te paso las semanas anteriores, míralas antes de decidir:
+
+   - Hambre alta UNA semana → no muevas nada por eso. Anótalo y espera.
+   - Hambre alta DOS O TRES seguidas → ahí sí. El déficit es demasiado
+     aunque el peso vaya bien, y seguir apretando es como se abandona una
+     dieta. Súbele.
+   - Algo que venía mal y esta semana mejoró → dilo. Que alguien note que
+     lo estás siguiendo vale más que el ajuste.
+
+   Y ANTES DE TOCAR NADA, MIRA EL SUEÑO. Dormir mal produce exactamente
+   las mismas respuestas que un déficit excesivo: hambre alta y energía
+   baja. Son problemas distintos con soluciones opuestas.
+
+   - Hambre alta + energía baja + sueño MALO → el problema es el descanso,
+     no la comida. NO le muevas las calorías: no arreglan dormir cinco
+     horas. Díselo tal cual, sin sermón.
+   - Hambre alta + energía baja + sueño BIEN → ahora sí, el déficit es
+     demasiado.
+
+   Confundir estos dos casos es mover calorías por un problema que no está
+   en la comida, y eso no se arregla nunca.
 3. El peso, y la TENDENCIA, no el último número. Un kilo arriba de un día
    para otro es agua, no grasa.
 4. El entreno, si te lo paso. Un peso plano NO significa lo mismo según lo
@@ -322,6 +344,20 @@ QUÉ MIRAS, EN ESTE ORDEN
    - Peso plano y volumen plano → ahí sí hay estancamiento de verdad.
    - Peso plano y entrenó poco o nada → no le faltan calorías, le falta
      estímulo. Ajustar aquí no arregla nada.
+
+5. La cintura, si te la paso. Es lo único que distingue perder grasa de
+   perder peso, y manda sobre la báscula cuando se contradicen.
+
+   - Peso plano y cintura BAJANDO → está perdiendo grasa. No le toques
+     nada y díselo, porque la báscula le está mintiendo y mucha gente
+     abandona justo aquí creyendo que no avanza.
+   - Peso bajando y cintura QUIETA → cuidado, puede estar perdiendo
+     músculo o agua. No aprietes más.
+
+   Se mide una vez al mes, así que compara meses, NUNCA dos medidas
+   seguidas de días distintos: la cinta más o menos apretada ya mueve un
+   centímetro, y eso es más de lo que cambia una cintura en una semana.
+   Si solo hay una medida, no saques conclusiones: dilo y ya.
 
 CUÁNTO MUEVES
 
@@ -853,6 +889,31 @@ Deno.serve(async (req) => {
           `- Volumen: ${e.volumen} kg esta semana, ${e.volumen_antes} kg la anterior`
         : '';
 
+      // Las semanas de antes. Una semana suelta casi no dice nada: hambre 4
+      // de 5 pudo ser una mala semana. Tres seguidas es otra cosa, y es
+      // justo el momento en que la gente abandona. Sin esto el modelo
+      // juzgaba cada semana como si fuera la primera.
+      const previas = Array.isArray(cuerpo.historial)
+        ? (cuerpo.historial as Record<string, unknown>[]).slice(-4) : [];
+      const historial = previas.length
+        ? `\nSEMANAS ANTERIORES (de la más vieja a la más reciente):\n` +
+          previas.map((p) =>
+            `- ${p.semana}: hambre ${p.hambre ?? '—'}, energía ${p.energia ?? '—'}, ` +
+            `sueño ${p.sueno ?? '—'}` +
+            (p.ajusto ? ` · se le ajustó a ${p.cal_despues} cal` : ' · no se tocó')
+          ).join('\n') + `\n`
+        : '';
+
+      // La báscula no distingue grasa de agua de músculo. La cintura sí, y
+      // es lo que convierte "el peso no baja" en "el peso no baja PERO está
+      // perdiendo grasa", que es un mensaje completamente distinto.
+      const c = Array.isArray(cuerpo.cinturas)
+        ? (cuerpo.cinturas as Record<string, unknown>[]).slice(-6) : [];
+      const cinturas = c.length
+        ? `\nCINTURA:\n` +
+          c.map((x) => `- ${x.log_date}: ${x.cintura_cm} cm`).join('\n') + `\n`
+        : '';
+
       const contexto =
         `\n\nESTA SEMANA:\n` +
         `- Días que apuntó: ${diasApuntados} de 7\n` +
@@ -861,7 +922,9 @@ Deno.serve(async (req) => {
         `- Pesos apuntados: ${pesos.length ? pesos.join(', ') + ' kg' : 'ninguno'}` +
         entreno + `\n` +
         `- Hambre: ${encuesta.hambre ?? '—'}/5 · Energía: ${encuesta.energia ?? '—'}/5 · ` +
-        `Apetito: ${encuesta.apetito ?? '—'}/5  (3 = normal)\n` +
+        `Sueño: ${encuesta.sueno ?? '—'}/5  (3 = normal)\n` +
+        historial +
+        cinturas +
         (cuerpo.nota ? `- Dice: "${String(cuerpo.nota).slice(0, 300)}"\n` : '') +
         `- ¿Hay material para ajustar?: ${hayMaterial ? 'sí' : 'NO'}`;
 
