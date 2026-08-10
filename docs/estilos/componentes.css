@@ -24,7 +24,14 @@
 .exercise-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:14px 16px 110px;}
 .ex-lib-card{
   background:var(--card-bg);border-radius:16px;box-shadow:var(--shadow);overflow:hidden;position:relative;cursor:pointer;
-  border:2px solid transparent;
+  /* El borde iba transparente porque estaba reservado para el seleccionado.
+     Resultado: tarjeta blanca sobre fondo blanco, con una sombra al 4% que
+     no se ve, y los cuadros se fundían unos con otros. Ahora en reposo hay
+     un pelo de marco; seleccionado sigue siendo negro entero, así que se
+     distinguen igual de bien.
+     Los 2px se quedan en los dos estados a propósito: si el reposo fuera de
+     1px, al seleccionar la tarjeta daría un salto. */
+  border:2px solid var(--borde-tarjeta);
 }
 .ex-lib-card.picked{border-color:var(--ink);}
 .ex-lib-pic{

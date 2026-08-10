@@ -19,6 +19,11 @@
   --amber:#c8790a;
   --amber-soft:#fdf1de;
   --shadow:0 1px 2px rgba(20,20,25,.04), 0 8px 24px -12px rgba(20,20,25,.12);
+  /* Marco de tarjeta. La sombra sola no basta cuando la tarjeta es blanca y
+     lo de detras tambien: al 4% de opacidad no se ve el borde y las
+     tarjetas se funden con el fondo. Esto es un pelo de negro, lo justo
+     para que se sepa donde acaba una y empieza la otra. */
+  --borde-tarjeta:rgba(20,20,25,.14);
   --chrome-bg:#f6f5f2;
   --chrome-ink:#1c1c1e;
   --chrome-line:#dedcd6;
@@ -40,6 +45,9 @@
   --amber:#e2a13a;
   --amber-soft:#2e2411;
   --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+  /* En oscuro el pelo tiene que ser de blanco: un borde negro sobre fondo
+     oscuro no separa nada. */
+  --borde-tarjeta:rgba(255,255,255,.16);
   --chrome-bg:#141416;
   --chrome-ink:#eceae6;
   --chrome-line:#2c2b28;
@@ -62,6 +70,9 @@
     --amber:#e2a13a;
   --amber-soft:#2e2411;
     --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+    /* En oscuro el pelo tiene que ser de blanco: un borde negro sobre fondo
+       oscuro no separa nada. */
+    --borde-tarjeta:rgba(255,255,255,.16);
     --chrome-bg:#141416;
     --chrome-ink:#eceae6;
     --chrome-line:#2c2b28;

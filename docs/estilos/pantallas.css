@@ -547,7 +547,20 @@
   background:none;font:700 13.5px/1 sans-serif;width:calc(100% - 32px);cursor:pointer;
 }
 
-.exercise-card{background:var(--card-bg);margin:0 16px 14px;border-radius:18px;box-shadow:var(--shadow);overflow:hidden;}
+/* ---- Un pelo de marco en el apartado de ejercicio ----
+   Las tarjetas son blancas y lo de detrás también, así que la sombra -que
+   va al 4%- no marcaba dónde acaba una y empieza la siguiente. Con esto se
+   distinguen sin que parezca una tabla.
+
+   Va acotado a estas pantallas y no a `.card` a secas porque esa clase la
+   usa media app: ponerlo ahí cambiaría el Diario, el Peso y el Perfil de
+   paso, y eso no se pidió. */
+.exercise-card{
+  background:var(--card-bg);margin:0 16px 14px;border-radius:18px;box-shadow:var(--shadow);overflow:hidden;
+  border:1px solid var(--borde-tarjeta);
+}
+[data-view="ejercicio"] .card,
+[data-view="library"] .card{ border:1px solid var(--borde-tarjeta); }
 .ex-head{padding:14px 16px 12px;border-bottom:1px solid var(--line);}
 .ex-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
 /* Sin esto no hay puntos suspensivos que valgan. Un elemento flex trae
