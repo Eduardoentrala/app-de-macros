@@ -6561,12 +6561,6 @@
       })
       .then(function(motivo){
         if(!motivo) return;
-        // El cierre de semana no es un aviso de ánimo: lleva las calorías,
-        // la decisión y el porqué, así que va por la misma acción que el
-        // chequeo manual en vez de tener su propio camino. Dos caminos que
-        // deciden calorías acabarían decidiendo cosas distintas.
-        if(motivo === 'cierre_semana') return avisoDeCierreDeSemana();
-
         // Solo aquí se gasta una consulta, y solo cuando de verdad hay algo
         // que decir. Son cuatro o cinco al mes por persona.
         return iaLlamar({ accion: 'aviso', motivo: motivo })
@@ -6576,76 +6570,6 @@
               .then(function(id){ pintarAvisoCoach(r.texto, id); });
           });
       })['catch'](function(){});   // en silencio: nadie pidió esto
-  }
-
-  // ---- El cierre de la semana, contado al entrar ----
-  // Antes había que ir a buscarlo: abrir el chequeo, contestar y pulsar
-  // "Revisar mi semana". Quien no lo abría no se enteraba de nada, y es
-  // justo a quien más falta le hace.
-  //
-  // Aquí normalmente NO habrá contestado cómo se sintió, así que casi
-  // siempre saldrá "no te muevo nada todavía". Eso no es un fallo: es la
-  // regla de no ajustar a ciegas, dicha en voz alta. El mensaje lleva igual
-  // en cuántas calorías está y qué puede mejorar, que es lo que sirve.
-  function avisoDeCierreDeSemana(){
-    var pesos = Object.keys(PESOS).sort().slice(-8)
-                      .map(function(k){ return PESOS[k]; });
-
-    return Promise.all([
-      datosDeEntreno(),
-      // El chequeo de la semana que cerró, si lo llegó a contestar. Si no,
-      // van vacías: el modelo tiene dicho qué hacer sin ellas.
-      chequeoDeLaSemanaPasada()
-    ]).then(function(r){
-      return iaLlamar({
-        accion: 'semana',
-        datos: datosDeLaSemanaPasada(),
-        pesos: pesos,
-        entreno: r[0],
-        chequeo: r[1] || {}
-      });
-    }).then(function(r){
-      if(!r || !r.mensaje) return;
-      // Se aplica ANTES de enseñarlo: el mensaje dice "te dejo en 2100" y
-      // sería raro que el anillo siguiera en 2250 mientras se lee.
-      if(r.ajusto && r.cal_nueva) aplicarCaloriasNuevas(r.cal_nueva);
-      return sbRpc('guardar_aviso',
-                   { p_motivo: 'cierre_semana', p_texto: r.mensaje })
-        .then(function(id){ pintarAvisoCoach(r.mensaje, id); });
-    });
-  }
-
-  // La semana que acaba de cerrar: del lunes pasado al domingo. No la de
-  // datosDeLaSemana(), que es la que está corriendo ahora y todavía no
-  // tiene nada que contar.
-  function datosDeLaSemanaPasada(){
-    var meta = leerMetas();
-    var lunes = lunesDe(HOY);
-    var desde = new Date(lunes); desde.setDate(desde.getDate() - 7);
-    var dias = 0, suma = 0;
-    for(var i = 0; i < 7; i++){
-      var d = new Date(desde); d.setDate(d.getDate() + i);
-      var r = REGISTRO[isoDe(d)];
-      if(r){ dias++; suma += calDe(r); }
-    }
-    return {
-      dias_apuntados: dias,
-      meta_cal: calDe(meta),
-      media_cal: dias ? Math.round(suma / dias) : 0
-    };
-  }
-
-  function chequeoDeLaSemanaPasada(){
-    if(!sesion || !sesion.user) return Promise.resolve(null);
-    var lunes = lunesDe(HOY);
-    lunes.setDate(lunes.getDate() - 7);
-    return sbFetch('/rest/v1/chequeos_semanales?select=hambre,energia,apetito' +
-                   '&user_id=eq.' + sesion.user.id +
-                   '&semana=eq.' + isoDe(lunes) + '&limit=1')
-      .then(function(f){ return (f && f[0]) || null; })
-      // Quedarse sin el chequeo no debe dejar sin cierre: sin él el modelo
-      // no ajusta, que es exactamente lo que ya haría.
-      ['catch'](function(){ return null; });
   }
 
   // ---- Eventos que el asistente detectó en la conversación ----
@@ -7079,6 +7003,11 @@
     caja.hidden = true; caja.textContent = '';
     var btn = document.getElementById('chqEnviar');
     btn.disabled = false; btn.textContent = 'Revisar mi semana';
+    // Se vuelve al papel de revisar: si la hoja se reabre despues de una
+    // revision, el boton se habia quedado en "Entiendo" y cerraba sin
+    // revisar nada.
+    delete btn.dataset.modo;
+    document.getElementById('chqCerrar').hidden = false;
     chequeoSheet.classList.add('open');
   }
   // Sale al empezar la semana y deja de salir cuando lo CONTESTAN, no
@@ -7171,6 +7100,12 @@
   document.getElementById('chqEnviar').addEventListener('click', function(){
     var btn = this;
     if(btn.disabled) return;
+    // Ya revisada: el mismo boton cierra. Se comprueba lo PRIMERO, antes de
+    // deshabilitarlo, o el clic de cerrar gastaria otra consulta de IA.
+    if(btn.dataset.modo === 'cerrar'){
+      chequeoSheet.classList.remove('open');
+      return;
+    }
     btn.disabled = true;
     btn.textContent = 'Revisando…';
 
@@ -7197,7 +7132,15 @@
 
       if(r.ajusto && r.cal_nueva) aplicarCaloriasNuevas(r.cal_nueva);
       guardarChequeo(r);
-      btn.textContent = 'Listo';
+
+      // El mismo botón pasa a cerrar. Antes se quedaba en "Listo" apagado y
+      // había que salir por "Ahora no", que ahí ya no significa nada: la
+      // semana ya se revisó. Quien acaba de leer sus calorías nuevas busca
+      // el botón grande, no el texto gris de abajo.
+      btn.disabled = false;
+      btn.textContent = 'Entiendo';
+      btn.dataset.modo = 'cerrar';
+      document.getElementById('chqCerrar').hidden = true;
     })['catch'](function(e){
       caja.hidden = false;
       caja.className = 'chq-respuesta';
