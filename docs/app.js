@@ -455,7 +455,7 @@
     var card = document.createElement('div');
     card.className = 'exercise-card';
     card.innerHTML = '<div class="ex-head"><div class="ex-top">'+
-      '<div><div class="ex-name">'+name+' <span class="nota-badge" hidden title="Tiene notas">📝</span></div>'+
+      '<div><div class="ex-name">'+escapar(name)+' <span class="nota-badge" hidden title="Tiene notas">📝</span></div>'+
       '<div class="nota-previa" hidden title="Toca «notas» para verla entera"></div><div class="ex-delta"></div></div>'+
       '<div class="ex-vol">vol<br><b class="vol-num">0</b><span class="prev"></span></div></div>'+
       '<div class="ex-pills">'+
@@ -767,7 +767,7 @@
       : htmlSerie({reps:10, peso:0, hecho:false}, 1);
     return '<div class="exercise-card" data-id="' + ej.id + '">' +
       '<div class="ex-head"><div class="ex-top">' +
-      '<div><div class="ex-name">' + ej.nombre +
+      '<div><div class="ex-name">' + escapar(ej.nombre) +
         ' <span class="nota-badge" hidden title="Tiene notas">📝</span></div>' +
         '<div class="nota-previa" hidden title="Toca «notas» para verla entera"></div><div class="ex-delta"></div></div>' +
       '<div class="ex-vol">vol<br><b class="vol-num">0</b><span class="prev"></span></div></div>' +
@@ -1357,7 +1357,7 @@
       return '<div class="ex-lib-card'+(picked?' picked':'')+'" data-id="'+id+'">'+
         '<div class="ex-lib-pic">'+figureSvg(g.key)+
           '<span class="ex-lib-view">'+(VISTA[g.key]==='espalda' ? 'vista posterior' : 'vista frontal')+'</span></div>'+
-        '<div class="ex-lib-name">'+name+'</div>'+
+        '<div class="ex-lib-name">'+escapar(name)+'</div>'+
         '<div class="ex-lib-check">✓</div>'+
         '</div>';
     }).join('');
@@ -2067,7 +2067,7 @@
 
     cont.innerHTML = lista.length ? '<div class="food-list">' + lista.map(function(a, i){
       prepararAlimento(a);
-      return '<div class="food-card"><div class="fc-main"><div class="fc-name">'+a.n+'</div>'+
+      return '<div class="food-card"><div class="fc-main"><div class="fc-name">'+escapar(a.n)+'</div>'+
         '<div class="fc-sub">'+lineaComida(a)+'</div></div>'+
         '<div class="fc-actions">'+
           // La estrella va primero y sin texto: es la acción que se repite
@@ -2412,10 +2412,10 @@
 
   // Listas de Frecuentes y Mis alimentos
   function tarjeta(a, conAcciones){
-    return '<div class="food-card" data-alim="'+a.n+'">'+
+    return '<div class="food-card" data-alim="'+escapar(a.n)+'">'+
       // Sin flechas de subir/bajar: no hacían nada. Eran dos botones cuya
       // única función era no agregar el alimento al tocarlos.
-      '<div class="fc-main"><div class="fc-name">'+a.n+'</div>'+
+      '<div class="fc-main"><div class="fc-name">'+escapar(a.n)+'</div>'+
       '<div class="fc-sub">'+lineaMacros(a)+'</div></div>'+
       (conAcciones ? '<div class="fc-actions"><button class="btn-mini edit">Editar</button>'+
                      '<button class="btn-mini del">Borrar</button></div>' : '')+
@@ -2473,7 +2473,7 @@
       ? document.getElementById('buscarRecetas').value.trim() : '';
     document.getElementById('recetaList').innerHTML = recs.length
       ? recs.map(function(r){
-          return '<div class="food-card"><div class="fc-main"><div class="fc-name">'+r.n+'</div>'+
+          return '<div class="food-card"><div class="fc-main"><div class="fc-name">'+escapar(r.n)+'</div>'+
             '<div class="fc-sub">'+r.cal+' kcal por porción · '+r.vis+'</div></div>'+
             '<span style="color:var(--ink-faint)">›</span></div>';
         }).join('')
@@ -5269,9 +5269,20 @@
 
   // El texto lo escribe una persona y se pinta con innerHTML: hay que
   // escaparlo o un "<" cualquiera rompería la tarjeta.
+  // Todo lo que escribe una persona y acaba dentro de HTML pasa por aquí.
+  //
+  // Las comillas NO sobran, aunque solo hagan falta dentro de un atributo:
+  // el nombre de un alimento viaja en `data-alim="..."`, y sin escaparlas
+  // un alimento llamado  " onclick="algo   se sale del atributo y mete lo
+  // que quiera en la etiqueta. En texto normal no molestan: &quot; se pinta
+  // como una comilla y ya.
+  //
+  // Esto se añadió después de comprobar en la app que un ejercicio llamado
+  // <img src=x onerror=...> ejecutaba el código al pintar la tarjeta.
   function escapar(t){
     return String(t == null ? '' : t)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
   function pintarPlanClientes(){
@@ -6855,7 +6866,7 @@
       return '<div class="plan-ia' + (mio ? ' mio' : '') + (abierto ? ' abierto' : '') +
              '" data-plan-ia="' + p.id + '">' +
         '<div class="plan-ia-cab">' +
-          '<div><b>' + p.nombre + '</b><span>' + p.resumen + '</span></div>' +
+          '<div><b>' + escapar(p.nombre) + '</b><span>' + escapar(p.resumen) + '</span></div>' +
           (mio ? '<em>Tu plan</em>' : '<i>' + (abierto ? '−' : '+') + '</i>') +
         '</div>' +
         (abierto
