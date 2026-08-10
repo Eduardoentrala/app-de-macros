@@ -82,6 +82,42 @@ console.log('\n— No salta encima de nadie —');
   check('y solo con sesion', /if\(!sesion \|\| !sesion\.user\) return/.test(fn));
 }
 
+console.log('\n— El porcentaje se mueve mientras entrenas —');
+{
+  // Antes solo se pintaba lo decidido al guardar. El motivo era bueno -a
+  // media rutina el número diría "-70%" y asusta-, pero aquí las series se
+  // cargan con los números de la sesión anterior: el volumen arranca igual
+  // que la última vez y solo se mueve cuando la persona cambia algo, que es
+  // justo cuando quiere saber si va mejor o peor.
+  const i = APP.indexOf('function recalcCard(');
+  const trozo = i > 0 ? APP.slice(i, i + 2600) : '';
+  check('se calcula en vivo', /pintarPorcentaje\(badge, Math\.round\(\(vol - prev\) \/ prev \* 100\)\)/.test(trozo));
+
+  // LO QUE NO PUEDE ROMPERSE: al guardar, data-prev-vol pasa a ser el
+  // volumen de HOY. Si el vivo mandara siempre, diría "igual al anterior" y
+  // borraría el +3% que se acaba de ganar.
+  check('el guardado manda justo después de guardar',
+    /var guardado = card\.getAttribute\('data-veredicto'\);[\s\S]{0,90}pintarVeredicto\(card\); return;/.test(trozo));
+  check('y el vivo va después, no antes',
+    trozo.indexOf("getAttribute('data-veredicto')") < trozo.indexOf('pintarPorcentaje(badge'));
+  // Al tocar una serie el veredicto deja de valer y el vivo toma el relevo.
+  check('tocar una serie devuelve el mando al vivo',
+    /olvidarVeredicto\(card\);\s*\n\s*recalcCard\(card\);/.test(APP));
+
+  // Volumen cero es una tarjeta a medio llenar, no un retroceso del 100%.
+  check('no grita -100% con la tarjeta a medio llenar',
+    /if\(vol <= 0\)\{ badge\.className = 'ex-delta'; badge\.textContent = ''; return; \}/.test(trozo));
+  // Sin sesión anterior no hay con qué comparar.
+  check('sin sesión anterior no inventa nada',
+    /if\(prev === null \|\| !isFinite\(prev\) \|\| prev <= 0\)/.test(trozo));
+
+  // Un solo sitio decide cómo se ve: separados, uno diría "+3%" y el otro
+  // "3% más" sin que nadie lo notara.
+  check('los dos caminos pintan igual', /function pintarPorcentaje\(badge, pct\)/.test(APP));
+  check('subir y bajar se ven distinto',
+    /'ex-delta show up'/.test(APP) && /'ex-delta show down'/.test(APP) && /'ex-delta show same'/.test(APP));
+}
+
 console.log('\n— El reloj también marca la serie —');
 {
   // Poner el descanso ES haber terminado la serie: nadie descansa antes de

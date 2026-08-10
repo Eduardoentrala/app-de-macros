@@ -410,23 +410,40 @@
     if(prevEl) prevEl.textContent = 'antes ' + prev.toLocaleString('es-MX');
     if(!badge) return;
 
-    // El veredicto NO se calcula aquí. Aquí solo se pinta lo que ya se
-    // decidió al guardar la sesión, que es cuando tiene sentido comparar:
-    // mientras se teclean las series el número baila con cada pulsación y
-    // decía "-33%" a media serie, cuando aún faltaba la mitad del trabajo.
-    pintarVeredicto(card);
+    // ---- El porcentaje, en vivo ----
+    // Antes solo se pintaba lo decidido al guardar. El motivo era bueno: si
+    // las series empiezan vacías, a media rutina el número dice "-70%" y
+    // asusta cuando todavía falta la mitad del trabajo.
+    //
+    // Pero aquí las series NO empiezan vacías: se cargan con los números de
+    // la sesión anterior. Así que el volumen arranca igual que la última vez
+    // -"igual al anterior"- y solo se mueve cuando la persona cambia algo,
+    // que es justo cuando quiere saber si va mejor o peor. Ver el +3% al
+    // subir una repetición es la mitad de la razón para subirla.
+    //
+    // El veredicto guardado sigue mandando JUSTO DESPUÉS de guardar, y no es
+    // un detalle: al guardar, `data-prev-vol` pasa a ser el volumen de hoy,
+    // así que el cálculo en vivo diría "igual al anterior" y borraría el
+    // +3% que se acaba de ganar. Se muestra el guardado hasta que se vuelva
+    // a tocar una serie, y ahí el vivo toma el relevo.
+    var guardado = card.getAttribute('data-veredicto');
+    if(guardado !== null){ pintarVeredicto(card); return; }
+
+    // Volumen cero es una tarjeta a medio llenar -sin peso todavía-, no un
+    // retroceso del 100%. Callarse es más honesto que asustar.
+    if(vol <= 0){ badge.className = 'ex-delta'; badge.textContent = ''; return; }
+
+    pintarPorcentaje(badge, Math.round((vol - prev) / prev * 100));
   }
 
   // El veredicto vive en la propia tarjeta. Así sobrevive a los repintados
   // -que son muchos- y desaparece solo cuando se vuelve a tocar algo o
   // cuando se cambia de día, que es cuando deja de ser cierto.
-  function pintarVeredicto(card){
-    var badge = card.querySelector('.ex-delta');
+  // Un solo sitio donde se decide cómo se ve el porcentaje, lo pida el
+  // cálculo en vivo o el veredicto guardado. Separados, uno de los dos
+  // acabaría diciendo "+3%" y el otro "3% más" sin que nadie lo notara.
+  function pintarPorcentaje(badge, pct){
     if(!badge) return;
-    var v = card.getAttribute('data-veredicto');
-    if(!v){ badge.className = 'ex-delta'; badge.textContent = ''; return; }
-
-    var pct = Number(v);
     if(pct === 0){
       badge.className = 'ex-delta show same';
       badge.textContent = 'igual al anterior';
@@ -437,6 +454,14 @@
       badge.className = 'ex-delta show down';
       badge.textContent = pct + '% vs anterior';
     }
+  }
+
+  function pintarVeredicto(card){
+    var badge = card.querySelector('.ex-delta');
+    if(!badge) return;
+    var v = card.getAttribute('data-veredicto');
+    if(v === null || v === ''){ badge.className = 'ex-delta'; badge.textContent = ''; return; }
+    pintarPorcentaje(badge, Number(v));
   }
 
   // Al tocar una serie el veredicto deja de valer: se borra hasta la
