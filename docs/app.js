@@ -410,24 +410,25 @@
     if(prevEl) prevEl.textContent = 'antes ' + prev.toLocaleString('es-MX');
     if(!badge) return;
 
-    // ---- El porcentaje, en vivo ----
-    // Antes solo se pintaba lo decidido al guardar. El motivo era bueno: si
-    // las series empiezan vacías, a media rutina el número dice "-70%" y
-    // asusta cuando todavía falta la mitad del trabajo.
+    // ---- El porcentaje, en vivo y solo mientras entrenas ----
     //
-    // Pero aquí las series NO empiezan vacías: se cargan con los números de
-    // la sesión anterior. Así que el volumen arranca igual que la última vez
-    // -"igual al anterior"- y solo se mueve cuando la persona cambia algo,
-    // que es justo cuando quiere saber si va mejor o peor. Ver el +3% al
-    // subir una repetición es la mitad de la razón para subirla.
+    // Sale cuando tocas algo y desaparece al guardar la sesión. Las tres
+    // situaciones, que son distintas:
     //
-    // El veredicto guardado sigue mandando JUSTO DESPUÉS de guardar, y no es
-    // un detalle: al guardar, `data-prev-vol` pasa a ser el volumen de hoy,
-    // así que el cálculo en vivo diría "igual al anterior" y borraría el
-    // +3% que se acaba de ganar. Se muestra el guardado hasta que se vuelva
-    // a tocar una serie, y ahí el vivo toma el relevo.
-    var guardado = card.getAttribute('data-veredicto');
-    if(guardado !== null){ pintarVeredicto(card); return; }
+    //   Abres la rutina        → nada. Las series vienen con los números de
+    //                            la última vez, así que el porcentaje sería
+    //                            "igual al anterior" antes de haber hecho
+    //                            nada: ruido.
+    //   Cambias reps o peso    → el porcentaje, en vivo. Ver el +3% al subir
+    //                            una repetición es media razón para subirla.
+    //   Guardas la sesión      → se va. Ya está hecha; el número que importa
+    //                            es el de la PRÓXIMA vez, contra esta.
+    //
+    // Por eso manda `data-tocado` y no el volumen: sin él, al reabrir la
+    // rutina saldría "igual al anterior" en todas las tarjetas.
+    if(!card.hasAttribute('data-tocado')){
+      badge.className = 'ex-delta'; badge.textContent = ''; return;
+    }
 
     // Volumen cero es una tarjeta a medio llenar -sin peso todavía-, no un
     // retroceso del 100%. Callarse es más honesto que asustar.
@@ -436,12 +437,9 @@
     pintarPorcentaje(badge, Math.round((vol - prev) / prev * 100));
   }
 
-  // El veredicto vive en la propia tarjeta. Así sobrevive a los repintados
-  // -que son muchos- y desaparece solo cuando se vuelve a tocar algo o
-  // cuando se cambia de día, que es cuando deja de ser cierto.
-  // Un solo sitio donde se decide cómo se ve el porcentaje, lo pida el
-  // cálculo en vivo o el veredicto guardado. Separados, uno de los dos
-  // acabaría diciendo "+3%" y el otro "3% más" sin que nadie lo notara.
+  // Un solo sitio donde se decide cómo se ve el porcentaje. Separado en dos
+  // acabaría diciendo "+3%" en un sitio y "3% más" en el otro sin que nadie
+  // lo notara.
   function pintarPorcentaje(badge, pct){
     if(!badge) return;
     if(pct === 0){
@@ -456,19 +454,10 @@
     }
   }
 
-  function pintarVeredicto(card){
-    var badge = card.querySelector('.ex-delta');
-    if(!badge) return;
-    var v = card.getAttribute('data-veredicto');
-    if(v === null || v === ''){ badge.className = 'ex-delta'; badge.textContent = ''; return; }
-    pintarPorcentaje(badge, Number(v));
-  }
-
-  // Al tocar una serie el veredicto deja de valer: se borra hasta la
-  // proxima vez que se guarde.
-  function olvidarVeredicto(card){
-    if(card) card.removeAttribute('data-veredicto');
-  }
+  // Aquí vivía `pintarVeredicto`, que enseñaba el porcentaje decidido al
+  // guardar. Se quitó: ese número ya no se muestra después de guardar. La
+  // sesión ya está hecha, y el porcentaje que importa es el de la PRÓXIMA
+  // vez, comparada contra esta.
 
   function recalcAll(){
     Array.from(exList.querySelectorAll('.exercise-card')).forEach(recalcCard);
@@ -528,7 +517,10 @@
   exList.addEventListener('input', function(e){
     var card = e.target.closest('.exercise-card');
     if(card && e.target.classList.contains('set-input')){
-      olvidarVeredicto(card);
+      // Esto es lo que enciende el porcentaje. Antes de tocar nada no se
+      // enseña: las series vienen con los números de la última vez y diría
+      // "igual al anterior" sin que la persona haya hecho todavía nada.
+      card.setAttribute('data-tocado', '1');
       recalcCard(card);
     }
   });
@@ -2929,17 +2921,10 @@
         if(!HISTORIAL[nombre]) HISTORIAL[nombre] = [];
         HISTORIAL[nombre].push(vol);
 
-        // EL ORDEN IMPORTA: se compara contra la sesión anterior ANTES de
-        // pisar la referencia con la de hoy. Al revés siempre saldría
-        // "igual al anterior", porque se estaría comparando con uno mismo.
-        var crudo = c.getAttribute('data-prev-vol');
-        var antes = crudo === null ? null : parseFloat(crudo);
-        if(antes !== null && isFinite(antes) && antes > 0){
-          c.setAttribute('data-veredicto', String(Math.round((vol - antes) / antes * 100)));
-        } else {
-          // Primera vez que se hace este ejercicio: no hay con qué comparar.
-          c.removeAttribute('data-veredicto');
-        }
+        // El porcentaje se apaga: la sesión ya está hecha. Vuelve a salir
+        // la próxima vez, en cuanto se cambien reps o peso, comparado
+        // contra ESTA sesión.
+        c.removeAttribute('data-tocado');
 
         c.setAttribute('data-prev-vol', vol);   // la próxima sesión compara contra esta
         detalle.push({ nombre: nombre, volumen: vol, series: series });
@@ -2964,7 +2949,8 @@
 
     saveCurrentDay();
     pintarEjercicio();
-    // Después de repintar, para que el veredicto recién decidido se vea.
+    // Después de repintar: es lo que apaga los porcentajes de la sesión
+    // que se acaba de guardar.
     recalcAll();
 
     if(!sesion || !sesion.user){ toast('toastRutina', 'Sesión guardada'); return; }

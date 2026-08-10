@@ -93,16 +93,29 @@ console.log('\n— El porcentaje se mueve mientras entrenas —');
   const trozo = i > 0 ? APP.slice(i, i + 2600) : '';
   check('se calcula en vivo', /pintarPorcentaje\(badge, Math\.round\(\(vol - prev\) \/ prev \* 100\)\)/.test(trozo));
 
-  // LO QUE NO PUEDE ROMPERSE: al guardar, data-prev-vol pasa a ser el
-  // volumen de HOY. Si el vivo mandara siempre, diría "igual al anterior" y
-  // borraría el +3% que se acaba de ganar.
-  check('el guardado manda justo después de guardar',
-    /var guardado = card\.getAttribute\('data-veredicto'\);[\s\S]{0,90}pintarVeredicto\(card\); return;/.test(trozo));
-  check('y el vivo va después, no antes',
-    trozo.indexOf("getAttribute('data-veredicto')") < trozo.indexOf('pintarPorcentaje(badge'));
-  // Al tocar una serie el veredicto deja de valer y el vivo toma el relevo.
-  check('tocar una serie devuelve el mando al vivo',
-    /olvidarVeredicto\(card\);\s*\n\s*recalcCard\(card\);/.test(APP));
+  // Sale al tocar algo y se va al guardar. Son tres situaciones distintas y
+  // las tres importan:
+  //   abrir la rutina   → nada (las series traen los números de la última
+  //                       vez: diría "igual al anterior" sin haber hecho ya)
+  //   cambiar algo      → el porcentaje, en vivo
+  //   guardar la sesión → se va; el número que importa es el de la próxima
+  check('sin tocar nada no se enseña',
+    /if\(!card\.hasAttribute\('data-tocado'\)\)\{[\s\S]{0,80}badge\.textContent = ''; return;/.test(trozo),
+    'al reabrir la rutina saldría "igual al anterior" en todas las tarjetas');
+  check('tocar una serie lo enciende',
+    /card\.setAttribute\('data-tocado', '1'\);\s*\n\s*recalcCard\(card\);/.test(APP));
+  check('y guardar la sesión lo apaga',
+    /c\.removeAttribute\('data-tocado'\);/.test(APP));
+  // Y se repinta después de guardar, que es lo que apaga los porcentajes en
+  // pantalla. Se ancla en el manejador de "Guardar sesión": `saveCurrentDay`
+  // aparece tres veces en el archivo y un indexOf a secas coge la primera.
+  const g = APP.indexOf("getElementById('saveSessionBtn')");
+  check('se repinta después de guardar, para que se apague de verdad',
+    /removeAttribute\('data-tocado'\)[\s\S]*recalcAll\(\);/.test(APP.slice(g, g + 4000)));
+
+  // Ya no queda el veredicto que sobrevivía al guardado.
+  check('no queda el porcentaje que se quedaba pegado',
+    !/data-veredicto/.test(APP) && !/function pintarVeredicto/.test(APP));
 
   // Volumen cero es una tarjeta a medio llenar, no un retroceso del 100%.
   check('no grita -100% con la tarjeta a medio llenar',
