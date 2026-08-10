@@ -82,6 +82,37 @@ console.log('\n— No salta encima de nadie —');
   check('y solo con sesion', /if\(!sesion \|\| !sesion\.user\) return/.test(fn));
 }
 
+console.log('\n— El reloj también marca la serie —');
+{
+  // Poner el descanso ES haber terminado la serie: nadie descansa antes de
+  // hacerla. Eran dos toques -la palomita y el reloj- para decir una sola
+  // cosa, y el segundo se olvidaba.
+  const i = APP.indexOf("var clock = e.target.closest('.clock-btn');");
+  const trozo = i > 0 ? APP.slice(i, i + 1200) : '';
+  check('el reloj existe y se atiende', i > 0);
+  check('marca la palomita de SU fila',
+    /var palomita = row \? row\.querySelector\('\.set-check'\) : null;/.test(trozo));
+  check('poniéndola en verde', /palomita\.classList\.add\('done'\);/.test(trozo));
+  // Alternar sería deshacer la serie al reiniciar el descanso. Volver a
+  // darle al reloj es querer descansar otra vez, no borrar lo hecho.
+  check('la añade, no la alterna', !/palomita\.classList\.toggle/.test(trozo));
+  check('y arranca el descanso igual', /startRest\(restSeconds,/.test(trozo));
+  // Marcar antes de arrancar: si startRest tardara o fallara, la serie ya
+  // quedó marcada, que es lo que la persona vino a hacer.
+  check('marca antes de arrancar el cronómetro',
+    trozo.indexOf("classList.add('done')") < trozo.indexOf('startRest('));
+
+  // Y que se guarde. No hace falta pedirlo aquí: hay un oyente de clic en
+  // toda la lista que programa el guardado pase lo que pase.
+  check('el clic programa el guardado solo',
+    /exList\.addEventListener\('click', programarGuardado\);/.test(APP));
+
+  // La palomita por su cuenta sigue alternando: tocarla es corregirse.
+  const j = APP.indexOf("var chk = e.target.closest('.set-check');");
+  check('tocar la palomita sigue alternando',
+    /if\(chk\)\{ chk\.classList\.toggle\('done'\); return; \}/.test(APP.slice(j, j + 200)));
+}
+
 console.log('\n— Las palomitas se apagan al guardar la sesión —');
 {
   // Marcan "esta serie ya la hice HOY", no "este ejercicio lleva palomita

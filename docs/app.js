@@ -521,6 +521,18 @@
       var row = clock.closest('tr');
       var name = card ? card.querySelector('.ex-name').textContent : 'Ejercicio';
       var setNo = row ? row.querySelector('td').textContent : '';
+
+      // Poner el descanso ES haber terminado la serie: nadie descansa antes
+      // de hacerla. Antes había que dar dos toques -la palomita y el reloj-
+      // para decir una sola cosa, y el segundo se olvidaba.
+      //
+      // Se AÑADE la clase, no se alterna como al tocar la palomita: volver a
+      // darle al reloj es reiniciar el descanso, no deshacer la serie.
+      // Guardarla no hace falta pedirlo: hay un listener de clic en la lista
+      // que programa el guardado pase lo que pase.
+      var palomita = row ? row.querySelector('.set-check') : null;
+      if(palomita) palomita.classList.add('done');
+
       startRest(restSeconds, 'Descanso · ' + name + ', set ' + setNo);
       return;
     }
