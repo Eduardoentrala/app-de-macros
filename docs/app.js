@@ -3076,6 +3076,52 @@
     pintarPeso();
   });
 
+  // ---- La cintura ----
+  // No se pide todos los días: se mide una vez al mes y ya. El error de la
+  // cinta -cómo de apretada, un dedo más arriba, si soltaste el aire- ronda
+  // el centímetro, que es MÁS de lo que cambia una cintura en una semana.
+  // Pedirla cada día sería recoger ruido y encima cansar a quien la apunta.
+  //
+  // Así que el campo aparece solo cuando toca, se va al guardarla, y vuelve
+  // al mes siguiente.
+  var CINTURAS = [];                    // [{fecha, cm}], de la vieja a la nueva
+  var DIAS_ENTRE_CINTURAS = 28;
+
+  function tocaMedirCintura(){
+    if(!CINTURAS.length) return true;   // nunca la ha medido
+    var ultima = new Date(CINTURAS[CINTURAS.length - 1].fecha + 'T12:00:00');
+    return (HOY - ultima) / 86400000 >= DIAS_ENTRE_CINTURAS;
+  }
+
+  function pintarCintura(){
+    var bloque = document.getElementById('cinturaBloque');
+    var hist   = document.getElementById('cinturaHist');
+    var filas  = document.getElementById('cinturaFilas');
+    if(!bloque || !hist || !filas) return;
+
+    bloque.hidden = !tocaMedirCintura();
+    // El campo se vacía al esconderlo: si volviera con el número del mes
+    // pasado, se guardaría el viejo sin querer al tocar Guardar.
+    if(bloque.hidden) document.getElementById('cinturaInput').value = '';
+
+    hist.hidden = !CINTURAS.length;
+    // De la más reciente a la más vieja: lo último medido es lo que se mira.
+    filas.innerHTML = CINTURAS.slice().reverse().map(function(m, i, arr){
+      var previa = arr[i + 1];          // la de antes en el tiempo
+      var dif = previa ? Math.round((m.cm - previa.cm) * 10) / 10 : null;
+      var clase = dif == null ? '' : (dif < 0 ? 'baja' : (dif > 0 ? 'sube' : 'igual'));
+      // El número solo no dice nada; la dirección sí. 88 no significa
+      // nada, 91 -> 88 significa que está perdiendo grasa.
+      var texto = dif == null ? 'primera'
+                : (dif === 0 ? 'igual' : (dif > 0 ? '+' : '−') + Math.abs(dif) + ' cm');
+      return '<div class="medida-fila">' +
+               '<div><div class="mf-val">' + m.cm + ' cm</div>' +
+               '<div class="mf-fecha">Medida el ' + fmtFecha(new Date(m.fecha + 'T12:00:00')) + '</div></div>' +
+               '<div class="mf-dif ' + clase + '">' + texto + '</div>' +
+             '</div>';
+    }).join('');
+  }
+
   // Guardar peso: se registra en la fecha de hoy y la gráfica se actualiza
   document.getElementById('saveWeightBtn').addEventListener('click', function(){
     var v = Number(document.getElementById('pesoInput').value);
@@ -3090,6 +3136,15 @@
     toast('toastPeso', 'Peso guardado: ' + PESOS[k] + ' kg' +
                        (cin != null ? ' · cintura ' + cin + ' cm' : ''));
 
+    if(cin != null){
+      // En sitio para que el historial y el "¿toca?" cuadren al momento,
+      // sin esperar a la red. Si la fila de hoy ya existía, se sustituye.
+      CINTURAS = CINTURAS.filter(function(m){ return m.fecha !== k; });
+      CINTURAS.push({ fecha: k, cm: cin });
+      CINTURAS.sort(function(a, b){ return a.fecha < b.fecha ? -1 : 1; });
+      pintarCintura();
+    }
+
     sbGuardarPeso(k, PESOS[k], cin)['catch'](function(e){
       if(antes == null) delete PESOS[k]; else PESOS[k] = antes;
       pintarPeso();
@@ -3098,6 +3153,7 @@
   });
 
   pintarPeso();
+  pintarCintura();
 
   // ---- Empezar de cero ----
   // Borra el historial de peso entero. A diferencia de casi todo lo demás,
@@ -6106,13 +6162,10 @@
         // Se sustituye la serie de ejemplo entera, no se mezcla con ella.
         PESOS = {};
         pesos.forEach(function(f){ PESOS[f.log_date] = Number(f.weight_kg); });
-        // La ultima cintura medida, para que el campo no salga vacio y
-        // parezca que no se guardo. No se borra al cambiar de dia: no se
-        // mide a diario y un hueco no significa que haya desaparecido.
-        var conCintura = pesos.filter(function(f){ return f.cintura_cm != null; });
-        var campoCin = document.getElementById('cinturaInput');
-        if(campoCin) campoCin.value = conCintura.length
-          ? conCintura[conCintura.length - 1].cintura_cm : '';
+        // Las cinturas medidas, para el historial y para saber si toca.
+        CINTURAS = pesos.filter(function(f){ return f.cintura_cm != null; })
+                        .map(function(f){ return { fecha: f.log_date, cm: Number(f.cintura_cm) }; });
+        pintarCintura();
         var hoyPeso = PESOS[hoy];
         // El `else` importa tanto como el `if`: sin él, el campo se quedaba
         // con lo que hubiera antes —el 83.8 del maquetado, o el peso de la
@@ -7223,18 +7276,17 @@
       ['catch'](function(){ return []; });   // sin historial se decide igual
   }
 
-  // Las cinturas que haya. Van con su fecha porque lo que importa es la
-  // direccion, no el numero: 88 no significa nada solo; 91 -> 88 en dos
-  // meses significa que esta perdiendo grasa aunque la bascula no se mueva.
+  // Las cinturas que haya, con su fecha: lo que importa es la direccion, no
+  // el numero. 88 no significa nada solo; 91 -> 88 en dos meses significa
+  // que esta perdiendo grasa aunque la bascula no se mueva.
+  //
+  // Sale de memoria y no de otra consulta: CINTURAS ya se llena al cargar
+  // los pesos, de la misma tabla. Pedirlo otra vez seria pagar dos veces
+  // por el mismo dato y ademas retrasar la revision.
   function cinturasRecientes(){
-    if(!sesion || !sesion.user) return Promise.resolve([]);
-    return sbFetch('/rest/v1/weight_logs?select=log_date,cintura_cm' +
-                   '&user_id=eq.' + sesion.user.id +
-                   '&cintura_cm=not.is.null&order=log_date.desc&limit=6')
-      .then(function(f){ return (f || []).reverse(); })
-      // Si aun no se ha medido nunca, esto va vacio y se decide igual: la
-      // cintura suma, no es un requisito.
-      ['catch'](function(){ return []; });
+    return Promise.resolve(CINTURAS.slice(-6).map(function(m){
+      return { log_date: m.fecha, cintura_cm: m.cm };
+    }));
   }
 
   function guardarChequeo(r){

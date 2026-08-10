@@ -88,10 +88,19 @@ console.log('\n— La IA ve las semanas de antes, no una suelta —');
 console.log('\n— Y la cintura, que es lo que mide el cambio físico —');
 {
   check('hay campo de cintura', /id="cinturaInput"/.test(HTML));
-  check('es opcional', /Cintura \(cm\) · opcional/.test(HTML));
-  // Se mide una vez al mes: el error de la cinta es mayor que lo que
-  // cambia una cintura en una semana.
-  check('dice cada cuánto medirla', /Con medirla una vez al mes basta/.test(HTML));
+  // Solo aparece cuando toca: se esconde al medirla y vuelve al mes.
+  // Pedirla a diario seria recoger ruido, porque el error de la cinta es
+  // mayor que lo que cambia una cintura en una semana.
+  check('el bloque empieza escondido', /id="cinturaBloque" hidden/.test(HTML));
+  check('y dice que toca medirla', /Cintura \(cm\) · toca medirla/.test(HTML));
+  check('dice cada cuánto', /Se pide una vez al mes/.test(HTML));
+  check('hay un plazo, no un capricho', /var DIAS_ENTRE_CINTURAS = 28;/.test(APP));
+  check('si nunca la midió, se la pide', /if\(!CINTURAS\.length\) return true;/.test(APP));
+  check('se esconde al guardarla', /bloque\.hidden = !tocaMedirCintura\(\);/.test(APP));
+  // Si volviera con el numero del mes pasado, se guardaria el viejo sin
+  // querer al tocar Guardar.
+  check('y el campo se vacía al esconderse',
+    /if\(bloque\.hidden\) document\.getElementById\('cinturaInput'\)\.value = '';/.test(APP));
   check('y cómo medirla', /A la altura del ombligo, sin apretar/.test(HTML));
   check('con teclado de números', /id="cinturaInput"[^>]*inputmode="decimal"/.test(HTML));
 
@@ -110,8 +119,21 @@ console.log('\n— Y la cintura, que es lo que mide el cambio físico —');
   const j = APP.indexOf('function cinturasRecientes(');
   const cin = APP.slice(j, j + 700);
   check('se traen las medidas para la revisión', j > 0);
-  check('solo las que existen', /cintura_cm=not\.is\.null/.test(cin));
+  // Salen de memoria: CINTURAS ya se llena al cargar los pesos, de la misma
+  // tabla. Pedirlo otra vez seria pagar dos veces por el mismo dato.
+  check('sin pedirlas otra vez a la base', /return Promise\.resolve\(CINTURAS\.slice\(-6\)/.test(cin));
   check('y se le mandan', /cinturas: extra\[2\]/.test(APP));
+
+  // El historial, debajo de la grafica.
+  check('hay lista de medidas', /id="cinturaHist"/.test(HTML));
+  check('con su encabezado', /MEDIDAS DE CINTURA/.test(HTML));
+  check('va debajo de la gráfica',
+    HTML.indexOf('id="pesoChart"') < HTML.indexOf('id="cinturaHist"'));
+  check('cada fila lleva la fecha', /Medida el ' \+ fmtFecha/.test(APP));
+  // El numero solo no dice nada; la direccion si.
+  check('y cuánto cambió', /var dif = previa \? Math\.round\(\(m\.cm - previa\.cm\)/.test(APP));
+  check('bajar se ve distinto de subir', /dif < 0 \? 'baja' : \(dif > 0 \? 'sube'/.test(APP));
+  check('la más reciente arriba', /CINTURAS\.slice\(\)\.reverse\(\)/.test(APP));
 }
 
 console.log('\n— La IA sabe qué hacer con lo nuevo —');

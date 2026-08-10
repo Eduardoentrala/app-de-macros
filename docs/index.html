@@ -60,7 +60,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '803d68f282';
+    var SELLO = '9629636fef';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -1065,15 +1065,16 @@
                  borrar el historial porque nadie lo tocaba nunca. -->
             <input class="field-value big" id="pesoInput" type="number" inputmode="decimal" step="0.1" style="border:none;width:100%;font-family:inherit;color:var(--ink);background:var(--app-bg);" placeholder="—">
 
-            <!-- Opcional y de vez en cuando, no cada día. Es lo único que
-                 distingue perder grasa de perder peso: la báscula baja igual
-                 por agua, por músculo o por grasa, y la cintura no.
-                 Va aquí y no en el chequeo semanal porque es una medida del
+            <!-- Solo aparece cuando toca, no todos los días. Se esconde al
+                 guardarla y vuelve al mes siguiente.
+                 Está aquí y no en el chequeo semanal porque es una medida del
                  cuerpo, no una sensación, y se toma a la vez que el peso. -->
-            <div class="field-label">Cintura (cm) · opcional</div>
-            <input class="field-value" id="cinturaInput" type="number" inputmode="decimal" step="0.5" min="40" max="200" style="border:none;width:100%;font-family:inherit;color:var(--ink);background:var(--app-bg);" placeholder="—">
-            <p class="hint" style="margin-top:6px;">A la altura del ombligo, sin apretar
-              y soltando el aire. Con medirla una vez al mes basta.</p>
+            <div id="cinturaBloque" hidden>
+              <div class="field-label">Cintura (cm) · toca medirla</div>
+              <input class="field-value" id="cinturaInput" type="number" inputmode="decimal" step="0.5" min="40" max="200" style="border:none;width:100%;font-family:inherit;color:var(--ink);background:var(--app-bg);" placeholder="—">
+              <p class="hint" style="margin-top:6px;">A la altura del ombligo, sin apretar
+                y soltando el aire. Se pide una vez al mes.</p>
+            </div>
 
             <button class="btn-primary" style="width:100%;margin-top:16px;" id="saveWeightBtn">Guardar</button>
           </div>
@@ -1084,6 +1085,14 @@
             </div>
             <div id="pesoChart"></div>
             <div class="peso-resumen" id="pesoResumen">—</div>
+          </div>
+
+          <!-- Las cinturas medidas. Van debajo de la gráfica y no dentro de
+               ella a propósito: son cuatro o cinco números al año, y en una
+               gráfica de peso -que tiene un punto por día- se perderían. -->
+          <div id="cinturaHist" hidden>
+            <div class="lista-tit">MEDIDAS DE CINTURA</div>
+            <div id="cinturaFilas"></div>
           </div>
         </div>
         <div class="toast" id="toastPeso">Peso guardado</div>
@@ -1431,7 +1440,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '803d68f282';
+    var SELLO = '9629636fef';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que
