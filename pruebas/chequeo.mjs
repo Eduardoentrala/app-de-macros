@@ -128,7 +128,9 @@ console.log('\n— El entreno entra en el ajuste semanal —');
   check('se piden las sesiones', /function datosDeEntreno\(/.test(APP));
   check('de dos semanas, para poder comparar', /haceDias\(13\)/.test(APP));
   check('separadas por semana', /f\.session_date >= corte \? estaSemana : anterior/.test(APP));
-  check('y se mandan al asistente', /entreno: entreno/.test(APP));
+  // Llega dentro del Promise.all que trae entreno, historial y cinturas a
+  // la vez. Antes era `entreno: entreno`, cuando era la única consulta.
+  check('y se mandan al asistente', /entreno: extra\[0\]/.test(APP));
   // Si falla la consulta, el ajuste sigue: quedarse sin ajuste por no poder
   // leer el gimnasio seria peor que ajustar sin ese dato.
   check('si falla, no bloquea el ajuste', /\['catch'\]\(function\(\)\{ return null; \}\)/.test(APP));
