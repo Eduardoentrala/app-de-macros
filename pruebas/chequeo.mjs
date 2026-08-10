@@ -149,6 +149,43 @@ console.log('\n— El reloj también marca la serie —');
     /if\(chk\)\{ chk\.classList\.toggle\('done'\); return; \}/.test(APP.slice(j, j + 200)));
 }
 
+console.log('\n— Y no se toca el de al lado sin querer —');
+{
+  // El fallo reportado: "toco el cuadro y se activa el cronómetro". No era
+  // lógica -el código sale antes de llegar al reloj- sino tamaño: palomita
+  // de 26 px, reloj de 33 y × de 20, separados 8. Una yema mide unos 50.
+  const CSS = readFileSync(join(RAIZ, 'docs', 'estilos', 'pantallas.css'), 'utf8');
+
+  check('los tres tienen blanco táctil ampliado',
+    /\.set-check::after\{[\s\S]{0,90}position:absolute/.test(CSS) &&
+    /\.clock-btn::after\{[\s\S]{0,90}position:absolute/.test(CSS) &&
+    /\.rm-set::after\s*\{[\s\S]{0,90}position:absolute/.test(CSS));
+
+  // Cada uno crece ALEJÁNDOSE del vecino: la palomita a la izquierda y el
+  // reloj a la derecha. Si crecieran hacia dentro se solaparían, y "gana el
+  // que esté encima" es igual de aleatorio que el problema original.
+  check('la palomita crece hacia la izquierda',
+    /\.set-check::after\{[^}]*inset:-11px -4px -11px -14px/.test(CSS));
+  check('y el reloj hacia la derecha',
+    /\.clock-btn::after\{[^}]*inset:-11px -10px -11px -4px/.test(CSS));
+
+  // El hueco no puede engordar mucho: la fila tiene 375 px y cada píxel se
+  // lo quita a los campos de reps y peso. Con hueco de 20 se quedaron en 35
+  // px, y ahí no entra "102.5".
+  const hueco = (CSS.match(/\.set-row-actions\{display:flex;gap:(\d+)px/) || [])[1];
+  check('el hueco entre botones no se come los campos',
+    hueco && Number(hueco) <= 12, `gap: ${hueco}px`);
+
+  // Y que solo el reloj arranque el cronómetro. Es la mitad de la queja:
+  // que la palomita NO lo dispare.
+  const arranques = (APP.match(/startRest\(/g) || []).length;
+  check('startRest se llama en pocos sitios y controlados', arranques <= 3, `${arranques} veces`);
+  const i = APP.indexOf("var chk = e.target.closest('.set-check');");
+  check('el camino de la palomita corta antes del reloj',
+    /if\(chk\)\{ chk\.classList\.toggle\('done'\); return; \}/.test(APP.slice(i, i + 200)),
+    'sin ese return, tocar la palomita seguiría al reloj');
+}
+
 console.log('\n— Las palomitas se apagan al guardar la sesión —');
 {
   // Marcan "esta serie ya la hice HOY", no "este ejercicio lleva palomita

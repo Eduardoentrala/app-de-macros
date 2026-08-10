@@ -604,9 +604,33 @@
   cursor:pointer;background:var(--app-bg);color:transparent;font-size:14px;font-weight:900;
 }
 .set-check.done{background:var(--green);border-color:var(--green);color:#fff;}
-.set-row-actions{display:flex;gap:8px;align-items:center;}
+/* ---- Tres botones diminutos, uno al lado del otro ----
+   La palomita medía 26 px, el reloj 33 y la × 20, separados 8 px. Una yema
+   mide unos 50: tocabas la palomita y salía el cronómetro. Y al lado está
+   la × que borra la serie, que es peor todavía.
+
+   Se agranda el blanco táctil sin agrandar el dibujo: un ::after invisible
+   estirado por fuera. La palomita se sigue viendo de 26 px y se toca como
+   si midiera 44.
+
+   Cada uno crece ALEJÁNDOSE del vecino, no hacia él: la palomita se estira
+   a la izquierda y el reloj a la derecha. Así los dos llegan a 44 px sin
+   tener que separar los botones — y eso importa, porque la fila tiene 375
+   px y cada píxel del hueco se lo quita a los campos de reps y peso. El
+   primer intento, con hueco de 20, dejó esos campos en 35 px y ahí no
+   entra "102.5".
+
+   Y no se solapan: dos blancos superpuestos convierten el problema en
+   "gana el que esté encima", que es igual de aleatorio que ahora. */
+.set-row-actions{display:flex;gap:12px;align-items:center;}
+.set-check, .clock-btn, .rm-set{position:relative;}
+.set-check::after{ content:'';position:absolute;inset:-11px -4px -11px -14px; }
+.clock-btn::after{ content:'';position:absolute;inset:-11px -10px -11px -4px; }
+.rm-set::after  { content:'';position:absolute;inset:-11px -10px -11px -4px; }
 .clock-btn{background:none;border:none;font-size:15px;cursor:pointer;color:var(--red);}
-.rm-set{background:none;border:none;color:var(--ink-faint);font-size:14px;cursor:pointer;}
+/* La × no se deshace: un poco más de aire que las demás. Equivocarse aquí
+   cuesta la serie entera, no un cronómetro de más. */
+.rm-set{background:none;border:none;color:var(--ink-faint);font-size:14px;cursor:pointer;margin-left:4px;}
 .add-set-row{padding:8px 16px 14px;}
 .add-set{
   border:1.5px dashed var(--ink-faint);background:none;border-radius:10px;padding:8px 14px;
