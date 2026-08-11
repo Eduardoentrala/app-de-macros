@@ -1,15 +1,12 @@
-// Apuntar comida en un día pasado.
+// Apuntar, ver y corregir la comida de otro día de la semana.
 //
-// "Ayer comí esto y no lo registré" es de las cosas que más pasan, y hasta
-// ahora no habia forma: `HOY` estaba fijo dentro de las dos funciones que
-// guardan.
+// Antes se podía apuntar en un día pasado, pero la lista seguía enseñando
+// la comida de HOY: se guardaba bien y no había forma de ver lo que ya
+// había ahí ni de corregirlo. Se apuntaba a ciegas.
 //
-// Lo que puede salir mal aqui no da error en pantalla, y por eso se prueba:
-//   · Que la comida de ayer aparezca en la lista de HOY (contaria dos veces
-//     en el anillo y la persona creeria que se paso).
-//   · Que el selector recuerde el dia anterior y alguien apunte una semana
-//     entera en la fecha equivocada sin notarlo.
-//   · Que al deshacer un guardado fallido se reste del dia que no era.
+// Y el calendario dejaba retroceder catorce días, o sea meterse en semanas
+// que la app ya cerró y sobre las que quizá ya ajustó calorías. Cambiar un
+// día de aquellas descuadra ese ajuste sin que nadie se entere.
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -24,96 +21,94 @@ const check = (n, cond, extra = '') => {
   else { mal++; console.log(`  FALLA ${n}${extra ? '\n        ' + extra : ''}`); }
 };
 
-console.log('\n— El día de apunte existe y se declara pronto —');
+console.log('\n— Solo la semana que va corriendo —');
 {
-  const decl = APP.indexOf('var DIA_APUNTE = null;');
-  check('DIA_APUNTE se declara una sola vez',
-    (APP.match(/var DIA_APUNTE = null;/g) || []).length === 1);
-  // Mismo error que tumbó la app entera con EVENTOS: `var` iza la
-  // declaracion pero no la asignacion, y las funciones que lo leen corren
-  // al arrancar.
-  check('antes que el balance diario', decl > 0 && decl < APP.indexOf('var hoyEsEvento'),
-    `declaracion en ${decl}`);
-  check('null significa hoy', /return DIA_APUNTE \|\| HOY/.test(APP));
+  const i = APP.indexOf('function pintarSelectorDia(');
+  const trozo = i > 0 ? APP.slice(i, i + 900) : '';
+  check('el mínimo es el inicio de SU semana', /inp\.min = isoDe\(anclaSemana\);/.test(trozo));
+  check('y el máximo es hoy', /inp\.max = isoDe\(HOY\);/.test(trozo));
+  // Semanas ya cerradas quedan fuera: la app pudo haber ajustado calorías
+  // con esos datos, y cambiarlos ahora deja el ajuste sin sentido.
+  check('ya no deja retroceder catorce días',
+    !/inp\.min = isoDe\(haceDias\(DIAS_ATRAS_APUNTE\)\)/.test(APP),
+    'con 14 días se podían tocar semanas que la app ya dio por cerradas');
+  check('el botón dice «Hoy» o la fecha',
+    /txt\.textContent = fuera \? fmtFecha\(diaDeApunte\(\)\) : 'Hoy'/.test(trozo));
 }
 
-console.log('\n— Guardar usa el día elegido, no HOY —');
+console.log('\n— Al elegir un día se ve lo de ESE día —');
 {
-  const s = APP.slice(APP.indexOf('function sumarAlRegistro('), APP.indexOf('function sumarAlRegistro(') + 300);
-  check('el registro se suma al día elegido', /var k = isoDe\(diaDeApunte\(\)\)/.test(s),
-    'con isoDe(HOY) fijo, lo de ayer se apunta hoy');
-  const g = APP.slice(APP.indexOf('function sbAgregarAlimento('),
-                      APP.indexOf('function sbAgregarAlimento(') + 500);
-  check('y la base guarda esa fecha', /entry_date: isoDe\(diaDeApunte\(\)\)/.test(g));
+  const i = APP.indexOf('function cargarComidasDelDia(');
+  const trozo = i > 0 ? APP.slice(i, i + 2400) : '';
+  check('existe la carga por día', i > 0);
+  check('pide solo ese día', /entry_date=eq\.' \+ isoDe\(fecha\)/.test(trozo));
+  check('y solo lo suyo', /user_id=eq\.' \+ sesion\.user\.id/.test(trozo));
+  check('vacía la lista antes, para no mezclar dos días',
+    /COMIDAS\.Desayuno = \[\]; COMIDAS\.Comida = \[\]; COMIDAS\.Cena = \[\];/.test(trozo));
+  // Si mientras llegaba se cambió de día otra vez, esa respuesta ya no vale.
+  check('descarta una respuesta que llega tarde',
+    /if\(isoDe\(diaDeApunte\(\)\) !== isoDe\(fecha\)\) return;/.test(trozo),
+    'sin esto se pinta la lista de un día con el rótulo de otro');
+  // La base admite 'Snack', que el Diario no lista.
+  check('una comida que no se lista no revienta', /if\(!COMIDAS\[f\.meal\]\) return;/.test(trozo));
+  // La corrección de siempre: quantity=1 quería decir "una porción".
+  check('respeta la compatibilidad de las cantidades viejas',
+    /if\(cantidad === 1 && baseDeUnidad\(unidad\) === 100\) cantidad = 100;/.test(trozo));
+
+  // ESTO NO SE PUEDE CALLAR: una lista vacía significa "no comiste nada", y
+  // si en realidad es "no pude leerlo", se vuelve a apuntar lo que ya estaba
+  // y el día queda duplicado.
+  check('si no puede leer el día, lo dice',
+    /No pude leer ese día: ' \+ traducirError/.test(trozo),
+    'callarlo hace que la persona duplique la comida de ese día');
+
+  check('y se llama al cambiar la fecha', /cargarComidasDelDia\(diaDeApunte\(\)\);/.test(APP));
 }
 
-console.log('\n— Lo de ayer NO entra en la lista de hoy —');
+console.log('\n— Y se puede añadir, editar y quitar ahí —');
 {
-  const a = APP.slice(APP.indexOf('function agregarAlimento('),
-                      APP.indexOf('function agregarAlimento(') + 1800);
-  // COMIDAS es la lista de HOY. Meter ahi lo de ayer lo haria aparecer en
-  // el desayuno de hoy y contar dos veces en el anillo.
-  check('solo se mete en COMIDAS si es hoy', /if\(enHoy\) COMIDAS\[comida\]\.push\(a\)/.test(a));
-  check('y solo se repinta la comida si es hoy', /if\(enHoy\) pintarComida\(\)/.test(a));
-  // Un dia pasado si cuenta para la semana: es el punto de apuntarlo.
-  check('pero la semana se actualiza igual', /else actualizarSemana\(\)/.test(a));
-  check('y el aviso dice en qué día quedó', /' del ' \+ fmtFecha\(dia\)/.test(a));
+  const i = APP.indexOf('function agregarAlimento(');
+  const trozo = APP.slice(i, i + 900);
+  // Antes: `if(enHoy) COMIDAS[comida].push(a)`. Por eso lo apuntado en un
+  // día pasado no aparecía en ninguna parte.
+  check('lo añadido entra en la lista del día que se mira',
+    /COMIDAS\[comida\]\.push\(a\);/.test(trozo) && !/if\(enHoy\) COMIDAS\[comida\]\.push/.test(APP));
+  check('y se repinta siempre', /pintarComida\(\);/.test(trozo) && !/if\(enHoy\) pintarComida\(\)/.test(APP));
+  // El anillo es de hoy; un día pasado cuenta para la semana, no para él.
+  check('un día pasado rehace la semana', /if\(!enHoy\) actualizarSemana\(\);/.test(trozo));
+
+  // Editar y quitar ya existían y siguen ahí.
+  check('se puede editar', /data-editar="'\+i\+'"/.test(APP));
+  check('se puede quitar', /data-quitar="'\+i\+'"/.test(APP));
+  // El borrado va por id de fila, así que funciona en cualquier día.
+  check('el borrado va por id, no por día', /sbQuitarAlimento\(quitado\.id\)/.test(APP));
+
+  // Si el guardado falla se deshace sobre el día correcto.
+  const j = APP.indexOf('var eraDia = DIA_APUNTE;');
+  check('deshacer un fallo toca el día correcto', j > 0 &&
+    /DIA_APUNTE = enHoy \? null : dia;/.test(APP.slice(j, j + 300)));
 }
 
-console.log('\n— El borrado de un día vacío no se lleva lo de ayer —');
+console.log('\n— Y al salir se vuelve a hoy —');
 {
-  const s = APP.slice(APP.indexOf('function sumarAlRegistro('),
-                      APP.indexOf('function sumarAlRegistro(') + 1400);
-  // Esa comprobacion mira COMIDAS, que es de hoy. Aplicada a un dia pasado
-  // borraria justo lo que se acaba de apuntar en el.
-  check('el borrado por día vacío solo aplica a hoy', /if\(apuntandoEnHoy\(\)\)\{/.test(s),
-    'sin esto, apuntar en ayer se borra solo al instante');
+  // COMIDAS guarda el día que se estaba mirando. Sin esto, el Diario se
+  // quedaría enseñando las comidas del lunes mientras el anillo cuenta las
+  // de hoy.
+  check('salir devuelve a hoy',
+    /if\(DIA_APUNTE && typeof cargarComidasDelDia === 'function'\)\{[\s\S]{0,200}cargarComidasDelDia\(HOY\);/.test(APP));
+  check('y entrar también, si se quedó en otro día',
+    /if\(veniaDeOtroDia && typeof cargarComidasDelDia === 'function'\) cargarComidasDelDia\(HOY\);/.test(APP));
+  // Entrar a apuntar siempre empieza en hoy: un selector que recuerda el día
+  // anterior acaba metiendo la cena de hoy en el lunes pasado.
+  check('entrar a apuntar empieza en hoy',
+    /if\(push\.dataset\.push === 'mealadd'\)\{[\s\S]{0,120}DIA_APUNTE = null;/.test(APP));
 }
 
-console.log('\n— Deshacer resta del día correcto —');
+console.log('\n— El selector sigue donde estaba —');
 {
-  const a = APP.slice(APP.indexOf('function agregarAlimento('),
-                      APP.indexOf('function agregarAlimento(') + 2400);
-  // Para cuando falla la red, la persona puede haber cambiado la fecha.
-  check('se restaura el día al deshacer', /var eraDia = DIA_APUNTE;[\s\S]{0,120}DIA_APUNTE = enHoy \? null : dia;/.test(a));
-  check('y se devuelve como estaba', /DIA_APUNTE = eraDia;/.test(a));
-}
-
-console.log('\n— Siempre empieza en hoy —');
-{
-  // Un selector que recuerda el dia anterior acaba metiendo la cena de hoy
-  // en el martes pasado, y nadie revisa una fecha que ya estaba puesta.
-  check('entrar a apuntar lo reinicia',
-    /push\.dataset\.push === 'mealadd'\)\{[\s\S]{0,120}DIA_APUNTE = null/.test(APP));
-  check('hay selector en pantalla', HTML.includes('id="mealFecha"'));
-  // Antes había un botón aparte de "Volver a hoy". Se quitó: la fila con
-  // etiqueta, control nativo a ancho completo y botón pesaba demasiado para
-  // algo que el 99% de las veces dice "hoy". Ahora es una píldora que
-  // muestra el estado y abre el selector.
-  check('la píldora dice "Hoy" cuando es hoy',
-    /txt\.textContent = fuera \? fmtFecha\(diaDeApunte\(\)\) : 'Hoy'/.test(APP),
-    'una fecha completa ahí obliga a comprobarla cada vez');
-  check('y ya no queda el botón viejo', !HTML.includes('mealFechaHoy'));
-}
-
-console.log('\n— Con límites —');
-{
-  const p = APP.slice(APP.indexOf('function pintarSelectorDia('),
-                      APP.indexOf('function pintarSelectorDia(') + 700);
-  check('no deja apuntar en el futuro', /inp\.max = isoDe\(HOY\)/.test(p));
-  // Mas atras ya no es "se me olvido", es reescribir semanas que la app dio
-  // por cerradas y sobre las que quiza ya ajusto calorias.
-  check('ni más de dos semanas atrás', /inp\.min = isoDe\(haceDias\(DIAS_ATRAS_APUNTE\)\)/.test(p));
-  check('el límite está escrito, no suelto', /var DIAS_ATRAS_APUNTE = 14/.test(APP));
-  check('se marca cuando no es hoy', /classList\.toggle\('otro-dia', fuera\)/.test(p));
-}
-
-console.log('\n— La zona horaria no corre el día —');
-{
-  // Con las horas a cero, una zona por detras de UTC convierte la fecha en
-  // el dia anterior. Es el clasico "aparecio en el dia de antes".
-  check('la fecha se lee a mediodía', /new Date\(this\.value \+ 'T12:00:00'\)/.test(APP),
-    "con 'T00:00:00' el dia se corre en zonas negativas");
+  check('la píldora del día existe', /id="mealFechaBtn"/.test(HTML));
+  check('con su campo de fecha', /id="mealFecha"/.test(HTML) && /type="date"/.test(HTML));
+  check('y se sabe para qué es', /aria-label="Día en que se apunta"/.test(HTML));
 }
 
 console.log(`\n${ok} pasan · ${mal} fallan`);

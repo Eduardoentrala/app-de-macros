@@ -115,14 +115,28 @@
       // día anterior acaba metiendo la cena de hoy en el martes pasado, y
       // nadie revisa una fecha que ya estaba puesta.
       if(push.dataset.push === 'mealadd'){
+        var veniaDeOtroDia = !!DIA_APUNTE;
         DIA_APUNTE = null;
         if(typeof pintarSelectorDia === 'function') pintarSelectorDia();
+        // Si la vez anterior se quedó en otro día, hay que rehacer la lista:
+        // COMIDAS todavía tiene la de aquel día.
+        if(veniaDeOtroDia && typeof cargarComidasDelDia === 'function') cargarComidasDelDia(HOY);
       }
       goto(push.dataset.push, true);
       return;
     }
     var backBtn = e.target.closest('[data-back]');
-    if(backBtn){ back(); return; }
+    if(backBtn){
+      // Al salir de apuntar se vuelve a HOY. COMIDAS guarda el día que se
+      // estaba mirando, y sin esto el Diario se quedaría enseñando las
+      // comidas del martes pasado mientras el anillo cuenta las de hoy.
+      if(DIA_APUNTE && typeof cargarComidasDelDia === 'function'){
+        DIA_APUNTE = null;
+        if(typeof pintarSelectorDia === 'function') pintarSelectorDia();
+        cargarComidasDelDia(HOY);
+      }
+      back(); return;
+    }
     var tabbar = e.target.closest('[data-tabbar]');
     if(tabbar){
       var destino = tabbar.dataset.tabbar;
@@ -2200,7 +2214,11 @@
     var txt = document.getElementById('mealFechaTxt');
     if(!inp || !btn) return;
     inp.max = isoDe(HOY);
-    inp.min = isoDe(haceDias(DIAS_ATRAS_APUNTE));
+    // Solo la semana que va corriendo. Retocar días de semanas ya cerradas
+    // es reescribir la historia: son semanas sobre las que la app quizá ya
+    // ajustó calorías, y cambiarlas ahora descuadra ese ajuste sin que nadie
+    // se entere. Lo de esta semana todavía no ha contado para nada.
+    inp.min = isoDe(anclaSemana);
     inp.value = isoDe(diaDeApunte());
 
     // "Hoy" en vez de la fecha cuando es hoy: es lo que la persona espera
@@ -2210,17 +2228,62 @@
     btn.classList.toggle('otro-dia', fuera);
   }
 
+  // ---- Lo que se comió ESE día ----
+  // Antes se podía apuntar en un día pasado, pero la lista seguía enseñando
+  // la comida de hoy: no había forma de ver lo que ya había ahí, ni de
+  // corregirlo. Se apuntaba a ciegas.
+  //
+  // Se pide solo ese día y no se guarda todo el historial en memoria: son
+  // tres o cuatro filas y se consultan cuando hacen falta.
+  function cargarComidasDelDia(fecha){
+    COMIDAS.Desayuno = []; COMIDAS.Comida = []; COMIDAS.Cena = [];
+    pintarComida();                      // vacío mientras llega
+    if(!sesion || !sesion.user) return Promise.resolve();
+
+    return sbFetch('/rest/v1/diary_entries' +
+        '?select=id,meal,food_name,unit,quantity,protein_g,carbs_g,fat_g' +
+        '&user_id=eq.' + sesion.user.id +
+        '&entry_date=eq.' + isoDe(fecha) + '&order=created_at.asc')
+      .then(function(filas){
+        // Si mientras llegaba se cambió de día otra vez, esta respuesta ya
+        // no vale: pintarla dejaría la lista de un día con el rótulo de otro.
+        if(isoDe(diaDeApunte()) !== isoDe(fecha)) return;
+        (filas || []).forEach(function(f){
+          if(!COMIDAS[f.meal]) return;   // la base admite 'Snack', que no se lista
+          var unidad = f.unit || 'Gramos';
+          var cantidad = Number(f.quantity) || null;
+          // La misma corrección de siempre: `quantity=1` de antes de que
+          // existiera la edición quería decir "una porción", no "1 gramo".
+          if(cantidad === 1 && baseDeUnidad(unidad) === 100) cantidad = 100;
+          COMIDAS[f.meal].push(prepararAlimento({
+            id: f.id, n: f.food_name, u: unidad, cant: cantidad,
+            P: Number(f.protein_g) || 0,
+            C: Number(f.carbs_g)   || 0,
+            G: Number(f.fat_g)     || 0
+          }));
+        });
+        pintarComida();
+      })['catch'](function(e){
+        // Aquí NO se puede callar. Una lista vacía significa "ese día no
+        // comiste nada", y si en realidad es "no pude leerlo", la persona
+        // vuelve a apuntar lo que ya estaba y acaba con el día duplicado.
+        // Mejor decirlo y que no se fíe de lo que ve.
+        toast('toastComida', 'No pude leer ese día: ' + traducirError(e.message));
+      });
+  }
+
   (function(){
     var inp = document.getElementById('mealFecha');
     if(!inp) return;
     inp.addEventListener('change', function(){
-      if(!this.value){ DIA_APUNTE = null; pintarSelectorDia(); return; }
+      if(!this.value){ DIA_APUNTE = null; pintarSelectorDia(); cargarComidasDelDia(HOY); return; }
       // Mediodía y no medianoche: con las horas a cero, una zona horaria
       // por detrás de UTC convierte la fecha en el día anterior.
       var d = new Date(this.value + 'T12:00:00');
       d.setHours(0,0,0,0);
       DIA_APUNTE = isoDe(d) === isoDe(HOY) ? null : d;
       pintarSelectorDia();
+      cargarComidasDelDia(diaDeApunte());
     });
     // El input está encima de la píldora y transparente, así que el toque
     // ya cae en él. Este listener es para cuando el foco llega por teclado.
@@ -2235,12 +2298,16 @@
     var dia = diaDeApunte();
     prepararAlimento(a);            // deja lista la cantidad y la porción base
 
-    // COMIDAS es la lista de HOY. Meter ahí lo de ayer lo haría aparecer en
-    // el desayuno de hoy y contaría dos veces en el anillo.
-    if(enHoy) COMIDAS[comida].push(a);
+    // COMIDAS es la lista del día que se está mirando, no la de hoy. Antes
+    // era siempre la de hoy y por eso lo apuntado en un día pasado no
+    // aparecía en ningún sitio: se guardaba bien y no había forma de verlo
+    // ni de corregirlo.
+    COMIDAS[comida].push(a);
     if(typeof sumarAlRegistro === 'function') sumarAlRegistro(a, +1);
-    if(enHoy) pintarComida();
-    else actualizarSemana();        // el día pasado ya cuenta para la semana
+    pintarComida();
+    // El anillo y la semana son de HOY: si se apunta en otro día, hay que
+    // rehacer la semana porque ese día ya cuenta para ella.
+    if(!enHoy) actualizarSemana();
 
     volverA('mealadd', 'diario');   // conserva el camino: diario › mealadd
     toast('toastComida', a.n + ' agregado a ' + comida +
@@ -2259,12 +2326,16 @@
           // del día equivocado dejaría dos días mal en vez de uno.
           var eraDia = DIA_APUNTE;
           DIA_APUNTE = enHoy ? null : dia;
-          var i = enHoy ? COMIDAS[comida].indexOf(a) : -1;
-          if(enHoy && i >= 0) COMIDAS[comida].splice(i, 1);
-          if(enHoy ? i >= 0 : true) sumarAlRegistro(a, -1);
+          var i = COMIDAS[comida].indexOf(a);
+          if(i >= 0) COMIDAS[comida].splice(i, 1);
+          sumarAlRegistro(a, -1);
           DIA_APUNTE = eraDia;
 
-          if(enHoy) pintarComida(); else actualizarSemana();
+          // Se repinta siempre: la lista es la del día que se está
+          // mirando, así que el alimento que se quita tiene que
+          // desaparecer de ahí sea el día que sea.
+          pintarComida();
+          if(!enHoy) actualizarSemana();
           toast('toastComida', 'No se pudo guardar: ' + traducirError(e.message));
         });
     }
