@@ -7324,12 +7324,26 @@
         ? Math.round(pesos.reduce(function(a,b){ return a+b; }, 0) / pesos.length * 10) / 10
         : null;
 
+      // Cuántas fotos subió esa semana. Va el NÚMERO, no las fotos: quedó
+      // acordado que las imágenes no viajan a la IA en el chequeo semanal
+      // -eso sería mensual, a petición y con consentimiento aparte, porque
+      // el aviso de privacidad de hoy no cubre que las fotos del cuerpo
+      // salgan de la app-. Saber si las subió es constancia, no contenido, y
+      // es lo que un entrenador nota: "llevas tres semanas sin fotos".
+      //
+      // Las fotos se guardan por semana ISO -de lunes a domingo- y la semana
+      // de cada quien puede empezar otro día. Se usa la semana ISO que
+      // CONTIENE su inicio: no es exacto, y por eso solo se manda el conteo
+      // y no se saca ninguna conclusión fina de él.
+      var cuantasFotos = Object.keys(FOTOS[claveSemana(ini)] || {}).length;
+
       out.push({
         semana: isoDe(ini),
         dias_apuntados: dias,
         media_cal: dias ? Math.round(suma / dias) : null,
         peso_medio: medio,
-        dias_con_peso: pesos.length
+        dias_con_peso: pesos.length,
+        fotos: cuantasFotos
       });
     }
     return out;

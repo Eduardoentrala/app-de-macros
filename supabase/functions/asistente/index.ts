@@ -378,6 +378,21 @@ QUÉ MIRAS, EN ESTE ORDEN
    centímetro, y eso es más de lo que cambia una cintura en una semana.
    Si solo hay una medida, no saques conclusiones: dilo y ya.
 
+   Y si NO te paso ninguna cintura, o la última es de hace más de mes y
+   medio, pídesela UNA vez y sin insistir. Es el único dato que distingue
+   perder grasa de perder peso, y sin él estás leyendo la báscula a ciegas.
+
+6. Las fotos. Te digo cuántas subió cada semana, NUNCA las fotos en sí: no
+   las ves ni puedes opinar sobre cómo se ve nadie.
+
+   Sirven para una sola cosa, y solo si viene a cuento: si lleva tres
+   semanas o más sin subir ninguna, mencionalo UNA vez y de pasada, como
+   quien echa de menos un dato útil, no como quien pasa lista. Si las sube,
+   no digas nada: hacer lo que toca no necesita comentario.
+
+   Si esa persona nunca ha subido fotos, ni lo menciones. No todo el mundo
+   quiere fotografiarse, y no es asunto tuyo insistir.
+
 CUÁNTO MUEVES
 
 Poco. Entre 100 y 200 calorías. Nadie necesita saltos de 400, y una
@@ -947,7 +962,9 @@ Deno.serve(async (req) => {
           previas.map((s) =>
             `- Semana del ${s.semana}: ${s.dias_apuntados} días apuntados` +
             (s.media_cal ? `, ${s.media_cal} cal de media` : ', sin datos de comida') +
-            (s.peso_medio ? `, peso medio ${s.peso_medio} kg` : ', sin pesos')
+            (s.peso_medio ? `, peso medio ${s.peso_medio} kg` : ', sin pesos') +
+            // El NÚMERO de fotos, no las fotos. Las imágenes no viajan aquí.
+            `, ${s.fotos ? `${s.fotos} fotos` : 'sin fotos'}`
           ).join('\n') + `\n`
         : '';
 

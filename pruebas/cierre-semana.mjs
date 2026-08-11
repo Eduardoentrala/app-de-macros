@@ -219,7 +219,7 @@ console.log('\n— Y con cuatro semanas de contexto —');
   // que cambie nada de grasa. Con cuatro puntos se distingue "no bajó" de
   // "bajó y todavía no se ve".
   const i = APP.indexOf('function resumenDeSemanas(');
-  const res = i > 0 ? APP.slice(i, i + 1500) : '';
+  const res = i > 0 ? APP.slice(i, i + 2600) : '';
   check('hay resumen por semanas', i > 0);
   check('cada una con su fecha', /semana: isoDe\(ini\)/.test(res));
   check('con los días apuntados', /dias_apuntados: dias/.test(res));
@@ -244,6 +244,27 @@ console.log('\n— Y con cuatro semanas de contexto —');
   check('los pesos con su fecha', /\$\{x\.fecha\}: \$\{x\.kg\} kg/.test(FN));
   check('y el entreno semana a semana', /ENTRENO, SEMANA A SEMANA/.test(FN));
   check('el encabezado dice que es la que cierra', /LA SEMANA QUE SE CIERRA/.test(FN));
+
+  // ---- Fotos y cintura, con el mismo criterio ----
+  // De las fotos va el NÚMERO, nunca las imágenes: quedó acordado que eso
+  // sería mensual, a petición y con consentimiento aparte, porque el aviso
+  // de privacidad de hoy no cubre que las fotos del cuerpo salgan de la app.
+  check('cuenta las fotos de cada semana', /fotos: cuantasFotos/.test(APP));
+  check('y llegan al contexto', /\$\{s\.fotos\} fotos/.test(FN));
+  check('pero NO se manda ninguna imagen',
+    !/foto.*base64|image\/jpeg/i.test(APP.slice(APP.indexOf('function resumenDeSemanas('),
+                                                APP.indexOf('function resumenDeSemanas(') + 1800)));
+  check('y se le dice que no las ve', /NUNCA las fotos en sí: no\s*\n?\s*las ves/.test(FN));
+  // Tres semanas sin fotos se menciona una vez; subirlas no necesita
+  // comentario, y a quien nunca las sube no se le insiste.
+  check('solo lo menciona si lleva tres semanas sin subirlas',
+    /lleva tres\s*\n?\s*semanas o más sin subir ninguna/.test(FN));
+  check('y a quien nunca sube fotos no le insiste',
+    /nunca ha subido fotos, ni lo menciones/.test(FN));
+
+  // La cintura, pedida cuando lleva mucho sin medirse.
+  check('pide la cintura si falta o está vieja',
+    /la última es de hace más de mes y\s*\n?\s*medio, pídesela UNA vez/.test(FN));
 
   // Y que sepa qué hacer con ellas.
   check('sabe que una semana suelta miente', /El peso de UNA\s*\n?\s*semana miente/.test(FN));
