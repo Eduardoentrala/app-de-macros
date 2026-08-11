@@ -165,11 +165,13 @@ console.log('\n— La IA sabe qué hacer con lo nuevo —');
 console.log('\n— Y solo DESPUÉS se deciden las calorías —');
 {
   const i = APP.indexOf("document.getElementById('chqEnviar').addEventListener");
-  const trozo = APP.slice(i, i + 2200);
+  const trozo = APP.slice(i, i + 3200);
   check('la revisión sale del botón, no del arranque', i > 0);
   check('manda las respuestas', /chequeo: respuestasChequeo\(\)/.test(trozo));
   check('manda el peso', /pesos: pesosRecientes/.test(trozo));
-  check('manda la semana', /datos: datosDeLaSemana\(\)/.test(trozo));
+  // Con `true`: la que cierra, no la que acaba de empezar.
+  check('manda la semana que cierra', /datos: datosDeLaSemana\(true\)/.test(trozo));
+  check('y las cuatro anteriores de contexto', /semanas: resumenDeSemanas\(4\)/.test(trozo));
   // Sin el entreno, un peso plano siempre parece estancamiento.
   check('y manda el entreno', /entreno: extra\[0\]/.test(trozo));
   check('aplica las calorías si ajusta', /if\(r\.ajusto && r\.cal_nueva\) aplicarCaloriasNuevas\(r\.cal_nueva\)/.test(trozo));
@@ -181,6 +183,76 @@ console.log('\n— Y solo DESPUÉS se deciden las calorías —');
     'ese camino llamaba a la IA sin las respuestas de la persona');
   check('y el aviso del coach no toca el cierre de semana',
     !/cierre_semana/.test(APP));
+}
+
+console.log('\n— Lee la semana que CIERRA, no la que empieza —');
+{
+  // EL FALLO QUE COSTÓ UNA SEMANA REAL. La revisión salta el primer día de
+  // la semana nueva, y `datosDeLaSemana()` contaba desde el inicio de la
+  // semana ACTUAL hasta hoy: un solo día, el de hoy, sin nada apuntado. La
+  // IA recibía "0 días de 7" y decía con razón que no podía leer la semana.
+  // Quien había apuntado los siete días se quedaba sin ajuste.
+  const i = APP.indexOf('function datosDeLaSemana(');
+  const trozo = i > 0 ? APP.slice(i, i + 1600) : '';
+  check('la función sabe mirar atrás', /function datosDeLaSemana\(anterior\)/.test(APP));
+  check('retrocede una semana entera', /desde\.setDate\(desde\.getDate\(\) - 7\);/.test(trozo));
+  check('y se corta al empezar la nueva', /hasta = new Date\(anclaSemana\);/.test(trozo));
+  check('la revisión pide la que cierra', /datos: datosDeLaSemana\(true\)/.test(APP),
+    'sin el true vuelve a contar la semana en curso, que está vacía');
+
+  // El entreno tiene que cubrir el MISMO periodo o se comparan cosas
+  // distintas: "entrenó más" mirando unos días y "comió menos" mirando otros.
+  const j = APP.indexOf('function datosDeEntreno(');
+  const ent = APP.slice(j, j + 1800);
+  check('el entreno se alinea con la misma semana',
+    /iniCerrada\.setDate\(iniCerrada\.getDate\(\) - 7\)/.test(ent));
+  check('y descarta la semana en curso',
+    /if\(f\.session_date >= finCerrada\) return;/.test(ent));
+  // "Hace 6 días" solo cuadra si la revisión cae el mismo día de la semana,
+  // y no cuadra nunca para quien no empieza en lunes.
+  check('ya no parte por «hace 6 días»', !/var corte = isoDe\(haceDias\(6\)\)/.test(APP));
+}
+
+console.log('\n— Y con cuatro semanas de contexto —');
+{
+  // Una semana suelta miente: el peso se mueve un kilo por agua o sal sin
+  // que cambie nada de grasa. Con cuatro puntos se distingue "no bajó" de
+  // "bajó y todavía no se ve".
+  const i = APP.indexOf('function resumenDeSemanas(');
+  const res = i > 0 ? APP.slice(i, i + 1500) : '';
+  check('hay resumen por semanas', i > 0);
+  check('cada una con su fecha', /semana: isoDe\(ini\)/.test(res));
+  check('con los días apuntados', /dias_apuntados: dias/.test(res));
+  // El peso MEDIO de la semana, no el del día que se pesó: es lo que quita
+  // el ruido del día a día.
+  check('y con el peso MEDIO, no el último', /peso_medio: medio/.test(res) &&
+    /pesos\.reduce\(function\(a,b\)\{ return a\+b; \}, 0\) \/ pesos\.length/.test(res));
+  check('se mandan cuatro', /semanas: resumenDeSemanas\(4\)/.test(APP));
+
+  // Los pesos, con fecha. Ocho números sueltos no dicen si son de ocho días
+  // o de tres meses, y eso cambia lo que significan.
+  check('los pesos van fechados', /return \{ fecha: k, kg: Number\(PESOS\[k\]\) \};/.test(APP));
+  check('y de las últimas cuatro semanas',
+    /desdePesos\.setDate\(desdePesos\.getDate\(\) - 28\)/.test(APP));
+  check('ya no van como lista pelada', !/\.slice\(-8\)\s*\n?\s*\.map\(function\(k\)\{ return PESOS\[k\]; \}\)/.test(APP));
+
+  // El entreno también, que el volumen sube y baja con las descargas.
+  check('el entreno trae su tendencia', /por_semana: porSemana/.test(APP));
+
+  // Y que la función del asistente lo reciba y lo pinte.
+  check('llegan al contexto del modelo', /LAS SEMANAS ANTERIORES/.test(FN));
+  check('los pesos con su fecha', /\$\{x\.fecha\}: \$\{x\.kg\} kg/.test(FN));
+  check('y el entreno semana a semana', /ENTRENO, SEMANA A SEMANA/.test(FN));
+  check('el encabezado dice que es la que cierra', /LA SEMANA QUE SE CIERRA/.test(FN));
+
+  // Y que sepa qué hacer con ellas.
+  check('sabe que una semana suelta miente', /El peso de UNA\s*\n?\s*semana miente/.test(FN));
+  check('una plana dentro de un mes que baja no es estancamiento',
+    /Una semana plana dentro de un mes que baja → todo va bien/.test(FN));
+  check('tres o cuatro planas sí lo son',
+    /Tres o cuatro semanas planas seguidas → ahí sí hay estancamiento/.test(FN));
+  check('y con poca historia es prudente',
+    /Si solo hay una o dos semanas de historia, DILO y sé prudente/.test(FN));
 }
 
 console.log('\n— El botón de «Entiendo» —');

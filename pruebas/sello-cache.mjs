@@ -41,6 +41,42 @@ console.log('\n— El sello está y está al día —');
     'ejecuta: node herramientas/sellar.mjs');
 }
 
+console.log('\n— El index tampoco se queda viejo —');
+{
+  // El agujero que quedaba: el sello arregla app.js y las hojas, pero no a
+  // sí mismo. Vive DENTRO del index, que se pide siempre con la misma
+  // dirección. Si el teléfono se queda con un index viejo, pide el JS y el
+  // CSS viejos y no hay forma de enterarse. Pasó: se arregló un botón, se
+  // comprobó que el servidor lo servía, y en el móvil seguía roto.
+  const VERSION = readFileSync(join(RAIZ, 'docs', 'version.txt'), 'utf8').trim();
+  const sello = (HTML.match(/var SELLO = '([^']*)';/) || [])[1];
+
+  check('hay un archivo de versión', VERSION.length === 10, VERSION);
+  check('y dice lo mismo que el index', VERSION === sello, `${VERSION} vs ${sello}`);
+
+  check('la app lo consulta al abrirse', /fetch\('version\.txt', \{ cache: 'no-store' \}\)/.test(HTML));
+  check('sin caché, o preguntaría a la copia vieja', /cache: 'no-store'/.test(HTML));
+  check('y si no coincide, se recarga con la versión nueva',
+    /location\.replace\(location\.pathname \+ '\?v=' \+ nuevo\)/.test(HTML));
+  // Sin freno, un despliegue a medias dejaría la app recargándose en bucle,
+  // y una app que parpadea es peor que una desactualizada.
+  check('con freno para no recargar en bucle',
+    /sessionStorage\.getItem\('macros\.recargado'\) !== SELLO/.test(HTML) &&
+    /sessionStorage\.setItem\('macros\.recargado', SELLO\)/.test(HTML));
+  check('sin red se sigue con lo que hay', /\['catch'\]\(function\(\)\{\}\)/.test(HTML));
+
+  // El index entra en el sello, o un cambio solo de HTML no avisaría a nadie.
+  const SELLAR = readFileSync(join(RAIZ, 'herramientas', 'sellar.mjs'), 'utf8');
+  check('el index cuenta para el sello', /partes\.push\(readFileSync\(RUTA_HTML, 'utf8'\)/.test(SELLAR));
+  // Y se le quitan sus propios sellos antes, o esto se muerde la cola:
+  // cambiar el sello cambia el index, que cambia el sello, y así siempre.
+  check('quitándole antes sus propios sellos',
+    /readFileSync\(RUTA_HTML, 'utf8'\)\.replace\(PATRON_SELLO, "\$1\$3"\)/.test(SELLAR));
+  check('version.txt se escribe siempre, aunque el sello no cambie',
+    /if \(escribir\) writeFileSync\(RUTA_VERSION, sello \+ '\\n'\);[\s\S]{0,120}if \(anterior === sello\)/.test(SELLAR),
+    'si se quedara viejo, la app se recargaría en bucle buscando algo que no llega');
+}
+
 console.log('\n— Y el sello cubre también las hojas de estilo —');
 {
   // Esto se aprendió por las malas: el arreglo del zoom -que ningún campo

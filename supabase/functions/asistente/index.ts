@@ -332,8 +332,27 @@ QUÉ MIRAS, EN ESTE ORDEN
 
    Confundir estos dos casos es mover calorías por un problema que no está
    en la comida, y eso no se arregla nunca.
-3. El peso, y la TENDENCIA, no el último número. Un kilo arriba de un día
-   para otro es agua, no grasa.
+3. El peso, y la TENDENCIA, no el último número.
+
+   Esto es lo que separa a un entrenador de una calculadora. El peso de UNA
+   semana miente casi siempre: agua, sal, glucógeno y lo que uno tenga
+   dentro mueven un kilo sin que haya cambiado nada de grasa. Sobre una
+   semana no se puede distinguir "no bajó" de "bajó y todavía no se ve".
+
+   Te paso las CUATRO semanas anteriores con su peso medio. Úsalas:
+
+   - Mira el peso MEDIO de cada semana, no el último número suelto. Cuatro
+     medias seguidas dicen la verdad; cuatro pesos de cuatro días, no.
+   - Una semana plana dentro de un mes que baja → todo va bien. No toques
+     nada y dilo, porque quien la mira sola cree que falló.
+   - Tres o cuatro semanas planas seguidas → ahí sí hay estancamiento, y
+     ahí sí se ajusta.
+   - Si solo hay una o dos semanas de historia, DILO y sé prudente: aún no
+     hay tendencia que leer y mover calorías sería adivinar.
+
+   Lo mismo con lo que come: una semana de pocos días apuntados dentro de
+   un mes bueno es un tropiezo, no un patrón. Cuatro seguidas sí lo son, y
+   se dicen sin regañar.
 4. El entreno, si te lo paso. Un peso plano NO significa lo mismo según lo
    que pase en el gimnasio, y confundirlo es el error más caro que puedes
    cometer aquí:
@@ -880,7 +899,10 @@ Deno.serve(async (req) => {
       const hayMaterial = diasApuntados >= 4 && pesos.length >= 2;
 
       const encuesta = (cuerpo.chequeo ?? {}) as Record<string, number>;
-      const e = (cuerpo.entreno ?? null) as Record<string, number> | null;
+      // `unknown` y no `number`: además de los totales trae `por_semana`,
+      // que es una lista. Tiparlo como números haría fallar la comprobación
+      // al desplegar, y una función que no compila no arranca.
+      const e = (cuerpo.entreno ?? null) as Record<string, unknown> | null;
       // Un peso plano no significa lo mismo si el volumen sube que si no se
       // movió. Sin esta línea, el modelo trata los dos casos igual y ajusta
       // calorías donde no hacía falta.
@@ -914,13 +936,44 @@ Deno.serve(async (req) => {
           c.map((x) => `- ${x.log_date}: ${x.cintura_cm} cm`).join('\n') + `\n`
         : '';
 
+      // Las cuatro semanas anteriores, resumidas. Una semana suelta miente:
+      // el peso de siete días se mueve un kilo por agua o sal sin que haya
+      // cambiado nada de grasa. Con cuatro puntos se distingue "no bajó" de
+      // "bajó y todavía no se ve".
+      const previas = Array.isArray(cuerpo.semanas)
+        ? (cuerpo.semanas as Record<string, unknown>[]).slice(-4) : [];
+      const semanas = previas.length
+        ? `\nLAS SEMANAS ANTERIORES (de la más vieja a la más reciente):\n` +
+          previas.map((s) =>
+            `- Semana del ${s.semana}: ${s.dias_apuntados} días apuntados` +
+            (s.media_cal ? `, ${s.media_cal} cal de media` : ', sin datos de comida') +
+            (s.peso_medio ? `, peso medio ${s.peso_medio} kg` : ', sin pesos')
+          ).join('\n') + `\n`
+        : '';
+
+      // Con fecha. Sin ella, una lista de kilos no dice si son de una semana
+      // o de medio año, y eso cambia por completo lo que significan.
+      const listaPesos = pesos.length
+        ? pesos.map((x: Record<string, unknown> | number) =>
+            typeof x === 'number' ? String(x) : `${x.fecha}: ${x.kg} kg`).join(' · ')
+        : 'ninguno';
+
+      const trend = (e && Array.isArray(e.por_semana))
+        ? `\nENTRENO, SEMANA A SEMANA:\n` +
+          (e.por_semana as unknown as Record<string, unknown>[]).map((x) =>
+            `- Semana del ${x.semana}: ${x.sesiones} sesiones, ${x.volumen} kg de volumen`
+          ).join('\n') + `\n`
+        : '';
+
       const contexto =
-        `\n\nESTA SEMANA:\n` +
+        `\n\nLA SEMANA QUE SE CIERRA:\n` +
         `- Días que apuntó: ${diasApuntados} de 7\n` +
         `- Meta diaria actual: ${Math.round(Number(d.meta_cal) || 0)} cal\n` +
         `- Promedio de lo que comió: ${Math.round(Number(d.media_cal) || 0)} cal\n` +
-        `- Pesos apuntados: ${pesos.length ? pesos.join(', ') + ' kg' : 'ninguno'}` +
+        `- Pesos (últimas 4 semanas): ${listaPesos}` +
         entreno + `\n` +
+        semanas +
+        trend +
         `- Hambre: ${encuesta.hambre ?? '—'}/5 · Energía: ${encuesta.energia ?? '—'}/5 · ` +
         `Sueño: ${encuesta.sueno ?? '—'}/5  (3 = normal)\n` +
         historial +

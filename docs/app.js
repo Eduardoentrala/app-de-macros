@@ -6129,13 +6129,10 @@
         // app le va a negar después.
         MI_NIVEL_IA = (p && p.nivel_ia) || 'normal';
         pintarPlanIA();
-        if(MI_NIVEL_IA === 'plus'){
-          ofrecerChequeoSiEsSemanaNueva();
-          revisarAvisoDelCoach();
-        }
-        // Fuera del `if` de Plus a propósito: las fotos de progreso las sube
-        // cualquiera, no son parte de la IA.
-        revisarAvisoDeFotos();
+        // Los avisos que dependen de la semana NO van aquí: se lanzaban
+        // antes de aplicar `week_start_dow`, así que miraban la semana del
+        // lunes por defecto en vez de la de cada quien. Están más abajo,
+        // cuando el ancla ya es la buena.
 
         // ---- Perfil ----
         if(p){
@@ -6181,6 +6178,19 @@
             anclaSemana  = ultimoDia(inicioSemana);   // el ancla depende del día elegido
           }
         }
+
+        // AHORA, y no antes: los tres preguntan "¿en qué semana estamos?" y
+        // eso no se sabe hasta tener el día de inicio de esta persona. Antes
+        // se lanzaban arriba, con el lunes por defecto: a quien empieza el
+        // martes le miraban la semana equivocada, y por eso el chequeo salía
+        // cuando no tocaba o no salía cuando sí.
+        if(MI_NIVEL_IA === 'plus'){
+          ofrecerChequeoSiEsSemanaNueva();
+          revisarAvisoDelCoach();
+        }
+        // Fuera del `if` de Plus a propósito: las fotos de progreso las sube
+        // cualquiera, no son parte de la IA.
+        revisarAvisoDeFotos();
 
         // ---- Diario ----
         // Se vacía lo de ejemplo antes de llenar; si no, se sumaría encima.
@@ -7235,14 +7245,34 @@
   // Lo que se le manda al asistente para que decida. Los días apuntados son
   // el dato que decide si hay material o no, así que se cuentan aquí y no
   // se estiman: contar de menos deja a alguien sin ajuste que sí lo merecía.
-  function datosDeLaSemana(){
+  // ---- Lo que se comió en la semana que se está cerrando ----
+  //
+  // OJO CON ESTO, que costó una semana de ajuste. La revisión salta el
+  // PRIMER día de la semana nueva, y antes esta función contaba desde el
+  // inicio de la semana ACTUAL hasta hoy. O sea: un solo día, el de hoy,
+  // todavía sin apuntar nada. La IA recibía "0 días de 7", decía con toda
+  // razón que no podía leer la semana... y quien había apuntado los siete
+  // días se quedaba sin ajuste.
+  //
+  // Se cuenta la semana ANTERIOR completa, que es la que se está cerrando.
+  //
+  // `anterior` existe para poder seguir preguntando por la semana en curso
+  // desde otros sitios sin repetir el recorrido.
+  function datosDeLaSemana(anterior){
     var meta = leerMetas();
+    var desde = new Date(anclaSemana);
+    var hasta;                                  // exclusivo
+    if(anterior){
+      desde.setDate(desde.getDate() - 7);
+      hasta = new Date(anclaSemana);            // los siete días de antes
+    }else{
+      hasta = new Date(HOY); hasta.setDate(hasta.getDate() + 1);
+    }
+
     var dias = 0, suma = 0;
-    var d = new Date(anclaSemana);
-    while(d < HOY || isoDe(d) === isoDe(HOY)){
+    for(var d = new Date(desde); d < hasta; d.setDate(d.getDate() + 1)){
       var r = REGISTRO[isoDe(d)];
       if(r){ dias++; suma += calDe(r); }
-      d.setDate(d.getDate() + 1);
     }
     return {
       dias_apuntados: dias,
@@ -7262,25 +7292,103 @@
   //
   // Se pide a la base y no a HISTORIAL, que solo guarda volúmenes sueltos
   // sin fecha: aquí hacen falta las dos semanas para poder compararlas.
+  // ---- Las últimas semanas, resumidas ----
+  //
+  // Una semana suelta no basta para decidir bien, y el motivo es el ruido:
+  // el peso de siete días miente con facilidad -agua, sal, glucógeno, lo que
+  // tengas dentro mueven un kilo sin que hayas ganado ni perdido grasa-. Con
+  // una sola semana no se distingue "no bajó" de "bajó y todavía no se ve".
+  //
+  // Así que se decide sobre la que cierra, pero se manda el contexto de las
+  // cuatro anteriores. Resumidas por semana y no día a día: al modelo le
+  // sirve la tendencia, y cuatro semanas de filas sueltas es ruido caro.
+  //
+  // Va con FECHA cada una. Sin fecha, cuatro números no dicen si son de un
+  // mes o de medio año, y esa diferencia lo cambia todo.
+  function resumenDeSemanas(cuantas){
+    var out = [];
+    for(var i = cuantas; i >= 1; i--){
+      var ini = new Date(anclaSemana); ini.setDate(ini.getDate() - 7 * i);
+      var fin = new Date(ini);         fin.setDate(fin.getDate() + 7);   // exclusivo
+
+      var dias = 0, suma = 0, pesos = [];
+      for(var d = new Date(ini); d < fin; d.setDate(d.getDate() + 1)){
+        var k = isoDe(d);
+        var r = REGISTRO[k];
+        if(r){ dias++; suma += calDe(r); }
+        if(PESOS[k] != null) pesos.push(Number(PESOS[k]));
+      }
+      // El peso MEDIO de la semana, no el del día que se pesó: es lo que
+      // quita el ruido del día a día y deja ver hacia dónde va.
+      var medio = pesos.length
+        ? Math.round(pesos.reduce(function(a,b){ return a+b; }, 0) / pesos.length * 10) / 10
+        : null;
+
+      out.push({
+        semana: isoDe(ini),
+        dias_apuntados: dias,
+        media_cal: dias ? Math.round(suma / dias) : null,
+        peso_medio: medio,
+        dias_con_peso: pesos.length
+      });
+    }
+    return out;
+  }
+
+  // Las DOS semanas que se comparan tienen que ser las mismas que las de la
+  // comida, o la IA compara periodos distintos sin saberlo: diría "entrenó
+  // más" mirando unos días y "comió menos" mirando otros.
+  //
+  // Se alinean con `anclaSemana`, que es el día en que empieza la semana de
+  // ESTA persona. Antes se partía por "hace 6 días" a secas, que solo cuadra
+  // si la revisión cae justo el mismo día de la semana, y no cuadra nunca
+  // para quien no empieza en lunes.
   function datosDeEntreno(){
     if(!sesion || !sesion.user) return Promise.resolve(null);
-    var desde = isoDe(haceDias(13));
+    // La que se cierra: los siete días anteriores al inicio de la actual.
+    var iniCerrada = new Date(anclaSemana); iniCerrada.setDate(iniCerrada.getDate() - 7);
+    // Y la de antes, para tener con qué comparar.
+    var iniPrevia  = new Date(anclaSemana); iniPrevia.setDate(iniPrevia.getDate() - 14);
+    // Cuatro semanas para la tendencia, no solo las dos que se comparan: el
+    // volumen sube y baja con las descargas, y dos puntos no distinguen una
+    // descarga de un estancamiento.
+    var iniTendencia = new Date(anclaSemana); iniTendencia.setDate(iniTendencia.getDate() - 28);
+
+    var desde = isoDe(iniTendencia);
     return sbFetch('/rest/v1/workout_sessions' +
         '?select=session_date,total_volume&session_date=gte.' + desde +
         '&user_id=eq.' + sesion.user.id + '&order=session_date.asc')
       .then(function(filas){
-        var corte = isoDe(haceDias(6));
+        var corte = isoDe(iniCerrada);
+        var finCerrada = isoDe(anclaSemana);      // exclusivo: ya es la nueva
         var estaSemana = [], anterior = [];
         (filas || []).forEach(function(f){
+          if(f.session_date >= finCerrada) return;   // de la semana en curso
           (f.session_date >= corte ? estaSemana : anterior)
             .push(Number(f.total_volume) || 0);
         });
         var suma = function(a){ return a.reduce(function(x, y){ return x + y; }, 0); };
+
+        // Y las cuatro semanas por separado, con su fecha, para la tendencia.
+        var porSemana = [];
+        for(var i = 4; i >= 1; i--){
+          var ini = new Date(anclaSemana); ini.setDate(ini.getDate() - 7 * i);
+          var fin = new Date(ini);         fin.setDate(fin.getDate() + 7);
+          var a = isoDe(ini), b = isoDe(fin);
+          var v = (filas || []).filter(function(f){ return f.session_date >= a && f.session_date < b; });
+          porSemana.push({
+            semana: a,
+            sesiones: v.length,
+            volumen: Math.round(v.reduce(function(x, f){ return x + (Number(f.total_volume) || 0); }, 0))
+          });
+        }
+
         return {
           sesiones: estaSemana.length,
           sesiones_antes: anterior.length,
           volumen: Math.round(suma(estaSemana)),
-          volumen_antes: Math.round(suma(anterior))
+          volumen_antes: Math.round(suma(anterior)),
+          por_semana: porSemana
         };
       })['catch'](function(){ return null; });   // sin esto, igual se ajusta
   }
@@ -7298,8 +7406,13 @@
     btn.textContent = 'Revisando…';
 
     var caja = document.getElementById('chqRespuesta');
-    var pesosRecientes = Object.keys(PESOS).sort().slice(-8)
-                               .map(function(k){ return PESOS[k]; });
+    // Con FECHA. Antes iban ocho números sueltos: el modelo no podía saber
+    // si eran de ocho días seguidos o de tres meses, y eso cambia por
+    // completo lo que significan.
+    var desdePesos = new Date(anclaSemana); desdePesos.setDate(desdePesos.getDate() - 28);
+    var pesosRecientes = Object.keys(PESOS).sort()
+      .filter(function(k){ return k >= isoDe(desdePesos); })
+      .map(function(k){ return { fecha: k, kg: Number(PESOS[k]) }; });
 
     // Las tres a la vez: son tres consultas independientes y esperarlas en
     // fila haria que la persona mirase "Revisando..." el triple de tiempo.
@@ -7307,7 +7420,12 @@
     .then(function(extra){
       return iaLlamar({
         accion: 'semana',
-        datos: datosDeLaSemana(),
+        // La semana que se CIERRA, no la que acaba de empezar: cuando esto
+        // salta, la nueva no tiene ni un día apuntado todavía.
+        datos: datosDeLaSemana(true),
+        // Y las cuatro anteriores, para que una mala semana suelta no se
+        // confunda con una tendencia.
+        semanas: resumenDeSemanas(4),
         pesos: pesosRecientes,
         // Sin esto, el peso plano siempre parece estancamiento. Con el
         // entreno delante se distingue lo que de verdad son dos cosas

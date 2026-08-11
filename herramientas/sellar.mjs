@@ -21,6 +21,11 @@ const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
 const RUTA_APP = join(RAIZ, 'docs', 'app.js');
 const RUTA_HTML = join(RAIZ, 'docs', 'index.html');
 const DIR_CSS = join(RAIZ, 'docs', 'estilos');
+// El sello, a pelo, en un archivo diminuto. Es lo que la app consulta al
+// abrirse para saber si lo que tiene en el teléfono es lo último. Se pide
+// con `cache:'no-store'`, y pesa diez bytes, así que preguntarlo en cada
+// arranque no cuesta nada.
+const RUTA_VERSION = join(RAIZ, 'docs', 'version.txt');
 
 // Las hojas cuentan igual que app.js. Se aprendió por las malas: el arreglo
 // del zoom -que ningún campo baje de 16px- vive en el CSS, se publicó, y la
@@ -32,6 +37,15 @@ function contenidoSellado() {
   // archivos el sistema, que cambia entre Windows y una Mac.
   for (const f of readdirSync(DIR_CSS).filter(x => x.endsWith('.css')).sort())
     partes.push(readFileSync(join(DIR_CSS, f), 'utf8'));
+
+  // El index también cuenta. Si no, un cambio que solo toque el HTML -un
+  // botón nuevo, un texto- dejaría el sello igual, y quien tuviera el index
+  // viejo en el teléfono no se enteraría de que hay versión nueva.
+  //
+  // Se le quitan ANTES sus propios sellos: si no, esto se muerde la cola —
+  // cambiar el sello cambia el index, que cambia el sello, y así siempre.
+  partes.push(readFileSync(RUTA_HTML, 'utf8').replace(PATRON_SELLO, "$1$3"));
+
   return partes.join('\n');
 }
 
@@ -62,6 +76,12 @@ export function sellar({ escribir = true } = {}) {
     throw new Error(`esperaba 2 sellos en index.html y hay ${encontrados.length}`);
 
   const anterior = html.match(/var SELLO = '([^']*)';/)[1];
+
+  // version.txt se escribe SIEMPRE, aunque el sello no haya cambiado: si
+  // faltara o se quedara viejo, la app se recargaría en bucle creyendo que
+  // hay una versión nueva que nunca llega.
+  if (escribir) writeFileSync(RUTA_VERSION, sello + '\n');
+
   if (anterior === sello) return { sello, anterior, cambio: false };
 
   if (escribir) {

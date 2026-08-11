@@ -60,7 +60,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '17aae26a0d';
+    var SELLO = 'b4ebdc17f3';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -1453,12 +1453,39 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '17aae26a0d';
+    var SELLO = 'b4ebdc17f3';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que
     // es lo que app.js da por hecho. No usa DOMContentLoaded, así que
     // cargarlo aquí se comporta igual que el <script src> de siempre.
     document.body.appendChild(s);
+
+    // ---- Y que este archivo tampoco se quede viejo ----
+    // El sello arregla app.js y las hojas, pero no a sí mismo: vive DENTRO
+    // de este index.html, que se pide siempre con la misma dirección. Si el
+    // teléfono se queda con un index viejo, pide el JS y el CSS viejos y no
+    // hay forma de enterarse. Pasó de verdad: se arregló un botón, se
+    // comprobó que el servidor lo servía, y en el móvil seguía roto.
+    //
+    // Así que se pregunta. `version.txt` son diez bytes y se pide sin caché;
+    // si no coincide con lo que traemos, se recarga con la versión nueva en
+    // la dirección, que es lo único que obliga a soltar la copia guardada.
+    //
+    // El freno de `sessionStorage` no sobra: si algo fallara -un despliegue
+    // a medias, un proxy raro- sin él la app se recargaría en bucle, y una
+    // app que parpadea es peor que una desactualizada.
+    try{
+      if(sessionStorage.getItem('macros.recargado') !== SELLO){
+        fetch('version.txt', { cache: 'no-store' })
+          .then(function(r){ return r.ok ? r.text() : null; })
+          .then(function(t){
+            var nuevo = (t || '').trim();
+            if(!nuevo || nuevo === SELLO) return;
+            sessionStorage.setItem('macros.recargado', SELLO);
+            location.replace(location.pathname + '?v=' + nuevo);
+          })['catch'](function(){});   // sin red se sigue con lo que hay
+      }
+    }catch(e){}
   })();
 </script>

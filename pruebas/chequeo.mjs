@@ -267,7 +267,11 @@ console.log('\n— Las barras siguen a su cifra —');
 console.log('\n— El entreno entra en el ajuste semanal —');
 {
   check('se piden las sesiones', /function datosDeEntreno\(/.test(APP));
-  check('de dos semanas, para poder comparar', /haceDias\(13\)/.test(APP));
+  // Cuatro semanas y alineadas al día en que empieza SU semana. Antes eran
+  // 13 días a secas, que solo cuadra si la revisión cae el mismo día de la
+  // semana y no cuadra nunca para quien no empieza en lunes.
+  check('de cuatro semanas, alineadas a su semana',
+    /iniTendencia\.setDate\(iniTendencia\.getDate\(\) - 28\)/.test(APP));
   check('separadas por semana', /f\.session_date >= corte \? estaSemana : anterior/.test(APP));
   // Llega dentro del Promise.all que trae entreno, historial y cinturas a
   // la vez. Antes era `entreno: entreno`, cuando era la única consulta.
