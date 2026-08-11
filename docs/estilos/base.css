@@ -95,6 +95,18 @@
 
 html,body{margin:0;padding:0;}
 
+/* ---- `hidden` tiene que ganar SIEMPRE ----
+   El navegador esconde lo que lleva `hidden` con una regla suya que dice
+   `display:none`. Pero cualquier regla nuestra con `display` la pisa, aunque
+   sea un simple `.aviso-fotos{display:flex}`: la del navegador va en la hoja
+   de usuario-agente y pierde contra la nuestra.
+   Resultado: se ponía `caja.hidden = true`, el atributo quedaba puesto... y
+   el aviso seguía ahí. Pasó con el aviso de las fotos y lo tenía esperando
+   `.eventos-tira`, que también es flex.
+   El `!important` es de los pocos que se justifican: `hidden` significa
+   escondido, y no hay ningún caso en que un `display` deba ganarle. */
+[hidden]{display:none !important;}
+
 /* ---- Nada de zoom ----
    El que molestaba de verdad no era el pellizco: iOS hace zoom él solo al
    tocar un campo cuya letra mide menos de 16px, y al salir no siempre

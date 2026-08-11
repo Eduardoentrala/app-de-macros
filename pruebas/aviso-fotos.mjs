@@ -142,5 +142,25 @@ console.log('\n— Y se ve como se pidió —');
   check('el texto largo no echa fuera al tache', /\.af-texto\{flex:1;min-width:0;\}/.test(CSS));
 }
 
+console.log('\n— Y `hidden` esconde de verdad —');
+{
+  // El fallo que hubo: se pulsaba el tache, el atributo `hidden` quedaba
+  // puesto... y el aviso seguía midiendo 85 px. El navegador esconde lo que
+  // lleva `hidden` con una regla suya, pero cualquier `display` nuestro la
+  // pisa —y `.aviso-fotos` es `display:flex`—.
+  const BASE = readFileSync(join(RAIZ, 'docs', 'estilos', 'base.css'), 'utf8');
+  check('el atributo gana a cualquier display',
+    /\[hidden\]\{display:none !important;\}/.test(BASE),
+    'sin esto, todo lo que tenga display propio ignora `hidden`');
+
+  // Lo mismo le esperaba a la tira de eventos, que también es flex.
+  check('la tira de eventos también es flex y también lo necesitaba',
+    /\.eventos-tira\{display:flex/.test(CSS));
+
+  // Y que el aviso siga siendo flex: la regla de arriba es lo que permite
+  // tenerlo así sin romper el escondido.
+  check('el aviso sigue pudiendo ser flex', /\.aviso-fotos\{[^}]*display:flex/s.test(CSS));
+}
+
 console.log(`\n${ok} pasan · ${mal} fallan`);
 process.exit(mal ? 1 : 0);
