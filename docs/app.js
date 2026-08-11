@@ -383,6 +383,25 @@
   // anterior de ese mismo ejercicio; si subiste sale verde, si bajaste sale rojo.
   var exList = document.getElementById('exerciseList');
 
+  // ---- Cuánto trabajo cuenta una serie ----
+  //
+  // `reps × peso` deja en CERO todo lo que se hace con el peso del cuerpo.
+  // Diez dominadas al fallo valían lo mismo que no haber ido al gimnasio, y
+  // además hundía la base contra la que se compara: con el volumen cerca de
+  // cero, cualquier cambio se convierte en un porcentaje absurdo. De ahí
+  // salía un "+157%" donde la app de referencia enseñaba "+25%".
+  //
+  // Sin peso, cada repetición cuenta 1. Es lo que hace la app en la que nos
+  // fijamos: para las mismas series -10 sin lastre y tres de 6×5- ellos
+  // enseñan 100 y esto daba 90; la diferencia son justo esas 10 reps.
+  //
+  // Sí, mezcla unidades: suma repeticiones con kilos. Y da igual, porque
+  // este número no se compara con el de nadie más — solo consigo mismo, de
+  // una semana a la siguiente.
+  function volumenDeSerie(reps, peso){
+    return peso > 0 ? reps * peso : reps;
+  }
+
   function recalcCard(card){
     var vol = 0;
     Array.from(card.querySelectorAll('.sets-table tr')).forEach(function(tr){
@@ -390,7 +409,7 @@
       if(inputs.length < 2) return;
       var reps = parseFloat(inputs[0].value) || 0;
       var peso = parseFloat(inputs[1].value) || 0;
-      vol += reps * peso;
+      vol += volumenDeSerie(reps, peso);
     });
 
     var volNum = card.querySelector('.vol-num');
@@ -979,8 +998,25 @@
         (ss || []).forEach(function(s){
           SESIONES[s.session_date] = true;
           (s.exercises || []).forEach(function(e){
-            if(!e || !e.nombre || !(Number(e.volumen) > 0)) return;
-            (HISTORIAL[e.nombre] = HISTORIAL[e.nombre] || []).push(Number(e.volumen));
+            if(!e || !e.nombre) return;
+
+            // El volumen guardado se calculó con la fórmula VIEJA, la que
+            // dejaba en cero el trabajo sin lastre. Compararlo contra el de
+            // hoy daría un salto inventado la primera semana: la misma
+            // rutina saldría como una mejora enorme solo por el cambio de
+            // cuenta.
+            //
+            // Las series se guardan con sus reps y su peso, así que se
+            // rehace el número con la regla de ahora. Si una sesión vieja no
+            // las trae -las hubo antes de guardarlas-, se usa lo que haya.
+            var vol = Array.isArray(e.series) && e.series.length
+              ? e.series.reduce(function(t, x){
+                  return t + volumenDeSerie(Number(x.reps) || 0, Number(x.peso) || 0);
+                }, 0)
+              : Number(e.volumen) || 0;
+
+            if(!(vol > 0)) return;
+            (HISTORIAL[e.nombre] = HISTORIAL[e.nombre] || []).push(Math.round(vol));
           });
         });
         pintarEjercicio();
@@ -2948,7 +2984,7 @@
         var ins = tr.querySelectorAll('.set-input');
         if(ins.length < 2) return;
         var reps = Number(ins[0].value) || 0, peso = Number(ins[1].value) || 0;
-        vol += reps * peso;
+        vol += volumenDeSerie(reps, peso);
         series.push({ reps: reps, peso: peso, hecho: !!tr.querySelector('.set-check.done') });
       });
       if(vol > 0){

@@ -89,6 +89,36 @@ console.log('\n— No salta encima de nadie —');
   check('y solo con sesion', /if\(!sesion \|\| !sesion\.user\) return/.test(fn));
 }
 
+console.log('\n— El trabajo sin lastre también cuenta —');
+{
+  // `reps × peso` dejaba en CERO todo lo hecho con el peso del cuerpo: diez
+  // dominadas al fallo valían lo mismo que no haber ido. Y de paso hundía la
+  // base contra la que se compara, así que cualquier cambio se convertía en
+  // un porcentaje absurdo: un "+157%" donde la app de referencia enseñaba
+  // "+25%", con las mismas series.
+  const i = APP.indexOf('function volumenDeSerie(');
+  check('hay una sola regla para todos los sitios', i > 0);
+  check('sin peso, cada repetición cuenta 1',
+    /return peso > 0 \? reps \* peso : reps;/.test(APP.slice(i, i + 200)));
+
+  // Los tres sitios donde se cuenta volumen usan la misma función: si uno
+  // se quedara con la vieja, la tarjeta y lo guardado dirían cosas distintas.
+  check('la usan la tarjeta y el guardado',
+    (APP.match(/volumenDeSerie\(/g) || []).length >= 3);
+  check('no queda ningún «reps * peso» suelto', !/vol \+= reps \* peso/.test(APP));
+
+  // LO QUE EVITA UN SALTO FALSO: las sesiones guardadas traen el volumen
+  // calculado con la formula vieja. Compararlo contra el de hoy daria una
+  // mejora enorme la primera semana solo por el cambio de cuenta.
+  const j = APP.indexOf('(s.exercises || []).forEach(');
+  const hist = APP.slice(j, j + 1400);
+  check('el historial se recalcula con la regla de ahora',
+    /e\.series\.reduce\(function\(t, x\)\{[\s\S]{0,120}volumenDeSerie\(Number\(x\.reps\)/.test(hist));
+  // Hubo sesiones antes de guardar las series: esas se quedan con lo que hay.
+  check('y si una sesión vieja no trae series, usa lo que haya',
+    /: Number\(e\.volumen\) \|\| 0;/.test(hist));
+}
+
 console.log('\n— El porcentaje se mueve mientras entrenas —');
 {
   // Antes solo se pintaba lo decidido al guardar. El motivo era bueno -a
