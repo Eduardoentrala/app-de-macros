@@ -41,6 +41,25 @@ console.log('\n— Primero pregunta, y sale solo al entrar —');
   // desayuno: la cerraría sin leerla.
   check('con un respiro antes, no de golpe', /1200/.test(trozo));
   check('filtra por usuario', /user_id=eq\.' \+ sesion\.user\.id/.test(trozo));
+
+  // ---- Y NO SE RINDE HASTA QUE SE CONTESTA ----
+  // El fallo: se marcaba como "ya mostrado" ANTES de contestar, en
+  // localStorage y con la fecha del día. Quien abría la app, veía la hoja,
+  // la cerraba sin llenarla y no volvía a abrir ese día se quedaba SIN
+  // CALORÍAS NUEVAS toda la semana. Perder el ajuste por no molestar es un
+  // mal cambio.
+  check('lo único que lo apaga es haberlo contestado',
+    /if\(filas && filas\.length\) return;\s*\/\/ ya lo contestó: eso sí apaga/.test(trozo));
+  // sessionStorage muere al cerrar la app; localStorage no. Esa es toda la
+  // diferencia entre "no insisto en esta sesión" y "no vuelvo hasta mañana".
+  check('la marca muere al cerrar la app',
+    /sessionStorage\.getItem\(CLAVE_CHEQUEO\) === semana/.test(trozo) &&
+    /sessionStorage\.setItem\(CLAVE_CHEQUEO, semana\)/.test(trozo));
+  check('ya no sobrevive en localStorage',
+    !/localStorage\.(get|set)Item\(CLAVE_CHEQUEO/.test(APP),
+    'con localStorage, cerrar la hoja costaba el ajuste de la semana');
+  // Ni lleva la fecha del día: eso era lo que lo convertía en "hoy ya no".
+  check('y no se guarda por día', !/CLAVE_CHEQUEO, semana \+ '\|'/.test(APP));
 }
 
 console.log('\n— Las tres preguntas son las que deciden —');

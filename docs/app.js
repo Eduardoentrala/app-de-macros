@@ -7220,21 +7220,37 @@
   // El localStorage se queda, pero solo para no insistir el mismo día. Si
   // hoy la cerró, mañana vuelve; en cuanto la llene, no vuelve hasta el
   // lunes que viene.
+  // ---- Cuándo se vuelve a preguntar ----
+  //
+  // Lo ÚNICO que apaga el chequeo es haberlo contestado, y eso lo dice la
+  // base: existe la fila de esta semana o no existe.
+  //
+  // Antes se apagaba también con una marca en `localStorage` puesta ANTES de
+  // contestar, para "no insistir el mismo día". Sonaba considerado y era un
+  // fallo caro: quien abría la app, veía la hoja, la cerraba sin llenarla y
+  // no volvía a abrir ese día se quedaba SIN CALORÍAS NUEVAS toda la semana.
+  // Perder el ajuste por no molestar es un mal cambio.
+  //
+  // Se sigue sin insistir dentro de una misma sesión -cerrarla y que
+  // reaparezca a los diez segundos sería insoportable-, pero eso va en
+  // `sessionStorage`, que muere al cerrar la app. Cerrar y volver a entrar
+  // la trae otra vez, y así hasta que se conteste.
   var CLAVE_CHEQUEO = 'macros.chequeoVisto';
 
   function ofrecerChequeoSiEsSemanaNueva(){
     if(!sesion || !sesion.user) return;
     var semana = isoDe(anclaSemana);
     try{
-      if(localStorage.getItem(CLAVE_CHEQUEO) === semana + '|' + isoDe(HOY)) return;
+      // Solo "ya te la enseñé en ESTA sesión", no "ya te la enseñé hoy".
+      if(sessionStorage.getItem(CLAVE_CHEQUEO) === semana) return;
     }catch(e){}
 
     sbFetch('/rest/v1/chequeos_semanales?select=semana' +
             '&user_id=eq.' + sesion.user.id +
             '&semana=eq.' + semana + '&limit=1')
       .then(function(filas){
-        if(filas && filas.length) return;      // ya lo contestó esta semana
-        try{ localStorage.setItem(CLAVE_CHEQUEO, semana + '|' + isoDe(HOY)); }catch(e){}
+        if(filas && filas.length) return;      // ya lo contestó: eso sí apaga
+        try{ sessionStorage.setItem(CLAVE_CHEQUEO, semana); }catch(e){}
         // Un poco después de abrir: saltarle una hoja en la cara a alguien
         // que acaba de entrar a apuntar el desayuno es la forma de que la
         // cierre sin leerla.

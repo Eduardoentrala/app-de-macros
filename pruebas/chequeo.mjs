@@ -47,15 +47,22 @@ console.log('\n— Lo decide la base, no el navegador —');
     'esta es la linea que hace que deje de salir al contestarlo');
 }
 
-console.log('\n— Y no insiste el mismo dia —');
+console.log('\n— Pero no se rinde hasta que se contesta —');
 {
-  // La marca lleva semana Y dia: si solo llevara la semana, cerrarla una
-  // vez la mataria hasta el lunes aunque nunca la contestaran.
-  check('la marca local lleva semana y dia',
-    /semana \+ '\|' \+ isoDe\(HOY\)/.test(fn),
-    'solo con la semana, cerrarla una vez valdria por contestada');
+  // AQUÍ HABÍA UNA PRUEBA QUE DEFENDÍA EL FALLO. Decía que la marca debía
+  // llevar semana Y día "porque solo con la semana, cerrarla una vez
+  // valdría por contestada". El razonamiento estaba al revés: con el día,
+  // cerrarla una vez valía por contestada HASTA MAÑANA, y quien no volvía a
+  // abrir la app ese día se quedaba sin calorías nuevas toda la semana.
+  //
+  // Lo único que puede apagar el chequeo es la fila en la base. La marca de
+  // pantalla solo sirve para no repetirlo dentro de la misma sesión.
+  check('la marca muere al cerrar la app',
+    /sessionStorage\.getItem\(CLAVE_CHEQUEO\) === semana/.test(fn),
+    'en localStorage sobrevive al cierre y entierra el chequeo sin contestar');
+  check('y no se guarda por día', !/semana \+ '\|' \+ isoDe\(HOY\)/.test(fn));
   check('se pone DESPUES de comprobar la base',
-    fn.indexOf('filas && filas.length') < fn.indexOf('localStorage.setItem'),
+    fn.indexOf('filas && filas.length') < fn.indexOf('sessionStorage.setItem'),
     'marcarla antes haria que un fallo de red la enterrase');
   check('si la consulta falla, no molesta', /\['catch'\]\(function\(\)\{\}\)/.test(fn));
 }
