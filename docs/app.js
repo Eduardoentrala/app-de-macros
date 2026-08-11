@@ -266,7 +266,8 @@
   }
   function loadDay(tab){
     exList.innerHTML = dayContent[tab.dataset.day] || '';
-    recalcAll();
+    // Repone la referencia: cambiar de día rehace las tarjetas desde cero.
+    if(typeof ponerReferencias === 'function') ponerReferencias(); else recalcAll();
     syncEmptyState();
     if(typeof marcarTodasLasNotas === 'function') marcarTodasLasNotas();
   }
@@ -461,6 +462,31 @@
 
   function recalcAll(){
     Array.from(exList.querySelectorAll('.exercise-card')).forEach(recalcCard);
+  }
+
+  // ---- Contra qué se compara ----
+  // `data-prev-vol` es el volumen de la última sesión de ESE ejercicio. Se
+  // ponía en un solo sitio: al guardar, sobre el elemento vivo. Y ahí estaba
+  // el fallo por el que el porcentaje no aparecía nunca: al cerrar la app la
+  // rutina se reconstruye desde la base y ese atributo no se reponía, así
+  // que `recalcCard` salía por "no hay sesión anterior" y no enseñaba nada.
+  //
+  // El dato ya estaba cargado en HISTORIAL, que se llena de
+  // `workout_sessions`. Aquí solo se baja a las tarjetas.
+  //
+  // Va por NOMBRE y no por id de fila: así sobrevive a reordenar la rutina,
+  // y si borras un ejercicio y lo vuelves a crear sigue comparando contra lo
+  // que levantabas antes, que es lo que la persona espera.
+  function ponerReferencias(){
+    Array.from(exList.querySelectorAll('.exercise-card')).forEach(function(card){
+      var el = card.querySelector('.ex-name');
+      if(!el) return;
+      var nombre = el.childNodes[0].textContent.trim();
+      var hist = HISTORIAL[nombre];
+      if(hist && hist.length) card.setAttribute('data-prev-vol', hist[hist.length - 1]);
+      else card.removeAttribute('data-prev-vol');
+    });
+    recalcAll();
   }
 
   // Tarjeta de un ejercicio recién agregado (escrito a mano o tomado del catálogo).
@@ -958,6 +984,9 @@
           });
         });
         pintarEjercicio();
+        // Las dos cargas van en paralelo y no se sabe cuál termina antes,
+        // así que las dos llaman a esto. Es idempotente a propósito.
+        ponerReferencias();
       });
   }
 
@@ -1010,7 +1039,12 @@
     // encuentre dónde ponerse.
     // Fuera del `if(!dias.length) return` a propósito: aunque no haya rutina
     // guardada está el "Día 1" de arranque, y sus notas son igual de tuyas.
-    .then(cargarNotas);
+    .then(cargarNotas)
+    // Y la referencia contra la que se compara. La otra mitad la pone
+    // sbCargarSesiones(): van en paralelo y gana la que termine después,
+    // que es justo lo que hace falta para que estén las dos cosas -las
+    // tarjetas y el historial- antes de emparejarlas.
+    .then(ponerReferencias);
   }
 
   // ---- Gráfica de progreso por ejercicio ----

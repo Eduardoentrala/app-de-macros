@@ -46,8 +46,10 @@ console.log('\n— Se cargan cuando las tarjetas ya existen —');
   // correría sobre una lista vacía y no se marcaría ninguna.
   const i = APP.indexOf('function sbCargarRutina(');
   const trozo = APP.slice(i, i + 3000);
+  // Sin exigir el punto y coma: detrás va encadenado `.then(ponerReferencias)`,
+  // que repone contra qué se compara el volumen.
   check('van encadenadas al final de la carga de rutina',
-    /\.then\(cargarNotas\);/.test(trozo));
+    /\.then\(cargarNotas\)/.test(trozo));
   check('y no dentro del Promise.all',
     !/Promise\.all\(\[[^\]]*exercise_notes/s.test(trozo));
 }

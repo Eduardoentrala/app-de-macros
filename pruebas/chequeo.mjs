@@ -117,6 +117,30 @@ console.log('\n— El porcentaje se mueve mientras entrenas —');
   check('no queda el porcentaje que se quedaba pegado',
     !/data-veredicto/.test(APP) && !/function pintarVeredicto/.test(APP));
 
+  // ---- Y CONTRA QUÉ SE COMPARA ----
+  // Esto es lo que hacía que no apareciera NUNCA: `data-prev-vol` se ponía
+  // en un solo sitio, al guardar, sobre el elemento vivo. Al cerrar la app
+  // la rutina se reconstruye desde la base y ese atributo no se reponía, así
+  // que recalcCard salía por "no hay sesión anterior" y no enseñaba nada.
+  const iRef = APP.indexOf('function ponerReferencias(');
+  const ref = iRef > 0 ? APP.slice(iRef, iRef + 900) : '';
+  check('la referencia se repone al cargar', iRef > 0);
+  check('sale del historial de sesiones', /var hist = HISTORIAL\[nombre\];/.test(ref));
+  check('y es el volumen de la última', /hist\[hist\.length - 1\]/.test(ref));
+  // Por nombre y no por id de fila: así sobrevive a reordenar la rutina, y
+  // si borras un ejercicio y lo recreas sigue comparando contra lo que
+  // levantabas antes, que es lo que la persona espera.
+  check('se empareja por nombre', /el\.childNodes\[0\]\.textContent\.trim\(\)/.test(ref));
+  check('sin historial, sin referencia', /card\.removeAttribute\('data-prev-vol'\)/.test(ref));
+
+  // Los tres momentos en que las tarjetas se rehacen.
+  check('al cambiar de día', /if\(typeof ponerReferencias === 'function'\) ponerReferencias\(\)/.test(APP));
+  check('al terminar de cargar la rutina', /\.then\(ponerReferencias\);/.test(APP));
+  // Las dos cargas van en paralelo: hace falta que las DOS llamen, porque
+  // no se sabe cuál termina antes y hacen falta las tarjetas Y el historial.
+  check('y al llegar el historial de sesiones',
+    /pintarEjercicio\(\);[\s\S]{0,200}ponerReferencias\(\);/.test(APP));
+
   // Volumen cero es una tarjeta a medio llenar, no un retroceso del 100%.
   check('no grita -100% con la tarjeta a medio llenar',
     /if\(vol <= 0\)\{ badge\.className = 'ex-delta'; badge\.textContent = ''; return; \}/.test(trozo));
