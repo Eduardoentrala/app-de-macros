@@ -117,6 +117,34 @@
 }
 .aviso-coach button:active{color:var(--ink);}
 
+/* ---- "Prepara tus fotos para mañana" ----
+   En azul y no en el gris de las tarjetas: es lo único de esta pantalla que
+   pide hacer algo FUERA de la app -buscar luz, un espejo, tiempo-, y por eso
+   tiene que destacar sobre el resto. Sale una vez por semana; si fuera
+   permanente, este color sería agresivo. */
+.aviso-fotos{
+  display:flex;align-items:center;gap:12px;
+  margin:0 16px 10px;padding:14px 14px 14px 16px;border-radius:15px;
+  background:#5b93e0;color:#fff;
+}
+.af-ico{font-size:26px;flex:none;line-height:1;}
+/* min-width:0 o el texto largo estira la caja y empuja la × fuera. */
+.af-texto{flex:1;min-width:0;}
+.af-texto b{display:block;font:800 15px/1.25 sans-serif;}
+.af-texto span{display:block;font:500 12.5px/1.4 sans-serif;color:rgba(255,255,255,.88);margin-top:3px;}
+/* La × en su círculo, como en el resto de la app. Blanco translúcido para
+   que se lea sobre el azul sin competir con el texto. */
+.af-cerrar{
+  flex:none;width:30px;height:30px;border-radius:50%;border:none;cursor:pointer;
+  background:rgba(255,255,255,.22);color:#fff;
+  font:400 17px/1 sans-serif;display:flex;align-items:center;justify-content:center;
+  position:relative;
+}
+/* El blanco táctil llega a 44 px sin agrandar el círculo: es lo mismo que
+   se hizo en las series, y aquí además está pegado al borde de la pantalla. */
+.af-cerrar::after{content:'';position:absolute;inset:-7px;}
+.af-cerrar:active{background:rgba(255,255,255,.35);}
+
 /* La tira de eventos apartados. En ámbar suave y no en verde: no es un
    logro ni una alerta, es un aviso de que esta semana está repartida
    distinto y que eso está previsto. */

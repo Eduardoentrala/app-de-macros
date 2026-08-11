@@ -6133,6 +6133,9 @@
           ofrecerChequeoSiEsSemanaNueva();
           revisarAvisoDelCoach();
         }
+        // Fuera del `if` de Plus a propósito: las fotos de progreso las sube
+        // cualquiera, no son parte de la IA.
+        revisarAvisoDeFotos();
 
         // ---- Perfil ----
         if(p){
@@ -6669,6 +6672,64 @@
         headers: { 'Prefer': 'return=minimal' },
         body: JSON.stringify({ visto_en: new Date().toISOString() })
       })['catch'](function(){});
+    });
+  })();
+
+  // ---- "Prepara tus fotos para mañana" ----
+  // Las fotos se suben el día que cierra la semana. Avisar ESE día llega
+  // tarde: buscar luz, un espejo y un momento a solas no se improvisa. Así
+  // que se avisa la víspera.
+  //
+  // Y a partir de las 7 de la tarde, no todo el sábado: por la mañana
+  // todavía queda un día entero por delante y "mañana" no significa nada
+  // urgente. A las 7 sí: es la noche de antes.
+  var HORA_AVISO_FOTOS = 19;
+  var CLAVE_AVISO_FOTOS = 'macros.avisoFotos';
+
+  // La semana NO empieza el lunes para todo el mundo: cada quien elige su
+  // día en el Perfil y se guarda en `week_start_dow`. Atar esto a un sábado
+  // fijo habría estado mal para cualquiera que no empiece en lunes.
+  //
+  // El aviso sale el ÚLTIMO día de la semana por la noche, que es la víspera
+  // de que arranque la siguiente. Si tu semana empieza el martes, el último
+  // día es el lunes y el aviso te sale el lunes por la noche.
+  //
+  // Recibe la fecha y el día de inicio en vez de mirarlos por dentro: así se
+  // comprueba contra un lunes a las 19:00 sin esperar al lunes.
+  //
+  // El día y la hora salen de la MISMA fecha, no de `HOY` por un lado y del
+  // reloj por otro: quien deja la app abierta pasada la medianoche tendría
+  // un `HOY` de ayer y una hora de hoy, y el aviso saldría un día tarde.
+  function esVisperaDeCerrarSemana(cuando, inicio){
+    var d = cuando || new Date();
+    var arranca = inicio == null ? inicioSemana : inicio;   // 0=domingo … 6=sábado
+    var ultimoDiaDeLaSemana = (arranca + 6) % 7;
+    return d.getDay() === ultimoDiaDeLaSemana && d.getHours() >= HORA_AVISO_FOTOS;
+  }
+
+  function revisarAvisoDeFotos(){
+    var caja = document.getElementById('avisoFotos');
+    if(!caja) return;
+
+    // Se guarda la SEMANA en la que se cerró, no un simple "ya lo vio". Así
+    // no vuelve a salir esta semana por mucho que se cierre y se abra la
+    // app, y la que viene sí sale, que es lo que se pidió.
+    var semana = claveSemana(HOY);
+    var cerrado = null;
+    try{ cerrado = localStorage.getItem(CLAVE_AVISO_FOTOS); }catch(e){}
+
+    caja.hidden = !(esVisperaDeCerrarSemana() && cerrado !== semana);
+  }
+
+  (function(){
+    var b = document.getElementById('avisoFotosCerrar');
+    if(!b) return;
+    b.addEventListener('click', function(){
+      document.getElementById('avisoFotos').hidden = true;
+      // En el navegador y no en la base a propósito: es una preferencia de
+      // pantalla, no un dato. Que reinstalar la app lo devuelva es aceptable;
+      // montarle una tabla a un aviso que se cierra, no.
+      try{ localStorage.setItem(CLAVE_AVISO_FOTOS, claveSemana(HOY)); }catch(e){}
     });
   })();
 
