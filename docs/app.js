@@ -1521,7 +1521,18 @@
   var MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
   var MESES_LARGO = ['enero','febrero','marzo','abril','mayo','junio','julio',
                      'agosto','septiembre','octubre','noviembre','diciembre'];
-  var inicioSemana = 1; // 0=domingo … 6=sábado. Por defecto lunes.
+  // La semana va SIEMPRE de lunes a domingo. Lunes es el día 1, domingo el 7.
+  //
+  // Antes esto se movía solo: cambiar los macros o el objetivo ponía el
+  // inicio en el día en que estuvieras, así que a quien tocaba sus macros un
+  // miércoles se le quedaba la semana de miércoles a martes. El calendario de
+  // apuntar, que solo deja moverse dentro de la semana en curso, empezaba
+  // entonces en miércoles, y la persona no entendía por qué no podía volver
+  // al lunes de esa misma semana.
+  //
+  // Fijo, y no elegible: una semana que cada quien empieza un día distinto no
+  // se puede comparar con nada, ni siquiera consigo misma de un mes antes.
+  var inicioSemana = 1; // 0=domingo … 6=sábado
 
   function isoDe(d){
     return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
@@ -1580,8 +1591,9 @@
   var iso = isoDe;
   function calDe(m){ return m.P*4 + m.C*4 + m.G*9; }
 
-  // La semana en curso arranca en una fecha concreta (el "ancla").
-  // Cambiar el día de inicio reinicia esa ancla: el conteo vuelve a cero.
+  // El "ancla" es el lunes de esta semana: el día 1. Se recalcula sola cada
+  // vez que se abre la app, así que al llegar el lunes la semana se reinicia
+  // sin que nadie toque nada.
   function ultimoDia(dow){
     var d = new Date(HOY);
     d.setDate(d.getDate() - ((HOY.getDay() - dow + 7) % 7));
@@ -1653,11 +1665,10 @@
     actualizarMetas(); // recalcula anillos, barras y el resumen del Diario
   }
 
-  // Cambiar el día de inicio pide confirmación, mostrando cómo quedaría el acumulado
+  // Cambiar los macros pide confirmación, enseñando las calorías de antes y
+  // las de ahora. La hoja se queda aunque ya no se pierda nada: son las
+  // calorías de todos los días y merecen un "¿seguro?" antes de moverlas.
   var weekConfirm = document.getElementById('weekConfirm');
-  // La semana ya no se elige a mano: arranca el día en que cambias tus
-  // macros. Un plan nuevo es lo que de verdad marca un ciclo nuevo, así que
-  // el ajuste sobra y una fecha menos que configurar es una decisión menos.
   var metasPendientes = null;   // lo tecleado, a la espera de confirmar
   var metasVigentes = null;     // lo último confirmado, para poder revertir
 
@@ -1674,11 +1685,14 @@
     if(mismasMetas(nuevas, metasVigentes)) return;
 
     metasPendientes = nuevas;
-    var actual = sumaSemana();
-    document.getElementById('wcNowCal').textContent   = mil(actual.cal);
-    document.getElementById('wcNowRange').textContent = 'Empezó el ' + fmtFecha(actual.inicio);
-    document.getElementById('wcNextCal').textContent  = '0';
-    document.getElementById('wcNextRange').textContent = 'Empieza hoy, ' + fmtFecha(HOY);
+    // Se comparan las calorías DIARIAS de antes y de ahora, que es lo que de
+    // verdad cambia. Antes aquí salía el acumulado de la semana contra un
+    // cero, porque la semana se cortaba; ahora no se corta y ese cero sería
+    // mentira.
+    document.getElementById('wcNowCal').textContent   = mil(calDe(metasVigentes || nuevas));
+    document.getElementById('wcNowRange').textContent = 'cal al día';
+    document.getElementById('wcNextCal').textContent  = mil(calDe(nuevas));
+    document.getElementById('wcNextRange').textContent = 'cal al día';
     weekConfirm.classList.add('open');
   }
 
@@ -1686,19 +1700,18 @@
     if(!metasPendientes) return;
     metasVigentes = metasPendientes;
 
-    // Hoy pasa a ser el día 1
-    inicioSemana = HOY.getDay();
-    anclaSemana  = new Date(HOY);
+    // La semana NO se corta. Sigue de lunes a domingo y los macros nuevos
+    // valen desde hoy. Cortarla aquí dejaba el inicio en el día en que se
+    // tocaran los macros y la semana ya no era de lunes a domingo.
 
     cerrarConfirm();
     actualizarSemana();
     sbActualizarPerfil({
       goal_protein_g: metasVigentes.P,
       goal_carbs_g:   metasVigentes.C,
-      goal_fat_g:     metasVigentes.G,
-      week_start_dow: inicioSemana
+      goal_fat_g:     metasVigentes.G
     })['catch'](function(){});
-    toast('toastPeso', 'Macros guardados · empieza tu semana');
+    toast('toastPeso', 'Macros guardados');
   });
   // ---- Cambiar el objetivo desde el Perfil ----
   // Cambiar de "mantener" a "bajar" recalcula las calorías, así que es el
@@ -1720,8 +1733,8 @@
     Array.from(document.querySelectorAll('#objOpts .meta-opt')).forEach(function(b){
       b.classList.toggle('active', b.dataset.obj === objElegido);
     });
-    // El aviso de reinicio solo si de verdad hay algo que perder
-    document.getElementById('objAviso').hidden = sumaSemana().cal === 0;
+    // Aquí había un aviso de que el conteo volvía a cero. Ya no vuelve: la
+    // semana es de lunes a domingo y cambiar el objetivo no la corta.
   }
 
   document.getElementById('profObjetivoBtn').addEventListener('click', function(){
@@ -1742,7 +1755,6 @@
 
   document.getElementById('objGuardar').addEventListener('click', function(){
     if(!objElegido) return;
-    var cambio = objElegido !== reg.objetivo;
     reg.objetivo = objElegido;
 
     var m = calcularMacros();
@@ -1751,18 +1763,15 @@
     document.getElementById('profObjetivo').innerHTML =
       NOMBRE_OBJ[reg.objetivo] + '<i>›</i>';
 
-    if(cambio){                             // hoy pasa a ser el día 1
-      inicioSemana = HOY.getDay();
-      anclaSemana  = new Date(HOY);
-    }
+    // Igual que al cambiar los macros: la semana no se corta, sigue de lunes
+    // a domingo, y las calorías nuevas valen desde hoy.
     cerrarObjetivo();
     actualizarSemana();
     toast('toastPeso', NOMBRE_OBJ[reg.objetivo] + ' · ' + mil(m.cal) + ' cal al día');
 
     sbActualizarPerfil({
       goal: reg.objetivo,
-      goal_protein_g: m.P, goal_carbs_g: m.C, goal_fat_g: m.G,
-      week_start_dow: inicioSemana
+      goal_protein_g: m.P, goal_carbs_g: m.C, goal_fat_g: m.G
     })['catch'](function(e){
       toast('toastPeso', 'No se pudo guardar: ' + traducirError(e.message));
     });
@@ -6280,17 +6289,18 @@
             aplicarRol();
           }
 
-          if(p.week_start_dow != null){
-            inicioSemana = Number(p.week_start_dow);
-            anclaSemana  = ultimoDia(inicioSemana);   // el ancla depende del día elegido
-          }
+          // `week_start_dow` ya NO se lee. La semana es de lunes a domingo
+          // para todos. La columna sigue en la base con los días sueltos que
+          // se guardaron cuando esto se movía solo; si se leyera, a quien
+          // tenga ahí un miércoles se le volvería a torcer la semana en
+          // cuanto abriera la app, deshaciendo el arreglo en silencio.
         }
 
-        // AHORA, y no antes: los tres preguntan "¿en qué semana estamos?" y
-        // eso no se sabe hasta tener el día de inicio de esta persona. Antes
-        // se lanzaban arriba, con el lunes por defecto: a quien empieza el
-        // martes le miraban la semana equivocada, y por eso el chequeo salía
-        // cuando no tocaba o no salía cuando sí.
+        // AHORA, y no antes: los tres preguntan "¿en qué semana estamos?", y
+        // eso hay que contestarlo con el perfil ya cargado. Se quedan aquí
+        // aunque la semana ya sea fija de lunes a domingo: lo que miran
+        // depende también del nivel de IA y de lo que haya en el perfil, que
+        // arriba todavía no está.
         if(MI_NIVEL_IA === 'plus'){
           ofrecerChequeoSiEsSemanaNueva();
           revisarAvisoDelCoach();
