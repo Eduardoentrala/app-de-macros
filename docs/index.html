@@ -60,7 +60,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '3767d9aead';
+    var SELLO = '1524fb7736';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -197,7 +197,7 @@
               </div>
               <div class="dots" id="ringDotsSem"><span class="on"></span><span></span></div>
             </div>
-            <div class="week-summary" id="weekSummary">P 170 · C 240 · G 75 · 2,315 cal/día · se reinicia cada lunes</div>
+            <div class="week-summary" id="weekSummary">P 170 · C 240 · G 75 · 2,315 cal/día · se reinicia cada semana</div>
           </div>
         </div>
 
@@ -1267,9 +1267,9 @@
           <div class="card">
             <div class="goal-head">
               <div style="font:800 14.5px/1 sans-serif;">Tu semana</div>
-              <span class="goal-hint">de lunes a domingo</span>
+              <span class="goal-hint" id="profSemanaHint">7 dias</span>
             </div>
-            <p class="calc-note" style="margin:0 0 12px;">Tu semana va de lunes a domingo. El lunes es tu día 1 y el conteo vuelve a cero solo, cada lunes.</p>
+            <p class="calc-note" style="margin:0 0 12px;" id="profSemanaTexto">—</p>
             <div class="calc-box" style="margin-top:12px;">
               <div class="calc-line"><span>Semana en curso</span><b id="profWeekRange" style="font-size:15px;">—</b></div>
               <div class="calc-note" id="profWeekDay">—</div>
@@ -1304,7 +1304,7 @@
               <div class="calc-line"><span>Calorías al día</span><b id="objCal">—</b></div>
               <div class="calc-note" id="objNota">—</div>
             </div>
-            <p class="wc-safe">✓ Valen desde hoy. Tu semana sigue hasta el domingo y no pierdes nada de lo apuntado.</p>
+            <p class="wc-safe">✓ Valen desde hoy. Tu semana sigue su curso y no pierdes nada de lo apuntado.</p>
             <button class="btn-primary" id="objGuardar">Guardar objetivo</button>
             <button class="btn-ghost-text" id="objCancelar">Cancelar</button>
           </div>
@@ -1469,7 +1469,7 @@
         <div class="sheet-backdrop" id="weekConfirm">
           <div class="sheet">
             <h4 id="wcTitle">¿Guardar tus macros nuevos?</h4>
-            <p class="hint">Valen a partir de hoy. Tu semana no se corta: sigue hasta el domingo.</p>
+            <p class="hint">Valen a partir de hoy. Tu semana no se corta: sigue hasta que termine.</p>
 
             <div class="wc-compare">
               <div class="wc-side">
@@ -1560,7 +1560,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '3767d9aead';
+    var SELLO = '1524fb7736';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que

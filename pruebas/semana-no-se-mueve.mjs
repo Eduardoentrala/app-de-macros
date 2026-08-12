@@ -1,16 +1,18 @@
-// La semana va de lunes a domingo. Siempre, y para todos.
+// La semana de cada quien no se mueve sola.
 //
-// Antes se movía sola: cambiar los macros o el objetivo ponía el inicio de
-// semana en el día en que estuvieras. A quien tocaba sus macros un
-// miércoles se le quedaba la semana de miércoles a martes.
+// EL FALLO NO ERA QUE CADA PERSONA TUVIERA SU DÍA. Era que ese día SE
+// REESCRIBÍA SOLO: cambiar los macros o el objetivo lo ponía en el día en
+// que estuvieras. Quien tocaba sus macros un miércoles se despertaba con
+// la semana de miércoles a martes sin haber pedido nada, y el calendario
+// de apuntar -que solo deja moverse dentro de la semana en curso- ya no le
+// dejaba volver al lunes de su propia semana.
 //
-// Eso se notaba justo en el calendario de apuntar comida, que solo deja
-// moverse dentro de la semana en curso: empezaba en miércoles, y no había
-// forma de volver al lunes de esa misma semana para corregir un día.
+// Al arreglarlo se quitó la columna del perfil entera y se puso lunes fijo
+// para todos. Eso fue pasarse, y se notó enseguida: le cambió la semana a
+// quien la tenía bien puesta a propósito.
 //
-// Y era pegajoso: el día se guardaba en el perfil (`week_start_dow`) y se
-// volvía a leer al abrir la app, así que arreglarlo en el navegador no
-// servía de nada — a la siguiente apertura volvía a torcerse.
+// Así que la columna vuelve y el ajuste automático no. Leer el día no
+// torcía la semana de nadie; escribirlo sin permiso, sí.
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,22 +29,44 @@ const check = (n, cond, extra = '') => {
 
 const DIAS = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
 
-console.log('\n— El lunes es el día 1, y no se mueve —');
+console.log('\n— Nadie le mueve el día a nadie —');
 {
-  check('el inicio de semana es lunes', /var inicioSemana = 1;/.test(APP));
+  check('lunes por defecto', /var inicioSemana = 1;/.test(APP));
 
-  // Estas dos líneas eran el fallo. Si vuelven, la semana se tuerce otra vez
-  // en cuanto alguien cambie sus macros.
+  // ESTAS DOS LÍNEAS ERAN EL FALLO, y son lo único que no puede volver.
   check('cambiar los macros no mueve el inicio',
     !/inicioSemana = HOY\.getDay\(\)/.test(APP),
     'con esto, tocar los macros un miércoles deja la semana de miércoles a martes');
   check('ni tampoco el ancla', !/anclaSemana\s+= new Date\(HOY\)/.test(APP));
+  // Ni se escribe la columna sola desde ningún guardado de perfil.
+  check('no se guarda el día por su cuenta', !/week_start_dow: inicioSemana/.test(APP),
+    'escribirlo al vuelo es justo lo que torcia la semana sin que nadie lo pidiera');
+}
 
-  // Y lo pegajoso: el valor guardado en el perfil.
-  check('no se relee el día guardado en el perfil',
-    !/inicioSemana = Number\(p\.week_start_dow\)/.test(APP),
-    'los perfiles viejos tienen ahí un día suelto; leerlo deshace el arreglo al abrir la app');
-  check('ni se vuelve a guardar', !/week_start_dow: inicioSemana/.test(APP));
+console.log('\n— Pero cada quien puede tener el suyo —');
+{
+  // Quitar la columna entera fue pasarse: le cambió la semana a quien la
+  // tenía puesta a propósito. Leerla no torcía nada.
+  check('se lee el día del perfil', /inicioSemana = dow;/.test(APP));
+  check('y el ancla lo sigue', /anclaSemana {2}= ultimoDia\(inicioSemana\);/.test(APP));
+  // Un valor raro en la base dejaría el ancla en una fecha inválida, y con
+  // ella la semana, el calendario de apuntar y el chequeo.
+  check('un valor fuera de rango se ignora',
+    /dow >= 0 && dow <= 6/.test(APP),
+    'sin esto, un 9 en la base deja el ancla en Invalid Date y se cae todo lo que cuelga de ella');
+  check('y si no hay valor, se queda el de por defecto',
+    /if\(p\.week_start_dow != null &&/.test(APP));
+}
+
+console.log('\n— Y los textos hablan de SU semana —');
+{
+  // Escribir "de lunes a domingo" a mano le miente en su propia pantalla de
+  // ajustes a quien empieza en martes.
+  check('el Perfil no dice un día fijo', !/lunes a domingo|cada lunes/.test(HTML));
+  check('lo rellena la app con su día',
+    /'de ' \+ DIAS\[inicioSemana\] \+ ' a ' \+ finSem/.test(APP));
+  check('y el fin de semana se calcula, no se escribe',
+    /DIAS\[\(inicioSemana \+ 6\) % 7\]/.test(APP));
 }
 
 console.log('\n— La cuenta, con los siete días posibles —');
@@ -93,7 +117,8 @@ console.log('\n— Y no se promete un reinicio que ya no pasa —');
   check('ni que se pierde el avance',
     !/Pierdes el avance de esta semana/.test(HTML));
   check('dice que valen desde hoy', /Valen a partir de hoy/.test(HTML));
-  check('y que la semana sigue', /sigue hasta el domingo/.test(HTML));
+  // Sin nombrar el día: "hasta el domingo" le mentía a quien acaba en lunes.
+  check('y que la semana sigue', /sigue hasta que termine/.test(HTML));
   // El aviso de la hoja de objetivo decía lo mismo y también sobraba.
   check('el aviso viejo del objetivo ya no está', !/id="objAviso"/.test(HTML));
   check('ni el código que lo encendía', !/getElementById\('objAviso'\)/.test(APP));

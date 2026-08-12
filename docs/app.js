@@ -1521,17 +1521,21 @@
   var MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
   var MESES_LARGO = ['enero','febrero','marzo','abril','mayo','junio','julio',
                      'agosto','septiembre','octubre','noviembre','diciembre'];
-  // La semana va SIEMPRE de lunes a domingo. Lunes es el día 1, domingo el 7.
+  // El día en que empieza SU semana. Lunes por defecto; cada persona puede
+  // tener el suyo, guardado en el perfil (`week_start_dow`).
   //
-  // Antes esto se movía solo: cambiar los macros o el objetivo ponía el
-  // inicio en el día en que estuvieras, así que a quien tocaba sus macros un
-  // miércoles se le quedaba la semana de miércoles a martes. El calendario de
-  // apuntar, que solo deja moverse dentro de la semana en curso, empezaba
-  // entonces en miércoles, y la persona no entendía por qué no podía volver
-  // al lunes de esa misma semana.
+  // OJO CON LO QUE SE ARREGLÓ AQUÍ, porque no es esto.
   //
-  // Fijo, y no elegible: una semana que cada quien empieza un día distinto no
-  // se puede comparar con nada, ni siquiera consigo misma de un mes antes.
+  // El fallo no era que cada quien tuviera su día: era que el día SE MOVÍA
+  // SOLO. Cambiar los macros o el objetivo lo ponía en el día en que
+  // estuvieras, así que quien tocaba sus macros un miércoles se despertaba
+  // con la semana de miércoles a martes sin haber pedido nada, y el
+  // calendario de apuntar -que solo deja moverse dentro de la semana en
+  // curso- ya no le dejaba volver al lunes de su propia semana.
+  //
+  // Se llegó a quitar la columna entera, y eso fue pasarse: le cambió la
+  // semana a quien la tenía bien puesta a propósito. Lo que no puede volver
+  // es la reasignación automática, no el ajuste.
   var inicioSemana = 1; // 0=domingo … 6=sábado
 
   function isoDe(d){
@@ -1659,6 +1663,18 @@
     document.getElementById('profWeekRange').textContent = s.rango;
     document.getElementById('profWeekDay').textContent =
       'Hoy es el día ' + s.dia + ' de 7. Se reinicia el próximo ' + DIAS[inicioSemana] + '.';
+
+    // Con SU día, no con uno fijo. Antes aquí ponía "de lunes a domingo"
+    // escrito a mano y a quien empieza en martes le mentía en su propia
+    // pantalla de ajustes.
+    var finSem = DIAS[(inicioSemana + 6) % 7];
+    var hint = document.getElementById('profSemanaHint');
+    if(hint) hint.textContent = 'de ' + DIAS[inicioSemana] + ' a ' + finSem;
+    var txt = document.getElementById('profSemanaTexto');
+    if(txt) txt.textContent =
+      'Tu semana va de ' + DIAS[inicioSemana] + ' a ' + finSem + '. El ' +
+      DIAS[inicioSemana] + ' es tu día 1 y el conteo vuelve a cero solo, cada ' +
+      DIAS[inicioSemana] + '.';
 
     refrescarFlechas();
     if(typeof pintarEjercicio === 'function') pintarEjercicio();  // el progreso sigue la misma semana
@@ -6580,11 +6596,21 @@
             aplicarRol();
           }
 
-          // `week_start_dow` ya NO se lee. La semana es de lunes a domingo
-          // para todos. La columna sigue en la base con los días sueltos que
-          // se guardaron cuando esto se movía solo; si se leyera, a quien
-          // tenga ahí un miércoles se le volvería a torcer la semana en
-          // cuanto abriera la app, deshaciendo el arreglo en silencio.
+          // Su día de inicio de semana, si tiene uno puesto.
+          //
+          // Se vuelve a leer, y no es un paso atrás: lo que se quitó -y no
+          // vuelve- es que este valor se REESCRIBIERA SOLO al cambiar los
+          // macros. Leerlo no torcía la semana de nadie; escribirlo sin
+          // permiso, sí.
+          //
+          // Solo 0-6 y nada más: un valor raro en la base dejaría el ancla en
+          // una fecha inválida y con ella la semana entera, el calendario de
+          // apuntar y el chequeo.
+          var dow = Number(p.week_start_dow);
+          if(p.week_start_dow != null && dow >= 0 && dow <= 6){
+            inicioSemana = dow;
+            anclaSemana  = ultimoDia(inicioSemana);
+          }
 
           // El permiso para analizar las fotos. Se copia TAL CUAL, sin
           // convertirlo a booleano: `null` significa "todavía no se le ha
