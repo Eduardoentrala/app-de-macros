@@ -32,7 +32,7 @@ const check = (n, cond, extra = '') => {
 console.log('\n— Primero pregunta, y sale solo al entrar —');
 {
   const i = APP.indexOf('function ofrecerChequeoSiEsSemanaNueva(');
-  const trozo = i > 0 ? APP.slice(i, i + 1100) : '';
+  const trozo = i > 0 ? APP.slice(i, i + 2200) : '';
   check('existe el ofrecimiento', i > 0);
   check('solo si es semana nueva', /chequeos_semanales\?select=semana/.test(trozo));
   check('y solo si no lo contestó ya', /if\(filas && filas\.length\) return;/.test(trozo));
@@ -96,7 +96,7 @@ console.log('\n— La IA ve las semanas de antes, no una suelta —');
   check('sin historial se decide igual', /\['catch'\]\(function\(\)\{ return \[\]; \}\)/.test(trozo));
 
   const j = APP.indexOf("accion: 'semana'");
-  const envio = APP.slice(j, j + 900);
+  const envio = APP.slice(j, j + 1600);
   check('y se le manda', /historial: extra\[1\]/.test(envio));
   // Tres consultas en paralelo: en fila, la persona miraría "Revisando…"
   // el triple de tiempo.

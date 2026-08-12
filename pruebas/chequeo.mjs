@@ -42,7 +42,14 @@ console.log('\n— Lo decide la base, no el navegador —');
   check('la funcion existe', fn.length > 0);
   check('consulta chequeos_semanales', fn.includes('/rest/v1/chequeos_semanales'));
   check('filtrando por esta persona', fn.includes('user_id=eq.'));
-  check('y por esta semana', fn.includes('semana=eq.'));
+  // Por RANGO y no por el día exacto. El día de inicio de semana se movió a
+  // lunes para todos, y quien la tenía en martes guardó su chequeo con el
+  // martes: preguntando por el lunes exacto no aparece, y se le reabriría el
+  // cuestionario de una semana que ya contestó -otra consulta de IA, y un
+  // segundo ajuste de calorías por el mismo periodo-.
+  check('y por esta semana, entera',
+    fn.includes('semana=gte.') && fn.includes('semana=lt.'),
+    'con «semana=eq.» un cambio del día de inicio reabre chequeos ya contestados');
   check('si ya hay fila, no sale', /if\(filas && filas\.length\) return/.test(fn),
     'esta es la linea que hace que deje de salir al contestarlo');
 }

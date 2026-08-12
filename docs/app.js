@@ -1662,7 +1662,39 @@
 
     refrescarFlechas();
     if(typeof pintarEjercicio === 'function') pintarEjercicio();  // el progreso sigue la misma semana
+    if(typeof pintarGastoReal === 'function') pintarGastoReal();
     actualizarMetas(); // recalcula anillos, barras y el resumen del Diario
+  }
+
+  // Su gasto medido, en el Perfil. Se enseña porque es SUYO y porque explica
+  // por qué la IA le mueve lo que le mueve; esconderlo dejaría los ajustes
+  // pareciendo caprichos.
+  //
+  // `typeof` arriba y comprobación de la caja aquí: esto vive mil líneas más
+  // abajo y actualizarSemana corre al arrancar, antes de que exista.
+  function pintarGastoReal(){
+    var caja = document.getElementById('gastoBox');
+    if(!caja || typeof gastoMedido !== 'function') return;
+
+    var g;
+    try{ g = gastoMedido(); }catch(e){ caja.hidden = true; return; }
+
+    // Sin datos suficientes, o con un número que no se sostiene, no se
+    // enseña nada. Un "todavía no se puede" solo genera la pregunta de
+    // cuándo, y el número descartado es justo el que no hay que creerse.
+    if(!g || g.estado !== 'ok'){ caja.hidden = true; return; }
+
+    caja.hidden = false;
+    document.getElementById('gastoReal').textContent = mil(g.gasto) + ' cal';
+
+    var dif = g.gasto - g.estimado;
+    var comparado = dif === 0 ? 'lo mismo que decía la fórmula del registro'
+      : (dif > 0 ? mil(dif) + ' más' : mil(-dif) + ' menos') +
+        ' de lo que decía la fórmula del registro';
+
+    document.getElementById('gastoNota').textContent =
+      'Medido con ' + g.semanas + ' semanas y ' + g.dias + ' días apuntados: ' +
+      comparado + '.';
   }
 
   // Cambiar los macros pide confirmación, enseñando las calorías de antes y
@@ -3702,14 +3734,28 @@
       'confirmarlas con tu médico.</span>';
   }
 
-  function calcularMacros(){
+  // El gasto ESTIMADO: Mifflin-St Jeor por el factor de actividad.
+  //
+  // Sale aparte de calcularMacros porque lo necesita también la medición del
+  // gasto real, que lo usa como tope de cordura. Copiarlo allí garantizaba
+  // que un día se corrigiera aquí y allí no, y entonces la medición se
+  // compararía contra una fórmula que ya no es la que da las calorías.
+  //
+  // Sin efectos: no pinta nada. calcularMacros sí pinta, y llamarla solo
+  // para preguntarle el gasto repintaba media pantalla de registro.
+  function gastoEstimado(){
     var edad = Number(document.getElementById('regEdad').value) || 0;
     var alt  = Number(document.getElementById('regAltura').value) || 0;
     var peso = Number(document.getElementById('regPeso').value) || 0;
-
     var tmb = 10*peso + 6.25*alt - 5*edad + (reg.sexo === 'h' ? 5 : -161);
     var nivel = NIVEL[reg.dias];
-    var gasto = tmb * nivel.f;
+    return { tmb: tmb, gasto: tmb * nivel.f, nivel: nivel, peso: peso, alt: alt, edad: edad };
+  }
+
+  function calcularMacros(){
+    var base = gastoEstimado();
+    var edad = base.edad, alt = base.alt, peso = base.peso;
+    var tmb = base.tmb, nivel = base.nivel, gasto = base.gasto;
 
     // Suelo de seguridad: nunca por debajo del metabolismo basal ni de
     // 1200 calorías. Por debajo de ahí ya no se pierde grasa, se pierde
@@ -7464,9 +7510,22 @@
       if(sessionStorage.getItem(CLAVE_CHEQUEO) === semana) return;
     }catch(e){}
 
+    // Se busca en TODA la semana natural, no por el día exacto.
+    //
+    // El día de inicio se movió: quien tenía la semana empezando en martes
+    // -porque cambió sus macros un martes, cuando eso aún movía el día 1-
+    // pasó a tenerla en lunes. Su chequeo de esta semana está guardado con
+    // el martes, y preguntando por el lunes exacto no aparece: se le
+    // volvería a abrir el cuestionario de una semana que YA contestó, le
+    // gastaría otra consulta de IA y podría ajustarle las calorías dos
+    // veces por el mismo periodo.
+    //
+    // Buscando en el rango, cualquier chequeo de esos siete días lo apaga.
+    var finSemana = new Date(anclaSemana); finSemana.setDate(finSemana.getDate() + 7);
     sbFetch('/rest/v1/chequeos_semanales?select=semana' +
             '&user_id=eq.' + sesion.user.id +
-            '&semana=eq.' + semana + '&limit=1')
+            '&semana=gte.' + semana +
+            '&semana=lt.' + isoDe(finSemana) + '&limit=1')
       .then(function(filas){
         if(filas && filas.length) return;      // ya lo contestó: eso sí apaga
         try{ sessionStorage.setItem(CLAVE_CHEQUEO, semana); }catch(e){}
@@ -7588,6 +7647,88 @@
     return out;
   }
 
+  // ---- El gasto MEDIDO, no estimado ----
+  //
+  // El número que da la app al registrarse sale de una fórmula por un factor
+  // de actividad que la persona elige una vez y no se vuelve a mirar. Ese
+  // factor es el error grande de todo el cálculo: pasar de "ligera" a
+  // "moderada" son 300 calorías, y casi todo el mundo se sobreestima.
+  //
+  // Esto no lo estima: lo resta. Si comió una media de 2.400 y perdió 1,2 kg
+  // en 28 días, su mantenimiento real es 2.400 + (1,2 × 7700 / 28) = 2.730.
+  // No hace falta saber POR QUÉ el número estaba mal.
+  //
+  // Y tiene una propiedad que la fórmula no tiene: absorbe sola el error de
+  // apuntar. Quien apunta 300 menos de lo que come sale con un gasto 300
+  // más bajo del real, pero medido en LAS MISMAS unidades en las que apunta,
+  // así que el objetivo que salga de ahí le deja el déficit correcto. Solo
+  // pide que apunte igual de mal siempre, no que apunte bien.
+  //
+  // El peligro es el contrario del que parece: un número medido que está mal
+  // es PEOR que una estimación floja, porque se deja de dudar de él. De ahí
+  // las guardas, que son la mitad del trabajo.
+  var GM = {
+    SEMANAS: 3,     // menos que esto y el agua pesa más que la grasa
+    DIAS: 5,        // días apuntados por semana
+    PESAJES: 2,     // pesajes por semana
+    MARGEN: 0.25    // cuánto puede alejarse del estimado antes de tirarlo
+  };
+
+  function gastoMedido(){
+    var todas = resumenDeSemanas(4);
+    // Solo semanas COMPLETAS de verdad. Una con tres días apuntados no dice
+    // lo que se comió esa semana, dice lo que se comió tres días de ella.
+    var s = todas.filter(function(x){
+      return x.dias_apuntados >= GM.DIAS && x.dias_con_peso >= GM.PESAJES &&
+             x.media_cal != null && x.peso_medio != null;
+    });
+    if(s.length < GM.SEMANAS)
+      return { estado: 'faltan_semanas', semanas: s.length, faltan: GM.SEMANAS - s.length };
+
+    // Recta de mínimos cuadrados sobre las MEDIAS semanales, no sobre los
+    // pesos sueltos. El peso de un día se mueve un kilo por agua o sal; la
+    // media de la semana no. Y la pendiente usa todos los puntos, no el
+    // primero contra el último, que es tirar la mitad de los datos.
+    var n = s.length, sx = 0, sy = 0, sxy = 0, sxx = 0;
+    for(var i = 0; i < n; i++){
+      sx += i; sy += s[i].peso_medio; sxy += i * s[i].peso_medio; sxx += i * i;
+    }
+    var den = n * sxx - sx * sx;
+    if(!den) return { estado: 'faltan_semanas', semanas: n, faltan: 1 };
+    var kgPorSemana = (n * sxy - sx * sy) / den;
+
+    // Ponderada por días apuntados: una semana de 7 días pesa más que una
+    // de 5, porque se sabe más de ella.
+    var totalCal = 0, totalDias = 0;
+    for(var j = 0; j < n; j++){
+      totalCal += s[j].media_cal * s[j].dias_apuntados;
+      totalDias += s[j].dias_apuntados;
+    }
+    var mediaCal = Math.round(totalCal / totalDias);
+    var gasto = Math.round(mediaCal - (kgPorSemana * KCAL_POR_KG / 7));
+
+    // El tope de cordura. Si se aleja más de un 25% del estimado, eso no es
+    // un metabolismo: es una semana rara -un viaje, una gripe, un fin de
+    // semana sin apuntar- y darlo por bueno le movería las calorías por algo
+    // que no volverá a pasar.
+    var est = Math.round(gastoEstimado().gasto);
+    if(!est || !isFinite(gasto) || gasto <= 0)
+      return { estado: 'faltan_semanas', semanas: n, faltan: 1 };
+    if(Math.abs(gasto - est) / est > GM.MARGEN)
+      return { estado: 'fuera_de_rango', gasto: gasto, estimado: est,
+               semanas: n, dias: totalDias };
+
+    return {
+      estado: 'ok',
+      gasto: gasto,
+      estimado: est,
+      kg_por_semana: Math.round(kgPorSemana * 100) / 100,
+      media_cal: mediaCal,
+      semanas: n,
+      dias: totalDias
+    };
+  }
+
   // Las DOS semanas que se comparan tienen que ser las mismas que las de la
   // comida, o la IA compara periodos distintos sin saberlo: diría "entrenó
   // más" mirando unos días y "comió menos" mirando otros.
@@ -7679,6 +7820,10 @@
         // Y las cuatro anteriores, para que una mala semana suelta no se
         // confunda con una tendencia.
         semanas: resumenDeSemanas(4),
+        // Su gasto REAL, restado de lo que comió y de lo que pesó, cuando
+        // hay semanas suficientes para que signifique algo. Es lo único de
+        // todo esto que no depende de lo que dijo al registrarse.
+        gasto: gastoMedido(),
         pesos: pesosRecientes,
         // Sin esto, el peso plano siempre parece estancamiento. Con el
         // entreno delante se distingue lo que de verdad son dos cosas

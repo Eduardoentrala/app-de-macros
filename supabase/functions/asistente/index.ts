@@ -1000,12 +1000,35 @@ Deno.serve(async (req) => {
           `para moverle nada otra vez.\n`
         : '';
 
+      // El gasto MEDIDO. Sale de restar: lo que comió menos lo que cambió de
+      // peso. No depende del factor de actividad que eligió al registrarse,
+      // que es de donde viene el error grande de todo el cálculo.
+      //
+      // Llega ya filtrado por la app: si no hay semanas suficientes o el
+      // número se aleja demasiado del estimado, viene con estado y sin cifra.
+      // Aquí solo se dice cuando de verdad significa algo.
+      const gm = (cuerpo.gasto ?? null) as Record<string, unknown> | null;
+      const gastoReal = (gm && gm.estado === 'ok')
+        ? `\nSU GASTO REAL, MEDIDO (no estimado):\n` +
+          `- Gasta ${gm.gasto} cal al día. Sale de restar: comió una media de ` +
+          `${gm.media_cal} y su peso se movió ${gm.kg_por_semana} kg por semana, ` +
+          `durante ${gm.semanas} semanas y ${gm.dias} días apuntados.\n` +
+          `- La fórmula del registro decía ${gm.estimado}. Manda el medido: el ` +
+          `estimado sale de unos días de ejercicio que dijo al registrarse y ` +
+          `que nadie ha vuelto a comprobar.\n` +
+          `- Esta cifra ya absorbe que apunte de menos, si lo hace de forma ` +
+          `parecida siempre. NO le sugieras que apunta mal por esto.\n` +
+          `- Úsala para decidir, pero muévele igual poco: entre 100 y 200. ` +
+          `Tener mejor información no es razón para dar saltos más grandes.\n`
+        : '';
+
       const contexto =
         `\n\nLA SEMANA QUE SE CIERRA:\n` +
         `- Días que apuntó: ${diasApuntados} de 7\n` +
         `- Meta diaria actual: ${Math.round(Number(d.meta_cal) || 0)} cal\n` +
         `- Promedio de lo que comió: ${Math.round(Number(d.media_cal) || 0)} cal\n` +
         cambioMeta +
+        gastoReal +
         `- Pesos (últimas 4 semanas): ${listaPesos}` +
         entreno + `\n` +
         semanas +

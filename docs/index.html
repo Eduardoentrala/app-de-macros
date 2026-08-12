@@ -60,7 +60,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '7d45cbcc2d';
+    var SELLO = 'ca0330dc12';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -1185,6 +1185,18 @@
               </div>
               <div class="calc-note">Se calculan solas: proteína y carbos ×4 cal, grasas ×9 cal.</div>
             </div>
+
+            <!-- Su gasto real. Sale solo cuando hay semanas suficientes para
+                 medirlo: hasta entonces no se enseña ni se menciona, porque
+                 un hueco que dice "todavía no" solo genera la pregunta de
+                 cuándo. -->
+            <div class="calc-box" id="gastoBox" hidden style="margin-top:10px;">
+              <div class="calc-line">
+                <span>Tu gasto real</span>
+                <b id="gastoReal">—</b>
+              </div>
+              <div class="calc-note" id="gastoNota">—</div>
+            </div>
           </div>
 
           <div class="card">
@@ -1483,7 +1495,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '7d45cbcc2d';
+    var SELLO = 'ca0330dc12';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que
