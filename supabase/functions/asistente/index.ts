@@ -955,11 +955,14 @@ Deno.serve(async (req) => {
       // el peso de siete días se mueve un kilo por agua o sal sin que haya
       // cambiado nada de grasa. Con cuatro puntos se distingue "no bajó" de
       // "bajó y todavía no se ve".
-      const previas = Array.isArray(cuerpo.semanas)
+      // OJO con el nombre: cuatro líneas más arriba ya hay unas `previas`,
+      // que son los CHEQUEOS anteriores. Estas son los RESÚMENES de las
+      // semanas, otra cosa. Llamarlas igual dejó la función sin arrancar.
+      const resumenPrevias = Array.isArray(cuerpo.semanas)
         ? (cuerpo.semanas as Record<string, unknown>[]).slice(-4) : [];
-      const semanas = previas.length
+      const semanas = resumenPrevias.length
         ? `\nLAS SEMANAS ANTERIORES (de la más vieja a la más reciente):\n` +
-          previas.map((s) =>
+          resumenPrevias.map((s) =>
             `- Semana del ${s.semana}: ${s.dias_apuntados} días apuntados` +
             (s.media_cal ? `, ${s.media_cal} cal de media` : ', sin datos de comida') +
             (s.peso_medio ? `, peso medio ${s.peso_medio} kg` : ', sin pesos') +
