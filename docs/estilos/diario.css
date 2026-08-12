@@ -393,3 +393,33 @@
 }
 .notas-input:focus{border-color:var(--ink);}
 
+
+/* ---- El chequeo de la semana, pendiente ----
+   Va fijo en lo alto del Diario, no en una ventana que salta al abrir.
+   La ventana ya falló: se cerró sin contestar, se dio por vista, y esa
+   semana no se le pudo ajustar nada a nadie.
+
+   Negro y no azul como el aviso de las fotos: el de las fotos se puede
+   ignorar y este no. Que se distingan a simple vista es la mitad del
+   mensaje.
+
+   Sin botón de cerrar, y no por descuido: se va al contestarlo. */
+.chq-pend{
+  display:flex;align-items:center;gap:12px;width:calc(100% - 32px);
+  margin:2px 16px 12px;padding:15px 14px 15px 16px;border-radius:15px;
+  background:var(--ink);color:var(--card-bg);
+  border:none;cursor:pointer;text-align:left;font:inherit;
+  /* Un pelo de sombra para que despegue del fondo: es lo único que hay
+     que mirar en esa pantalla cuando está. */
+  box-shadow:0 6px 18px rgba(0,0,0,.16);
+}
+.cp-ico{font-size:24px;flex:none;line-height:1;}
+/* min-width:0 o el texto largo estira la caja y empuja la flecha fuera. */
+.cp-texto{flex:1;min-width:0;}
+.cp-texto b{display:block;font:800 15px/1.25 sans-serif;}
+.cp-texto span{
+  display:block;font:500 12.5px/1.4 sans-serif;margin-top:3px;
+  color:color-mix(in srgb, var(--card-bg) 82%, transparent);
+}
+.cp-flecha{flex:none;font:400 22px/1 sans-serif;opacity:.6;}
+.chq-pend:active{transform:scale(.985);}

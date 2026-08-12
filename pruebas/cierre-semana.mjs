@@ -29,37 +29,36 @@ const check = (n, cond, extra = '') => {
   else { mal++; console.log(`  FALLA ${n}${extra ? '\n        ' + extra : ''}`); }
 };
 
-console.log('\n— Primero pregunta, y sale solo al entrar —');
+console.log('\n— Primero pregunta, y espera en la pantalla principal —');
 {
-  const i = APP.indexOf('function ofrecerChequeoSiEsSemanaNueva(');
+  const i = APP.indexOf('function revisarChequeoPendiente(');
   const trozo = i > 0 ? APP.slice(i, i + 2200) : '';
-  check('existe el ofrecimiento', i > 0);
+  check('existe la revisión', i > 0);
   check('solo si es semana nueva', /chequeos_semanales\?select=semana/.test(trozo));
-  check('y solo si no lo contestó ya', /if\(filas && filas\.length\) return;/.test(trozo));
-  check('abre la hoja de las preguntas', /setTimeout\(abrirChequeo, 1200\)/.test(trozo));
-  // No se le salta la hoja en la cara a quien acaba de entrar a apuntar el
-  // desayuno: la cerraría sin leerla.
-  check('con un respiro antes, no de golpe', /1200/.test(trozo));
   check('filtra por usuario', /user_id=eq\.' \+ sesion\.user\.id/.test(trozo));
 
   // ---- Y NO SE RINDE HASTA QUE SE CONTESTA ----
-  // El fallo: se marcaba como "ya mostrado" ANTES de contestar, en
-  // localStorage y con la fecha del día. Quien abría la app, veía la hoja,
-  // la cerraba sin llenarla y no volvía a abrir ese día se quedaba SIN
-  // CALORÍAS NUEVAS toda la semana. Perder el ajuste por no molestar es un
-  // mal cambio.
+  // Este es el fallo que costó una semana, dos veces.
+  //
+  // Primero: la hoja se marcaba como "ya mostrada" ANTES de contestarla, en
+  // localStorage y con la fecha del día. Quien la cerraba sin llenarla y no
+  // volvía a abrir la app ese día se quedaba sin calorías nuevas.
+  //
+  // Después se pasó la marca a sessionStorage, que muere al cerrar la app.
+  // Mejor, pero el fondo seguía igual: era una VENTANA que saltaba al
+  // abrir, y una ventana se cierra por reflejo.
+  //
+  // Ahora es un bloque fijo en el Diario, sin botón de cerrar. Lo único que
+  // lo apaga es la fila en la base, o sea haberlo contestado de verdad.
   check('lo único que lo apaga es haberlo contestado',
-    /if\(filas && filas\.length\) return;\s*\/\/ ya lo contestó: eso sí apaga/.test(trozo));
-  // sessionStorage muere al cerrar la app; localStorage no. Esa es toda la
-  // diferencia entre "no insisto en esta sesión" y "no vuelvo hasta mañana".
-  check('la marca muere al cerrar la app',
-    /sessionStorage\.getItem\(CLAVE_CHEQUEO\) === semana/.test(trozo) &&
-    /sessionStorage\.setItem\(CLAVE_CHEQUEO, semana\)/.test(trozo));
-  check('ya no sobrevive en localStorage',
-    !/localStorage\.(get|set)Item\(CLAVE_CHEQUEO/.test(APP),
-    'con localStorage, cerrar la hoja costaba el ajuste de la semana');
-  // Ni lleva la fecha del día: eso era lo que lo convertía en "hoy ya no".
-  check('y no se guarda por día', !/CLAVE_CHEQUEO, semana \+ '\|'/.test(APP));
+    /pintarChequeoPendiente\(!\(filas && filas\.length\)\)/.test(trozo));
+  check('ya no salta una ventana al abrir', !/setTimeout\(abrirChequeo/.test(APP),
+    'una hoja que salta se cierra sin leerla, y ahi se pierde la semana');
+  check('ni queda marca de «ya te la enseñe»', !/CLAVE_CHEQUEO/.test(APP),
+    'cualquier marca puesta antes de contestar acaba enterrando el chequeo');
+  check('el bloque no se puede quitar sin contestar',
+    /id="chequeoPend" hidden/.test(HTML) &&
+    !/id="chequeoPendCerrar"/.test(HTML));
 }
 
 console.log('\n— Las tres preguntas son las que deciden —');

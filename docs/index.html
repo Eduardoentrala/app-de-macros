@@ -60,7 +60,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = 'ca0330dc12';
+    var SELLO = '74bea90bb3';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -89,6 +89,22 @@
               </div>
             </div>
           </div>
+          <!-- EL CHEQUEO DE LA SEMANA.
+               Va aquí arriba y no en una ventana que salta al abrir. La
+               ventana ya falló una vez: se cerró sin contestar, se dio por
+               vista, y esa semana no se le pudo ajustar nada.
+               No lleva × a propósito. Se va cuando se contesta y no antes.
+               Es un <button> y no un div con onclick: así se alcanza con
+               teclado y un lector de pantalla lo anuncia como pulsable. -->
+          <button class="chq-pend" id="chequeoPend" hidden>
+            <span class="cp-ico">📋</span>
+            <span class="cp-texto">
+              <b>Tu semana nueva está lista</b>
+              <span>Contesta tres cosas y te doy tus calorías. Un minuto.</span>
+            </span>
+            <span class="cp-flecha" aria-hidden="true">›</span>
+          </button>
+
           <div class="tabrow">
             <button class="tab-hoy active" data-tab="hoy">Hoy</button>
             <button class="tab-semana" data-tab="semana">Semana</button>
@@ -1495,7 +1511,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = 'ca0330dc12';
+    var SELLO = '74bea90bb3';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que

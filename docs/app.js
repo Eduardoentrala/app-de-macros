@@ -6417,7 +6417,7 @@
         // depende también del nivel de IA y de lo que haya en el perfil, que
         // arriba todavía no está.
         if(MI_NIVEL_IA === 'plus'){
-          ofrecerChequeoSiEsSemanaNueva();
+          revisarChequeoPendiente();
           revisarAvisoDelCoach();
         }
         // Fuera del `if` de Plus a propósito: las fotos de progreso las sube
@@ -7496,19 +7496,29 @@
   // no volvía a abrir ese día se quedaba SIN CALORÍAS NUEVAS toda la semana.
   // Perder el ajuste por no molestar es un mal cambio.
   //
-  // Se sigue sin insistir dentro de una misma sesión -cerrarla y que
-  // reaparezca a los diez segundos sería insoportable-, pero eso va en
-  // `sessionStorage`, que muere al cerrar la app. Cerrar y volver a entrar
-  // la trae otra vez, y así hasta que se conteste.
-  var CLAVE_CHEQUEO = 'macros.chequeoVisto';
+  // YA NO SALTA UNA VENTANA AL ABRIR.
+  //
+  // Saltaba, y ese fue el fallo caro: quien entraba a apuntar el desayuno se
+  // encontraba una hoja en la cara, la cerraba sin leerla, y se quedaba sin
+  // calorías nuevas toda la semana. Se intentó arreglar con marcas de "ya te
+  // la enseñé", y cada intento empeoraba lo mismo: la app decidía por su
+  // cuenta que ya estaba visto.
+  //
+  // Ahora hay un bloque fijo en lo alto del Diario. No tiene botón de
+  // cerrar. No se va al recargar, ni al cambiar de pestaña, ni al día
+  // siguiente. Se va cuando se contesta, y vuelve el lunes que viene.
+  //
+  // La diferencia importa: una ventana interrumpe y se cierra por reflejo;
+  // un bloque espera. Nadie pierde una semana por cerrar algo sin querer.
 
-  function ofrecerChequeoSiEsSemanaNueva(){
+  // Se mira al arrancar y cada vez que se guarda una respuesta.
+  function pintarChequeoPendiente(pendiente){
+    var b = document.getElementById('chequeoPend');
+    if(b) b.hidden = !pendiente;
+  }
+
+  function revisarChequeoPendiente(){
     if(!sesion || !sesion.user) return;
-    var semana = isoDe(anclaSemana);
-    try{
-      // Solo "ya te la enseñé en ESTA sesión", no "ya te la enseñé hoy".
-      if(sessionStorage.getItem(CLAVE_CHEQUEO) === semana) return;
-    }catch(e){}
 
     // Se busca en TODA la semana natural, no por el día exacto.
     //
@@ -7521,20 +7531,32 @@
     // veces por el mismo periodo.
     //
     // Buscando en el rango, cualquier chequeo de esos siete días lo apaga.
+    var semana = isoDe(anclaSemana);
     var finSemana = new Date(anclaSemana); finSemana.setDate(finSemana.getDate() + 7);
-    sbFetch('/rest/v1/chequeos_semanales?select=semana' +
+    return sbFetch('/rest/v1/chequeos_semanales?select=semana' +
             '&user_id=eq.' + sesion.user.id +
             '&semana=gte.' + semana +
             '&semana=lt.' + isoDe(finSemana) + '&limit=1')
       .then(function(filas){
-        if(filas && filas.length) return;      // ya lo contestó: eso sí apaga
-        try{ sessionStorage.setItem(CLAVE_CHEQUEO, semana); }catch(e){}
-        // Un poco después de abrir: saltarle una hoja en la cara a alguien
-        // que acaba de entrar a apuntar el desayuno es la forma de que la
-        // cierre sin leerla.
-        setTimeout(abrirChequeo, 1200);
-      })['catch'](function(){});   // si falla la consulta, no molestar
+        // Lo ÚNICO que lo apaga es que exista la fila. Que se haya visto, que
+        // se haya abierto o que se haya cerrado no cuenta.
+        pintarChequeoPendiente(!(filas && filas.length));
+      })['catch'](function(){
+        // Si la consulta falla no se enseña: peor que no avisar es avisar de
+        // algo ya contestado, porque llevaría a gastar otra consulta de IA y
+        // a un segundo ajuste por el mismo periodo. Como el bloque es fijo y
+        // no una ventana de una sola oportunidad, se vuelve a mirar en cuanto
+        // se abra la app otra vez.
+        pintarChequeoPendiente(false);
+      });
   }
+
+  // Tocar el bloque abre las preguntas. El bloque sigue ahí detrás: cerrar
+  // la hoja no cuenta como haberla contestado.
+  (function(){
+    var b = document.getElementById('chequeoPend');
+    if(b) b.addEventListener('click', function(){ abrirChequeo(); });
+  })();
 
   // Lo que se le manda al asistente para que decida. Los días apuntados son
   // el dato que decide si hay material o no, así que se cuentan aquí y no
@@ -7926,20 +7948,42 @@
   function guardarChequeo(r){
     if(!sesion || !sesion.user) return;
     var q = respuestasChequeo();
-    sbFetch('/rest/v1/chequeos_semanales?on_conflict=user_id,semana', {
-      method: 'POST',
-      headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' },
-      body: JSON.stringify({
-        user_id: sesion.user.id,
-        semana: isoDe(anclaSemana),
-        hambre: q.hambre || null, energia: q.energia || null, sueno: q.sueno || null,
-        nota: document.getElementById('chqNota').value.trim() || null,
-        ajusto: !!r.ajusto,
-        motivo: (r.motivo || '').slice(0, 500) || null,
-        cal_antes: Math.round(datosDeLaSemana().meta_cal) || null,
-        cal_despues: r.ajusto && r.cal_nueva ? Math.round(r.cal_nueva) : null
-      })
-    })['catch'](function(){});
+    var cuerpo = JSON.stringify({
+      user_id: sesion.user.id,
+      semana: isoDe(anclaSemana),
+      hambre: q.hambre || null, energia: q.energia || null, sueno: q.sueno || null,
+      nota: document.getElementById('chqNota').value.trim() || null,
+      ajusto: !!r.ajusto,
+      motivo: (r.motivo || '').slice(0, 500) || null,
+      cal_antes: Math.round(datosDeLaSemana().meta_cal) || null,
+      cal_despues: r.ajusto && r.cal_nueva ? Math.round(r.cal_nueva) : null
+    });
+    var enviar = function(){
+      return sbFetch('/rest/v1/chequeos_semanales?on_conflict=user_id,semana', {
+        method: 'POST',
+        headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+        body: cuerpo
+      });
+    };
+
+    // ESTA FILA ES LA QUE APAGA EL BLOQUE. Si no se guarda, el lunes que
+    // viene el chequeo vuelve a salir como si no lo hubiera contestado, y
+    // contestarlo otra vez gasta otra consulta de IA y puede ajustarle las
+    // calorías dos veces por el mismo periodo.
+    //
+    // Antes esto era un `.catch(function(){})`: el fallo se tragaba entero y
+    // nadie se enteraba de nada. Ahora se reintenta una vez -casi siempre es
+    // un tropiezo de red- y si sigue fallando se dice, que es lo mínimo.
+    enviar()
+      .then(function(){ pintarChequeoPendiente(false); })
+      ['catch'](function(){
+        return enviar()
+          .then(function(){ pintarChequeoPendiente(false); })
+          ['catch'](function(e){
+            toast('toastPeso', 'Tus calorías sí se aplicaron, pero no pude ' +
+                  'guardar el cuestionario: ' + traducirError(e.message));
+          });
+      });
   }
 
   // Lo que lleva y lo que le queda hoy. Sin esto, recomendar sería a

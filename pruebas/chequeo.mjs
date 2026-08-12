@@ -24,8 +24,8 @@ const check = (n, cond, extra = '') => {
   else { mal++; console.log(`  FALLA ${n}${extra ? '\n        ' + extra : ''}`); }
 };
 
-const ini = APP.indexOf('function ofrecerChequeoSiEsSemanaNueva(');
-const fin = APP.indexOf('\n  document.getElementById(\'chqEnviar\')', ini);
+const ini = APP.indexOf('function revisarChequeoPendiente(');
+const fin = APP.indexOf('\n  // Tocar el bloque abre las preguntas', ini);
 const fn = ini >= 0 ? APP.slice(ini, fin > ini ? fin : ini + 2000) : '';
 
 console.log('\n— Ya no vive en Perfil —');
@@ -50,28 +50,55 @@ console.log('\n— Lo decide la base, no el navegador —');
   check('y por esta semana, entera',
     fn.includes('semana=gte.') && fn.includes('semana=lt.'),
     'con «semana=eq.» un cambio del día de inicio reabre chequeos ya contestados');
-  check('si ya hay fila, no sale', /if\(filas && filas\.length\) return/.test(fn),
+  check('lo unico que lo apaga es que exista la fila',
+    /pintarChequeoPendiente\(!\(filas && filas\.length\)\)/.test(fn),
     'esta es la linea que hace que deje de salir al contestarlo');
 }
 
-console.log('\n— Pero no se rinde hasta que se contesta —');
+console.log('\n— No salta una ventana: se queda un bloque —');
 {
-  // AQUÍ HABÍA UNA PRUEBA QUE DEFENDÍA EL FALLO. Decía que la marca debía
-  // llevar semana Y día "porque solo con la semana, cerrarla una vez
-  // valdría por contestada". El razonamiento estaba al revés: con el día,
-  // cerrarla una vez valía por contestada HASTA MAÑANA, y quien no volvía a
-  // abrir la app ese día se quedaba sin calorías nuevas toda la semana.
+  // ESTO ES LO QUE FALLÓ DOS VECES. La hoja saltaba sola al abrir la app.
+  // Quien entraba a apuntar el desayuno se la encontraba en la cara, la
+  // cerraba por reflejo, y se quedaba sin calorías nuevas TODA LA SEMANA.
   //
-  // Lo único que puede apagar el chequeo es la fila en la base. La marca de
-  // pantalla solo sirve para no repetirlo dentro de la misma sesión.
-  check('la marca muere al cerrar la app',
-    /sessionStorage\.getItem\(CLAVE_CHEQUEO\) === semana/.test(fn),
-    'en localStorage sobrevive al cierre y entierra el chequeo sin contestar');
-  check('y no se guarda por día', !/semana \+ '\|' \+ isoDe\(HOY\)/.test(fn));
-  check('se pone DESPUES de comprobar la base',
-    fn.indexOf('filas && filas.length') < fn.indexOf('sessionStorage.setItem'),
-    'marcarla antes haria que un fallo de red la enterrase');
-  check('si la consulta falla, no molesta', /\['catch'\]\(function\(\)\{\}\)/.test(fn));
+  // Se intentó parchear con marcas de "ya te la enseñé" -primero en
+  // localStorage, luego en sessionStorage- y cada intento repetía el mismo
+  // error de fondo: la app decidía por su cuenta que ya estaba visto.
+  //
+  // Una ventana se cierra por reflejo. Un bloque espera.
+  check('no hay hoja que salte sola', !/setTimeout\(abrirChequeo/.test(APP),
+    'una hoja que salta al abrir se cierra sin leerla, y ahi se pierde la semana');
+  check('ni marcas de «ya te la enseñe»',
+    !/CLAVE_CHEQUEO/.test(APP),
+    'cualquier marca puesta antes de contestar acaba enterrando el chequeo');
+
+  check('hay un bloque en el Diario', /id="chequeoPend"/.test(HTML));
+  // Nace oculto: sin saber si está contestado, enseñarlo seria mentir a
+  // quien ya lo llenó.
+  check('nace oculto', /id="chequeoPend" hidden/.test(HTML));
+  // SIN BOTÓN DE CERRAR, y no por descuido.
+  const bloque = HTML.slice(HTML.indexOf('id="chequeoPend"'),
+                            HTML.indexOf('</button>', HTML.indexOf('id="chequeoPend"')));
+  check('no se puede cerrar', !/cerrar|aria-label="Cerrar|×/i.test(bloque),
+    'si se puede quitar sin contestar, volvemos al fallo de siempre');
+  // Botón y no div: se alcanza con teclado y un lector de pantalla lo
+  // anuncia como pulsable.
+  check('es un boton de verdad', /<button class="chq-pend"/.test(HTML));
+  check('tocarlo abre las preguntas',
+    /getElementById\('chequeoPend'\)[\s\S]{0,140}abrirChequeo\(\)/.test(APP));
+
+  // Cerrar la hoja NO cuenta como contestarla: el bloque sigue ahi.
+  const cerrar = APP.slice(APP.indexOf("getElementById('chqCerrar').addEventListener"),
+                           APP.indexOf("getElementById('chqCerrar').addEventListener") + 200);
+  check('cerrar la hoja no apaga el bloque', !/pintarChequeoPendiente/.test(cerrar),
+    'cerrar sin contestar no es haber contestado');
+
+  // Si la consulta falla no se enseña: avisar de algo ya contestado lleva a
+  // gastar otra consulta de IA y a un segundo ajuste por el mismo periodo.
+  // Como el bloque es fijo y no una ventana de una sola oportunidad, se
+  // vuelve a mirar en cuanto se abra la app otra vez.
+  check('si la consulta falla, no se inventa nada',
+    /\['catch'\]\(function\(\)\{[\s\S]{0,400}pintarChequeoPendiente\(false\);/.test(fn));
 }
 
 console.log('\n— Contestarlo es lo que la entierra —');
@@ -91,9 +118,12 @@ console.log('\n— Contestarlo es lo que la entierra —');
 
 console.log('\n— No salta encima de nadie —');
 {
-  check('espera un poco antes de abrirse', /setTimeout\(abrirChequeo, \d{3,}\)/.test(fn),
-    'saltarle una hoja a alguien que entro a apuntar el desayuno es como se cierra sin leer');
-  check('y solo con sesion', /if\(!sesion \|\| !sesion\.user\) return/.test(fn));
+  // Antes esto pedía un `setTimeout` antes de abrir la hoja: se daba por
+  // hecho que la hoja iba a saltar y solo se discutía cuándo. Ya no salta
+  // ninguna, así que el retraso sobra —el bloque no interrumpe a nadie— y
+  // pedirlo obligaría a devolver la ventana que causó el problema.
+  check('nada se abre solo al entrar', !/setTimeout\(abrirChequeo/.test(APP));
+  check('y solo se mira con sesion', /if\(!sesion \|\| !sesion\.user\) return/.test(fn));
 }
 
 console.log('\n— El trabajo sin lastre también cuenta —');
