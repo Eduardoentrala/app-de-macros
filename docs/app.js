@@ -4824,6 +4824,182 @@
     llenarSelectores(); goto('comparar', true); pintarComparacion();
   });
 
+  // =====================================================================
+  //  LA COMPARACIÓN MENSUAL DE FOTOS
+  //
+  //  Hasta aquí las fotos NUNCA salían: el bucket es privado y la app las
+  //  mira con URLs firmadas. Esto las manda a Anthropic una vez al mes, y
+  //  eso es una cosa distinta de mandar números. Por eso hay un permiso, y
+  //  por eso `null` no vale como sí.
+  //
+  //  Nada de lo de aquí decide QUÉ fotos se analizan. La app solo dice
+  //  "compara las mías"; las rutas las saca el servidor de la base
+  //  filtrando por la sesión. Si el cliente mandara rutas, un token robado
+  //  serviría para pedir el análisis de las fotos de otra persona.
+  // =====================================================================
+  var PERMISO_FOTOS = null;    // true / false / null = no se le ha preguntado
+  var ANALISIS = null;         // el último guardado, para pintarlo
+  var ANALISIS_INTENTADO = false;   // solo un intento por apertura de la app
+
+  function pintarAnalisis(){
+    var caja = document.getElementById('analisisCard');
+    if(!caja) return;
+    if(!ANALISIS || !ANALISIS.mensaje){ caja.hidden = true; return; }
+    caja.hidden = false;
+    document.getElementById('analisisTxt').textContent = ANALISIS.mensaje;
+    document.getElementById('analisisCuando').textContent = ANALISIS.mes || '';
+    document.getElementById('analisisPie').textContent =
+      ANALISIS.semana_vieja && ANALISIS.semana_nueva
+        ? 'Comparando ' + ANALISIS.semana_vieja + ' con ' + ANALISIS.semana_nueva + '.'
+        : '';
+  }
+
+  // Lo último guardado, que es lo que se enseña. No cuesta una llamada a la
+  // IA: es una fila de la base.
+  function cargarAnalisis(){
+    if(!sesion || !sesion.user) return Promise.resolve();
+    return sbFetch('/rest/v1/analisis_fotos?select=mes,mensaje,semana_nueva,semana_vieja' +
+        '&user_id=eq.' + sesion.user.id + '&order=mes.desc&limit=1')
+      .then(function(filas){
+        ANALISIS = (filas && filas[0]) || null;
+        pintarAnalisis();
+      })['catch'](function(){});
+  }
+
+  // ---- El permiso ----
+  var permisoSheet = document.getElementById('permisoFotos');
+
+  // Se pregunta la PRIMERA VEZ que sube una serie completa, no al
+  // registrarse: en el registro no significa nada todavía, y un sí dado sin
+  // entender qué se acepta no es un sí.
+  //
+  // Ni botón de cerrar ni cerrar tocando fuera: no contestar no puede
+  // quedarse como un sí a medias.
+  function pedirPermisoFotos(){
+    if(!permisoSheet) return;
+    permisoSheet.classList.add('open');
+  }
+
+  function guardarPermisoFotos(si){
+    PERMISO_FOTOS = si;
+    permisoSheet.classList.remove('open');
+    pintarPermisoPerfil();
+    sbActualizarPerfil({ fotos_ia_ok: si, fotos_ia_fecha: new Date().toISOString() })
+      ['catch'](function(){
+        // Si no se pudo guardar, se vuelve a preguntar la próxima vez. Dar
+        // por bueno un sí que no llegó a la base sería mandar fotos con un
+        // permiso que no consta en ninguna parte.
+        PERMISO_FOTOS = null;
+        toast('toastFotos', 'No se pudo guardar tu respuesta. Te lo pregunto otra vez.');
+      });
+    if(si) revisarAnalisisDeFotos();
+  }
+
+  (function(){
+    var si = document.getElementById('permisoFotosSi');
+    var no = document.getElementById('permisoFotosNo');
+    if(si) si.addEventListener('click', function(){ guardarPermisoFotos(true); });
+    if(no) no.addEventListener('click', function(){ guardarPermisoFotos(false); });
+  })();
+
+  // Poder cambiar de opinión no es un adorno: se prometió en la pantalla del
+  // permiso, y un sí que no se puede retirar no es un permiso, es una
+  // trampa. La fila sale solo si ya se le preguntó alguna vez.
+  function pintarPermisoPerfil(){
+    var fila = document.getElementById('profFotosIaBtn');
+    var val  = document.getElementById('profFotosIa');
+    if(!fila || !val) return;
+    fila.hidden = (PERMISO_FOTOS === null);
+    val.innerHTML = (PERMISO_FOTOS === true ? 'Sí' : 'No') + '<i>›</i>';
+  }
+
+  (function(){
+    var fila = document.getElementById('profFotosIaBtn');
+    if(!fila) return;
+    fila.addEventListener('click', function(){
+      // Quitarlo es inmediato y no pregunta: poner trabas para retirar un
+      // permiso es la forma educada de no dejar retirarlo. Volver a darlo sí
+      // vuelve a enseñar la pantalla con lo que se acepta.
+      if(PERMISO_FOTOS === true){
+        guardarPermisoFotos(false);
+        toast('toastPeso', 'Tus fotos ya no se analizan.');
+      }else{
+        pedirPermisoFotos();
+      }
+    });
+  })();
+
+  // ---- Cuándo se pide el análisis ----
+  //
+  // Una vez al mes y por su cuenta, sin que nadie pulse nada: es lo que se
+  // pidió. El freno de verdad está en el servidor -uno por mes y persona,
+  // y solo con dos series completas separadas por tres semanas-, así que
+  // aquí basta con no llamar cuando es evidente que no toca.
+  var CLAVE_ANALISIS = 'macros.analisisPedido';
+
+  function mesDeHoy(){ return isoDe(HOY).slice(0, 7); }
+
+  function revisarAnalisisDeFotos(){
+    if(!sesion || !sesion.user) return;
+    if(MI_NIVEL_IA !== 'plus') return;
+
+    // Sin permiso no se manda nada. Y si todavía no se le ha preguntado, se
+    // le pregunta —pero solo cuando ya tiene dos series completas, que es
+    // cuando la pregunta significa algo.
+    var series = semanasConFotos().filter(function(k){
+      return Object.keys(FOTOS[k] || {}).length >= 4;
+    });
+    if(series.length < 2) return;
+    if(PERMISO_FOTOS === null){ pedirPermisoFotos(); return; }
+    if(PERMISO_FOTOS !== true) return;
+
+    // Una vez al mes. Pero la marca del mes se pone cuando el servidor
+    // CONTESTA, no antes.
+    //
+    // Ponerla antes parecía lo prudente y era el error: si la llamada no
+    // llega -sin red, la función caída, o desplegada más tarde que la app-
+    // el mes queda marcado como hecho y esa persona se queda sin su
+    // comparación hasta el mes siguiente, sin enterarse de nada.
+    //
+    // Para no repetirlo en bucle basta con una marca de sesión, que muere al
+    // cerrar la app: se intenta una vez por apertura y ya.
+    var mes = mesDeHoy();
+    try{
+      if(localStorage.getItem(CLAVE_ANALISIS) === mes) return;
+    }catch(e){}
+    if(ANALISIS_INTENTADO) return;
+    ANALISIS_INTENTADO = true;
+
+    iaLlamar({
+      accion: 'fotos',
+      // Los números para el segundo paso. Las fotos NO van por aquí: las
+      // baja el servidor del bucket con su propia clave.
+      pesos: Object.keys(PESOS).sort().slice(-8).map(function(k){
+        return { fecha: k, kg: Number(PESOS[k]) };
+      }),
+      // Con la misma forma que usa el cierre de semana. Mandarlas como
+      // están en memoria -{fecha, cm}- llegaría al servidor con los nombres
+      // cambiados y saldría "undefined: undefined cm" en el mensaje.
+      cinturas: CINTURAS.slice(-6).map(function(m){
+        return { log_date: m.fecha, cintura_cm: m.cm };
+      })
+    }).then(function(r){
+      // Contestó. Sea lo que sea -hecho, faltan series, demasiado pronto-,
+      // el mes ya está mirado y no hay que volver a preguntarlo.
+      try{ localStorage.setItem(CLAVE_ANALISIS, mes); }catch(e){}
+      if(r && r.estado === 'ok'){
+        ANALISIS = r;
+        pintarAnalisis();
+      }
+    })['catch'](function(){
+      // NO se marca el mes: no llegó a contestar, así que se vuelve a
+      // intentar la próxima vez que abra la app.
+      //
+      // Y en silencio: nadie pidió esto, así que un fallo no puede
+      // interrumpir a quien entró a apuntar la comida.
+    });
+  }
+
   // --- Comparador ---
   var cmpPose = 'frente', cmpModo = 'lado';
 
@@ -6409,6 +6585,17 @@
           // se guardaron cuando esto se movía solo; si se leyera, a quien
           // tenga ahí un miércoles se le volvería a torcer la semana en
           // cuanto abriera la app, deshaciendo el arreglo en silencio.
+
+          // El permiso para analizar las fotos. Se copia TAL CUAL, sin
+          // convertirlo a booleano: `null` significa "todavía no se le ha
+          // preguntado" y hay que poder distinguirlo de un "dijo que no".
+          // Un `!!p.fotos_ia_ok` los juntaría en `false` y no se le
+          // preguntaría nunca. Y si la columna aún no existe -la migración
+          // puede ir por detrás- se queda en null y no se manda nada, que
+          // es el lado seguro.
+          PERMISO_FOTOS = (p.fotos_ia_ok === true || p.fotos_ia_ok === false)
+            ? p.fotos_ia_ok : null;
+          if(typeof pintarPermisoPerfil === 'function') pintarPermisoPerfil();
         }
 
         // AHORA, y no antes: los tres preguntan "¿en qué semana estamos?", y
@@ -6523,6 +6710,13 @@
             Object.keys(mapa).forEach(function(k){ FOTOS[k] = mapa[k]; });
             pintarFotos();
             if(typeof llenarSelectores === 'function') llenarSelectores();
+            // AQUÍ y no antes: mirar si toca comparar necesita saber cuántas
+            // series completas hay, y eso no se sabe hasta tener las fotos.
+            if(typeof cargarAnalisis === 'function'){
+              cargarAnalisis().then(function(){
+                if(typeof revisarAnalisisDeFotos === 'function') revisarAnalisisDeFotos();
+              });
+            }
           })['catch'](function(){});
         }
       })

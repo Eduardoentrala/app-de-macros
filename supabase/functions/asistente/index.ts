@@ -453,6 +453,118 @@ REGLAS DURAS
 
 // El mensaje que la persona NO pidió. Va sin esquema JSON a propósito: son
 // dos frases, y envolverlas en un objeto solo gasta tokens.
+// ---------------------------------------------------------------------
+//  LAS FOTOS, EN DOS PASOS
+//
+//  Paso 1: mirar. SIN peso, SIN cintura, SIN calorías, SIN saber siquiera
+//  si quiere subir o bajar.
+//
+//  Esto no es escrúpulo, es el fallo central de hacerlo en una sola
+//  llamada: si el modelo lee "bajó 1,2 kg" antes de mirar, VE en las fotos
+//  lo que los números ya le dijeron y describe un cambio que no está ahí.
+//  Suena coherente, encaja con los datos, y es inventado. Nadie lo
+//  detectaría nunca.
+//
+//  Aquí solo se mira. Los números entran en el paso 2, y para entonces lo
+//  que se vio ya está escrito y no se puede retocar.
+// ---------------------------------------------------------------------
+const SISTEMA_FOTOS_VER = `
+Comparas fotos de progreso de la misma persona, tomadas con semanas de
+diferencia. Te digo de cuándo es cada grupo y en qué orden vienen.
+
+Tu único trabajo es decir QUÉ CAMBIÓ entre unas y otras. Nada más.
+
+NO SABES NADA MÁS DE ESTA PERSONA. No sabes cuánto pesa, ni si subió o
+bajó, ni qué quiere lograr, ni qué come. Es a propósito: si lo supieras
+acabarías viendo en las fotos lo que los números te hubieran contado. No
+lo supongas, no lo deduzcas, y no escribas como si lo supieras.
+
+QUÉ MIRAS
+- La cintura y el abdomen: ancho, y si se marca más o menos.
+- La espalda y los hombros: si el contorno es más ancho o más definido.
+- Las piernas y los brazos, si se ven.
+- La postura, solo si cambió tanto que altera lo que se ve.
+
+QUÉ NO HACES, NUNCA
+- No des un porcentaje de grasa corporal. Ni aproximado, ni "alrededor
+  de". Desde una foto eso no se puede saber: hasta con plicómetro y en
+  manos expertas el error es de varios puntos. Un número inventado que
+  suena preciso es peor que no decir nada, porque se lo van a creer.
+- No estimes kilos.
+- No hables del aspecto. Nada de "se ve mejor", "se ve bien", "se ve más
+  atractivo". Describes CAMBIOS, no a la persona.
+- No comentes nada que no sea el cambio físico buscado: ni la cara, ni la
+  ropa, ni el cuarto, ni lunares, marcas o cualquier cosa de la piel.
+- No des consejo médico ni menciones enfermedades.
+
+LO MÁS IMPORTANTE: SI NO VES CAMBIO, DILO
+Cuatro semanas son pocas. Lo normal es que no se note casi nada, y decir
+que sí para quedar bien es la peor cosa que puedes hacer aquí: hace que
+la persona se fíe de ti para lo siguiente, y para lo siguiente te vas a
+equivocar igual.
+
+Y ojo con la trampa de las fotos: la luz, la hora, la distancia, la
+postura y lo que haya comido ese día cambian lo que se ve MÁS que cuatro
+semanas de dieta. Si dos fotos se ven distintas pero puede ser por eso,
+dilo así, con esas palabras.
+
+CÓMO ESCRIBES
+Español de México, seco y corto. Cuatro o cinco frases como mucho. Esto
+no lo lee nadie: es una nota para ti mismo del mes que viene. Sé
+concreto y sin adornos.
+`.trim();
+
+// ---------------------------------------------------------------------
+//  Paso 2: contar. Aquí SÍ entran los números, y las fotos ya NO.
+//
+//  Lo que llega es el texto del paso 1, que ya está cerrado. El modelo
+//  puede reconciliarlo con la báscula y la cintura, pero no puede volver a
+//  "mirar" y cambiar lo que se vio para que cuadre.
+// ---------------------------------------------------------------------
+const SISTEMA_FOTOS_DECIR = `
+Eres el entrenador de esta persona y le cuentas su comparación mensual de
+fotos. Español de México, de tú, corto y humano.
+
+Te paso dos cosas: lo que se vio en las fotos -escrito antes, sin conocer
+ningún número- y sus números del mes. Tu trabajo es juntarlos.
+
+NO VISTE LAS FOTOS. Lo que se vio ya está escrito y no se toca. No añadas
+detalles visuales que no estén ahí, ni los adornes: si el texto dice
+"apenas se aprecia diferencia", eso es lo que hay.
+
+PARA QUÉ SIRVE ESTO
+La báscula no distingue grasa de agua de músculo. La cintura sí, pero
+solo en un punto. Las fotos dicen DÓNDE está cambiando el cuerpo.
+
+Junta las tres y busca sobre todo este caso, que es el que más se lee mal:
+peso plano o casi, y sin embargo espalda y hombros más marcados o cintura
+más estrecha. Eso es recomposición -ganó músculo y perdió grasa a la vez-
+y es cuando la gente abandona creyendo que está estancada. Si lo ves,
+dilo claro y con todas las letras.
+
+Al revés también: si el peso bajó pero en las fotos no se ve nada y la
+cintura no se movió, eso es agua o lo que tenga dentro, no grasa. Dilo
+sin dramatizar.
+
+QUÉ LLEVA EL MENSAJE
+Tres o cuatro frases. Sin listas, sin encabezados, sin cifras salvo la
+cintura si de verdad cambió.
+
+1. Qué cambió, o que no cambió.
+2. Cómo encaja con el peso y la cintura.
+3. Una frase de qué hacer, solo si hace falta. Si va bien, que va bien.
+
+REGLAS DURAS
+- Ni porcentajes de grasa, ni kilos estimados. Ni aquí ni disimulados.
+- Nada sobre su aspecto: hablas de cambios, no de cómo se ve.
+- Nunca consejo médico.
+- Si no hubo cambio visible, dilo sin rodeos y sin consolar de más. Cuatro
+  semanas son pocas y esa es la explicación entera; decirlo con
+  naturalidad tranquiliza más que cualquier ánimo forzado.
+- No le cambies las calorías ni se lo insinúes. Eso se decide el domingo,
+  con la semana entera delante. Aquí solo se cuenta lo que se ve.
+`.trim();
+
 const SISTEMA_AVISO = `
 Eres el entrenador de esta persona y le escribes tú, sin que te haya
 preguntado nada. Español de México, de tú.
@@ -666,25 +778,35 @@ Deno.serve(async (req) => {
   const nivel = String(perfil?.nivel_ia ?? 'normal');
   const esPlus = nivel === 'plus';
 
-  // --- Tope diario ---
-  const TOPE_DIARIO = TOPES[nivel as keyof typeof TOPES] ?? TOPES.normal;
-  const { data: quedan, error: errTope } = await admin.rpc('gastar_consulta_ia', {
-    usuario: userId,
-    tope: TOPE_DIARIO,
-  });
-  if (errTope) return json({ error: 'No se pudo comprobar tu uso.' }, 500);
-  if (quedan === -1) {
-    return json({
-      error: `Llegaste a las ${TOPE_DIARIO} consultas de hoy. Mañana se reinicia.`,
-    }, 429);
-  }
-
   // --- Qué pide ---
+  // Se lee ANTES del tope: hay una acción que no debe gastarlo.
   let cuerpo: Record<string, unknown>;
   try { cuerpo = await req.json(); }
   catch { return json({ error: 'Petición mal formada.' }, 400); }
 
   const accion = String(cuerpo.accion || '');
+
+  // --- Tope diario ---
+  //
+  // La comparación de fotos queda FUERA. Es mensual, la pide la app sola y
+  // no la persona, y no tiene sentido que analizar sus fotos la deje sin
+  // poder apuntar la cena. Su freno es otro: una vez al mes, y solo si hay
+  // dos series completas separadas por semanas.
+  const TOPE_DIARIO = TOPES[nivel as keyof typeof TOPES] ?? TOPES.normal;
+  let quedan: number | null = null;
+  if (accion !== 'fotos') {
+    const { data: q, error: errTope } = await admin.rpc('gastar_consulta_ia', {
+      usuario: userId,
+      tope: TOPE_DIARIO,
+    });
+    if (errTope) return json({ error: 'No se pudo comprobar tu uso.' }, 500);
+    if (q === -1) {
+      return json({
+        error: `Llegaste a las ${TOPE_DIARIO} consultas de hoy. Mañana se reinicia.`,
+      }, 429);
+    }
+    quedan = q as number;
+  }
 
   try {
     const ia = new Anthropic({ apiKey: clave });
@@ -1058,6 +1180,177 @@ Deno.serve(async (req) => {
       // gasto de tokens y de confianza que se quiere evitar.
       if (!hayMaterial) { salida.ajusto = false; salida.cal_nueva = null; }
       return json({ ...salida, quedan, nivel });
+    }
+
+    // ---------------------------------------------------------------
+    //  LA COMPARACIÓN MENSUAL DE FOTOS
+    //
+    //  LA APP NO DICE QUÉ FOTOS. Ni rutas, ni semanas, ni identificadores.
+    //  Solo dice "compara las mías". Todo lo demás sale de la base
+    //  filtrando por el usuario de la sesión.
+    //
+    //  Es la única forma segura de hacerlo: si el cliente mandara rutas,
+    //  quien tuviera un token robado podría pedir el análisis de las fotos
+    //  de otra persona sin más que cambiar una cadena de texto.
+    // ---------------------------------------------------------------
+    if (accion === 'fotos') {
+      if (!esPlus) {
+        return json({ error: 'La comparación de fotos es parte de IA Plus.', nivel }, 403);
+      }
+
+      // El permiso, y que sea `=== true` de verdad. `null` es "todavía no
+      // se le ha preguntado" y NO vale como sí: es exactamente la
+      // suposición que la ley de datos personales no permite hacer.
+      const { data: permiso } = await admin
+        .from('profiles').select('fotos_ia_ok').eq('id', userId).single();
+      if (permiso?.fotos_ia_ok !== true) {
+        return json({ error: 'Falta tu permiso para analizar tus fotos.', motivo: 'sin_permiso' }, 403);
+      }
+
+      const { data: fotos, error: errFotos } = await admin
+        .from('progress_photos')
+        .select('week_key, pose, storage_path')
+        .eq('user_id', userId)
+        .order('week_key', { ascending: false });
+      if (errFotos) return json({ error: 'No pude leer tus fotos.' }, 500);
+
+      // Solo cuentan las series COMPLETAS: cuatro poses. Comparar tres
+      // ángulos contra cuatro produce "cambió la espalda" cuando lo que
+      // pasó es que la de espalda de un mes no está.
+      const porSemana = new Map<string, Record<string, string>>();
+      for (const f of (fotos ?? []) as Record<string, string>[]) {
+        if (!porSemana.has(f.week_key)) porSemana.set(f.week_key, {});
+        porSemana.get(f.week_key)![f.pose] = f.storage_path;
+      }
+      const POSES = ['frente', 'espalda', 'izq', 'der'];
+      const completas = [...porSemana.entries()]
+        .filter(([, p]) => POSES.every((x) => p[x]))
+        .sort((a, b) => (a[0] < b[0] ? 1 : -1));      // la más nueva primero
+
+      if (completas.length < 2) {
+        return json({ estado: 'faltan_series', tiene: completas.length });
+      }
+
+      // La nueva es la última. La vieja tiene que estar al menos tres
+      // semanas atrás: comparar dos series de semanas seguidas no enseña
+      // nada y gasta lo mismo.
+      const semanaNueva = completas[0][0];
+      const nSem = (k: string) => Number(k.slice(0, 4)) * 52 + Number(k.slice(6));
+      const vieja = completas.slice(1).find((c) => nSem(semanaNueva) - nSem(c[0]) >= 3);
+      if (!vieja) return json({ estado: 'demasiado_pronto', ultima: semanaNueva });
+      const semanaVieja = vieja[0];
+      // Y la primera de todas, si no es ya una de las dos: contra el punto
+      // de partida es donde de verdad se nota, y es lo que sostiene a
+      // alguien en el mes cuatro, cuando mes contra mes no dice nada.
+      const primera = completas[completas.length - 1][0];
+      const semanaBase = (primera !== semanaNueva && primera !== semanaVieja) ? primera : null;
+
+      // Uno por mes y persona. Si ya está hecho se devuelve el guardado en
+      // vez de volver a pagarlo.
+      const mes = new Date().toISOString().slice(0, 7);
+      const { data: yaEsta } = await admin
+        .from('analisis_fotos').select('mes, mensaje, semana_nueva, semana_vieja')
+        .eq('user_id', userId).eq('mes', mes).maybeSingle();
+      if (yaEsta && cuerpo.rehacer !== true) {
+        return json({ estado: 'ok', ...yaEsta, guardado: true });
+      }
+
+      // Se bajan del bucket privado con la clave de servicio. Nunca pasan
+      // por el navegador de nadie.
+      const bajar = async (ruta: string) => {
+        const { data, error } = await admin.storage.from('progress-photos').download(ruta);
+        if (error || !data) return null;
+        const b = new Uint8Array(await data.arrayBuffer());
+        // Sin `btoa(String.fromCharCode(...b))`: con 8 imágenes eso revienta
+        // la pila por el número de argumentos. A trozos no.
+        let s = '';
+        for (let i = 0; i < b.length; i += 8192) {
+          s += String.fromCharCode(...b.subarray(i, i + 8192));
+        }
+        return { datos: btoa(s), tipo: data.type || 'image/jpeg' };
+      };
+
+      const armar = async (poses: Record<string, string>) => {
+        const out = [];
+        for (const p of POSES) {
+          const img = await bajar(poses[p]);
+          if (img) {
+            out.push({
+              type: 'image' as const,
+              source: { type: 'base64' as const, media_type: img.tipo, data: img.datos },
+            });
+          }
+        }
+        return out;
+      };
+
+      const imgsNuevas = await armar(completas[0][1]);
+      const imgsViejas = await armar(vieja[1]);
+      if (imgsNuevas.length < 4 || imgsViejas.length < 4) {
+        return json({ error: 'No pude abrir todas tus fotos.' }, 500);
+      }
+
+      // ---- PASO 1: mirar, a ciegas ----
+      const verR = await ia.messages.create({
+        model: MODELO,
+        max_tokens: 1200,
+        system: SISTEMA_FOTOS_VER,
+        thinking: { type: 'adaptive' as const },
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: `GRUPO ANTIGUO (semana ${semanaVieja}), en orden: frente, espalda, izquierda, derecha.` },
+            ...imgsViejas,
+            { type: 'text', text: `GRUPO NUEVO (semana ${semanaNueva}), mismo orden.` },
+            ...imgsNuevas,
+            { type: 'text', text: '¿Qué cambió del grupo antiguo al nuevo?' },
+          ],
+        }],
+      });
+      const visto = verR.content
+        .filter((b: Record<string, unknown>) => b.type === 'text')
+        .map((b: Record<string, string>) => b.text).join('\n').trim();
+
+      // ---- PASO 2: contarlo, ya con los números y SIN las fotos ----
+      const p = (cuerpo.pesos ?? []) as Record<string, unknown>[];
+      const c = (cuerpo.cinturas ?? []) as Record<string, unknown>[];
+      const numeros =
+        `\n\nLO QUE SE VIO EN LAS FOTOS (escrito sin conocer ningún número):\n` +
+        `"${visto}"\n\n` +
+        `SUS NÚMEROS:\n` +
+        `- Van ${semanaVieja} contra ${semanaNueva}.\n` +
+        `- Pesos: ${p.length ? p.map((x) => `${x.fecha}: ${x.kg} kg`).join(' · ') : 'no apuntó'}\n` +
+        `- Cintura: ${c.length ? c.map((x) => `${x.log_date}: ${x.cintura_cm} cm`).join(' · ') : 'no la midió'}\n` +
+        (semanaBase ? `- Además tiene fotos desde ${semanaBase}, su primera serie.\n` : '');
+
+      const decirR = await ia.messages.create({
+        model: MODELO,
+        max_tokens: 1000,
+        system: SISTEMA_FOTOS_DECIR + numeros,
+        thinking: { type: 'adaptive' as const },
+        messages: [{ role: 'user', content: 'Cuéntame mi comparación de este mes.' }],
+      });
+      const mensaje = decirR.content
+        .filter((b: Record<string, unknown>) => b.type === 'text')
+        .map((b: Record<string, string>) => b.text).join('\n').trim();
+
+      if (!mensaje) return json({ error: 'No pude armar tu comparación.' }, 500);
+
+      // Se guarda el TEXTO. Nunca las imágenes ni nada que las reconstruya.
+      await admin.from('analisis_fotos').upsert({
+        user_id: userId,
+        mes,
+        semana_nueva: semanaNueva,
+        semana_vieja: semanaVieja,
+        semana_base: semanaBase,
+        visto,
+        mensaje,
+      }, { onConflict: 'user_id,mes' });
+
+      return json({
+        estado: 'ok', mes, mensaje,
+        semana_nueva: semanaNueva, semana_vieja: semanaVieja, nivel,
+      });
     }
 
     if (accion === 'plan') {

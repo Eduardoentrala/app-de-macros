@@ -254,3 +254,11 @@ table.week-table tr.today td{font-weight:800;}
 .placeholder-view h3{margin:0;font-size:17px;}
 .placeholder-view p{margin:0;color:var(--ink-faint);font-size:13.5px;max-width:240px;}
 
+
+/* ---- El texto de la comparación mensual de fotos ----
+   Se lee como un mensaje de alguien, no como un informe: por eso interlínea
+   ancha y sin caja dentro de caja. */
+.analisis-txt{
+  margin:10px 0 0;font:500 14px/1.6 sans-serif;color:var(--ink);
+  white-space:pre-wrap;
+}

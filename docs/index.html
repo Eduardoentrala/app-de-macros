@@ -60,7 +60,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '74bea90bb3';
+    var SELLO = '3767d9aead';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -821,10 +821,52 @@
             <div class="calc-note">Se comprimen en tu teléfono antes de subirse: máximo 1080 px, calidad 80–85%. La foto original nunca se guarda.</div>
           </div>
 
+          <!-- La comparación del mes. Sale cuando hay una; si no, ni se
+               menciona: un hueco que dice "todavía no" solo genera la
+               pregunta de cuándo. -->
+          <div class="card" id="analisisCard" hidden>
+            <div class="goal-head">
+              <div style="font:800 14.5px/1 sans-serif;">Tu mes en fotos</div>
+              <span class="goal-hint" id="analisisCuando">—</span>
+            </div>
+            <p class="analisis-txt" id="analisisTxt">—</p>
+            <div class="calc-note" id="analisisPie">—</div>
+          </div>
+
           <button class="btn-primary" id="irComparar" style="width:calc(100% - 32px);margin:0 16px 24px;">Comparar dos semanas</button>
         </div>
         <input type="file" id="fotoInput" accept="image/*" hidden>
         <div class="toast" id="toastFotos">Listo</div>
+
+        <!-- EL PERMISO PARA ANALIZAR LAS FOTOS.
+             Sale UNA vez, la primera que sube fotos, y no antes: pedirlo en
+             el registro sería pedirlo cuando todavía no significa nada.
+             Se puede decir que no, y entonces las fotos siguen subiéndose y
+             viéndose exactamente igual: solo no se analizan. Un "no" que
+             quita funciones no es un no de verdad.
+             No tiene botón de cerrar ni se cierra tocando fuera: no
+             contestar no puede quedarse como un sí a medias. -->
+        <div class="sheet-backdrop" id="permisoFotos">
+          <div class="sheet">
+            <h4>¿Dejas que analice tus fotos?</h4>
+            <p class="hint">Una vez al mes comparo tus fotos con las del mes pasado y te digo qué cambió. Es lo único que ve dónde estás cambiando: la báscula no distingue grasa de músculo.</p>
+
+            <div class="calc-box" style="text-align:left;">
+              <div class="calc-note" style="line-height:1.55;">
+                <b>Qué pasa si dices que sí:</b><br>
+                · Tus 4 fotos del mes y las 4 del anterior se mandan a Anthropic para compararlas.<br>
+                · Se guarda solo el <b>texto</b> del resultado. Las fotos no salen de aquí para nada más.<br>
+                · No se usan para entrenar ningún modelo.<br>
+                · Nunca te va a dar un porcentaje de grasa ni opinar sobre cómo te ves.
+              </div>
+            </div>
+
+            <p class="wc-safe">✓ Si dices que no, tus fotos se siguen subiendo y viendo igual. Solo no se analizan. Puedes cambiar de opinión cuando quieras en tu Perfil.</p>
+
+            <button class="btn-primary" id="permisoFotosSi">Sí, analízalas</button>
+            <button class="btn-ghost-text" id="permisoFotosNo">No, gracias</button>
+          </div>
+        </div>
       </div>
 
       <!-- COMPARAR SEMANAS -->
@@ -1165,6 +1207,13 @@
             <button class="info-row info-btn" id="profPlanIaBtn">
               <span>Tu plan</span>
               <span class="v" id="profPlanIa">IA normal<i>›</i></span>
+            </button>
+            <!-- Se prometió en la pantalla del permiso que se podría cambiar
+                 de opinión aquí. Sale solo si ya se le preguntó alguna vez:
+                 antes no hay nada que cambiar. -->
+            <button class="info-row info-btn" id="profFotosIaBtn" hidden>
+              <span>Analizar mis fotos</span>
+              <span class="v" id="profFotosIa">—<i>›</i></span>
             </button>
           </div>
           <div class="card" id="tarjetaPanel" hidden>
@@ -1511,7 +1560,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '74bea90bb3';
+    var SELLO = '3767d9aead';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que
