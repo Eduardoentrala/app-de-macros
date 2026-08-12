@@ -1696,8 +1696,48 @@
     weekConfirm.classList.add('open');
   }
 
+  // ---- Cambios de meta hechos a mano, con su fecha ----
+  //
+  // La semana ya no se corta al cambiar los macros, y eso deja un cabo: si
+  // alguien se sube las calorías un miércoles, esa semana tiene dos días con
+  // una meta y cinco con otra. Al cerrarla se le manda a la IA una sola
+  // meta -la de ahora- y la media de los siete días. Sin saber que hubo un
+  // cambio, la IA lee "se pasó 300 al día" cuando en realidad iba clavado.
+  //
+  // Solo se apuntan los cambios A MANO. Los que hace la IA al cerrar la
+  // semana caen en lunes, ya sabe que los hizo, y los tiene en su historial.
+  //
+  // Vive en el navegador y no en la base a propósito: es una pista para
+  // afinar el mensaje, no un dato del que dependa nada. Si falta -teléfono
+  // nuevo, otro navegador- la IA se comporta como se comportaba hasta hoy.
+  var CLAVE_CAMBIOS = 'macros.cambiosMeta';
+
+  function apuntarCambioDeMeta(antes, despues){
+    if(!antes || !despues || antes === despues) return;
+    try{
+      var l = JSON.parse(localStorage.getItem(CLAVE_CAMBIOS) || '[]');
+      if(!Array.isArray(l)) l = [];
+      l.push({ fecha: isoDe(HOY), antes: antes, despues: despues });
+      // Cinco semanas y fuera: el cierre nunca mira más atrás, y una lista
+      // que solo crece acaba llenando el almacén del navegador.
+      var corte = isoDe(haceDias(35));
+      l = l.filter(function(c){ return c && c.fecha >= corte; });
+      localStorage.setItem(CLAVE_CAMBIOS, JSON.stringify(l));
+    }catch(e){}
+  }
+
+  function cambiosDeMetaEn(desde, hasta){        // `hasta` no entra
+    try{
+      var l = JSON.parse(localStorage.getItem(CLAVE_CAMBIOS) || '[]');
+      if(!Array.isArray(l)) return [];
+      var a = isoDe(desde), b = isoDe(hasta);
+      return l.filter(function(c){ return c && c.fecha >= a && c.fecha < b; });
+    }catch(e){ return []; }
+  }
+
   document.getElementById('wcAccept').addEventListener('click', function(){
     if(!metasPendientes) return;
+    apuntarCambioDeMeta(calDe(metasVigentes), calDe(metasPendientes));
     metasVigentes = metasPendientes;
 
     // La semana NO se corta. Sigue de lunes a domingo y los macros nuevos
@@ -1758,6 +1798,7 @@
     reg.objetivo = objElegido;
 
     var m = calcularMacros();
+    apuntarCambioDeMeta(calDe(metasVigentes || leerMetas()), calDe(m));
     goalP.value = m.P; goalC.value = m.C; goalG.value = m.G;
     metasVigentes = leerMetas();            // ya confirmado: no debe volver a preguntar
     document.getElementById('profObjetivo').innerHTML =
@@ -4195,6 +4236,34 @@
                                            return 'La contraseña necesita al menos 6 caracteres.';
     if(m.indexOf('failed to fetch') >= 0 || m.indexOf('networkerror') >= 0)
                                            return 'Sin conexión. Revisa tu internet e inténtalo otra vez.';
+
+    // El asistente caído. Esto pasó de verdad y estuvo horas así: la función
+    // no arrancaba y lo que se veía en pantalla era «Function failed to
+    // start (please check logs)». En inglés, hablando de unos registros que
+    // quien lo lee no puede abrir, y sin decir lo único que importa: que no
+    // es culpa suya y que no ha perdido nada.
+    if(m.indexOf('boot_error') >= 0 || m.indexOf('failed to start') >= 0 ||
+       m.indexOf('worker_limit') >= 0 || m.indexOf('worker_error') >= 0)
+      return 'El asistente está caído. No es cosa tuya y no perdiste nada: ' +
+             'lo que apuntaste sigue guardado. Inténtalo en un rato.';
+
+    // El servidor tardó más de lo que aguanta la petición. Con foto pasa:
+    // la imagen viaja, se analiza y a veces no llega a tiempo.
+    if(m.indexOf('timeout') >= 0 || m.indexOf('timed out') >= 0 || m.indexOf('504') >= 0)
+      return 'El asistente tardó demasiado. Inténtalo otra vez; si mandaste ' +
+             'foto, prueba con una más ligera.';
+
+    // Los topes de gasto. Son a propósito, así que se explican como una
+    // norma y no como una avería.
+    if(m.indexOf('429') >= 0 || m.indexOf('rate limit') >= 0 || m.indexOf('too many') >= 0)
+      return 'Llegaste a tu tope de consultas por hoy. Vuelve mañana.';
+
+    // Un 5xx suelto de Supabase o de Anthropic. Sin esto salía «Error 500».
+    if(/^error 5\d\d$/.test(m) || m.indexOf('internal server error') >= 0 ||
+       m.indexOf('service unavailable') >= 0 || m.indexOf('bad gateway') >= 0)
+      return 'El servidor falló. No perdiste nada de lo que ya apuntaste; ' +
+             'inténtalo otra vez en un momento.';
+
     return msg;
   }
 
@@ -7443,7 +7512,11 @@
     return {
       dias_apuntados: dias,
       meta_cal: calDe(meta),
-      media_cal: dias ? Math.round(suma / dias) : 0
+      media_cal: dias ? Math.round(suma / dias) : 0,
+      // Si la meta cambió a mitad de esta semana, `meta_cal` solo vale para
+      // los últimos días y la media mezcla dos objetivos. Sin decirlo, la IA
+      // lee un exceso que no existió.
+      cambios_de_meta: cambiosDeMetaEn(desde, hasta)
     };
   }
 

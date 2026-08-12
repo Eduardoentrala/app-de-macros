@@ -985,11 +985,27 @@ Deno.serve(async (req) => {
           ).join('\n') + `\n`
         : '';
 
+      // La meta pudo cambiar A MITAD de la semana que se cierra. Entonces
+      // «meta diaria» solo vale para los últimos días y el promedio mezcla
+      // dos objetivos: sin avisar, esto se lee como un exceso que no hubo.
+      const cambios = Array.isArray((cuerpo.datos as Record<string, unknown>)?.cambios_de_meta)
+        ? ((cuerpo.datos as Record<string, unknown>).cambios_de_meta as Record<string, unknown>[])
+        : [];
+      const cambioMeta = cambios.length
+        ? `- OJO: cambió su meta a mitad de semana (` +
+          cambios.map((c) => `el ${c.fecha}, de ${c.antes} a ${c.despues} cal`).join('; ') +
+          `). El promedio de arriba mezcla los dos objetivos, así que NO lo ` +
+          `leas como si se hubiera pasado o quedado corto. Dilo con naturalidad ` +
+          `y sé prudente: con la semana partida en dos, casi nunca hay razón ` +
+          `para moverle nada otra vez.\n`
+        : '';
+
       const contexto =
         `\n\nLA SEMANA QUE SE CIERRA:\n` +
         `- Días que apuntó: ${diasApuntados} de 7\n` +
         `- Meta diaria actual: ${Math.round(Number(d.meta_cal) || 0)} cal\n` +
         `- Promedio de lo que comió: ${Math.round(Number(d.media_cal) || 0)} cal\n` +
+        cambioMeta +
         `- Pesos (últimas 4 semanas): ${listaPesos}` +
         entreno + `\n` +
         semanas +
