@@ -142,7 +142,49 @@ table.week-table tr.today td{font-weight:800;}
    sin pensar y un "4/5" obliga a traducir. El número existe, pero por
    dentro. */
 .chq-bloque{margin-bottom:14px;}
-.chq-tit{font:700 13px/1 sans-serif;color:var(--ink);margin-bottom:8px;}
+.chq-tit{
+  font:700 13px/1 sans-serif;color:var(--ink);margin-bottom:8px;
+  display:flex;align-items:center;gap:7px;
+}
+/* La «i» dentro de un círculo, dibujada con CSS en vez de con un emoji:
+   los emojis de información se ven distintos en cada teléfono y algunos
+   salen en color. Así es el mismo en todas partes y sigue el tema. */
+.chq-ayuda{
+  flex:none;width:17px;height:17px;border-radius:50%;
+  border:1.7px solid var(--ink-faint);background:none;color:var(--ink-faint);
+  font:800 11px/1 Georgia, serif;   /* la «i» con serifa se lee como símbolo */
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;padding:0;position:relative;
+}
+/* El blanco táctil llega a 44 px sin agrandar el círculo, igual que en las
+   series: 17 px es un dibujo, no un botón. */
+.chq-ayuda::after{content:'';position:absolute;inset:-13px;}
+.chq-ayuda:active,
+.chq-ayuda.abierta{border-color:var(--ink);color:var(--ink);}
+
+/* La explicación. En gris y con la letra más chica que las opciones: es
+   apoyo, no compite con lo que hay que contestar. */
+.chq-info{
+  position:relative;
+  margin:-2px 0 9px;padding:11px 13px;border-radius:11px;
+  background:var(--app-bg);
+  font:500 12.5px/1.55 sans-serif;color:var(--ink-soft);
+}
+.chq-info b{font-weight:800;color:var(--ink);}
+/* La × arriba a la derecha, y el texto le deja sitio con el padding: sin
+   eso, la última línea le pasa por debajo. */
+.chq-info{padding-right:34px;}
+.chq-info-x{
+  position:absolute;top:6px;right:6px;
+  width:22px;height:22px;border-radius:50%;border:none;cursor:pointer;
+  background:var(--pill-bg);color:var(--ink-soft);
+  font:400 15px/1 sans-serif;display:flex;align-items:center;justify-content:center;
+  padding:0;
+}
+/* Igual que en todo lo demás: el blanco táctil llega a 44 px sin agrandar
+   el dibujo. 22 px pegados a una esquina son un blanco pequeño. */
+.chq-info-x::after{content:'';position:absolute;inset:-11px;}
+.chq-info-x:active{background:var(--line);color:var(--ink);}
 .chq-esc{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;}
 .chq-esc button{
   padding:10px 2px;border-radius:10px;cursor:pointer;

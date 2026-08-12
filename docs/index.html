@@ -60,7 +60,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '30d0ded623';
+    var SELLO = '32bc7959a3';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -1263,7 +1263,18 @@
             <p class="hint">Tres cosas rápidas. Sin esto, cambiarte las calorías sería adivinar.</p>
 
             <div class="chq-bloque">
-              <div class="chq-tit">Hambre</div>
+              <div class="chq-tit">Hambre
+                <button class="chq-ayuda" data-ayuda="hambre"
+                  aria-label="Más información sobre el hambre">i</button></div>
+              <div class="chq-info" id="infoHambre" hidden>
+                <button class="chq-info-x" aria-label="Cerrar esta explicación">×</button>
+                Piensa en la <b>semana entera</b>, no en cómo estás ahora mismo.<br>
+                <b>Normal</b> es el hambre de siempre antes de comer. <b>Bastante</b> o
+                <b>Mucha</b> es la que te distrae: la que te hace pensar en comida
+                entre comidas.<br>
+                Si está alta dos o tres semanas seguidas, es señal de que las calorías
+                están bajas de más y hay que subirlas.
+              </div>
               <div class="chq-esc" data-chq="hambre">
                 <button data-v="1">Nada</button><button data-v="2">Poca</button>
                 <button class="on" data-v="3">Normal</button>
@@ -1271,7 +1282,17 @@
               </div>
             </div>
             <div class="chq-bloque">
-              <div class="chq-tit">Energía</div>
+              <div class="chq-tit">Energía
+                <button class="chq-ayuda" data-ayuda="energia"
+                  aria-label="Más información sobre la energía">i</button></div>
+              <div class="chq-info" id="infoEnergia" hidden>
+                <button class="chq-info-x" aria-label="Cerrar esta explicación">×</button>
+                Cómo te sentiste para entrenar y para el día normal.<br>
+                <b>Normal</b> es tu energía de siempre. <b>Baja</b> es levantarte cansado,
+                arrastrarte en el gimnasio o quedarte sin fuerza a media tarde.<br>
+                Sirve para saber si el plan te está costando de más. Mira la semana,
+                no un mal día.
+              </div>
               <div class="chq-esc" data-chq="energia">
                 <button data-v="1">Muy baja</button><button data-v="2">Baja</button>
                 <button class="on" data-v="3">Normal</button>
@@ -1289,7 +1310,18 @@
                  con soluciones opuestas. Sin esta pregunta se acababa
                  moviendo las calorías por un problema de descanso. -->
             <div class="chq-bloque">
-              <div class="chq-tit">Sueño</div>
+              <div class="chq-tit">Sueño
+                <button class="chq-ayuda" data-ayuda="sueno"
+                  aria-label="Más información sobre el sueño">i</button></div>
+              <div class="chq-info" id="infoSueno" hidden>
+                <button class="chq-info-x" aria-label="Cerrar esta explicación">×</button>
+                Cuánto y qué tal dormiste, en promedio.<br>
+                Está aquí porque <b>dormir mal produce lo mismo que comer poco</b>:
+                hambre alta y energía baja. Son problemas distintos y se arreglan al
+                revés.<br>
+                Si lo que falla es el sueño, moverte las calorías no lo arregla — y
+                saberlo evita que te las cambie sin motivo.
+              </div>
               <div class="chq-esc" data-chq="sueno">
                 <button data-v="1">Muy mal</button><button data-v="2">Mal</button>
                 <button class="on" data-v="3">Normal</button>
@@ -1453,7 +1485,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '30d0ded623';
+    var SELLO = '32bc7959a3';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que

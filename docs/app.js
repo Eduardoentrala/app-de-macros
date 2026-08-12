@@ -7294,6 +7294,34 @@
 
   chequeoSheet.addEventListener('click', function(e){
     if(e.target === chequeoSheet){ chequeoSheet.classList.remove('open'); return; }
+
+    // La × de una explicación abierta. Va ANTES que la «i»: las dos viven
+    // dentro del mismo bloque y si se mirara primero la «i» nunca se
+    // llegaría aquí.
+    var cerrarInfo = e.target.closest('.chq-info-x');
+    if(cerrarInfo){
+      var caja = cerrarInfo.closest('.chq-info');
+      var suBloque = cerrarInfo.closest('.chq-bloque');
+      if(caja) caja.hidden = true;
+      var suIcono = suBloque && suBloque.querySelector('.chq-ayuda');
+      if(suIcono) suIcono.classList.remove('abierta');
+      return;
+    }
+
+    // La «i» de cada pregunta. Se despliega debajo en vez de abrir otra hoja:
+    // una hoja encima de otra tapa lo que se está contestando, y quien la
+    // cierra pierde de vista la pregunta.
+    var ayuda = e.target.closest('.chq-ayuda');
+    if(ayuda){
+      var bloque = ayuda.closest('.chq-bloque');
+      var texto = bloque && bloque.querySelector('.chq-info');
+      if(texto){
+        texto.hidden = !texto.hidden;
+        ayuda.classList.toggle('abierta', !texto.hidden);
+      }
+      return;
+    }
+
     var b = e.target.closest('.chq-esc button');
     if(!b) return;
     Array.from(b.parentNode.children).forEach(function(x){ x.classList.remove('on'); });
@@ -7306,6 +7334,11 @@
   function abrirChequeo(){
     var caja = document.getElementById('chqRespuesta');
     caja.hidden = true; caja.textContent = '';
+    // Las explicaciones se cierran: si se quedaran abiertas de la vez
+    // anterior, la hoja arrancaría con tres párrafos y las opciones fuera de
+    // pantalla, que es justo lo contrario de "tres cosas rápidas".
+    Array.from(chequeoSheet.querySelectorAll('.chq-info')).forEach(function(x){ x.hidden = true; });
+    Array.from(chequeoSheet.querySelectorAll('.chq-ayuda')).forEach(function(x){ x.classList.remove('abierta'); });
     var btn = document.getElementById('chqEnviar');
     btn.disabled = false; btn.textContent = 'Revisar mi semana';
     // Se vuelve al papel de revisar: si la hoja se reabre despues de una

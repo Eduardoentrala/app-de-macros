@@ -320,7 +320,7 @@ console.log('\n— Al reabrirla vuelve a revisar, no a cerrar —');
   // La regresión evidente: si la hoja se reabre con el botón todavía en
   // modo cerrar, pulsarlo la cerraría sin revisar nada.
   const i = APP.indexOf('function abrirChequeo(');
-  const trozo = APP.slice(i, i + 600);
+  const trozo = APP.slice(i, i + 1400);
   check('se le quita el modo cerrar', /delete btn\.dataset\.modo;/.test(trozo));
   check('vuelve «Ahora no»', /chqCerrar'\)\.hidden = false;/.test(trozo));
   check('y el botón vuelve a su texto', /btn\.textContent = 'Revisar mi semana';/.test(trozo));
