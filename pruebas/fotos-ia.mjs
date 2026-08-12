@@ -203,6 +203,22 @@ console.log('\n— El permiso se pide bien y se puede retirar —');
     'mandar fotos con un permiso que no consta en la base es peor que no mandarlas');
 }
 
+console.log('\n— Y no se enciende antes que el servidor —');
+{
+  // Si esto corriera con la funcion vieja arriba, decir que si al permiso
+  // llamaria a una accion que el servidor no conoce: una consulta de IA
+  // gastada por cada apertura, y nada a cambio. Pedir permiso para algo que
+  // todavia no funciona es peor que no pedirlo.
+  check('hay un interruptor', /var FOTOS_IA_LISTO = /.test(APP));
+  check('y lo primero que se mira es ese',
+    /function revisarAnalisisDeFotos\(\)\{\s*\r?\n\s*if\(!FOTOS_IA_LISTO\) return;/.test(APP),
+    'antes que la sesion y antes que el nivel: si no esta listo, no se toca nada');
+  // Lo ya guardado si se enseña: no depende del servidor.
+  check('lo ya guardado se sigue enseñando',
+    !/FOTOS_IA_LISTO/.test(APP.slice(APP.indexOf('function cargarAnalisis('),
+                                     APP.indexOf('function cargarAnalisis(') + 600)));
+}
+
 console.log('\n— Y se ve —');
 {
   check('hay sitio para el analisis', /id="analisisCard"/.test(HTML));

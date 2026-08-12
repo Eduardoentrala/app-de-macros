@@ -4853,6 +4853,19 @@
   //  filtrando por la sesión. Si el cliente mandara rutas, un token robado
   //  serviría para pedir el análisis de las fotos de otra persona.
   // =====================================================================
+  // INTERRUPTOR: se enciende cuando la función `asistente` con la acción
+  // 'fotos' esté desplegada, y no antes.
+  //
+  // No es un adorno. Si esto estuviera encendido con la función vieja
+  // arriba, decir que sí al permiso llamaría a una acción que el servidor
+  // no conoce: le gastaría una consulta de IA por cada apertura de la app y
+  // no daría nada a cambio. Pedir un permiso para algo que todavía no
+  // funciona es peor que no pedirlo.
+  //
+  // Apagado, no se pide el permiso ni se llama a nada. Lo ya guardado sí se
+  // enseña, que no depende del servidor.
+  var FOTOS_IA_LISTO = false;
+
   var PERMISO_FOTOS = null;    // true / false / null = no se le ha preguntado
   var ANALISIS = null;         // el último guardado, para pintarlo
   var ANALISIS_INTENTADO = false;   // solo un intento por apertura de la app
@@ -4956,6 +4969,7 @@
   function mesDeHoy(){ return isoDe(HOY).slice(0, 7); }
 
   function revisarAnalisisDeFotos(){
+    if(!FOTOS_IA_LISTO) return;      // la función todavía no lo sabe hacer
     if(!sesion || !sesion.user) return;
     if(MI_NIVEL_IA !== 'plus') return;
 
