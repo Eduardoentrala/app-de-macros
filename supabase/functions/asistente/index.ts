@@ -1314,14 +1314,17 @@ Deno.serve(async (req) => {
       // ---- PASO 2: contarlo, ya con los números y SIN las fotos ----
       const p = (cuerpo.pesos ?? []) as Record<string, unknown>[];
       const c = (cuerpo.cinturas ?? []) as Record<string, unknown>[];
+      // Concatenación y no plantillas: aquí van plantillas ANIDADAS dentro de
+      // una plantilla, y eso es lo que más se rompe al copiar el fichero de
+      // un sitio a otro. Se lee igual y no hay nada que escapar.
       const numeros =
-        `\n\nLO QUE SE VIO EN LAS FOTOS (escrito sin conocer ningún número):\n` +
-        `"${visto}"\n\n` +
-        `SUS NÚMEROS:\n` +
-        `- Van ${semanaVieja} contra ${semanaNueva}.\n` +
-        `- Pesos: ${p.length ? p.map((x) => `${x.fecha}: ${x.kg} kg`).join(' · ') : 'no apuntó'}\n` +
-        `- Cintura: ${c.length ? c.map((x) => `${x.log_date}: ${x.cintura_cm} cm`).join(' · ') : 'no la midió'}\n` +
-        (semanaBase ? `- Además tiene fotos desde ${semanaBase}, su primera serie.\n` : '');
+        '\n\nLO QUE SE VIO EN LAS FOTOS (escrito sin conocer ningún número):\n' +
+        '"' + visto + '"\n\n' +
+        'SUS NÚMEROS:\n' +
+        '- Van ' + semanaVieja + ' contra ' + semanaNueva + '.\n' +
+        '- Pesos: ' + (p.length ? p.map((x) => x.fecha + ': ' + x.kg + ' kg').join(' · ') : 'no apuntó') + '\n' +
+        '- Cintura: ' + (c.length ? c.map((x) => x.log_date + ': ' + x.cintura_cm + ' cm').join(' · ') : 'no la midió') + '\n' +
+        (semanaBase ? '- Además tiene fotos desde ' + semanaBase + ', su primera serie.\n' : '');
 
       const decirR = await ia.messages.create({
         model: MODELO,
