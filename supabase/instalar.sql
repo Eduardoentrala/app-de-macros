@@ -2,7 +2,7 @@
 --  INSTALACIÓN COMPLETA — pega este archivo entero en el editor SQL
 --  de Supabase y pulsa Run. Una sola vez.
 --
---  Son las 19 migraciones de supabase/migrations/ unidas en orden.
+--  Son las 39 migraciones de supabase/migrations/ unidas en orden.
 --  Se ejecutan como una sola transacción: si algo fallara, no queda nada
 --  a medias — se deshace todo y la base se queda como estaba.
 --
@@ -4660,3 +4660,2118 @@ on conflict (alimento_id, termino) do nothing;
 --     from public.alimentos_catalogo
 --    where kcal > 900 or proteina > 100 or carbos > 100 or grasas > 100;
 
+
+
+-- ============================ 0020_condiciones_de_salud.sql ============================
+
+-- ---------------------------------------------------------------------
+--  CONDICIONES DE SALUD
+--
+--  Para qué: una persona con diabetes, hipertensión o embarazo no debería
+--  recibir las mismas calorías que calcula la fórmula a secas. Guardarlo
+--  permite ajustar el objetivo y, sobre todo, avisar de lo que la app NO
+--  puede decidir por nadie.
+--
+--  DÓNDE ESTÁ EL LÍMITE. Esto no convierte la app en consejo médico y no
+--  debe presentarse así. La fórmula (Mifflin-St Jeor) sigue mandando y el
+--  suelo de seguridad -nunca por debajo del metabolismo basal ni de 1200
+--  calorías- se aplica igual, tenga la condición que tenga. Lo que la
+--  condición cambia es el margen del ajuste y el aviso que se enseña.
+--
+--  Por qué una lista cerrada y no texto libre: sobre una lista se puede
+--  razonar (ajustar, avisar, medir cuánta gente hay de cada tipo). Sobre
+--  texto libre no. El texto libre existe aparte, para lo que no encaje, y
+--  NO se usa para calcular nada.
+--
+--  Privacidad: esto es dato de salud. Lo protegen las mismas políticas RLS
+--  de `profiles` que ya existen -cada quien ve lo suyo, el entrenador ve a
+--  los suyos-. No se añade ninguna vista nueva que lo exponga.
+-- ---------------------------------------------------------------------
+
+do $$
+begin
+  if not exists (select 1 from pg_type where typname = 'condicion_salud') then
+    create type public.condicion_salud as enum (
+      'diabetes_1',
+      'diabetes_2',
+      'prediabetes',
+      'hipertension',
+      'colesterol_alto',
+      'hipotiroidismo',
+      'higado_graso',
+      'enfermedad_renal',
+      'celiaquia',
+      'embarazo',
+      'lactancia'
+    );
+  end if;
+end $$;
+
+alter table public.profiles
+  add column if not exists condiciones public.condicion_salud[] not null default '{}',
+  -- Para lo que no está en la lista. Se enseña a quien corresponda, pero
+  -- no entra en ningún cálculo: no hay forma honesta de razonar sobre
+  -- texto libre sin inventarse lo que dice.
+  add column if not exists nota_salud text
+    check (nota_salud is null or length(nota_salud) <= 300);
+
+-- Sin duplicados en el array: 'diabetes_2' dos veces no significa nada y
+-- complicaría cualquier cuenta que se haga después.
+--
+-- Va en una función y no directo en el CHECK porque PostgreSQL no admite
+-- subconsultas dentro de una restricción. Marcarla `immutable` es correcto
+-- y necesario: solo depende de lo que se le pasa.
+create or replace function public.sin_condiciones_repetidas(a public.condicion_salud[])
+returns boolean
+language sql immutable
+as $$
+  select a is null
+      or cardinality(a) = cardinality(array(select distinct unnest(a)))
+$$;
+
+alter table public.profiles
+  drop constraint if exists profiles_condiciones_sin_repetir;
+alter table public.profiles
+  add constraint profiles_condiciones_sin_repetir
+  check (public.sin_condiciones_repetidas(condiciones));
+
+-- Los dos tipos de diabetes a la vez no existen: es uno u otro. Se rechaza
+-- en la base y no solo en la pantalla, porque la pantalla no es la única
+-- puerta -la app habla por PostgREST y cualquiera puede llamar directo-.
+alter table public.profiles
+  drop constraint if exists profiles_una_sola_diabetes;
+alter table public.profiles
+  add constraint profiles_una_sola_diabetes
+  check (not ('diabetes_1' = any(condiciones) and 'diabetes_2' = any(condiciones)));
+
+comment on column public.profiles.condiciones is
+  'Condiciones declaradas por la persona. Ajustan el margen del calculo y el aviso; NO sustituyen criterio medico.';
+comment on column public.profiles.nota_salud is
+  'Texto libre de salud. Se enseña, no se calcula con el.';
+
+
+-- ============================ 0021_arreglo_lista_usuarios.sql ============================
+
+-- ---------------------------------------------------------------------
+--  ARREGLO: admin_buscar_usuarios reventaba
+--
+--  Sintoma: el panel de super admin se quedaba en "Cargando usuarios..."
+--  para siempre, y la pestana Plan mostraba
+--      "structure of query does not match function result type".
+--  Las dos pantallas comen de esta misma funcion, por eso fallaban juntas.
+--
+--  Causa: la funcion declara `returns table (... correo text ...)` pero
+--  devuelve `u.email`, y en Supabase `auth.users.email` es
+--  `character varying(255)`, no `text`. PostgreSQL no lo convierte solo en
+--  el tipo de retorno de una funcion: compara los tipos exactos y aborta.
+--
+--  El error solo aparece AL EJECUTARLA, no al crearla, asi que la 0017 se
+--  aplico sin quejarse y el fallo salio meses despues, en produccion.
+--
+--  Arreglo: castear a text lo que la firma dice que es text. Se castean
+--  tambien los otros dos campos de texto que salen de columnas ajenas
+--  (`full_name`), por si alguna vez cambian de tipo: cuesta nada y cierra
+--  la misma clase de fallo.
+-- ---------------------------------------------------------------------
+
+create or replace function public.admin_buscar_usuarios(p_texto text default '', p_limite int default 50)
+returns table (
+  id uuid, nombre text, correo text, rol public.app_role, activo boolean,
+  coach text, ultima_actividad date, creado_en timestamptz,
+  ia_habilitada boolean, estado public.estado_cliente
+)
+language plpgsql stable security definer set search_path = public, pg_temp
+as $$
+begin
+  if not public.es_super_admin() then
+    raise exception 'Solo el super admin puede buscar usuarios';
+  end if;
+
+  return query
+  select p.id,
+         p.full_name::text,
+         u.email::text,          -- varchar(255) en auth.users: hay que castear
+         p.role,
+         p.activo,
+         c.full_name::text as coach,
+         greatest(
+           (select max(d.entry_date)   from public.diary_entries    d where d.user_id = p.id),
+           (select max(w.session_date) from public.workout_sessions w where w.user_id = p.id)
+         ) as ultima_actividad,
+         p.created_at,
+         p.ia_habilitada,
+         p.estado
+    from public.profiles p
+    join auth.users u on u.id = p.id
+    left join public.coach_clientes cc on cc.cliente_id = p.id and cc.activo
+    left join public.profiles c on c.id = cc.coach_id
+   where p_texto = ''
+      or p.full_name ilike '%' || p_texto || '%'
+      or u.email    ilike '%' || p_texto || '%'
+   order by p.created_at desc
+   limit p_limite;
+end $$;
+
+revoke execute on function public.admin_buscar_usuarios(text, int) from public;
+grant  execute on function public.admin_buscar_usuarios(text, int) to authenticated;
+
+
+-- ---------------------------------------------------------------------
+--  Cuanto se ha gastado hoy en el asistente
+--
+--  El tope diario impide que se dispare, pero no avisa de nada. Esto
+--  devuelve el gasto de hoy para poder verlo en el panel sin entrar a
+--  Anthropic.
+--
+--  Cuenta consultas, no dinero: el precio depende del modelo y cambia, y
+--  guardar un precio en la base seria mentira en cuanto se toque. El coste
+--  aproximado lo pone la app, que es donde ya vive el modelo.
+-- ---------------------------------------------------------------------
+create or replace function public.admin_uso_ia_hoy()
+returns table (consultas int, personas int, tope_por_persona int)
+language plpgsql stable security definer set search_path = public, pg_temp
+as $$
+begin
+  if not public.es_super_admin() then
+    raise exception 'Solo el super admin puede ver el uso';
+  end if;
+
+  return query
+  select coalesce(sum(iu.consultas), 0)::int,
+         count(*)::int,
+         -- El tope real vive en la Edge Function; aqui va como referencia
+         -- para que el panel pueda decir "3 de 5" sin inventarselo.
+         5::int
+    from public.ia_uso iu
+   where iu.dia = current_date;
+end $$;
+
+revoke execute on function public.admin_uso_ia_hoy() from public;
+grant  execute on function public.admin_uso_ia_hoy() to authenticated;
+
+
+-- ============================ 0022_sexo_y_dias_de_entreno.sql ============================
+
+-- ---------------------------------------------------------------------
+--  Guardar lo que faltaba de la formula: sexo y dias de entreno
+--
+--  Sintoma: quien INICIA SESION (no quien se registra) y cambia su objetivo
+--  desde Perfil recalculaba sus macros sobre casillas vacias. Salian 1.200
+--  calorias y 0 g de proteina, y se guardaban asi en la base.
+--
+--  Causa: calcularMacros() lee los campos de la pantalla de REGISTRO. Al
+--  iniciar sesion el perfil se restauraba a los <span> de Perfil, que son
+--  otros elementos, y esos campos se quedaban en blanco.
+--
+--  Al ir a arreglarlo aparecio lo de verdad: aunque se rellenen peso, altura
+--  y edad, `profiles` nunca guardo las otras dos entradas de la formula.
+--
+--    sexo         Mifflin-St Jeor suma +5 a un hombre y -161 a una mujer.
+--                 166 calorias de diferencia que se decidian por el valor
+--                 por defecto de la pantalla, no por la persona.
+--    dias_entreno El factor de actividad va de 1,2 a 1,9. Es el multiplicador
+--                 de TODO el gasto: quien entrena 6 dias y se recalculaba
+--                 como si entrenara 3 perdia ~11% de sus calorias.
+--
+--  Sin estas dos columnas el arreglo de la pantalla dejaria el mismo fallo
+--  con un numero menos escandaloso, que es peor: deja de notarse.
+--
+--  Ambas admiten null a proposito. Las seis cuentas que ya existen no las
+--  tienen y no hay forma honesta de adivinarlas; la app usa su valor por
+--  defecto hasta que esa persona pase por Perfil. Poner un default en la
+--  columna seria afirmar algo que nadie ha dicho.
+-- ---------------------------------------------------------------------
+
+alter table public.profiles
+  -- 'h' | 'm'. Un check y no un enum: son dos valores que no van a crecer,
+  -- y un enum obliga a una migracion para cualquier retoque.
+  add column if not exists sexo text
+    check (sexo is null or sexo in ('h', 'm')),
+  add column if not exists dias_entreno int
+    check (dias_entreno is null or dias_entreno between 0 and 7);
+
+comment on column public.profiles.sexo is
+  'Para Mifflin-St Jeor. null = nunca lo dijo; la app usa su valor por defecto.';
+comment on column public.profiles.dias_entreno is
+  'Dias de entreno por semana, 0-7. Da el factor de actividad del gasto.';
+
+
+-- ============================ 0023_huevo_por_piezas.sql ============================
+
+-- ---------------------------------------------------------------------
+--  El huevo se cuenta en piezas, no en gramos
+--
+--  Nadie pesa un huevo. Se dicen "dos huevos", y obligar a escribir 100 g
+--  es pedirle a la persona que haga una cuenta que la app puede hacer sola.
+--
+--  POR QUE UNA COLUMNA NUEVA Y NO `porcion_g`
+--
+--  Las piezas ya existieron y se quitaron. La razon esta escrita en app.js:
+--  la porcion de USDA no es una pieza. Son cosas como 'cup, chopped', 'oz' o
+--  'chop without refuse'. Al ofrecerlas como piezas, "1 Pieza" de espagueti
+--  acababa significando una taza y nadie podia saberlo mirando la pantalla.
+--
+--  `porcion` y `porcion_g` siguen siendo lo que USDA dice, sin tocar: son el
+--  dato auditable contra la fuente. `pieza_g` es otra cosa y por eso va
+--  aparte: cuanto pesa UNA unidad de comer, y solo se rellena donde una
+--  pieza es algo que existe y no admite discusion.
+--
+--  Hoy: los seis huevos. Nada mas. Un aguacate o un platano tambien serian
+--  candidatos, pero varian tanto de tamano que la pieza mentiria; el huevo
+--  no, porque se vende por calibre.
+--
+--  Los pesos son los de USDA para 'large', que es el huevo que se vende en
+--  Mexico como blanquillo mediano-grande. El cocido llevaba 136 g de
+--  'cup, chopped': eso no es un huevo, es una taza de huevo picado.
+-- ---------------------------------------------------------------------
+
+alter table public.alimentos_catalogo
+  add column if not exists pieza_g integer
+    check (pieza_g is null or pieza_g between 1 and 2000);
+
+comment on column public.alimentos_catalogo.pieza_g is
+  'Cuanto pesa UNA unidad de comer, en gramos. null = este alimento no se '
+  'cuenta por piezas y va en gramos. No confundir con porcion_g, que es la '
+  'porcion de referencia de USDA y puede ser una taza o una onza.';
+
+update public.alimentos_catalogo set pieza_g = 50 where nombre = 'Huevo entero';
+update public.alimentos_catalogo set pieza_g = 50 where nombre = 'Huevo cocido';
+update public.alimentos_catalogo set pieza_g = 46 where nombre = 'Huevo estrellado';
+update public.alimentos_catalogo set pieza_g = 61 where nombre = 'Huevo revuelto';
+update public.alimentos_catalogo set pieza_g = 33 where nombre = 'Clara de huevo';
+update public.alimentos_catalogo set pieza_g = 17 where nombre = 'Yema de huevo';
+
+-- La busqueda tiene que devolverlo o la app no puede saber que hay pieza.
+--
+-- Hay que SOLTARLA antes: `create or replace` no puede cambiar el tipo que
+-- devuelve una funcion, y aqui se le anade una columna.
+--   ERROR: cannot change return type of existing function
+--   DETAIL: Row type defined by OUT parameters is different.
+-- Los permisos se van con la funcion, por eso el grant de abajo no sobra.
+drop function if exists public.buscar_catalogo(text, integer);
+
+create or replace function public.buscar_catalogo(
+  p_texto  text,
+  p_limite integer default 25
+)
+returns table (
+  id bigint, nombre text, categoria public.categoria_alimento,
+  estado public.estado_alimento, kcal numeric, proteina numeric,
+  carbos numeric, grasas numeric, porcion text, porcion_g integer,
+  pieza_g integer
+)
+language sql stable security definer set search_path = public, pg_temp
+as $$
+  with q as (select public.normalizar_texto(coalesce(p_texto, '')) t)
+  select distinct on (a.id)
+         a.id, a.nombre, a.categoria, a.estado,
+         a.kcal, a.proteina, a.carbos, a.grasas, a.porcion, a.porcion_g,
+         a.pieza_g
+    from public.alimentos_catalogo a
+    left join public.alimentos_sinonimos s on s.alimento_id = a.id
+   cross join q
+   where a.activo
+     and length(q.t) >= 2
+     and (a.nombre_norm like '%' || q.t || '%' or s.termino_norm like '%' || q.t || '%')
+   order by a.id,
+            (a.nombre_norm = q.t) desc,
+            (a.nombre_norm like q.t || '%') desc,
+            length(a.nombre)
+   limit least(greatest(p_limite, 1), 50);
+$$;
+
+revoke execute on function public.buscar_catalogo(text, integer) from public, anon;
+grant  execute on function public.buscar_catalogo(text, integer) to authenticated;
+
+
+-- ============================ 0024_eventos_y_chequeo_semanal.sql ============================
+
+-- ---------------------------------------------------------------------
+--  Eventos y chequeo semanal
+--
+--  Dos cosas que la app no sabia hacer y que son la misma idea: dejar de
+--  tratar la semana como siete dias iguales.
+--
+--  EVENTOS. Una boda, una cena fuera, un asado. Hoy la persona llega al
+--  sabado, se pasa 1.500 calorias y la app le dice que fallo. Pero no fallo:
+--  iba a una boda y lo sabia desde el martes. Guardar el evento antes
+--  permite repartir esas calorias por los dias de ANTES, que es lo que hace
+--  cualquiera que sepa comer.
+--
+--  No hay lista de tipos de evento, y es a proposito. Una tabla de 'boda',
+--  'cumpleanos', 'asado' obliga a mantenerla y siempre le falta el caso de
+--  alguien. El titulo es texto libre porque la persona lo escribe con sus
+--  palabras y quien lo interpreta es el asistente.
+--
+--  CHEQUEO. Antes de moverle las calorias a alguien hay que saber como
+--  esta. El peso solo no lo dice: bajar 800 g pasando hambre y sin energia
+--  no es lo mismo que bajarlos comodo. Sin estos tres numeros, subir o
+--  bajar calorias es adivinar.
+--
+--  El chequeo tambien guarda la DECISION que se tomo con el, incluida la de
+--  no tocar nada. Eso importa: si a alguien no se le ajustan las calorias
+--  tres semanas seguidas por falta de registros, esa historia tiene que
+--  poder leerse en algun sitio.
+-- ---------------------------------------------------------------------
+
+-- Que se prioriza cuando no cabe todo. En una boda casi nadie quiere las
+-- dos cosas: o se come o se bebe.
+do $$
+begin
+  if not exists (select 1 from pg_type where typname = 'prioridad_evento') then
+    create type public.prioridad_evento as enum ('comida', 'bebida', 'ambas');
+  end if;
+end $$;
+
+create table if not exists public.eventos (
+  id          bigint generated always as identity primary key,
+  user_id     uuid not null references auth.users(id) on delete cascade,
+
+  fecha       date not null,
+  -- Texto libre: lo escribe la persona y lo lee el asistente.
+  titulo      text not null check (length(btrim(titulo)) between 1 and 120),
+
+  -- Cuanto se aparta para ese dia, POR ENCIMA de su meta normal. El tope de
+  -- 4.000 no es un juicio moral: por encima de ahi la semana no puede
+  -- absorberlo sin dejar dias por debajo del minimo seguro, y entonces el
+  -- reparto deja de ser sano y pasa a ser un ayuno con otro nombre.
+  calorias    integer not null default 0 check (calorias between 0 and 4000),
+  -- Se cuentan aparte porque el alcohol no se administra como la comida:
+  -- son 7 cal/g que no alimentan y que ademas frenan la quema de grasa esa
+  -- noche. Saber cuantas van cambia el consejo, no solo la suma.
+  bebidas     integer not null default 0 check (bebidas between 0 and 30),
+  prioridad   public.prioridad_evento not null default 'ambas',
+
+  creado_en   timestamptz not null default now(),
+  -- Se cancela, no se borra: si alguien apunta una boda, se le reparte la
+  -- semana y luego la quita, hay que poder explicar por que sus calorias
+  -- del miercoles fueron las que fueron.
+  cancelado_en timestamptz
+);
+
+create index if not exists eventos_persona_fecha
+  on public.eventos (user_id, fecha desc) where cancelado_en is null;
+
+-- Un evento por dia y persona. Dos cenas el mismo viernes son una cena con
+-- mas calorias; permitir dos filas solo sirve para sumar dos veces.
+create unique index if not exists eventos_uno_por_dia
+  on public.eventos (user_id, fecha) where cancelado_en is null;
+
+
+create table if not exists public.chequeos_semanales (
+  id        bigint generated always as identity primary key,
+  user_id   uuid not null references auth.users(id) on delete cascade,
+  -- El lunes de la semana a la que se refiere.
+  semana    date not null,
+
+  -- Del 1 al 5, y el 3 es "normal". Tres preguntas y no diez: un
+  -- cuestionario largo se contesta en diagonal y entonces no mide nada.
+  hambre    smallint check (hambre  is null or hambre  between 1 and 5),
+  energia   smallint check (energia is null or energia between 1 and 5),
+  apetito   smallint check (apetito is null or apetito between 1 and 5),
+  nota      text check (nota is null or length(nota) <= 300),
+
+  -- La decision que se tomo con esto, incluida la de no tocar nada.
+  ajusto      boolean not null default false,
+  motivo      text check (motivo is null or length(motivo) <= 500),
+  cal_antes   integer check (cal_antes   is null or cal_antes   between 800 and 8000),
+  cal_despues integer check (cal_despues is null or cal_despues between 800 and 8000),
+
+  creado_en timestamptz not null default now(),
+
+  -- Un chequeo por semana. El segundo actualiza al primero.
+  unique (user_id, semana)
+);
+
+create index if not exists chequeos_persona_semana
+  on public.chequeos_semanales (user_id, semana desc);
+
+
+-- ---------------------------------------------------------------------
+--  Quien ve que
+--
+--  Mismo trato que el resto de datos personales: el coach los VE, solo el
+--  dueno los EDITA. Se escribe con las funciones que ya existen en la 0002
+--  en vez de repetir la logica: si algun dia cambia lo que puede ver un
+--  coach, cambia en un sitio.
+-- ---------------------------------------------------------------------
+do $$
+declare t text;
+begin
+  foreach t in array array['eventos', 'chequeos_semanales'] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists "%s: ver" on public.%I', t, t);
+    execute format('create policy "%s: ver" on public.%I for select using (public.puede_ver(user_id))', t, t);
+    execute format('drop policy if exists "%s: insertar" on public.%I', t, t);
+    execute format('create policy "%s: insertar" on public.%I for insert with check (public.puede_editar_propio(user_id))', t, t);
+    execute format('drop policy if exists "%s: actualizar" on public.%I', t, t);
+    execute format('create policy "%s: actualizar" on public.%I for update using (public.puede_editar_propio(user_id)) with check (public.puede_editar_propio(user_id))', t, t);
+    execute format('drop policy if exists "%s: borrar" on public.%I', t, t);
+    execute format('create policy "%s: borrar" on public.%I for delete using (public.puede_editar_propio(user_id))', t, t);
+  end loop;
+end $$;
+
+grant select, insert, update, delete on public.eventos            to authenticated;
+grant select, insert, update, delete on public.chequeos_semanales to authenticated;
+
+
+-- ============================ 0025_niveles_de_ia.sql ============================
+
+-- ---------------------------------------------------------------------
+--  La IA deja de ser un interruptor y pasa a tener tres niveles
+--
+--  Hasta ahora `ia_habilitada` era si o no. Con eso no se puede vender la
+--  diferencia entre "te reconozco un plato por foto" y "te llevo la semana
+--  como un entrenador": o se da todo o no se da nada.
+--
+--    apagada  Sin IA. La app sigue entera: apuntar a mano, rutinas, peso,
+--             fotos. Solo no hay asistente.
+--    normal   El chat y la foto del platillo. Lo que resuelve el dia a dia.
+--    plus     Todo lo anterior mas lo que necesita seguimiento: eventos que
+--             reparten la semana, chequeo semanal y ajuste de calorias.
+--             Esto es lo que cuesta tokens de verdad y lo que se parece a
+--             tener un coach.
+--
+--  Se guarda el nivel y no dos booleanos. Dos booleanos permiten estados
+--  que no existen -"plus si, normal no"- y tarde o temprano alguien los
+--  crea sin querer.
+--
+--  `ia_habilitada` se queda por ahora y se mantiene en sintonia con un
+--  trigger: la Edge Function desplegada todavia la lee, y apagarla de golpe
+--  dejaria sin asistente a todo el mundo hasta el siguiente despliegue.
+--  Migrar y romper a la vez es como se pierden usuarios un martes.
+-- ---------------------------------------------------------------------
+
+do $$
+begin
+  if not exists (select 1 from pg_type where typname = 'nivel_ia') then
+    -- El orden importa: `order by nivel` los saca de menos a mas, y hay
+    -- comparaciones que se leen mucho mejor asi.
+    create type public.nivel_ia as enum ('apagada', 'normal', 'plus');
+  end if;
+end $$;
+
+alter table public.profiles
+  add column if not exists nivel_ia public.nivel_ia not null default 'normal';
+
+-- Quien tenia la IA apagada se queda apagado. El resto entra en 'normal':
+-- subir a alguien a 'plus' es una decision, no un efecto secundario de una
+-- migracion.
+update public.profiles
+   set nivel_ia = case when ia_habilitada then 'normal' else 'apagada' end::public.nivel_ia
+ where nivel_ia = 'normal' and not ia_habilitada;
+
+comment on column public.profiles.nivel_ia is
+  'apagada | normal (chat y foto) | plus (ademas eventos, chequeo y ajuste semanal).';
+
+
+-- ---------------------------------------------------------------------
+--  Que los dos no se contradigan
+--
+--  Mientras convivan, `ia_habilitada` tiene que ser exactamente "el nivel
+--  no es apagada". Se hace con un trigger y no a mano en cada UPDATE porque
+--  la app no es la unica puerta: se puede escribir por PostgREST directo.
+-- ---------------------------------------------------------------------
+create or replace function public.sincronizar_ia_habilitada()
+returns trigger language plpgsql as $$
+begin
+  new.ia_habilitada := (new.nivel_ia <> 'apagada');
+  return new;
+end $$;
+
+drop trigger if exists profiles_sincronizar_ia on public.profiles;
+create trigger profiles_sincronizar_ia
+  before insert or update of nivel_ia on public.profiles
+  for each row execute function public.sincronizar_ia_habilitada();
+
+-- Y se cuadra lo que ya estaba escrito antes del trigger.
+update public.profiles
+   set ia_habilitada = (nivel_ia <> 'apagada')
+ where ia_habilitada <> (nivel_ia <> 'apagada');
+
+
+-- ---------------------------------------------------------------------
+--  El super admin lo cambia
+--
+--  Funcion propia y no un UPDATE suelto: cambiarle el nivel a otra persona
+--  es un poder, y los poderes se ejercen por una puerta que comprueba quien
+--  llama. Las politicas de `profiles` no dejan editar filas ajenas, asi que
+--  sin esto el panel no podria hacerlo aunque quisiera.
+-- ---------------------------------------------------------------------
+create or replace function public.admin_nivel_ia(p_usuario uuid, p_nivel public.nivel_ia)
+returns public.nivel_ia
+language plpgsql security definer set search_path = public, pg_temp
+as $$
+declare v_nivel public.nivel_ia;
+begin
+  if not public.es_super_admin() then
+    raise exception 'Solo el super admin puede cambiar el nivel de IA';
+  end if;
+
+  update public.profiles set nivel_ia = p_nivel
+   where id = p_usuario
+   returning nivel_ia into v_nivel;
+
+  -- Un UPDATE que no encaja con ninguna fila NO da error: sale bien sin
+  -- tocar nada. Sin esto, el panel diria "hecho" ante un id inventado.
+  if v_nivel is null then
+    raise exception 'No existe esa persona';
+  end if;
+  return v_nivel;
+end $$;
+
+revoke execute on function public.admin_nivel_ia(uuid, public.nivel_ia) from public;
+grant  execute on function public.admin_nivel_ia(uuid, public.nivel_ia) to authenticated;
+
+
+-- La lista de usuarios tiene que traerlo o el panel no sabe que pintar.
+--
+-- Se suelta antes: `create or replace` no puede cambiar el tipo que
+-- devuelve una funcion, y aqui se le anade una columna.
+drop function if exists public.admin_buscar_usuarios(text, int);
+
+create or replace function public.admin_buscar_usuarios(p_texto text default '', p_limite int default 50)
+returns table (
+  id uuid, nombre text, correo text, rol public.app_role, activo boolean,
+  coach text, ultima_actividad date, creado_en timestamptz,
+  ia_habilitada boolean, estado public.estado_cliente, nivel_ia public.nivel_ia
+)
+language plpgsql stable security definer set search_path = public, pg_temp
+as $$
+begin
+  if not public.es_super_admin() then
+    raise exception 'Solo el super admin puede buscar usuarios';
+  end if;
+
+  return query
+  select p.id,
+         p.full_name::text,
+         u.email::text,          -- varchar(255) en auth.users: hay que castear
+         p.role,
+         p.activo,
+         c.full_name::text as coach,
+         greatest(
+           (select max(d.entry_date)   from public.diary_entries    d where d.user_id = p.id),
+           (select max(w.session_date) from public.workout_sessions w where w.user_id = p.id)
+         ) as ultima_actividad,
+         p.created_at,
+         p.ia_habilitada,
+         p.estado,
+         p.nivel_ia
+    from public.profiles p
+    join auth.users u on u.id = p.id
+    left join public.coach_clientes cc on cc.cliente_id = p.id and cc.activo
+    left join public.profiles c on c.id = cc.coach_id
+   where p_texto = ''
+      or p.full_name ilike '%' || p_texto || '%'
+      or u.email    ilike '%' || p_texto || '%'
+   order by p.created_at desc
+   limit p_limite;
+end $$;
+
+revoke execute on function public.admin_buscar_usuarios(text, int) from public;
+grant  execute on function public.admin_buscar_usuarios(text, int) to authenticated;
+
+
+-- ============================ 0026_borrar_cuenta.sql ============================
+
+-- ---------------------------------------------------------------------
+--  Borrar una cuenta de verdad
+--
+--  Hasta ahora no habia forma de irse. La 0007 convirtio los DELETE en
+--  archivado, que esta bien para no perder el historial cuando alguien
+--  quita una receta por error, pero significa que quien queria borrar su
+--  cuenta no podia: se quedaba marcada y ahi seguia todo.
+--
+--  Esto es distinto y es definitivo. No hay papelera, no hay deshacer.
+--
+--  DONDE VIVEN LOS DATOS DE UNA PERSONA
+--
+--  Borrar `auth.users` arrastra en cascada casi todo, pero no todo, y lo
+--  que queda fuera es justo lo que haria inutil el borrado:
+--
+--    auditoria     Guarda `datos_antes` en jsonb: una copia COMPLETA de
+--                  cada fila borrada. Sin purgarla, borrar la cuenta deja
+--                  el expediente entero dentro, con nombre y medidas. Es
+--                  el sitio menos evidente y el mas grave.
+--    versiones     Lo mismo con el historial de metas.
+--    storage       Las fotos de progreso. La fila se borra aqui; el
+--                  archivo en el bucket queda huerfano hasta que pase una
+--                  limpieza. Eso es una limitacion real y conviene saberla
+--                  en vez de suponer que ya no existe.
+--
+--  El flag `app.borrado_definitivo` ya existia en la 0007 para esto: es la
+--  puerta que deja pasar un DELETE de verdad por delante del archivado. Se
+--  pone `true` en el tercer argumento para que sea LOCAL a la transaccion:
+--  si se quedara puesto en la sesion, el siguiente borrado normal de esa
+--  conexion borraria de verdad sin que nadie lo pidiera.
+-- ---------------------------------------------------------------------
+
+create or replace function public.purgar_persona(p_usuario uuid)
+returns void
+language plpgsql security definer set search_path = public, pg_temp
+as $$
+begin
+  -- El orden importa. Primero la cascada, que dispara los triggers de
+  -- auditoria y escribe las copias; y despues se purgan esas copias. Al
+  -- reves, la auditoria del propio borrado sobreviviria.
+  perform set_config('app.borrado_definitivo', 'on', true);
+
+  -- Las filas de Storage. El archivo del bucket es otra historia: esto
+  -- solo suelta la referencia.
+  delete from storage.objects where owner = p_usuario;
+
+  delete from auth.users where id = p_usuario;
+
+  delete from public.auditoria where user_id = p_usuario or actor_id = p_usuario;
+  if to_regclass('public.metas_macros_versiones') is not null then
+    execute 'delete from public.metas_macros_versiones where user_id = $1'
+      using p_usuario;
+  end if;
+end $$;
+
+revoke execute on function public.purgar_persona(uuid) from public, anon, authenticated;
+
+
+-- ---------------------------------------------------------------------
+--  Que alguien borre SU cuenta
+--
+--  No lleva parametro a proposito: el unico id que acepta es el de quien
+--  llama. Un parametro seria una forma de borrar la cuenta de otro.
+-- ---------------------------------------------------------------------
+create or replace function public.borrar_mi_cuenta()
+returns void
+language plpgsql security definer set search_path = public, pg_temp
+as $$
+declare v_yo uuid := auth.uid();
+begin
+  if v_yo is null then
+    raise exception 'Necesitas sesion para borrar tu cuenta';
+  end if;
+
+  -- El ultimo super admin no puede irse: dejaria el panel sin nadie que
+  -- pueda entrar, y recuperarlo requiere tocar la base a mano.
+  if public.es_super_admin() and
+     (select count(*) from public.profiles where role = 'super_admin') <= 1 then
+    raise exception 'Eres el unico super admin: nombra a otro antes de borrarte';
+  end if;
+
+  perform public.purgar_persona(v_yo);
+end $$;
+
+revoke execute on function public.borrar_mi_cuenta() from public, anon;
+grant  execute on function public.borrar_mi_cuenta() to authenticated;
+
+
+-- ---------------------------------------------------------------------
+--  Que el super admin borre la de otro
+-- ---------------------------------------------------------------------
+create or replace function public.admin_borrar_cuenta(p_usuario uuid)
+returns void
+language plpgsql security definer set search_path = public, pg_temp
+as $$
+begin
+  if not public.es_super_admin() then
+    raise exception 'Solo el super admin puede borrar cuentas';
+  end if;
+  -- Borrarse a uno mismo desde el panel de administracion es siempre un
+  -- accidente. Para irse de verdad esta borrar_mi_cuenta(), que ademas
+  -- comprueba que quede otro super admin.
+  if p_usuario = auth.uid() then
+    raise exception 'No puedes borrar tu propia cuenta desde aqui';
+  end if;
+  if not exists (select 1 from public.profiles where id = p_usuario) then
+    raise exception 'No existe esa persona';
+  end if;
+
+  perform public.purgar_persona(p_usuario);
+end $$;
+
+revoke execute on function public.admin_borrar_cuenta(uuid) from public, anon;
+grant  execute on function public.admin_borrar_cuenta(uuid) to authenticated;
+
+
+-- ============================ 0027_inscritos_en_plan.sql ============================
+
+-- ---------------------------------------------------------------------
+--  Plan deja de ser "todo el mundo"
+--
+--  Hasta ahora Plan listaba a TODAS las personas registradas: al super
+--  admin le salian los seis usuarios y al coach todos sus asignados. Pero
+--  no todo el mundo lleva plan de comidas. La lista crecia con cada alta y
+--  se llenaba de gente a la que nadie iba a armarle nada, con lo cual
+--  encontrar a quien si lo lleva costaba mas cada semana.
+--
+--  Ahora hay que inscribir a alguien. Es una decision, no una consecuencia
+--  de haberse registrado.
+--
+--  POR CORREO Y NO POR UNA LISTA DESPLEGABLE
+--
+--  Un desplegable con todos los usuarios es la misma lista larga en otro
+--  sitio. Escribir el correo obliga a saber a quien se esta inscribiendo,
+--  y el correo es lo unico que distingue de verdad a dos personas que se
+--  llamen igual.
+--
+--  SE DA DE BAJA, NO SE BORRA
+--
+--  Si alguien deja el plan y vuelve en marzo, interesa saber que ya estuvo.
+--  `baja_en` guarda esa historia; el indice unico parcial permite volver a
+--  inscribirle sin chocar con la fila vieja.
+-- ---------------------------------------------------------------------
+
+create table if not exists public.plan_inscritos (
+  id           bigint generated always as identity primary key,
+  cliente_id   uuid not null references auth.users(id) on delete cascade,
+  inscrito_por uuid references auth.users(id) on delete set null,
+  inscrito_en  timestamptz not null default now(),
+  baja_en      timestamptz
+);
+
+-- Uno solo activo por persona. Parcial, para que las bajas antiguas no
+-- impidan volver a inscribir a quien regresa.
+create unique index if not exists plan_inscritos_uno_activo
+  on public.plan_inscritos (cliente_id) where baja_en is null;
+
+create index if not exists plan_inscritos_quien
+  on public.plan_inscritos (inscrito_por) where baja_en is null;
+
+
+-- ---------------------------------------------------------------------
+--  Quien ve y quien toca
+--
+--  Se apoya en `puede_ver`, que ya sabe que un coach ve a los suyos y el
+--  super admin a todos. Repetir esa logica aqui garantizaria que un dia se
+--  corrija en un sitio y no en el otro.
+-- ---------------------------------------------------------------------
+alter table public.plan_inscritos enable row level security;
+
+drop policy if exists "plan_inscritos: ver" on public.plan_inscritos;
+create policy "plan_inscritos: ver" on public.plan_inscritos
+  for select using (public.puede_ver(cliente_id));
+
+-- Escribir va por las funciones de abajo, no directo: inscribir requiere
+-- buscar por correo en auth.users, que la app no puede leer.
+revoke all on public.plan_inscritos from anon, authenticated;
+grant select on public.plan_inscritos to authenticated;
+
+
+-- ---------------------------------------------------------------------
+--  Inscribir por correo
+-- ---------------------------------------------------------------------
+create or replace function public.plan_inscribir(p_correo text)
+returns uuid
+language plpgsql security definer set search_path = public, pg_temp
+as $$
+declare
+  v_id  uuid;
+  v_rol public.app_role;
+begin
+  if not (public.es_super_admin() or public.mi_rol() in ('coach', 'org_admin')) then
+    raise exception 'No puedes inscribir a nadie en Plan';
+  end if;
+
+  select u.id, p.role into v_id, v_rol
+    from auth.users u
+    join public.profiles p on p.id = u.id
+   where lower(u.email) = lower(btrim(p_correo));
+
+  if v_id is null then
+    raise exception 'No hay ninguna cuenta con ese correo';
+  end if;
+
+  -- Un coach solo inscribe a los suyos. Sin esto podria meter en su Plan a
+  -- cualquiera con solo saberle el correo.
+  if not public.es_super_admin() and not public.puede_ver(v_id) then
+    raise exception 'Esa persona no es cliente tuyo';
+  end if;
+
+  insert into public.plan_inscritos (cliente_id, inscrito_por)
+  values (v_id, auth.uid())
+  on conflict (cliente_id) where baja_en is null do nothing;
+
+  return v_id;
+end $$;
+
+revoke execute on function public.plan_inscribir(text) from public, anon;
+grant  execute on function public.plan_inscribir(text) to authenticated;
+
+
+-- ---------------------------------------------------------------------
+--  Dar de baja
+-- ---------------------------------------------------------------------
+create or replace function public.plan_dar_baja(p_cliente uuid)
+returns void
+language plpgsql security definer set search_path = public, pg_temp
+as $$
+begin
+  if not public.puede_ver(p_cliente) then
+    raise exception 'No puedes tocar el plan de esa persona';
+  end if;
+  update public.plan_inscritos
+     set baja_en = now()
+   where cliente_id = p_cliente and baja_en is null;
+end $$;
+
+revoke execute on function public.plan_dar_baja(uuid) from public, anon;
+grant  execute on function public.plan_dar_baja(uuid) to authenticated;
+
+
+-- ---------------------------------------------------------------------
+--  La lista de Plan
+--
+--  Una sola funcion para los dos roles. `puede_ver` ya filtra: el super
+--  admin recibe a todos los inscritos y el coach solo a los suyos, sin que
+--  la app tenga que pedir cosas distintas segun quien mire.
+--
+--  Devuelve el correo, que es lo que un coach nunca habia podido ver: la
+--  vista `mis_clientes` no lo trae porque vive en auth.users. Y va casteado
+--  a text a proposito: `auth.users.email` es varchar(255), y una funcion
+--  que declare `correo text` y devuelva la columna a pelo revienta AL
+--  EJECUTARSE, no al crearse. Ya paso una vez y tumbo esta misma pantalla.
+-- ---------------------------------------------------------------------
+create or replace function public.plan_lista()
+returns table (
+  id uuid, nombre text, correo text, inscrito_en timestamptz, tiene_plan boolean
+)
+language plpgsql stable security definer set search_path = public, pg_temp
+as $$
+begin
+  -- Esta lista es de quien entrena. Un cliente se veria a si mismo -no es
+  -- una fuga, son sus datos- pero su plan lo lee por otro sitio, y una
+  -- lista de una persona en la pantalla de coach solo confunde.
+  --
+  -- Devuelve vacio en vez de reventar: la app la pide en la misma carga
+  -- para todos los roles, y una excepcion aqui llenaria de errores rojos
+  -- la pantalla de gente que no ha hecho nada mal.
+  if not (public.es_super_admin() or public.mi_rol() in ('coach', 'org_admin')) then
+    return;
+  end if;
+
+  return query
+  select p.id,
+         p.full_name::text,
+         u.email::text,
+         i.inscrito_en,
+         exists (select 1 from public.planes pl
+                  where pl.user_id = p.id and pl.activo) as tiene_plan
+    from public.plan_inscritos i
+    join public.profiles p on p.id = i.cliente_id
+    join auth.users u on u.id = p.id
+   where i.baja_en is null
+     and public.puede_ver(i.cliente_id)
+   order by p.full_name;
+end $$;
+
+revoke execute on function public.plan_lista() from public, anon;
+grant  execute on function public.plan_lista() to authenticated;
+
+
+-- ============================ 0028_tortilla_por_piezas.sql ============================
+
+-- ---------------------------------------------------------------------
+--  La tortilla también se cuenta en piezas
+--
+--  Mismo caso que el huevo (0023) y con la misma regla: `pieza_g` solo se
+--  rellena donde una pieza es algo que existe y no admite discusion. Nadie
+--  pesa las tortillas; se dicen "tres tortillas".
+--
+--  LOS PESOS
+--
+--  Maiz: 30 g. USDA da 26 g para una de 6 pulgadas, pero la tortilla que se
+--  come en Mexico es algo mas gruesa. A 30 g salen ~67 calorias por pieza,
+--  que es lo que se mide en la realidad. Quedarse en los 26 de USDA seria
+--  fiel a la fuente y falso en la mesa.
+--
+--  Harina: 48 g, el numero de USDA tal cual. Ahi su `porcion` ya era
+--  'tortilla' y no una onza, o sea que la fuente si esta hablando de una
+--  pieza. Es la mas variable de las dos -de taco a burrito hay el doble de
+--  peso- pero 48 g es la medida corriente y es auditable.
+--
+--  `porcion` y `porcion_g` se quedan intactos: son el dato contra el que se
+--  audita. `pieza_g` es otra cosa y por eso vive aparte.
+-- ---------------------------------------------------------------------
+
+update public.alimentos_catalogo set pieza_g = 30 where nombre = 'Tortilla de maíz';
+update public.alimentos_catalogo set pieza_g = 48 where nombre = 'Tortilla de harina';
+
+
+-- ============================ 0029_memoria_del_asistente.sql ============================
+
+-- ---------------------------------------------------------------------
+--  Lo que el asistente sabe de cada persona
+--
+--  Hoy olvida todo entre conversaciones: guarda los ultimos doce turnos y
+--  se acabo. Cada vez hay que volver a contarle que odias el brocoli, que
+--  entrenas de noche o que los martes viajas.
+--
+--  Un entrenador no funciona asi, y es exactamente lo que separa "una app
+--  que responde" de "alguien que me conoce". Esto es lo mas parecido a un
+--  coach que se puede construir por unos centimos de tokens.
+--
+--  POR QUE UN TEXTO Y NO UNA TABLA DE HECHOS
+--
+--  Una tabla obligaria a decidir de antemano que categorias existen
+--  -alergias, horarios, gustos, lesiones- y siempre faltaria una. El texto
+--  libre lo escribe el propio asistente con sus palabras y lo vuelve a leer
+--  el mismo. No hay nada que consultar por SQL aqui.
+--
+--  SE REESCRIBE ENTERA, NO SE AÑADE
+--
+--  Si cada dato nuevo se anadiera al final, en tres meses seria un ladrillo
+--  de mil lineas que cuesta tokens en CADA mensaje y donde lo importante
+--  queda enterrado. El asistente devuelve la version completa y actualizada,
+--  ya depurada. El limite de 1200 caracteres no es decoracion: es lo que
+--  fuerza a que elija.
+--
+--  DATO PERSONAL
+--
+--  Aqui acaban cosas como "le cuesta comer despues de discutir con su
+--  madre". Va en `profiles`, que ya tiene sus politicas: el coach lo ve,
+--  solo el dueno lo edita. Y se borra con la cuenta, como todo lo demas.
+-- ---------------------------------------------------------------------
+
+alter table public.profiles
+  add column if not exists memoria_ia text
+    check (memoria_ia is null or length(memoria_ia) <= 1200);
+
+comment on column public.profiles.memoria_ia is
+  'Lo que el asistente ha aprendido de esta persona. Lo escribe el modelo, '
+  'se reescribe entero en cada actualizacion y se le inyecta en el sistema.';
+
+
+-- ============================ 0030_avisos_del_coach.sql ============================
+
+-- ---------------------------------------------------------------------
+--  Que el asistente escriba primero
+--
+--  Un entrenador te busca. Una app espera a que le abras. Esa es toda la
+--  diferencia, y es lo que separa "una herramienta" de "alguien que me
+--  lleva".
+--
+--  QUIEN DECIDE QUE
+--
+--  El motivo lo decide SQL, no el modelo. Preguntarle a una IA "¿merece
+--  esta persona un mensaje?" cuesta dinero en cada revision, da respuestas
+--  distintas el martes y el jueves, y no se puede probar. Aqui las
+--  situaciones son cinco, estan escritas, y salen igual siempre.
+--
+--  El modelo solo pone las palabras. Eso es lo que hace bien.
+--
+--  POR QUE UNO SOLO Y CON PRIORIDAD
+--
+--  Si alguien lleva tres dias sin apuntar Y ademas se le estanco el peso,
+--  mandarle dos mensajes es acoso. Sale el mas urgente y nada mas. El orden
+--  del CASE es la prioridad, y esta pensado: primero lo que hace que alguien
+--  vuelva, despues lo que le anima, al final lo que le corrige.
+--
+--  Y NUNCA DOS VECES POR LO MISMO
+--
+--  Un aviso por motivo cada siete dias. Sin eso, quien lleve dos semanas
+--  sin aparecer recibiria el mismo "¿todo bien?" cada mañana, que es como
+--  se consigue que alguien silencie una app para siempre.
+-- ---------------------------------------------------------------------
+
+do $$
+begin
+  if not exists (select 1 from pg_type where typname = 'motivo_aviso') then
+    create type public.motivo_aviso as enum (
+      'ausente',        -- lleva dias sin apuntar y antes si apuntaba
+      'racha',          -- siete dias seguidos apuntando
+      'semana_buena',   -- cerro la semana cerca de su meta
+      'estancado'       -- quiere bajar y el peso no se mueve
+    );
+    -- No hay 'progreso' (subir peso en los ejercicios) a proposito:
+    -- calcularlo aqui obligaria a replicar en SQL la logica de volumen que
+    -- ya vive en la app, y dos copias de una regla se separan. Cuando esa
+    -- cuenta baje a la base, se anade el valor y su rama.
+  end if;
+end $$;
+
+create table if not exists public.avisos_coach (
+  id        bigint generated always as identity primary key,
+  user_id   uuid not null references auth.users(id) on delete cascade,
+  motivo    public.motivo_aviso not null,
+  -- Lo escribe el modelo. Corto a proposito: un parrafo no se lee.
+  texto     text not null check (length(btrim(texto)) between 1 and 400),
+  creado_en timestamptz not null default now(),
+  visto_en  timestamptz
+);
+
+create index if not exists avisos_pendientes
+  on public.avisos_coach (user_id, creado_en desc) where visto_en is null;
+create index if not exists avisos_por_motivo
+  on public.avisos_coach (user_id, motivo, creado_en desc);
+
+alter table public.avisos_coach enable row level security;
+
+drop policy if exists "avisos: ver" on public.avisos_coach;
+create policy "avisos: ver" on public.avisos_coach
+  for select using (public.puede_ver(user_id));
+-- Marcarlo como visto es lo unico que hace la app. El texto lo escribe la
+-- funcion de abajo, que comprueba el motivo antes de dejar guardar nada.
+drop policy if exists "avisos: marcar visto" on public.avisos_coach;
+create policy "avisos: marcar visto" on public.avisos_coach
+  for update using (public.puede_editar_propio(user_id))
+           with check (public.puede_editar_propio(user_id));
+
+revoke all on public.avisos_coach from anon, authenticated;
+grant select, update on public.avisos_coach to authenticated;
+
+
+-- ---------------------------------------------------------------------
+--  ¿Tengo algo que decirle a esta persona?
+--
+--  Devuelve el motivo mas urgente, o null. Todo lo que mira son fechas y
+--  numeros que ya estan en la base: no cuesta un centimo llamarla.
+-- ---------------------------------------------------------------------
+create or replace function public.motivo_de_aviso(p_usuario uuid)
+returns public.motivo_aviso
+language plpgsql stable security definer set search_path = public, pg_temp
+as $$
+declare
+  v_ultimo_diario  date;
+  v_dias_con_datos int;
+  v_dias_seguidos  int;
+  v_objetivo       text;
+  v_peso_viejo     numeric;
+  v_peso_nuevo     numeric;
+  v_dias_peso      int;
+begin
+  if not public.puede_ver(p_usuario) then
+    return null;
+  end if;
+
+  select max(entry_date), count(distinct entry_date)
+    into v_ultimo_diario, v_dias_con_datos
+    from public.diary_entries where user_id = p_usuario;
+
+  -- Sin historial no hay nada que decir. A alguien que acaba de entrar no
+  -- se le echa de menos: se le deja empezar.
+  if v_dias_con_datos < 3 then
+    return null;
+  end if;
+
+  -- 1. AUSENTE. Lo primero, porque es lo unico que puede hacer que
+  --    alguien vuelva. Tres dias: dos es un fin de semana.
+  if v_ultimo_diario < current_date - 3 then
+    return 'ausente';
+  end if;
+
+  -- 2. ESTANCADO. Quiere bajar, lleva dos semanas y el peso no se mueve.
+  --    Va antes que los animos: es lo que de verdad necesita saber.
+  select goal into v_objetivo from public.profiles where id = p_usuario;
+  if v_objetivo = 'bajar' then
+    select weight_kg, log_date into v_peso_nuevo, v_ultimo_diario
+      from public.weight_logs where user_id = p_usuario
+      order by log_date desc limit 1;
+    select weight_kg into v_peso_viejo
+      from public.weight_logs
+     where user_id = p_usuario and log_date <= current_date - 14
+     order by log_date desc limit 1;
+    if v_peso_viejo is not null and v_peso_nuevo is not null
+       and abs(v_peso_nuevo - v_peso_viejo) < 0.3 then
+      return 'estancado';
+    end if;
+  end if;
+
+  -- 3. RACHA. Siete dias seguidos apuntando.
+  select count(*) into v_dias_seguidos
+    from generate_series(current_date - 6, current_date, '1 day') d
+   where exists (select 1 from public.diary_entries e
+                  where e.user_id = p_usuario and e.entry_date = d::date);
+  if v_dias_seguidos = 7 then
+    return 'racha';
+  end if;
+
+  -- 4. SEMANA BUENA. Cinco de los ultimos siete dias apuntados. Es el
+  --    ultimo porque es el mas prescindible: esta bien oirlo, pero nadie
+  --    cambia su semana por ello.
+  if v_dias_seguidos >= 5 then
+    return 'semana_buena';
+  end if;
+
+  return null;
+end $$;
+
+revoke execute on function public.motivo_de_aviso(uuid) from public, anon;
+grant  execute on function public.motivo_de_aviso(uuid) to authenticated;
+
+
+-- ---------------------------------------------------------------------
+--  ¿Toca mandarlo, o ya se lo dije?
+--
+--  Un aviso por motivo cada siete dias. Separado de la deteccion para
+--  poder probar las dos cosas por su cuenta.
+-- ---------------------------------------------------------------------
+create or replace function public.aviso_pendiente(p_usuario uuid)
+returns public.motivo_aviso
+language plpgsql stable security definer set search_path = public, pg_temp
+as $$
+declare v_motivo public.motivo_aviso;
+begin
+  v_motivo := public.motivo_de_aviso(p_usuario);
+  if v_motivo is null then return null; end if;
+
+  -- Ya hay uno sin leer: no se amontonan.
+  if exists (select 1 from public.avisos_coach
+              where user_id = p_usuario and visto_en is null) then
+    return null;
+  end if;
+
+  if exists (select 1 from public.avisos_coach
+              where user_id = p_usuario and motivo = v_motivo
+                and creado_en > now() - interval '7 days') then
+    return null;
+  end if;
+
+  return v_motivo;
+end $$;
+
+revoke execute on function public.aviso_pendiente(uuid) from public, anon;
+grant  execute on function public.aviso_pendiente(uuid) to authenticated;
+
+
+-- ---------------------------------------------------------------------
+--  Guardar el aviso ya escrito
+--
+--  Funcion y no INSERT directo: si la app pudiera insertar, cualquiera se
+--  escribiria sus propios avisos. Aqui se vuelve a comprobar que el motivo
+--  sea de verdad el que toca antes de dejar guardar nada.
+-- ---------------------------------------------------------------------
+create or replace function public.guardar_aviso(p_motivo public.motivo_aviso, p_texto text)
+returns bigint
+language plpgsql security definer set search_path = public, pg_temp
+as $$
+declare
+  v_yo uuid := auth.uid();
+  v_id bigint;
+begin
+  if v_yo is null then
+    raise exception 'Necesitas sesion';
+  end if;
+  if public.aviso_pendiente(v_yo) is distinct from p_motivo then
+    raise exception 'Ese aviso no toca ahora';
+  end if;
+
+  insert into public.avisos_coach (user_id, motivo, texto)
+  values (v_yo, p_motivo, left(btrim(p_texto), 400))
+  returning id into v_id;
+  return v_id;
+end $$;
+
+revoke execute on function public.guardar_aviso(public.motivo_aviso, text) from public, anon;
+grant  execute on function public.guardar_aviso(public.motivo_aviso, text) to authenticated;
+
+
+-- ============================ 0031_consentimiento.sql ============================
+
+-- ---------------------------------------------------------------------
+--  Constancia de que aceptaron, y de QUE aceptaron
+--
+--  La app recoge peso, medidas, fotos del cuerpo y condiciones medicas, y
+--  va a cobrar por ello. En Mexico eso cae bajo la LFPDPPP, y las
+--  condiciones de salud son DATOS SENSIBLES: no basta con que nadie se
+--  queje, hace falta consentimiento expreso y por separado.
+--
+--  DOS FECHAS Y NO UNA
+--
+--  `consentimiento_en` es el aviso de privacidad y los terminos, que valen
+--  para todos. `consentimiento_salud_en` es aparte porque el consentimiento
+--  para datos sensibles tiene que ser expreso y distinguible: una sola
+--  casilla que mezcle "acepto los terminos" con "y que guarden mis datos
+--  medicos" no sirve. Quien no declare ninguna condicion no necesita la
+--  segunda, y por eso admite null.
+--
+--  LA VERSION
+--
+--  Sin ella, "acepto" no significa nada dentro de un ano: el texto habra
+--  cambiado y no habra forma de saber que leyo esa persona. Se guarda cual
+--  era, y cuando el texto cambie se vuelve a pedir a quien tenga una vieja.
+--
+--  NO SE BORRA AL DARSE DE BAJA DE NADA. Se va con la cuenta y nada mas:
+--  es la prueba de que hubo consentimiento, y borrarla antes dejaria a
+--  todos sin poder demostrar nada.
+-- ---------------------------------------------------------------------
+
+alter table public.profiles
+  add column if not exists consentimiento_en       timestamptz,
+  add column if not exists consentimiento_version  text
+    check (consentimiento_version is null or length(consentimiento_version) <= 20),
+  add column if not exists consentimiento_salud_en timestamptz;
+
+comment on column public.profiles.consentimiento_en is
+  'Cuando acepto el aviso de privacidad y los terminos.';
+comment on column public.profiles.consentimiento_version is
+  'Que version del texto acepto. Sin esto, "acepto" no significa nada dentro de un ano.';
+comment on column public.profiles.consentimiento_salud_en is
+  'Consentimiento EXPRESO para datos de salud. Aparte porque son datos sensibles.';
+
+
+-- ---------------------------------------------------------------------
+--  Sin consentimiento expreso no se guardan condiciones de salud
+--
+--  La restriccion vive aqui y no solo en la pantalla porque la pantalla no
+--  es la unica puerta: la app habla por PostgREST y se puede llamar
+--  directo. Si alguien mete condiciones sin haber aceptado, la base dice
+--  que no.
+-- ---------------------------------------------------------------------
+--  Va como NOT VALID a proposito.
+--
+--  Quien declaro sus condiciones ANTES de que existiera esta casilla no
+--  tiene fecha de consentimiento, y sin `not valid` el propio ALTER TABLE
+--  fallaria al validar esas filas: la migracion no entraria y nadie sabria
+--  por que.
+--
+--  Rellenarles una fecha inventada tampoco vale: seria escribir que
+--  consintieron algo que nunca se les enseño, que es justo lo contrario de
+--  lo que esta restriccion existe para conseguir. Se les vuelve a pedir la
+--  proxima vez que toquen sus condiciones, y hasta entonces la fila se
+--  queda como esta.
+--
+--  NOT VALID no es un agujero: las filas NUEVAS y las que se actualicen si
+--  se comprueban. Solo se deja en paz lo que ya estaba.
+alter table public.profiles
+  drop constraint if exists profiles_salud_con_consentimiento;
+alter table public.profiles
+  add constraint profiles_salud_con_consentimiento
+  check (
+    condiciones is null
+    or cardinality(condiciones) = 0
+    or consentimiento_salud_en is not null
+  ) not valid;
+
+
+-- ============================ 0032_contar_uso_alimento.sql ============================
+
+-- Contar cuántas veces se usa cada alimento guardado.
+--
+-- La columna `veces_usado` existe desde la migración 0001, con su índice y
+-- todo... y nunca la subía nadie. Se quedaba en 0 para siempre, así que la
+-- pestaña "Frecuentes" estaba vacía para todo el mundo desde el primer día.
+-- Esto es lo que faltaba.
+--
+-- Por qué una función y no un PATCH normal: PostgREST solo sabe poner un
+-- valor fijo, no sabe decir "lo que haya más uno". Mandar veces+1 desde el
+-- teléfono significaría leer, sumar y escribir; si apuntas lo mismo en el
+-- móvil y en el ordenador a la vez, los dos leen 4, los dos escriben 5, y
+-- un uso se pierde. Aquí la suma la hace la base y eso no puede pasar.
+
+create or replace function public.registrar_uso_alimento(p_alimento uuid)
+returns int
+language plpgsql
+security invoker          -- a propósito: que mande RLS, no la función
+set search_path = public
+as $$
+declare
+  v_veces int;
+begin
+  update public.saved_foods
+     set veces_usado = veces_usado + 1,
+         ultimo_uso  = now()
+   -- El `user_id` va aquí aunque RLS ya lo exija. RLS dice lo que PUEDES
+   -- tocar; esto dice lo que QUIERES tocar. Un coach ve a sus clientes, y
+   -- sin esta línea un id ajeno pasaría el filtro y le subiría el contador
+   -- a otra persona.
+   where id = p_alimento
+     and user_id = auth.uid()
+  returning veces_usado into v_veces;
+
+  -- Si no era tuyo o ya no existe, no es un error: el alimento se pudo
+  -- borrar desde otro dispositivo mientras lo apuntabas. Se devuelve 0 y
+  -- la app sigue: perder un contador no vale reventar el registro de una
+  -- comida que la persona ya dio por hecha.
+  return coalesce(v_veces, 0);
+end;
+$$;
+
+comment on function public.registrar_uso_alimento(uuid) is
+  'Suma uno a veces_usado del alimento guardado, si es de quien llama. '
+  'Devuelve el total; 0 si no era suyo.';
+
+-- `from public` NO basta, y esto se comprobó mirándolo, no suponiéndolo:
+-- Supabase le da execute a `anon` por permisos por defecto del esquema, y
+-- esa concesión es suya, no la hereda de PUBLIC. Quitando solo PUBLIC, un
+-- has_function_privilege('anon', ...) seguía diciendo `true`.
+--
+-- No llegaba a abrir nada -sin sesión auth.uid() es null, ningún user_id
+-- casa con null, y encima RLS corta antes-, pero un permiso que no hace
+-- falta es un permiso que sobra: el día que alguien toque el `where`, la
+-- puerta ya estaría abierta.
+revoke all on function public.registrar_uso_alimento(uuid) from public;
+revoke all on function public.registrar_uso_alimento(uuid) from anon;
+grant execute on function public.registrar_uso_alimento(uuid) to authenticated;
+
+
+-- ============================ 0033_unidad_del_catalogo.sql ============================
+
+-- Decir en qué se registra cada alimento del catálogo: gramos, piezas o
+-- servicios.
+--
+--  QUÉ HABÍA
+--  El catálogo guarda los macros SIEMPRE por 100 g -así vienen de USDA- y
+--  `pieza_g` dice cuánto pesa una unidad de comer. La app deducía la unidad
+--  del propio dato: si había `pieza_g`, lo ofrecía en piezas; si no, en
+--  gramos. Funcionaba mientras la única unidad que no era gramos fuese la
+--  pieza, y mientras solo la pusiera una migración a mano.
+--
+--  QUÉ CAMBIA
+--  Ahora el panel puede darlo de alta, y "pieza" no es la única forma de
+--  contar: un batido o un suplemento se cuentan por servicio. Cuánto pesa
+--  una unidad y cómo se llama esa unidad son dos datos distintos, así que
+--  se guardan por separado en vez de adivinar uno del otro.
+--
+--  LOS MACROS NO SE TOCAN: siguen siendo por 100 g. `unidad` solo dice cómo
+--  se le enseña y se le pide la cantidad a la persona; la conversión la
+--  hace la app con `pieza_g`. Guardar los macros ya multiplicados haría el
+--  dato imposible de auditar contra USDA.
+
+alter table public.alimentos_catalogo
+  add column if not exists unidad text not null default 'Gramos';
+
+comment on column public.alimentos_catalogo.unidad is
+  'Como se le pide la cantidad a la persona: Gramos, Pieza o Servicio. '
+  'Los macros de la fila siguen siendo por 100 g pase lo que pase; para '
+  'Pieza y Servicio, pieza_g dice cuanto pesa una y la app convierte.';
+
+-- El relleno va ANTES del check, y no es un detalle: hasta hoy la app
+-- ofrecia en piezas todo lo que tuviera `pieza_g` -huevos y tortilla-.
+-- Si se quedaran en 'Gramos' por defecto, esos alimentos volverian a
+-- pedirse en gramos y seria una regresion silenciosa: nadie veria un
+-- error, simplemente el huevo dejaria de contarse por huevos.
+update public.alimentos_catalogo
+   set unidad = 'Pieza'
+ where pieza_g is not null
+   and unidad = 'Gramos';
+
+alter table public.alimentos_catalogo
+  drop constraint if exists alimentos_catalogo_unidad_valida;
+
+alter table public.alimentos_catalogo
+  add constraint alimentos_catalogo_unidad_valida check (
+    unidad in ('Gramos', 'Pieza', 'Servicio')
+    -- Contar por piezas sin saber cuanto pesa una es imposible: los macros
+    -- estan por 100 g y sin ese peso no hay forma de convertir. Mejor que
+    -- lo impida la base a que la app ensene "1 pieza = 0 calorias".
+    and (unidad = 'Gramos' or pieza_g is not null)
+  );
+
+-- La busqueda tiene que devolver la unidad o la app no puede saberla.
+--
+-- Hay que SOLTARLA antes: `create or replace` no puede cambiar el tipo que
+-- devuelve una funcion, y aqui se le anade una columna.
+--   ERROR: cannot change return type of existing function
+-- Los permisos se van con la funcion, por eso el grant de abajo no sobra.
+drop function if exists public.buscar_catalogo(text, integer);
+
+create or replace function public.buscar_catalogo(
+  p_texto  text,
+  p_limite integer default 25
+)
+returns table (
+  id bigint, nombre text, categoria public.categoria_alimento,
+  estado public.estado_alimento, kcal numeric, proteina numeric,
+  carbos numeric, grasas numeric, porcion text, porcion_g integer,
+  pieza_g integer, unidad text
+)
+language sql stable security definer set search_path = public, pg_temp
+as $$
+  with q as (select public.normalizar_texto(coalesce(p_texto, '')) t)
+  select distinct on (a.id)
+         a.id, a.nombre, a.categoria, a.estado,
+         a.kcal, a.proteina, a.carbos, a.grasas, a.porcion, a.porcion_g,
+         a.pieza_g, a.unidad
+    from public.alimentos_catalogo a
+    left join public.alimentos_sinonimos s on s.alimento_id = a.id
+   cross join q
+   where a.activo
+     and length(q.t) >= 2
+     and (a.nombre_norm like '%' || q.t || '%' or s.termino_norm like '%' || q.t || '%')
+   order by a.id,
+            (a.nombre_norm = q.t) desc,
+            (a.nombre_norm like q.t || '%') desc,
+            length(a.nombre)
+   limit least(greatest(p_limite, 1), 50);
+$$;
+
+revoke execute on function public.buscar_catalogo(text, integer) from public, anon;
+grant  execute on function public.buscar_catalogo(text, integer) to authenticated;
+
+
+-- ============================ 0034_soltar_tablas_muertas.sql ============================
+
+-- Soltar dos tablas que no usa nadie, y lo que las sujetaba.
+--
+--  ESTO BORRA COSAS Y NO SE DESHACE. Por eso empieza con una guarda que
+--  cuenta filas y ABORTA si encuentra una sola. No es desconfianza del
+--  analisis: es que el analisis se hizo un dia y esto se ejecuta otro, y
+--  entre medias puede haber entrado un dato.
+--
+--  QUE SE VA Y POR QUE
+--
+--  exercise_library — la pantalla de ejercicios de la app NO sale de aqui:
+--    lleva 36 ejercicios escritos en el codigo, con sus mapas musculares.
+--    La tabla se creo en la 0001 para eso y se quedo vacia.
+--
+--  exercise_notes NO SE VA, y estuvo a punto de irse. Se saco de la lista
+--    al volver atras con las notas por ejercicio, y ahora ademas se USA: la
+--    app las guarda aqui en vez de en memoria, asi que la tabla se va a
+--    llenar. No hizo falta migracion para eso -la tabla y sus cuatro
+--    politicas estan desde la 0001 y la 0002, solo estaban sin usar-.
+--
+--    Vale la pena quedarse con esto: la tabla estaba vacia el dia que se
+--    escribio esta migracion, y una guarda que solo mira si esta vacia
+--    habria dicho que si. Vacia no significa muerta; significa que todavia
+--    nadie la ha usado.
+--
+--  consentimientos — la sustituyo la 0031, que puso el consentimiento en
+--    columnas de `profiles`. Se queda el dato donde se lee y se va la tabla
+--    que ya no lee nadie.
+--
+--  LO QUE LAS SUJETABA, Y QUE NO ERA OBVIO
+--
+--  1) `routine_exercises.exercise_id` apunta a exercise_library con una
+--     clave foranea. `routine_exercises` esta MUY viva -es la rutina de la
+--     gente-, pero la app nunca pide ni escribe esa columna: los ejercicios
+--     se guardan por `name`. Comprobado en la base: 16 ejercicios de rutina
+--     y 0 con exercise_id. Se suelta la columna primero, y asi la tabla se
+--     puede soltar sin `cascade`.
+--
+--  2) `acepto(text, text)` lee consentimientos. Es de la 0007 y la app no
+--     la llama desde que existe la 0031. Se va con su tabla: una funcion
+--     que consulta algo que ya no existe es una bomba de relojeria.
+--
+--  NADA DE `CASCADE`, a proposito. Si manana algo depende de estas tablas
+--  y no lo vimos, quiero que el borrado falle y lo diga, no que se lleve
+--  por delante lo que sea que dependia.
+
+do $guarda$
+declare
+  t          text;
+  n          bigint;
+  con_dato   bigint;
+begin
+  -- ---- Las tablas, una por una ----
+  -- exercise_notes no esta: las notas por ejercicio se quedan.
+  foreach t in array array['exercise_library', 'consentimientos'] loop
+    if to_regclass('public.' || t) is null then
+      raise notice 'public.% ya no existe, nada que hacer', t;
+      continue;
+    end if;
+    execute format('select count(*) from public.%I', t) into n;
+    if n > 0 then
+      raise exception
+        'ABORTADO: public.% tiene % fila(s). No se borra NADA. '
+        'Si de verdad sobra, vacíala a mano y vuelve a ejecutar esto.', t, n;
+    end if;
+  end loop;
+
+  -- ---- La columna que sujeta la clave foranea ----
+  -- Se pregunta si la columna existe antes de contarla: sin esto, volver a
+  -- ejecutar la migracion reventaria al compilar la consulta.
+  if exists (
+    select 1 from information_schema.columns
+     where table_schema = 'public'
+       and table_name   = 'routine_exercises'
+       and column_name  = 'exercise_id'
+  ) then
+    execute 'select count(*) from public.routine_exercises where exercise_id is not null'
+      into con_dato;
+    if con_dato > 0 then
+      raise exception
+        'ABORTADO: % ejercicio(s) de rutina usan exercise_id. '
+        'Esa columna se iba a soltar por no usarse; si se usa, para todo.', con_dato;
+    end if;
+  end if;
+
+  raise notice 'Guarda pasada: las tres tablas vacías y exercise_id sin usar.';
+end
+$guarda$;
+
+-- ---- A partir de aqui se borra ----
+-- El orden importa: primero lo que apunta, despues lo apuntado.
+
+alter table public.routine_exercises drop column if exists exercise_id;
+
+drop function if exists public.acepto(text, text);
+
+drop table if exists public.consentimientos;
+drop table if exists public.exercise_library;
+
+-- Aviso para quien monte un proyecto nuevo: `supabase/instalar.sql` sigue
+-- creando estas tablas, porque es la foto de la 0001 en adelante. Un
+-- proyecto nuevo las creara y esta migracion volvera a soltarlas, que es
+-- el comportamiento correcto de una cadena de migraciones. No se toca
+-- instalar.sql para no reescribir historia que ya se ejecuto.
+
+
+-- ============================ 0035_cerrar_escalada_de_privilegios.sql ============================
+
+-- URGENTE: cerrar una escalada de privilegios sin sesión.
+--
+--  QUE PASABA
+--  `nombrar_super_admin(correo)` convierte una cuenta en super admin. Es la
+--  funcion de arranque: se pensó para ejecutarse UNA vez desde el editor
+--  SQL, al montar el proyecto.
+--
+--  Su guarda era:
+--      if auth.uid() is not null then raise exception ...
+--
+--  O sea: aborta SI HAY SESION. La intencion era "solo desde el servidor",
+--  pero esta al reves para el caso que importa: `anon` no tiene sesion, asi
+--  que auth.uid() es null y la guarda LE DEJA PASAR.
+--
+--  Y los revoke eran `from public` y `from authenticated`. Ninguno alcanza a
+--  `anon`: Supabase le concede execute por permisos por defecto del esquema,
+--  y esa concesion es suya, no la hereda de PUBLIC. (Es el mismo fallo que
+--  ya aparecio en la 0032 con registrar_uso_alimento.)
+--
+--  Resultado: cualquiera que abriera la app publicada -donde la clave
+--  publishable esta a la vista, como debe estar- podia hacer
+--
+--      POST /rest/v1/rpc/nombrar_super_admin  {"p_correo":"..."}
+--
+--  y convertir en super admin la cuenta que quisiera. Comprobado contra la
+--  base real con un correo inexistente: la funcion se ejecuto y llego hasta
+--  el "no hay ninguna cuenta con ese correo". Con un correo de verdad habria
+--  hecho el update.
+--
+--  QUE SE HACE
+--  Dos capas, porque una sola ya fallo una vez.
+
+-- ---- Capa 1: que no la pueda llamar nadie desde la API ----
+-- Los tres nombrados, en una sola orden. `from public` NO implica a `anon`
+-- ni a `authenticated`: Supabase les concede execute por permisos por
+-- defecto del esquema, y esa concesion es suya. Escribir solo `from public`
+-- -que es lo que habia- es exactamente el fallo que se esta arreglando.
+revoke execute on function public.nombrar_super_admin(text) from public, anon, authenticated;
+
+-- ---- Capa 2: que la guarda mire lo que toca ----
+-- No "¿hay sesion?" sino "¿quien eres?". Los roles con los que entra la API
+-- son anon y authenticated; desde el editor SQL se entra como postgres, y
+-- una funcion de servidor entra como service_role. Asi, aunque manana
+-- alguien vuelva a conceder el permiso por error, la funcion se niega.
+create or replace function public.nombrar_super_admin(p_correo text)
+returns text
+language plpgsql security definer set search_path = public, pg_temp, auth
+as $$
+declare v_id uuid;
+begin
+  if current_user in ('anon', 'authenticated') then
+    raise exception
+      'Esta funcion solo se ejecuta desde el servidor (editor SQL o service_role), '
+      'nunca desde la app.';
+  end if;
+
+  select id into v_id from auth.users where email = lower(trim(p_correo));
+  if v_id is null then
+    raise exception 'No hay ninguna cuenta con el correo %. Registrate primero en la app.', p_correo;
+  end if;
+
+  update public.profiles set role = 'super_admin', activo = true where id = v_id;
+  if not found then
+    raise exception 'La cuenta % existe pero no tiene perfil', p_correo;
+  end if;
+
+  return 'Listo: ' || p_correo || ' ya es super admin';
+end $$;
+
+revoke execute on function public.nombrar_super_admin(text) from public, anon, authenticated;
+
+
+-- ---- Y de paso, la otra que tampoco tenia guarda ----
+-- `limpiar_uso_ia()` borra el consumo de IA de hace mas de 30 dias. Es
+-- mantenimiento y no filtra nada, pero no hay ninguna razon para que la
+-- pueda disparar alguien sin sesion.
+revoke execute on function public.limpiar_uso_ia() from public, anon, authenticated;
+
+
+-- ---- El barrido, que es lo que impide que se repita ----
+-- Todas las funciones SECURITY DEFINER de `public` dejan de estar al alcance
+-- de `anon`. Saltarse RLS es exactamente su trabajo, asi que ninguna deberia
+-- poder llamarla alguien sin identificar.
+--
+-- Antes de registrarse o entrar, la app no llama a ninguna RPC: el registro
+-- y el login van por /auth/v1/, que es otra cosa. Por eso esto no rompe el
+-- arranque.
+--
+-- Se hace en bucle y no a mano para que alcance tambien a las que se
+-- anadan manana sin acordarse de revocar.
+do $barrido$
+declare
+  f record;
+  n int := 0;
+begin
+  for f in
+    select p.oid::regprocedure as firma
+      from pg_proc p
+      join pg_namespace ns on ns.oid = p.pronamespace
+     where ns.nspname = 'public'
+       and p.prosecdef
+       and has_function_privilege('anon', p.oid, 'execute')
+  loop
+    execute format('revoke execute on function %s from anon', f.firma);
+    n := n + 1;
+  end loop;
+  raise notice 'Funciones SECURITY DEFINER cerradas a anon: %', n;
+end
+$barrido$;
+
+
+-- ============================ 0036_sueno_y_cintura.sql ============================
+
+-- Dos datos que le faltaban al entrenador para leer bien una semana.
+--
+--  1. SUEÑO
+--
+--  El chequeo semanal preguntaba hambre, energia y antojo. Hambre alta con
+--  energia baja se leia como "el deficit es demasiado" y se subian
+--  calorias. Pero eso mismo lo produce dormir cinco horas, y ahi subir o
+--  bajar calorias da igual: el problema no esta en la comida.
+--
+--  Sin esta pregunta la IA no puede distinguir los dos casos, y va a mover
+--  calorias por un problema de descanso. Eso no se arregla nunca.
+--
+--  Se mete en el hueco que deja el antojo. La columna `apetito` NO se
+--  borra: tiene el historico de quien ya lo contesto, y borrarlo seria
+--  perder datos de verdad por un cambio de formulario. Simplemente se deja
+--  de preguntar.
+--
+--  2. CINTURA
+--
+--  Va en weight_logs y no en el chequeo, a proposito: es una medida del
+--  cuerpo, no una sensacion, y ahi ya hay una fila por fecha. Asi da
+--  tendencia gratis y se apunta cuando toca, no cada semana.
+--
+--  Por que importa para el cambio fisico: la bascula no distingue grasa de
+--  agua de musculo. La cintura si. Y hace medible el mejor caso que el
+--  ajuste semanal ya intenta detectar -peso plano con volumen subiendo, o
+--  sea recomposicion-, que hoy solo se DEDUCE del entreno.
+
+alter table public.chequeos_semanales
+  add column if not exists sueno smallint
+    check (sueno is null or sueno between 1 and 5);
+
+comment on column public.chequeos_semanales.sueno is
+  'Como durmio, del 1 al 5, con 3 = normal. Sirve para no confundir un '
+  'deficit excesivo con falta de descanso: dan las mismas respuestas en '
+  'hambre y energia y se arreglan de forma distinta.';
+
+comment on column public.chequeos_semanales.apetito is
+  'YA NO SE PREGUNTA. Medía casi lo mismo que `hambre` -la gente las '
+  'contestaba igual- y ocupaba una de las tres preguntas del formulario. '
+  'La columna se queda por el historico de quien si la contesto.';
+
+alter table public.weight_logs
+  add column if not exists cintura_cm numeric(5,1)
+    check (cintura_cm is null or cintura_cm between 40 and 200);
+
+comment on column public.weight_logs.cintura_cm is
+  'Cintura en centimetros, opcional. Se mide de vez en cuando, no cada '
+  'dia. Es lo unico que distingue perder grasa de perder peso: la bascula '
+  'baja igual por agua, por musculo o por grasa, y la cintura no.';
+
+
+-- ============================ 0037_analisis_de_fotos.sql ============================
+
+-- Que la IA compare las fotos de progreso, una vez al mes.
+--
+--  POR QUE LAS FOTOS Y NO OTRA MEDIDA MAS
+--
+--  Cada medida que ya hay falla en algo distinto. La bascula no distingue
+--  grasa de agua de musculo. La cintura si separa grasa, pero solo en un
+--  punto del cuerpo. Las fotos enseñan DONDE esta cambiando, que es lo que
+--  ninguna de las dos ve.
+--
+--  Importa en un caso concreto: peso plano, cintura plana, pero espalda y
+--  hombros mas marcados. Eso es recomposicion -gano musculo y perdio grasa
+--  a la vez- y las otras dos medidas dirian "estancado" cuando va bien. Es
+--  justo el momento en que la gente abandona por leer mal sus datos.
+--
+--  EL CONSENTIMIENTO NO ES UN FORMALISMO
+--
+--  Hasta hoy las fotos NUNCA salen de aqui: el bucket es privado y la app
+--  las mira con URLs firmadas. Analizarlas las manda a Anthropic, y eso es
+--  una cosa distinta de mandar numeros.
+--
+--  Fotos de cuerpo de una persona identificable son datos personales
+--  sensibles bajo la LFPDPPP, y esa ley pide consentimiento EXPRESO. Por
+--  eso `fotos_ia_ok` arranca en NULL y no en `true`: null es "todavia no se
+--  le ha preguntado", false es "dijo que no". Un `default true` convertiria
+--  a todo el que ya subio fotos en alguien que consintio sin que se lo
+--  preguntaran, que es exactamente lo que la ley prohibe.
+--
+--  Quien diga que no sigue subiendo fotos y viendolas. Solo no se analizan.
+
+-- ---------------------------------------------------------------------
+--  1. El permiso, por persona
+-- ---------------------------------------------------------------------
+alter table public.profiles
+  add column if not exists fotos_ia_ok boolean;
+
+comment on column public.profiles.fotos_ia_ok is
+  'Si acepto que la IA analice sus fotos de progreso. NULL = todavia no se '
+  'le ha preguntado; false = dijo que no. Nunca se rellena solo: solo lo '
+  'escribe la persona desde la pantalla que explica que se manda y adonde.';
+
+-- Cuando lo dijo. Sin esto no hay forma de demostrar que se pregunto antes
+-- de mandar nada, que es justo lo que habria que enseñar si alguien lo
+-- reclama.
+alter table public.profiles
+  add column if not exists fotos_ia_fecha timestamptz;
+
+-- ---------------------------------------------------------------------
+--  2. El analisis guardado
+-- ---------------------------------------------------------------------
+--  Se guarda el TEXTO, nunca las imagenes ni nada derivado de ellas que
+--  pueda reconstruirlas. Al sexto mes, poder leer "que se veia en agosto"
+--  vale mas que el analisis de este mes: es la unica forma de que alguien
+--  vea de verdad cuanto lleva andado.
+create table if not exists public.analisis_fotos (
+  id            uuid primary key default gen_random_uuid(),
+  user_id       uuid not null references auth.users(id) on delete cascade,
+
+  -- El mes al que corresponde, como 'AAAA-MM'. Uno por mes y persona: si se
+  -- vuelve a pedir el mismo mes se pisa, no se acumula.
+  mes           text not null check (mes ~ '^\d{4}-\d{2}$'),
+
+  -- Las dos series que se compararon, en claves de semana ISO. Sirven para
+  -- saber DE QUE habla el texto, y para no repetir la misma comparacion.
+  semana_nueva  text not null check (semana_nueva ~ '^\d{4}-W\d{2}$'),
+  semana_vieja  text not null check (semana_vieja ~ '^\d{4}-W\d{2}$'),
+  -- Y contra la primera serie de todas, si habia. Mes a mes casi nunca se
+  -- nota nada, y es donde se abandona; contra el punto de partida si.
+  semana_base   text check (semana_base is null or semana_base ~ '^\d{4}-W\d{2}$'),
+
+  -- Lo que la IA vio A CIEGAS, sin conocer peso ni cintura. Se guarda
+  -- aparte del mensaje final a proposito: es lo unico que se puede volver a
+  -- comparar el mes que viene sin mandar las fotos viejas otra vez.
+  visto         text,
+  -- El mensaje que lee la persona, ya reconciliado con los numeros.
+  mensaje       text not null,
+
+  creado        timestamptz not null default now(),
+
+  unique (user_id, mes)
+);
+
+create index if not exists analisis_fotos_persona_mes
+  on public.analisis_fotos (user_id, mes desc);
+
+alter table public.analisis_fotos enable row level security;
+
+-- Solo lo suyo. `puede_ver` deja tambien al coach que la persona acepto,
+-- igual que con el resto de sus datos.
+drop policy if exists "analisis fotos: ver" on public.analisis_fotos;
+create policy "analisis fotos: ver" on public.analisis_fotos
+  for select using ( public.puede_ver(user_id) );
+
+-- NADIE escribe esto desde el navegador. Lo escribe la funcion `asistente`
+-- con su clave de servicio, despues de comprobar la sesion y el permiso.
+-- Sin insert ni update para `authenticated`, un token robado no puede
+-- inventarle a nadie un analisis de sus fotos.
+grant select on public.analisis_fotos to authenticated;
+revoke insert, update, delete on public.analisis_fotos from authenticated;
+
+-- Y explicitamente fuera del alcance de `anon`. `revoke ... from public` NO
+-- alcanza a `anon`: Supabase le concede permisos por las opciones por
+-- defecto del esquema, y ese descuido ya aparecio en una revision anterior.
+revoke all on public.analisis_fotos from anon;
+
+
+-- ============================ 0038_avisos_con_la_fecha_del_telefono.sql ============================
+
+-- Los avisos del entrenador miraban el dia equivocado.
+--
+--  EL FALLO, MEDIDO
+--
+--  Las tres funciones usaban `current_date`, que en Postgres va en UTC. Las
+--  comidas, en cambio, se guardan con `entry_date` = la fecha del TELEFONO.
+--
+--  Desde las 18:00 de Mexico, para la base ya es mañana. Asi que la ventana
+--  de siete dias incluia un dia que todavia no podia tener nada apuntado y
+--  descartaba el mas antiguo que si lo tenia.
+--
+--  Medido en produccion el 13 de agosto de 2026 a las 19:39 hora de Mexico:
+--
+--    now() en UTC ................................. 2026-08-14 01:39
+--    current_date (el que usaban las funciones) ... 2026-08-14
+--    la fecha real en Mexico ...................... 2026-08-13
+--    dias apuntados en [current_date-6, current_date] ... 6
+--    dias apuntados en la ventana correcta ............. 7
+--
+--  Consecuencia: "racha" es IMPOSIBLE de conseguir si abres la app por la
+--  tarde. Desde las 18:00 la ventana siempre incluye un dia vacio, asi que
+--  nunca llega a 7 de 7, y sale "semana_buena" en su lugar. Encaja con los
+--  datos: el unico aviso de racha salio un dia a las 14:56, cuando en UTC
+--  todavia era el mismo dia.
+--
+--  "ausente" y "estancado" tambien se corrian un dia. Ahi duele menos
+--  -esperar 4 dias en vez de 3-, pero es el mismo error.
+--
+--  EL ARREGLO
+--
+--  El telefono dice que dia es para el, igual que ya hace al guardar cada
+--  comida. Es la unica fuente coherente: si el dato se escribe con la fecha
+--  del telefono, tiene que leerse con la fecha del telefono.
+--
+--  Con un tope: si la fecha que manda se aleja mas de un dia de la del
+--  servidor, se ignora. Un dia es todo el margen que necesita cualquier
+--  zona horaria del mundo, y asi nadie se fabrica una racha mandando una
+--  fecha inventada.
+--
+--  Se BORRAN y se recrean en vez de `create or replace`: añadir un
+--  parametro no reemplaza la funcion, crea otra al lado, y la vieja -la que
+--  tiene el fallo- seguiria ahi y seguiria siendo llamable.
+
+-- El orden importa: guardar_aviso llama a aviso_pendiente, que llama a
+-- motivo_de_aviso. Se sueltan de fuera hacia dentro.
+drop function if exists public.guardar_aviso(public.motivo_aviso, text);
+drop function if exists public.aviso_pendiente(uuid);
+drop function if exists public.motivo_de_aviso(uuid);
+
+-- ---------------------------------------------------------------------
+--  El dia de esta persona, con tope de cordura
+-- ---------------------------------------------------------------------
+create or replace function public.dia_de_la_persona(p_hoy date)
+returns date
+language sql immutable
+as $$
+  select case
+           when p_hoy is null then current_date
+           when abs(p_hoy - current_date) > 1 then current_date
+           else p_hoy
+         end;
+$$;
+
+comment on function public.dia_de_la_persona(date) is
+  'La fecha del telefono, si es creible. Mas de un dia de diferencia con el '
+  'servidor no es una zona horaria: es un reloj mal puesto o alguien '
+  'intentando fabricarse una racha.';
+
+-- ---------------------------------------------------------------------
+--  Que aviso toca, si es que toca alguno
+-- ---------------------------------------------------------------------
+create or replace function public.motivo_de_aviso(p_usuario uuid, p_hoy date default null)
+returns public.motivo_aviso
+language plpgsql stable security definer set search_path = public, pg_temp
+as $$
+declare
+  v_hoy            date := public.dia_de_la_persona(p_hoy);
+  v_ultimo_diario  date;
+  v_dias_con_datos int;
+  v_dias_seguidos  int;
+  v_objetivo       text;
+  v_peso_viejo     numeric;
+  v_peso_nuevo     numeric;
+begin
+  if not public.puede_ver(p_usuario) then
+    return null;
+  end if;
+
+  select max(entry_date), count(distinct entry_date)
+    into v_ultimo_diario, v_dias_con_datos
+    from public.diary_entries where user_id = p_usuario;
+
+  -- Sin historial no hay nada que decir. A alguien que acaba de entrar no
+  -- se le echa de menos: se le deja empezar.
+  if v_dias_con_datos < 3 then
+    return null;
+  end if;
+
+  -- 1. AUSENTE. Lo primero, porque es lo unico que puede hacer que
+  --    alguien vuelva. Tres dias: dos es un fin de semana.
+  if v_ultimo_diario < v_hoy - 3 then
+    return 'ausente';
+  end if;
+
+  -- 2. ESTANCADO. Quiere bajar, lleva dos semanas y el peso no se mueve.
+  select goal into v_objetivo from public.profiles where id = p_usuario;
+  if v_objetivo = 'bajar' then
+    select weight_kg into v_peso_nuevo
+      from public.weight_logs where user_id = p_usuario
+      order by log_date desc limit 1;
+    select weight_kg into v_peso_viejo
+      from public.weight_logs
+     where user_id = p_usuario and log_date <= v_hoy - 14
+     order by log_date desc limit 1;
+    if v_peso_viejo is not null and v_peso_nuevo is not null
+       and abs(v_peso_nuevo - v_peso_viejo) < 0.3 then
+      return 'estancado';
+    end if;
+  end if;
+
+  -- 3. RACHA. Siete dias seguidos apuntando.
+  select count(*) into v_dias_seguidos
+    from generate_series(v_hoy - 6, v_hoy, '1 day') d
+   where exists (select 1 from public.diary_entries e
+                  where e.user_id = p_usuario and e.entry_date = d::date);
+  if v_dias_seguidos = 7 then
+    return 'racha';
+  end if;
+
+  -- 4. SEMANA BUENA. Cinco de los ultimos siete dias apuntados.
+  if v_dias_seguidos >= 5 then
+    return 'semana_buena';
+  end if;
+
+  return null;
+end $$;
+
+revoke execute on function public.motivo_de_aviso(uuid, date) from public, anon;
+grant  execute on function public.motivo_de_aviso(uuid, date) to authenticated;
+
+-- ---------------------------------------------------------------------
+--  Toca mandarlo, o ya se lo dije
+-- ---------------------------------------------------------------------
+create or replace function public.aviso_pendiente(p_usuario uuid, p_hoy date default null)
+returns public.motivo_aviso
+language plpgsql stable security definer set search_path = public, pg_temp
+as $$
+declare v_motivo public.motivo_aviso;
+begin
+  v_motivo := public.motivo_de_aviso(p_usuario, p_hoy);
+  if v_motivo is null then return null; end if;
+
+  -- Ya hay uno sin leer: no se amontonan.
+  if exists (select 1 from public.avisos_coach
+              where user_id = p_usuario and visto_en is null) then
+    return null;
+  end if;
+
+  -- El mismo motivo, no antes de siete dias. Aqui SI se usa now(): es
+  -- tiempo transcurrido de verdad, no "que dia es para esta persona".
+  if exists (select 1 from public.avisos_coach
+              where user_id = p_usuario and motivo = v_motivo
+                and creado_en > now() - interval '7 days') then
+    return null;
+  end if;
+
+  return v_motivo;
+end $$;
+
+revoke execute on function public.aviso_pendiente(uuid, date) from public, anon;
+grant  execute on function public.aviso_pendiente(uuid, date) to authenticated;
+
+-- ---------------------------------------------------------------------
+--  Guardar el aviso ya escrito
+--
+--  Funcion y no INSERT directo: si la app pudiera insertar, cualquiera se
+--  escribiria sus propios avisos.
+--
+--  Lleva la MISMA fecha que la comprobacion de antes. Sin ella, el aviso se
+--  pedia con la fecha del telefono y se guardaba comprobando con la del
+--  servidor: las dos podian dar motivos distintos y el guardado fallaba con
+--  "Ese aviso no toca ahora" despues de haber pagado la consulta de IA.
+-- ---------------------------------------------------------------------
+create or replace function public.guardar_aviso(
+  p_motivo public.motivo_aviso, p_texto text, p_hoy date default null)
+returns bigint
+language plpgsql security definer set search_path = public, pg_temp
+as $$
+declare
+  v_yo uuid := auth.uid();
+  v_id bigint;
+begin
+  if v_yo is null then
+    raise exception 'Necesitas sesion';
+  end if;
+  if public.aviso_pendiente(v_yo, p_hoy) is distinct from p_motivo then
+    raise exception 'Ese aviso no toca ahora';
+  end if;
+
+  insert into public.avisos_coach (user_id, motivo, texto)
+  values (v_yo, p_motivo, left(btrim(p_texto), 400))
+  returning id into v_id;
+  return v_id;
+end $$;
+
+revoke execute on function public.guardar_aviso(public.motivo_aviso, text, date) from public, anon;
+grant  execute on function public.guardar_aviso(public.motivo_aviso, text, date) to authenticated;
+
+revoke execute on function public.dia_de_la_persona(date) from public, anon;
+grant  execute on function public.dia_de_la_persona(date) to authenticated;
+
+
+-- ============================ 0039_el_tope_diario_se_reinicia_a_medianoche.sql ============================
+
+-- El tope diario de IA se reiniciaba a las 6 de la tarde.
+--
+--  LO MEDIDO, en la cuenta de Eduardo el 13 de agosto de 2026:
+--
+--    2026-08-14: 3 consultas  (la ultima el 13 ago a las 19:27)
+--    2026-08-13: 1 consulta   (la ultima el 13 ago a las 11:xx)
+--
+--  Dos filas de dias distintos, y las cuatro consultas son del mismo dia
+--  mexicano. `gastar_consulta_ia` usaba `current_date`, que va en UTC:
+--  desde las 18:00 de Mexico ya es el dia siguiente y el contador vuelve a
+--  cero.
+--
+--  A quien lo usa esto le REGALA consultas, asi que nadie se queja. Pero el
+--  tope no esta para racionar: esta para que un token robado no pueda
+--  vaciar la cuenta en una noche. Y tal como estaba, se podia gastar el
+--  DOBLE del tope en un solo dia usandolo a caballo de las 18:00.
+--
+--  POR QUE AQUI NO SE USA LA FECHA DEL TELEFONO
+--
+--  En los avisos del entrenador (0038) el arreglo fue que el telefono
+--  mandara su fecha, porque alli el dato que se lee -entry_date- tambien se
+--  escribe con la fecha del telefono, y habia que leerlo igual que se
+--  escribe.
+--
+--  Aqui es al reves. Si el cliente dijera que dia es, podria reiniciarse el
+--  tope cuando quisiera con solo mandar una fecha distinta, que es
+--  exactamente el agujero que este tope existe para tapar. Un limite de
+--  gasto no puede depender de lo que diga quien gasta.
+--
+--  Asi que se fija en la zona horaria de la app, que es mexicana de
+--  principio a fin. Para cualquier persona en Mexico el corte pasa a ser la
+--  medianoche de verdad, y nadie puede moverlo.
+
+create or replace function public.gastar_consulta_ia(
+  usuario uuid,
+  tope    integer default 40
+)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  usadas integer;
+  -- El dia de la persona, no el del servidor. Lo decide la base y no quien
+  -- llama: de eso depende que el tope signifique algo.
+  v_dia  date := (now() at time zone 'America/Mexico_City')::date;
+begin
+  select consultas into usadas
+    from public.ia_uso
+   where user_id = usuario and dia = v_dia
+   for update;
+
+  if usadas is null then
+    insert into public.ia_uso(user_id, dia, consultas)
+    values (usuario, v_dia, 1);
+    return tope - 1;
+  end if;
+
+  if usadas >= tope then
+    return -1;                       -- se acabo por hoy; no se suma nada
+  end if;
+
+  update public.ia_uso
+     set consultas = consultas + 1, ultima_en = now()
+   where user_id = usuario and dia = v_dia;
+
+  return tope - usadas - 1;
+end;
+$$;
+
+-- Se rehacen porque `create or replace` no toca los permisos, pero dejarlo
+-- escrito evita que un dia se recree en otro sitio sin ellos. Solo la
+-- funcion `asistente` la llama, con su clave de servicio: ni el navegador
+-- ni anon tienen por que poder gastar consultas de nadie.
+revoke all on function public.gastar_consulta_ia(uuid, integer) from public, anon, authenticated;
+
+-- Las filas que ya quedaron partidas por el corte viejo no se tocan: son el
+-- historial de lo que de verdad se gasto, y reescribirlo para que cuadre
+-- con el corte nuevo seria falsear el unico registro que hay del consumo.
+-- Se limpian solas al mes, como el resto.
