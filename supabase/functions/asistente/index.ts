@@ -623,7 +623,19 @@ NO sirve para:
 - Lo que ya está en la base: su peso, sus macros, lo que comió ayer. Eso lo
   tienes cada vez, no lo dupliques.
 - Lo de un solo día ("hoy desayunó tarde").
+- COMIDAS SUELTAS. "Se comió una barbacoa", "cenó budín de pan" NO van
+  aquí. Están en su diario con su fecha, y aquí acabarían sin ella.
+  Esto pasó de verdad: se le mencionó en el mismo mensaje una barbacoa de
+  la semana anterior y un budín de ese mismo día, como si fueran lo mismo.
+  Quien lo lee nota que no te enteras de cuándo pasaron las cosas, y a
+  partir de ahí ya no se fía de nada de lo que recuerdas.
 - Diagnósticos. Sus condiciones de salud vienen aparte y no son cosa tuya.
+
+ESTAS NOTAS NO TIENEN FECHA. Es la limitación que más te va a traicionar:
+lo que escribas aquí lo vas a leer dentro de un mes sin saber cuándo pasó.
+Así que escribe solo lo que siga siendo verdad entonces -lo que no come,
+cómo vive, qué le funciona-, y si algo solo se entiende con su fecha,
+ponla dentro de la frase: "en agosto de 2026 empezó a entrenar de noche".
 
 Escríbelo en frases cortas, como apuntes para ti:
   "Vegetariana. Odia el brócoli. Entrena de noche, cena tardísimo.
