@@ -7221,7 +7221,16 @@
           return null;
         }
         // Y si no hay ninguno, ¿toca uno nuevo? Lo decide Postgres, gratis.
-        return sbRpc('aviso_pendiente', { p_usuario: sesion.user.id });
+        //
+        // CON LA FECHA DEL TELÉFONO. Antes no se mandaba y allá se usaba
+        // `current_date`, que va en UTC: desde las 18:00 de México para la
+        // base ya era mañana, así que la ventana de siete días incluía un
+        // día que todavía no podía tener nada apuntado. "Racha" era
+        // imposible de conseguir abriendo la app por la tarde.
+        //
+        // Las comidas se guardan con la fecha del teléfono; leerlas con otra
+        // no podía salir bien.
+        return sbRpc('aviso_pendiente', { p_usuario: sesion.user.id, p_hoy: isoDe(HOY) });
       })
       .then(function(motivo){
         if(!motivo) return;
@@ -7230,7 +7239,11 @@
         return iaLlamar({ accion: 'aviso', motivo: motivo })
           .then(function(r){
             if(!r || !r.texto) return;
-            return sbRpc('guardar_aviso', { p_motivo: motivo, p_texto: r.texto })
+            // La MISMA fecha que arriba. Con una distinta, se pide el aviso
+            // con la del teléfono y se guarda comprobando con la del
+            // servidor: podían dar motivos distintos y el guardado fallaba
+            // después de haber pagado la consulta de IA.
+            return sbRpc('guardar_aviso', { p_motivo: motivo, p_texto: r.texto, p_hoy: isoDe(HOY) })
               .then(function(id){ pintarAvisoCoach(r.texto, id); });
           });
       })['catch'](function(){});   // en silencio: nadie pidió esto
