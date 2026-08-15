@@ -4532,7 +4532,22 @@
         aplicarRegistro();
         guardarCuenta();
         return sbGuardarPerfil()
-          .then(function(){ goto('diario', false); return cargarDatos(); });
+          .then(function(){ goto('diario', false); return cargarDatos(); })
+          ['catch'](function(e){
+            // AQUÍ LA CUENTA YA EXISTE Y LA SESIÓN ESTÁ ACTIVA. Si esto
+            // cayera al catch de abajo, saldría un error junto al correo
+            // en la pantalla de registro, esta persona lo reintentaría, y
+            // el reintento falla con "ese correo ya tiene cuenta": queda
+            // atrapada fuera de una cuenta que ya es suya, y si entra por
+            // login se la encuentra sin peso, altura, edad ni objetivo.
+            //
+            // Así que se entra igual -que es lo cierto- y se dice qué es lo
+            // único que falta.
+            goto('diario', false);
+            toast('toastComida', 'Tu cuenta está lista, pero no pude guardar tus datos: ' +
+                  traducirError(e.message) + ' Complétalos en Perfil.');
+            return cargarDatos();
+          });
       })
       ['catch'](function(e){ marcarError(campoCorreo, avisoCorreo, traducirError(e.message)); })
       .then(function(){ ocupado(btnEmpezar, false); });
@@ -5152,8 +5167,20 @@
     var a = document.getElementById('cmpA').value, b = document.getElementById('cmpB').value;
     var fa = (FOTOS[a]||{})[cmpPose], fb = (FOTOS[b]||{})[cmpPose];
 
+    // Hacen falta DOS semanas distintas.
+    //
+    // Antes solo se miraba que hubiera valor en los dos selectores. Con una
+    // sola semana de fotos, los dos caían en ella -`ks[0]` y
+    // `ks[ks.length-1]` son la misma- y salía la MISMA foto rotulada
+    // "Antes" y "Después". Y el aviso pedía "al menos una semana", que es
+    // justo el caso en el que no se puede comparar nada.
     if(!a || !b){
-      area.innerHTML = '<p class="cmp-aviso">Sube fotos de al menos una semana para poder comparar.</p>';
+      area.innerHTML = '<p class="cmp-aviso">Sube fotos de al menos <b>dos</b> semanas para poder comparar.</p>';
+      return;
+    }
+    if(a === b){
+      area.innerHTML = '<p class="cmp-aviso">Esas son la misma semana. Elige dos distintas ' +
+        'para ver el cambio.</p>';
       return;
     }
     if(!fa || !fb){
@@ -5878,9 +5905,33 @@
       }
       return;
     }
+    // --- Mandar enlace para recuperar la contraseña ---
+    //
+    // ESTO NO MANDABA NADA. Solo sacaba el aviso de "enlace enviado" y se
+    // quedaba tan ancho: no había ni una llamada, en toda la app la palabra
+    // "recuperación" solo aparecía en ese texto.
+    //
+    // O sea que quien no podía entrar a su cuenta oía "ya te lo mandé" y se
+    // quedaba esperando un correo que no existía. Mentir sobre algo hecho es
+    // peor que no tener el botón.
     var pw = e.target.closest('[data-pass]');
     if(pw){
-      toast('toastAdmin', 'Enlace de recuperación enviado a ' + USUARIOS[Number(pw.dataset.pass)].c);
+      var up = USUARIOS[Number(pw.dataset.pass)];
+      if(!up || !up.c){ toast('toastAdmin', 'No tengo el correo de esa persona'); return; }
+      // Se pregunta porque esto le llega a alguien de verdad a su bandeja.
+      if(!confirm('¿Mandar a ' + up.c + ' un enlace para cambiar su contraseña?')) return;
+
+      var boton = pw;
+      boton.disabled = true;
+      sbFetch('/auth/v1/recover', {
+        method: 'POST',
+        body: JSON.stringify({ email: up.c })
+      }).then(function(){
+        // El aviso va DESPUÉS de que conteste, que es lo que faltaba.
+        toast('toastAdmin', 'Enlace enviado a ' + up.c);
+      })['catch'](function(err){
+        toast('toastAdmin', 'No se pudo enviar: ' + traducirError(err.message));
+      }).then(function(){ boton.disabled = false; });
       return;
     }
     if(e.target.closest('#admCrear')){
