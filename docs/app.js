@@ -4864,7 +4864,11 @@
   //
   // Apagado, no se pide el permiso ni se llama a nada. Lo ya guardado sí se
   // enseña, que no depende del servidor.
-  var FOTOS_IA_LISTO = false;
+  //
+  // ENCENDIDO el 13 de agosto de 2026: la función quedó desplegada con la
+  // acción 'fotos', comprobado con el hash del código sin comentarios contra
+  // el fuente local.
+  var FOTOS_IA_LISTO = true;
 
   var PERMISO_FOTOS = null;    // true / false / null = no se le ha preguntado
   var ANALISIS = null;         // el último guardado, para pintarlo
