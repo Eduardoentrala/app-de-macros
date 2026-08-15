@@ -1980,10 +1980,40 @@
     // apartar sobre un suelo inflado dejaría días por debajo de lo sano.
     var hoyEsEvento = !!EVENTOS[isoDe(HOY)];
     var reserva = hoyEsEvento ? 0 : reservaDeLaSemana();
+    var pisoDia = Math.max(1200, calDe({P:P, C:C, G:G}) * 0.65);
     if(reserva > 0){
-      var pisoDia = Math.max(1200, calDe({P:P, C:C, G:G}) * 0.65);
       var conEvento = apartarParaEvento(metaHoy, diasRestantes, reserva, pisoDia);
       metaHoy = { P: conEvento.P, C: conEvento.C, G: conEvento.G };
+    }
+
+    // EL SUELO, COMO ÚLTIMA PALABRA Y PARA TODOS LOS CAMINOS.
+    //
+    // Antes solo existía dentro de `apartarParaEvento`, o sea únicamente
+    // cuando había un evento apartando calorías. La compensación normal no
+    // lo tenía, y la compensación no está acotada por abajo:
+    //
+    //   con 2.315 de meta, comiendo 1,5 veces eso cinco días seguidos
+    //   -unas vacaciones, una Navidad- el día 5 salía 772 cal y el día 6
+    //   MENOS 579.
+    //
+    // O sea: la app decía que comieras 772 calorías, por debajo de su
+    // propio mínimo, y después números negativos que no significan nada.
+    // Y lo decía justo al volver de una mala semana, que es cuando más
+    // caso se le hace.
+    //
+    // Compensar está bien; castigar no. Lo que no cabe en la semana se
+    // pierde, y se dice en voz alta más abajo.
+    var pisoTocado = false;
+    if(calDe(metaHoy) < pisoDia){
+      pisoTocado = true;
+      // La proteína se queda en su base: es lo que se protege cuando hay
+      // que recortar. El resto del suelo se reparte entre carbos y grasa
+      // en la misma proporción que ya tenía esta persona.
+      var restoCal = Math.max(0, pisoDia - P * 4);
+      var basC = C * 4, basG = G * 9, baseCG = basC + basG;
+      metaHoy = baseCG > 0
+        ? { P: P, C: (restoCal * (basC / baseCG)) / 4, G: (restoCal * (basG / baseCG)) / 9 }
+        : { P: P, C: 0, G: 0 };
     }
 
     pintarEventos();
@@ -2047,7 +2077,15 @@
     // Nota que explica por qué la meta de hoy cambió
     var nota = document.getElementById('ajusteNota');
     var dif = Math.round(calHoyMeta - calDia);
-    if(!avisoAjustePendiente){
+    if(pisoTocado){
+      // Esta gana a todas las demás, incluso a "ya se enseñó hoy": no es un
+      // ajuste, es que la compensación se paró en el mínimo. Callarlo
+      // dejaría a alguien pensando que hoy le tocan 1.200 porque sí.
+      nota.className = 'ajuste-nota debe';
+      nota.textContent = 'Te pasaste bastante. Hoy te dejo en ' +
+        mil(calHoyMeta) + ' cal y no menos: recuperarlo de golpe no es sano ' +
+        'ni funciona. Lo que sobra se olvida.';
+    } else if(!avisoAjustePendiente){
       // Ya se enseñó hoy: la nota no vuelve hasta mañana.
       nota.className = 'ajuste-nota';
       nota.textContent = '';
