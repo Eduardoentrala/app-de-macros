@@ -303,7 +303,7 @@ console.log('\n— Las palomitas se apagan al guardar la sesión —');
   // para siempre". Si sobreviven, la próxima sesión empieza con todo dado
   // por hecho y dejan de significar nada.
   const i = APP.indexOf("getElementById('saveSessionBtn')");
-  const f = APP.slice(i, i + 3000);
+  const f = APP.slice(i, i + 5400);
   check('se quitan al guardar', /querySelectorAll\('\.set-check\.done'\)[\s\S]{0,120}classList\.remove\('done'\)/.test(f));
 
   // El orden importa en los dos sentidos.

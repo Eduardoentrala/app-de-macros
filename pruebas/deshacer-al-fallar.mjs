@@ -93,5 +93,38 @@ console.log('\n— Los otros sitios que ya lo hacían bien —');
   check('probar un objetivo no lo cambia', /reg\.objetivo = antes;/.test(obj));
 }
 
+console.log('\n— Y una sesión de entreno que no se guarda —');
+{
+  const i = APP.indexOf("getElementById('saveSessionBtn')");
+  const fn = APP.slice(i, i + 5400);
+  check('existe el guardado de sesión', i > 0);
+
+  // Lo que ya se deshacía.
+  check('se deshace la sesión', /delete SESIONES\[iso\(HOY\)\];/.test(fn));
+  check('y el historial de volumen', /HISTORIAL\[d\.nombre\]\.pop\(\);/.test(fn));
+
+  // LO QUE FALTABA, y era justo lo que se ve.
+  check('se apunta qué palomitas estaban puestas',
+    /var palomitasAntes = Array\.from\(exList\.querySelectorAll\('\.set-check\.done'\)\);/.test(fn),
+    'sin esto, quien marco veinte series se queda sin ninguna y sin saber por que');
+  check('y vuelven si falla',
+    /palomitasAntes\.forEach\(function\(v\)\{ v\.classList\.add\('done'\); \}\);/.test(fn));
+
+  check('se apunta la referencia anterior del volumen',
+    /refsAntes\.push\(\{ card: c, valor: c\.getAttribute\('data-prev-vol'\) \}\)/.test(fn));
+  check('y vuelve si falla', /r\.card\.setAttribute\('data-prev-vol', r\.valor\)/.test(fn),
+    'si se queda la nueva, el porcentaje en vivo compara contra una sesion que no existe');
+  // Sin referencia previa hay que QUITAR el atributo, no dejar la cadena
+  // "null": parseFloat daria NaN y el porcentaje se apagaria sin motivo.
+  check('y si antes no había, se quita',
+    /if\(r\.valor === null\) r\.card\.removeAttribute\('data-prev-vol'\);/.test(fn));
+
+  // Lo devuelto hay que volver a persistirlo, o al reabrir se pierde igual.
+  const cat = fn.slice(fn.indexOf('delete SESIONES'));
+  check('lo devuelto se vuelve a guardar', /programarGuardado\(\);/.test(cat),
+    'la pantalla enseñaria las palomitas y la base seguiria con la rutina apagada');
+  check('y se repinta el porcentaje', /recalcAll\(\);/.test(cat));
+}
+
 console.log(`\n${ok} pasan · ${mal} fallan`);
 process.exit(mal ? 1 : 0);

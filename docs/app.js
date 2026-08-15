@@ -3162,7 +3162,9 @@
     // La rutina es la PLANTILLA, que se sigue editando. Esto es el
     // HISTORIAL: una foto de lo que se hizo hoy, que ya no cambia aunque
     // mañana se reordene la rutina. De aquí salen las gráficas.
-    var detalle = [], total = 0;
+    // Lo que hay que poder devolver si el guardado no llega. La sesión y el
+    // historial ya se deshacían; esto no, y era lo que se veía.
+    var detalle = [], total = 0, refsAntes = [];
     Array.from(exList.querySelectorAll('.exercise-card')).forEach(function(c){
       var nombre = c.querySelector('.ex-name').childNodes[0].textContent.trim();
       var vol = 0, series = [];
@@ -3182,6 +3184,10 @@
         // contra ESTA sesión.
         c.removeAttribute('data-tocado');
 
+        // La referencia de antes, por si hay que devolverla: si el guardado
+        // falla y esta se queda puesta, el porcentaje en vivo compara contra
+        // una sesión que no existe.
+        refsAntes.push({ card: c, valor: c.getAttribute('data-prev-vol') });
         c.setAttribute('data-prev-vol', vol);   // la próxima sesión compara contra esta
         detalle.push({ nombre: nombre, volumen: vol, series: series });
         total += vol;
@@ -3194,9 +3200,11 @@
     //
     // Va DESPUÉS de leer `detalle` -que necesita saber cuáles estaban
     // marcadas- y ANTES de saveCurrentDay, que es quien las persiste.
-    Array.from(exList.querySelectorAll('.set-check.done')).forEach(function(v){
-      v.classList.remove('done');
-    });
+    // Se apunta CUÁLES estaban puestas antes de apagarlas: si el guardado
+    // falla, quien acaba de marcar veinte series no puede quedarse sin
+    // ninguna y sin saber por qué.
+    var palomitasAntes = Array.from(exList.querySelectorAll('.set-check.done'));
+    palomitasAntes.forEach(function(v){ v.classList.remove('done'); });
     // Y se avisa de que hay algo que subir. Quitar la clase por código no
     // dispara ningún evento, así que `volcarRutina` no tenía nada pendiente
     // y salía sin guardar: la pantalla quedaba limpia y la base seguía con
@@ -3232,7 +3240,18 @@
       detalle.forEach(function(d){
         if(HISTORIAL[d.nombre]) HISTORIAL[d.nombre].pop();
       });
+      // Y lo que se VE, que era lo que faltaba por deshacer.
+      palomitasAntes.forEach(function(v){ v.classList.add('done'); });
+      refsAntes.forEach(function(r){
+        if(r.valor === null) r.card.removeAttribute('data-prev-vol');
+        else r.card.setAttribute('data-prev-vol', r.valor);
+      });
+      // Se vuelve a persistir lo devuelto: sin esto la pantalla enseña otra
+      // vez las palomitas pero la base se quedó con la rutina ya apagada, y
+      // al reabrir la app desaparecen igual.
+      if(typeof programarGuardado === 'function') programarGuardado();
       pintarEjercicio();
+      recalcAll();
       toast('toastRutina', 'No se pudo guardar: ' + traducirError(e.message));
     });
   });
