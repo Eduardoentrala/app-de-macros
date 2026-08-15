@@ -55,7 +55,7 @@ console.log('\n— Y no se confunde con la porción de USDA —');
 console.log('\n— Se guarda lo que se eligió —');
 {
   const i = APP.indexOf("var unidad = document.getElementById('catUnidad')");
-  const trozo = i > 0 ? APP.slice(i, i + 1600) : '';
+  const trozo = i > 0 ? APP.slice(i, i + 2600) : '';
   check('el guardado lee la unidad', i > 0);
   check('la manda a la base', /unidad:\s*unidad/.test(trozo));
   check('manda también el peso de la unidad', /pieza_g:/.test(trozo));
@@ -63,8 +63,10 @@ console.log('\n— Se guarda lo que se eligió —');
   // están por 100 g y sin ese peso no hay con qué convertir.
   check('no deja guardar piezas sin peso',
     /if\(unidad !== 'Gramos' && piezaG <= 0\)/.test(trozo), trozo.slice(0, 300));
+  // El texto cambio de "Di cuanto pesa" a "Falta cuanto pesa": lo que
+  // importa no es la redaccion sino que se diga QUE falta, en palabras.
   check('y lo dice con palabras, no con un error de Postgres',
-    /toast\('toastAdmin', 'Di cuánto pesa/.test(trozo));
+    /toast\('toastAdmin', '(Falta|Di) cuánto pesa/.test(trozo));
   // En gramos se limpia: un peso por pieza colgando de un alimento que va
   // en gramos no significa nada y confunde al siguiente que lo abra.
   check('en gramos el peso se limpia a null',

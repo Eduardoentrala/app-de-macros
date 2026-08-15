@@ -60,7 +60,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = 'fe708293fe';
+    var SELLO = '2c3206efb2';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -664,24 +664,42 @@
                 </select>
               </div>
               <div id="catPesoUnidad" hidden>
+                <!-- «obligatorio» en la etiqueta y no solo al fallar: el
+                     hueco vacío con un ejemplo en gris se lee como si ya
+                     estuviera lleno. Pasó: se guardaba, la app avisaba de
+                     que faltaba, y parecía que el botón no servía. -->
                 <div class="field-label" id="catPesoUnidadLabel">Pesa una (g)</div>
-                <input class="big-input" id="catPiezaG" type="number" step="1" min="1" inputmode="numeric" placeholder="50">
+                <input class="big-input" id="catPiezaG" type="number" step="1" min="1" inputmode="numeric" placeholder="obligatorio">
               </div>
             </div>
             <p class="hint" id="catUnidadNota">Se apunta en gramos.</p>
 
+            <!-- Lo que va a ver quien lo apunte, con sus números ya hechos.
+                 Sin esto hay que multiplicar de cabeza para saber si lo que
+                 se acaba de teclear tiene sentido, y nadie lo hace. -->
+            <div class="calc-box" id="catPreview" hidden>
+              <div class="calc-line"><span id="catPreviewQue">Una pieza</span><b id="catPreviewCal">—</b></div>
+              <div class="calc-note" id="catPreviewDet">—</div>
+            </div>
+
             <!-- Esto es OTRA cosa y por eso va separado: es la porción de
                  referencia de USDA («cup, chopped», «1 oz»), el dato con el
                  que se audita la fila contra la fuente. No es la unidad en
-                 la que se apunta. -->
-            <div class="cat-fila2">
-              <div>
-                <div class="field-label">Porción de USDA</div>
-                <input class="big-input" id="catPorcion" maxlength="40" placeholder="1 pieza mediana">
-              </div>
-              <div>
-                <div class="field-label">Pesa (g)</div>
-                <input class="big-input" id="catPorcionG" type="number" step="1" inputmode="numeric">
+                 la que se apunta.
+                 Se esconde en los alimentos propios: ahí no hay nada que
+                 auditar contra USDA, y dos campos de gramos en la misma
+                 pantalla es exactamente como se confunde a alguien. -->
+            <div id="catBloqueUsda" hidden>
+              <p class="hint" style="margin:0 0 6px;">Solo para cuadrar la fila con USDA. No es la unidad en la que se apunta.</p>
+              <div class="cat-fila2">
+                <div>
+                  <div class="field-label">Porción de USDA</div>
+                  <input class="big-input" id="catPorcion" maxlength="40" placeholder="1 pieza mediana">
+                </div>
+                <div>
+                  <div class="field-label">Pesa (g)</div>
+                  <input class="big-input" id="catPorcionG" type="number" step="1" inputmode="numeric">
+                </div>
               </div>
             </div>
 
@@ -1560,7 +1578,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = 'fe708293fe';
+    var SELLO = '2c3206efb2';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que

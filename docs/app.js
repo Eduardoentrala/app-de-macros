@@ -5487,8 +5487,44 @@
       ? 'Se apunta en gramos.'
       : 'Se apunta por ' + (u === 'Pieza' ? 'piezas' : 'servicios') +
         '. Di cuánto pesa ' + nombreUnidad + ' para poder calcular sus macros.';
+    pintarPreviaCatalogo();
   }
+
+  // Lo que va a ver quien lo apunte, con los números ya hechos.
+  //
+  // Los macros se teclean por 100 g y se apunta por piezas: para saber si
+  // lo escrito tiene sentido hay que multiplicar de cabeza, y nadie lo
+  // hace. Con esto se ve de un vistazo, y un dato absurdo canta solo.
+  function pintarPreviaCatalogo(){
+    var caja = document.getElementById('catPreview');
+    if(!caja) return;
+    var u = document.getElementById('catUnidad').value;
+    var g = Number(document.getElementById('catPiezaG').value) || 0;
+
+    if(u === 'Gramos' || g <= 0){ caja.hidden = true; return; }
+
+    var P = Number(document.getElementById('catP').value) || 0;
+    var C = Number(document.getElementById('catC').value) || 0;
+    var G = Number(document.getElementById('catG').value) || 0;
+    var f = g / 100;
+
+    caja.hidden = false;
+    document.getElementById('catPreviewQue').textContent =
+      (u === 'Pieza' ? 'Una pieza' : 'Un servicio') + ' (' + g + ' g)';
+    document.getElementById('catPreviewCal').textContent =
+      mil(Math.round((P*4 + C*4 + G*9) * f)) + ' cal';
+    document.getElementById('catPreviewDet').textContent =
+      'P ' + Math.round(P*f*10)/10 + ' g · C ' + Math.round(C*f*10)/10 +
+      ' g · G ' + Math.round(G*f*10)/10 + ' g';
+  }
+
   document.getElementById('catUnidad').addEventListener('change', pintarUnidadCatalogo);
+  // La previa se rehace con cualquier número que la cambie, no solo al
+  // elegir unidad: se teclea el peso y se ve al momento si cuadra.
+  Array.from(['catPiezaG','catP','catC','catG']).forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.addEventListener('input', pintarPreviaCatalogo);
+  });
 
   function abrirCatalogo(a){
     catEditando = a || null;
@@ -5496,9 +5532,16 @@
     document.getElementById('catTitulo').textContent = nuevo ? 'Alimento nuevo' : 'Editar alimento';
     // De dónde salió el dato. Si alguien lo cambia a mano, deja de ser de
     // USDA y hay que decirlo: es lo que permite auditarlo después.
-    document.getElementById('catFuente').textContent = (a && a.fdc_id)
+    var deUsda = !!(a && a.fdc_id);
+    document.getElementById('catFuente').textContent = deUsda
       ? 'USDA #' + a.fdc_id + ' · ' + (a.nombre_usda || '')
       : 'Alimento propio, no viene de USDA';
+
+    // La porción de USDA solo sale si el alimento viene de USDA. En uno
+    // propio no hay nada que cuadrar contra la fuente, y tener DOS campos
+    // de gramos en la misma pantalla -«pesa una» y «pesa»- es exactamente
+    // como se acaba rellenando el que no era.
+    document.getElementById('catBloqueUsda').hidden = !deUsda;
 
     document.getElementById('catNombre').value    = a ? a.nombre : '';
     document.getElementById('catCategoria').value = a ? a.categoria : 'otros';
@@ -5532,10 +5575,19 @@
     // check de Postgres no le dice a nadie qué campo le falta. La base lo
     // impide igualmente -es su trabajo-, pero esto es lo que se lee.
     if(unidad !== 'Gramos' && piezaG <= 0){
-      toast('toastAdmin', 'Di cuánto pesa ' +
+      // Además del aviso, se marca y se enfoca el campo. Un mensaje solo
+      // dice QUÉ falta; esto dice DÓNDE, que es lo que hacía falta cuando
+      // el aviso ni se veía -salía por debajo de la hoja- y parecía que el
+      // botón Guardar estuviera roto.
+      var campo = document.getElementById('catPiezaG');
+      campo.classList.add('falta');
+      campo.focus();
+      try{ campo.scrollIntoView({ block: 'center' }); }catch(e){}
+      toast('toastAdmin', 'Falta cuánto pesa ' +
         (unidad === 'Pieza' ? 'una pieza' : 'un servicio') + ' en gramos');
       return;
     }
+    document.getElementById('catPiezaG').classList.remove('falta');
 
     var cuerpo = {
       nombre: nombre,

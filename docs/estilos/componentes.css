@@ -98,9 +98,19 @@ table.week-table tr.today td{font-weight:800;}
 .sin-datos{
   padding:40px 16px;text-align:center;font:500 13.5px/1.4 sans-serif;color:var(--ink-faint);
 }
+/* z-index POR ENCIMA de las hojas (.sheet-backdrop va en 60).
+   Estaba en 50 y el aviso se pintaba DEBAJO de la hoja abierta: se
+   mostraba, se desvanecía a los segundos, y nadie lo veía nunca.
+   Lo destapó el editor de alimentos del panel: al guardar una pieza sin
+   decir cuánto pesa, la app avisaba de lo que faltaba y en pantalla solo
+   parecía que el botón Guardar estaba roto.
+   Afectaba a TODOS los avisos que salen con una hoja abierta, que son casi
+   todos los que importan: los errores salen justo cuando hay algo abierto. */
 .toast{
   position:absolute;left:50%;bottom:100px;transform:translateX(-50%);background:var(--ink);color:var(--card-bg);
-  padding:10px 18px;border-radius:12px;font:700 13px/1 sans-serif;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;z-index:50;
+  padding:10px 18px;border-radius:12px;font:700 13px/1 sans-serif;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;z-index:70;
+  /* Que un mensaje largo no se salga por los lados en un móvil. */
+  max-width:calc(100% - 32px);text-align:center;line-height:1.35;
 }
 .toast.show{opacity:1;transform:translateX(-50%) translateY(-6px);}
 
@@ -261,4 +271,11 @@ table.week-table tr.today td{font-weight:800;}
 .analisis-txt{
   margin:10px 0 0;font:500 14px/1.6 sans-serif;color:var(--ink);
   white-space:pre-wrap;
+}
+
+/* Un campo que falta. Rojo Y grosor: el color solo no lo distingue quien
+   no ve bien los rojos, y esto sale justo cuando algo ha ido mal. */
+.big-input.falta{
+  border-color:#e0574a;
+  box-shadow:0 0 0 3px rgba(224,87,74,.18);
 }
