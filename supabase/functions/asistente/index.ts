@@ -1259,7 +1259,19 @@ Deno.serve(async (req) => {
 
       // Uno por mes y persona. Si ya está hecho se devuelve el guardado en
       // vez de volver a pagarlo.
-      const mes = new Date().toISOString().slice(0, 7);
+      // El mes en la zona de la app, NO en UTC.
+      //
+      // `toISOString()` va en UTC, y desde las 18:00 de México ya es el día
+      // siguiente. El último día de cada mes, por la tarde, esto guardaba la
+      // comparación con el mes que viene — y entonces el mes que viene salía
+      // "ya está hecho" y esa persona se quedaba sin la suya.
+      //
+      // Se calcula aquí y no se acepta del cliente, por lo mismo que el tope
+      // diario: quien pudiera decir en qué mes está, podría pedir el análisis
+      // las veces que quisiera, y son ocho imágenes cada vez.
+      const mes = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Mexico_City', year: 'numeric', month: '2-digit',
+      }).format(new Date());
       const { data: yaEsta } = await admin
         .from('analisis_fotos').select('mes, mensaje, semana_nueva, semana_vieja')
         .eq('user_id', userId).eq('mes', mes).maybeSingle();

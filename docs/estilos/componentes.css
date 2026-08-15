@@ -98,17 +98,24 @@ table.week-table tr.today td{font-weight:800;}
 .sin-datos{
   padding:40px 16px;text-align:center;font:500 13.5px/1.4 sans-serif;color:var(--ink-faint);
 }
-/* z-index POR ENCIMA de las hojas (.sheet-backdrop va en 60).
-   Estaba en 50 y el aviso se pintaba DEBAJO de la hoja abierta: se
-   mostraba, se desvanecía a los segundos, y nadie lo veía nunca.
-   Lo destapó el editor de alimentos del panel: al guardar una pieza sin
-   decir cuánto pesa, la app avisaba de lo que faltaba y en pantalla solo
-   parecía que el botón Guardar estaba roto.
-   Afectaba a TODOS los avisos que salen con una hoja abierta, que son casi
-   todos los que importan: los errores salen justo cuando hay algo abierto. */
+/* EL AVISO VA ARRIBA DEL TODO. Por encima de las hojas (60) y también del
+   visor de fotos a pantalla completa (80).
+
+   Estaba en 50 y se pintaba DEBAJO de la hoja abierta: se mostraba, se
+   desvanecía a los segundos, y nadie lo veía nunca. Lo destapó el editor de
+   alimentos del panel: al guardar una pieza sin decir cuánto pesa, la app
+   avisaba de lo que faltaba y en pantalla solo parecía que el botón Guardar
+   estuviera roto. Afectaba a TODOS los avisos que salen con algo abierto,
+   que son casi todos los que importan: los errores salen justo entonces.
+
+   Se pone en 90 y no en 70 para que no vuelva a pasar por la puerta de al
+   lado: hoy el visor no avisa de nada, pero el día que se le añada un
+   "borrar esta foto", el error volvería a ser invisible. Un mensaje no
+   estorba a nadie estando encima -lleva pointer-events:none-, y estando
+   debajo no sirve para nada. */
 .toast{
   position:absolute;left:50%;bottom:100px;transform:translateX(-50%);background:var(--ink);color:var(--card-bg);
-  padding:10px 18px;border-radius:12px;font:700 13px/1 sans-serif;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;z-index:70;
+  padding:10px 18px;border-radius:12px;font:700 13px/1 sans-serif;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;z-index:90;
   /* Que un mensaje largo no se salga por los lados en un móvil. */
   max-width:calc(100% - 32px);text-align:center;line-height:1.35;
 }
