@@ -2675,7 +2675,8 @@
     var b = e.target.closest('[data-quitar]');
     if(!b) return;
     var comida = comidaActual;
-    var quitado = COMIDAS[comida].splice(Number(b.dataset.quitar), 1)[0];
+    var dondeEstaba = Number(b.dataset.quitar);
+    var quitado = COMIDAS[comida].splice(dondeEstaba, 1)[0];
     if(quitado && typeof sumarAlRegistro === 'function') sumarAlRegistro(quitado, -1);
     pintarComida();
 
@@ -2683,7 +2684,10 @@
     // vuelve a su sitio: la pantalla no debe mentir sobre lo que hay guardado.
     if(quitado && quitado.id && sesion){
       sbQuitarAlimento(quitado.id)['catch'](function(e){
-        COMIDAS[comida].push(quitado);
+        // A su sitio, no al final. Con `push`, borrar el primero de tres y
+        // que fallara lo devolvía el tercero: la lista queda distinta de
+        // como estaba y parece que pasó algo más.
+        COMIDAS[comida].splice(dondeEstaba, 0, quitado);
         sumarAlRegistro(quitado, +1);
         pintarComida();
         toast('toastComida', 'No se pudo borrar: ' + traducirError(e.message));
@@ -3405,7 +3409,12 @@
     // Fuera de rango se ignora en vez de rechazar el peso: quien se
     // equivoca tecleando la cintura no deberia perder el peso de hoy.
     if(cin != null && (cin < 40 || cin > 200)) cin = null;
-    var k = isoDe(HOY), antes = PESOS[k];
+    // Se guarda cómo estaba TODO lo que se va a tocar, no solo el peso. La
+    // cintura se metía en memoria y no se retiraba nunca si el guardado
+    // fallaba: quedaba una medida que no existe en la base, `tocaMedirCintura()`
+    // creía que ya se había medido y no la volvía a pedir en 28 días, y el
+    // cierre del domingo se la mandaba a la IA para que razonara sobre ella.
+    var k = isoDe(HOY), antes = PESOS[k], cinturasAntes = CINTURAS.slice();
     PESOS[k] = Math.round(v * 10) / 10;
     pintarPeso();
     toast('toastPeso', 'Peso guardado: ' + PESOS[k] + ' kg' +
@@ -3422,7 +3431,11 @@
 
     sbGuardarPeso(k, PESOS[k], cin)['catch'](function(e){
       if(antes == null) delete PESOS[k]; else PESOS[k] = antes;
+      // La cintura va en la MISMA fila que el peso: si no se guardó una,
+      // tampoco se guardó la otra, así que las dos vuelven atrás.
+      CINTURAS = cinturasAntes;
       pintarPeso();
+      pintarCintura();
       toast('toastPeso', 'No se pudo guardar: ' + traducirError(e.message));
     });
   });
