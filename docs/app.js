@@ -359,7 +359,11 @@
     // Crear o renombrar un día no pasa por la lista de ejercicios, así que
     // hay que pedir el guardado a mano.
     if(t && typeof guardarDia === 'function'){
-      guardarDia(t)['catch'](function(){});
+      guardarDia(t)['catch'](function(e){
+        // Ya se enseñó "Día: X" arriba. Sin esto, el nombre vive solo en la
+        // pantalla y al recargar vuelve el viejo sin que nadie sepa por qué.
+        toast('toastRutina', 'No se pudo guardar el día: ' + traducirError(e.message));
+      });
     }
   });
   dayNameInput.addEventListener('keydown', function(e){
@@ -1794,12 +1798,21 @@
 
     cerrarConfirm();
     actualizarSemana();
+    // El aviso va DESPUÉS de que la base conteste, no antes.
+    //
+    // Decía "Macros guardados" y se tragaba el fallo: quien lo leyera se
+    // pasaría la semana comiendo para unos números que solo existían en la
+    // pantalla de su teléfono, y al abrir la app en otro sitio -o al
+    // recargar- volverían los viejos sin explicación.
     sbActualizarPerfil({
       goal_protein_g: metasVigentes.P,
       goal_carbs_g:   metasVigentes.C,
       goal_fat_g:     metasVigentes.G
-    })['catch'](function(){});
-    toast('toastPeso', 'Macros guardados');
+    })
+      .then(function(){ toast('toastPeso', 'Macros guardados'); })
+      ['catch'](function(e){
+        toast('toastPeso', 'No se pudieron guardar: ' + traducirError(e.message));
+      });
   });
   // ---- Cambiar el objetivo desde el Perfil ----
   // Cambiar de "mantener" a "bajar" recalcula las calorías, así que es el
@@ -4221,6 +4234,9 @@
   }
   function sbSalir(){
     if(!sesion) return Promise.resolve();
+    // CALLA A PROPOSITO: la sesion local ya se borro. Que el servidor no se
+    // entere no cambia nada para quien acaba de salir, y un error al cerrar
+    // sesion solo asusta.
     return sbFetch('/auth/v1/logout', { method:'POST' })['catch'](function(){});
   }
 
@@ -4897,6 +4913,9 @@
         ANALISIS = (filas && filas[0]) || null;
         pintarAnalisis();
       })['catch'](function(){});
+    // CALLA A PROPÓSITO: si no se puede leer, la tarjeta se queda oculta,
+    // que es lo mismo que se ve cuando todavía no hay ninguna comparación.
+    // No hay nada que la persona pueda hacer al respecto y nadie lo pidió.
   }
 
   // ---- El permiso ----
@@ -6103,7 +6122,14 @@
       planComidas = ((p && p.comidas) || []).slice();
       ponerDiaALosViejos();
       pintarEditorComidas();
-    })['catch'](function(){});
+    })['catch'](function(e){
+      // Este es el peor de callar. El editor se queda vacío, parece que esa
+      // persona no tiene plan, y lo que se guarde encima BORRA el que sí
+      // tenía. Callarlo convierte un fallo de red en pérdida de datos de
+      // otro.
+      toast('toastAdmin', 'No pude cargar su plan: ' + traducirError(e.message) +
+            ' No guardes o lo sobrescribes.');
+    });
   }
 
   function leerEditorPlan(){
@@ -6794,8 +6820,18 @@
 
         // Rutina y sesiones. Aparte del Promise.all de arriba porque son
         // tres tablas encadenadas y no deben retrasar al Diario.
-        if(typeof sbCargarRutina === 'function') sbCargarRutina()['catch'](function(){});
-        if(typeof sbCargarSesiones === 'function') sbCargarSesiones()['catch'](function(){});
+        // Si estas dos fallan calladas, la app se ve como si no tuvieras
+        // rutina ni entrenamientos: se puede montar la rutina otra vez
+        // encima de la que ya existe, y el cierre del domingo decide sin
+        // saber lo que entrenaste.
+        if(typeof sbCargarRutina === 'function')
+          sbCargarRutina()['catch'](function(e){
+            toast('toastComida', 'No pude cargar tu rutina: ' + traducirError(e.message));
+          });
+        if(typeof sbCargarSesiones === 'function')
+          sbCargarSesiones()['catch'](function(e){
+            toast('toastComida', 'No pude cargar tus entrenamientos: ' + traducirError(e.message));
+          });
 
         // Y traer las fotos del bucket. Va aparte del Promise.all de arriba
         // porque son dos saltos (fichas y luego enlaces firmados) y no debe
@@ -6813,7 +6849,12 @@
                 if(typeof revisarAnalisisDeFotos === 'function') revisarAnalisisDeFotos();
               });
             }
-          })['catch'](function(){});
+          })['catch'](function(e){
+            // Callado, la pestaña Fotos se ve vacía y parece que se
+            // perdieron. Y quien lo crea vuelve a subirlas, duplicando la
+            // semana.
+            toast('toastComida', 'No pude cargar tus fotos: ' + traducirError(e.message));
+          });
         }
       })
       ['catch'](function(e){
@@ -7204,6 +7245,9 @@
         headers: { 'Prefer': 'return=minimal' },
         body: JSON.stringify({ visto_en: new Date().toISOString() })
       })['catch'](function(){});
+      // CALLA A PROPÓSITO: lo peor que pasa es que el mismo aviso vuelva a
+      // salir en la próxima apertura. Y volver a enseñarlo no cuesta nada:
+      // se lee la fila que ya existe, sin consultar a la IA.
     });
   })();
 
@@ -7368,7 +7412,14 @@
       method: 'PATCH',
       headers: { 'Prefer': 'return=minimal' },
       body: JSON.stringify({ cancelado_en: new Date().toISOString() })
-    })['catch'](function(){});
+    })['catch'](function(e){
+      // La pantalla ya dijo "quitado · tus calorías vuelven a la
+      // normalidad". Si la base no se enteró, el evento sigue vivo y al
+      // recargar la app te vuelve a repartir la semana por una cena que
+      // creías cancelada.
+      toast('toastDiario', 'No se pudo quitar: ' + traducirError(e.message) +
+            ' Sigue apuntado, inténtalo otra vez.');
+    });
   }
 
   // La tira de eventos del Diario. Solo aparece si hay alguno: una sección
@@ -8201,11 +8252,19 @@
     actualizarMetas();
 
     if(!sesion || !sesion.user) return;
+    // Estas son las calorías que acaba de decidir la IA en el cierre de
+    // semana. Si el guardado falla en silencio, la pantalla enseña las
+    // nuevas y la base conserva las viejas: al recargar vuelven las de
+    // antes, la persona no entiende nada, y el domingo siguiente el
+    // entrenador decide sobre una meta que nunca llegó a existir.
     sbActualizarPerfil({
       goal_protein_g: Number(goalP.value),
       goal_carbs_g:   Number(goalC.value),
       goal_fat_g:     Number(goalG.value)
-    })['catch'](function(){});
+    })['catch'](function(e){
+      toast('toastPeso', 'Tus calorías nuevas no se guardaron: ' +
+            traducirError(e.message) + ' Vuelve a abrir la app.');
+    });
   }
 
   // Se guarda siempre, ajustara o no. Que a alguien no se le tocaran las
