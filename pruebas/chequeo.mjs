@@ -84,8 +84,24 @@ console.log('\n— No salta una ventana: se queda un bloque —');
   // Botón y no div: se alcanza con teclado y un lector de pantalla lo
   // anuncia como pulsable.
   check('es un boton de verdad', /<button class="chq-pend"/.test(HTML));
+  // POR DELEGACIÓN, no enganchado al elemento.
+  //
+  // Estaba enganchado directo y a Eduardo no le funcionaba: «hace la
+  // animación de tocar el botón pero no hace nada». Esa frase lo dice todo:
+  // la animación es CSS y sale sola; lo que faltaba era el JavaScript.
+  //
+  // No se reprodujo -en el navegador de pruebas funcionaba, el elemento
+  // existe cuando se pide el script, y nada reescribe esa zona-. Cuando no
+  // se encuentra la causa se quita la clase entera de fallo: con delegación
+  // da igual cuándo corra el script, si el elemento se reemplaza, o el
+  // orden. El toque se escucha en `document`, que existe siempre.
   check('tocarlo abre las preguntas',
-    /getElementById\('chequeoPend'\)[\s\S]{0,140}abrirChequeo\(\)/.test(APP));
+    /document\.addEventListener\('click', function\(e\)\{[\s\S]{0,200}closest\('#chequeoPend'\)[\s\S]{0,200}abrirChequeo\(\)/.test(APP),
+    'enganchado al elemento, cualquier cosa que lo reemplace deja el boton muerto');
+  // Y si abrirChequeo reventara, el sintoma en pantalla seria EXACTAMENTE
+  // el mismo -animacion si, nada despues- y volveriamos a estar a ciegas.
+  check('y si algo revienta, se ve', /No pude abrir las preguntas/.test(APP),
+    'otro silencio con el mismo sintoma nos dejaria igual que al principio');
 
   // Cerrar la hoja NO cuenta como contestarla: el bloque sigue ahi.
   const cerrar = APP.slice(APP.indexOf("getElementById('chqCerrar').addEventListener"),

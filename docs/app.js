@@ -8028,10 +8028,33 @@
 
   // Tocar el bloque abre las preguntas. El bloque sigue ahí detrás: cerrar
   // la hoja no cuenta como haberla contestado.
-  (function(){
-    var b = document.getElementById('chequeoPend');
-    if(b) b.addEventListener('click', function(){ abrirChequeo(); });
-  })();
+  //
+  // POR DELEGACIÓN, en `document`, y no enganchado al elemento.
+  //
+  // Estaba enganchado directo y a Eduardo no le funcionaba: «hace la
+  // animación de tocar el botón pero no hace nada». Esa frase lo dice todo,
+  // porque la animación es CSS -sale sola- y lo que faltaba era el
+  // JavaScript. No conseguí reproducirlo: en el navegador de pruebas
+  // funciona, el elemento existe cuando se pide el script, y nada reescribe
+  // esa zona del Diario.
+  //
+  // Cuando no se encuentra la causa, se quita la clase entera de fallo. Con
+  // delegación da igual cuándo corra el script, da igual si el elemento se
+  // reemplaza después, y da igual el orden: el toque se escucha en
+  // `document`, que existe siempre.
+  //
+  // Y el `try` no es adorno. Si `abrirChequeo` reventara, el resultado en
+  // pantalla sería EXACTAMENTE el mismo síntoma -animación sí, nada
+  // después- y volveríamos a estar a ciegas. Prefiero un mensaje feo a otro
+  // silencio.
+  document.addEventListener('click', function(e){
+    var b = e.target && e.target.closest && e.target.closest('#chequeoPend');
+    if(!b) return;
+    try{ abrirChequeo(); }
+    catch(err){
+      toast('toastComida', 'No pude abrir las preguntas: ' + (err && err.message || err));
+    }
+  });
 
   // Lo que se le manda al asistente para que decida. Los días apuntados son
   // el dato que decide si hay material o no, así que se cuentan aquí y no
