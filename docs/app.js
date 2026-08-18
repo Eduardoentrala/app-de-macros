@@ -3338,6 +3338,11 @@
 
     document.getElementById('pesoHoyNota').style.display = PESOS[isoDe(HOY)] != null ? 'none' : '';
 
+    // Antes del `return` de "aún no hay suficientes registros": justo ahí es
+    // cuando más falta hace el recordatorio, y puesto después no se
+    // ejecutaría nunca en esos primeros días.
+    if(typeof revisarRecordatorios === 'function') revisarRecordatorios();
+
     if(pts.length < 2){
       cont.innerHTML = '<div class="sin-datos">Aún no hay suficientes registros en este periodo.</div>';
       delta.textContent = '—'; delta.className = 'chart-delta';
@@ -3439,6 +3444,13 @@
     // El campo se vacía al esconderlo: si volviera con el número del mes
     // pasado, se guardaría el viejo sin querer al tocar Guardar.
     if(bloque.hidden) document.getElementById('cinturaInput').value = '';
+
+    // Los recordatorios se preguntan aquí, y en `pintarPeso` y `pintarFotos`,
+    // que son los tres sitios por los que pasa cualquier cambio en los tres
+    // datos que vigilan. Colgarlo del botón de Guardar habría dejado la
+    // tarjeta puesta cuando el dato llega por otro lado: al cargar de la
+    // base al abrir la app, o al deshacer un guardado que falló.
+    if(typeof revisarRecordatorios === 'function') revisarRecordatorios();
 
     hist.hidden = !CINTURAS.length;
     // De la más reciente a la más vieja: lo último medido es lo que se mira.
@@ -4843,6 +4855,9 @@
   function pintarFotos(){
     var clave = claveSemana(semanaFoto);
     var set = FOTOS[clave] || {};
+    // Se pregunta contra la semana de HOY, no contra `semanaFoto`: mirar las
+    // fotos de hace un mes no puede apagar el recordatorio de esta semana.
+    if(typeof revisarRecordatorios === 'function') revisarRecordatorios();
     document.getElementById('fotoSemLabel').textContent =
       'Semana ' + (semanaDelPrograma(semanaFoto) || numSemana(lunesDe(semanaFoto)));
     document.getElementById('fotoSemRango').textContent = rangoSemana(semanaFoto);
@@ -6853,6 +6868,7 @@
         // Fuera del `if` de Plus a propósito: las fotos de progreso las sube
         // cualquiera, no son parte de la IA.
         revisarAvisoDeFotos();
+        revisarRecordatorios();
 
         // ---- Diario ----
         // Se vacía lo de ejemplo antes de llenar; si no, se sumaría encima.
@@ -7429,6 +7445,125 @@
       try{ localStorage.setItem(CLAVE_AVISO_FOTOS, claveSemana(HOY)); }catch(e){}
     });
   })();
+
+  // ---- Los tres recordatorios de arriba ----
+  //
+  // Peso todos los días, fotos una vez por semana, cintura una vez al mes.
+  // Los tres funcionan igual: salen cuando toca, se van SOLOS en cuanto se
+  // hace la cosa, y la × los calla hasta el ciclo siguiente.
+  //
+  // Lo que hace que "se vayan solos" no es el guardado, es que la condición
+  // se pregunta cada vez que se repinta: ¿hay peso de hoy?, ¿están las
+  // cuatro fotos?, ¿toca cintura? Atarlo al botón de guardar habría dejado
+  // el recordatorio puesto cuando el dato entra por otro lado -al cargar
+  // desde la base al abrir la app, por ejemplo-.
+  var CLAVE_REC = 'macros.rec.';
+
+  // El ciclo de cada uno. Es la clave de "ya lo cerré", y a la vez lo que
+  // hace que vuelva: cuando cambia el ciclo, lo guardado deja de coincidir
+  // y el recordatorio reaparece sin tener que borrar nada.
+  //
+  // El mes sale de `isoDe`, que ya usa la fecha del teléfono. Con
+  // `toISOString().slice(0,7)` habría sido el mes en UTC, y la última noche
+  // de cada mes -a partir de las 18:00 en México- habría dado el siguiente.
+  function cicloDeRecordatorio(cual){
+    if(cual === 'peso')  return isoDe(HOY);
+    if(cual === 'fotos') return claveSemana(HOY);
+    return isoDe(HOY).slice(0, 7);        // cintura: '2026-08'
+  }
+
+  function recordatorioCallado(cual){
+    try{ return localStorage.getItem(CLAVE_REC + cual) === cicloDeRecordatorio(cual); }
+    catch(e){ return false; }             // sin almacenamiento, mejor que salga
+  }
+
+  // Las cuatro fotos de la semana en curso. Se mira contra las MISMAS claves
+  // con las que se guardan (`claveSemana`), no contra una cuenta aparte: si
+  // se guardan en un sitio y se cuentan en otro, tarde o temprano no cuadra.
+  function faltanFotosDeLaSemana(){
+    // ESTA GUARDA NO ES PARANOIA, ES UN FALLO QUE YA PASÓ.
+    //
+    // `FOTOS` y `POSES` se declaran mucho más abajo en el fichero, y esto
+    // llega a llamarse ANTES: `pintarPeso()` corre en el arranque y pregunta
+    // por los recordatorios. En ese momento las dos valen `undefined` -`var`
+    // sube la declaración pero no el valor-, así que leer `FOTOS[...]`
+    // lanzaba y se llevaba por delante TODO lo que venía después en el
+    // guion: ni un solo botón de los que se enganchan más abajo quedaba
+    // vivo. La app abría y no respondía a nada.
+    //
+    // Decir "no faltan" durante ese instante no engaña a nadie:
+    // `pintarFotos()` corre unas líneas después en el mismo arranque y
+    // vuelve a preguntar con los datos ya puestos.
+    if(!FOTOS || !POSES) return false;
+    var set = FOTOS[claveSemana(HOY)] || {};
+    return POSES.some(function(p){ return !set[p.k]; });
+  }
+
+  // El día de fotos es el PRIMER día de la semana de cada quien, no un día
+  // fijo: la semana empieza donde dice `week_start_dow`, y para Eduardo es
+  // el martes. El aviso de la víspera ya avisa la noche de antes; este sale
+  // al día siguiente y se queda hasta que las suba.
+  //
+  // Que se quede es a propósito. Si saliera solo ese día y ese día no
+  // abriera la app, el recordatorio no habría servido para nada. Se va en
+  // cuanto están las cuatro, así que quien las sube el mismo día no lo ve
+  // más de un rato.
+  //
+  // Las fotos se guardan por semana ISO -lunes a domingo-, así que la
+  // comparación se hace en esa escala: qué posición ocupa hoy dentro de la
+  // semana ISO frente a la que ocupa el día de arranque.
+  function yaEsDiaDeFotos(cuando, inicio){
+    var d = cuando || HOY;
+    var arranca = inicio == null ? inicioSemana : inicio;   // 0=domingo … 6=sábado
+    return ((d.getDay() + 6) % 7) >= ((arranca + 6) % 7);
+  }
+
+  function revisarRecordatorios(){
+    var peso = document.getElementById('recPeso');
+    var fot  = document.getElementById('recFotos');
+    var cin  = document.getElementById('recCintura');
+    if(!peso || !fot || !cin) return;
+
+    peso.hidden = !(PESOS[isoDe(HOY)] == null && !recordatorioCallado('peso'));
+    fot.hidden  = !(yaEsDiaDeFotos() && faltanFotosDeLaSemana() && !recordatorioCallado('fotos'));
+    cin.hidden  = !(tocaMedirCintura() && !recordatorioCallado('cintura'));
+
+    // "Hoy toca" solo es verdad el día que toca. A partir del segundo día es
+    // mentira, y una app que te miente en algo comprobable deja de valer
+    // para lo que no puedes comprobar.
+    var tit = document.getElementById('recFotosTit');
+    if(tit) tit.textContent = yaEsDiaDeFotos(HOY, inicioSemana) && HOY.getDay() === inicioSemana
+      ? 'Hoy toca subir tus 4 fotos'
+      : 'Aún no subes tus 4 fotos';
+  }
+
+  // Por delegación, como el chequeo. El motivo es el mismo: estas tarjetas
+  // se esconden y se enseñan constantemente, y un enganche directo depende
+  // de que el elemento sea el mismo de siempre.
+  document.addEventListener('click', function(e){
+    var t = e.target && e.target.closest ? e.target : null;
+    if(!t) return;
+
+    var x = t.closest('[data-rec-cerrar]');
+    if(x){
+      var cual = x.dataset.recCerrar;
+      // En el navegador y no en la base: es una preferencia de pantalla, no
+      // un dato. Que reinstalar la app la devuelva es aceptable.
+      try{ localStorage.setItem(CLAVE_REC + cual, cicloDeRecordatorio(cual)); }catch(e2){}
+      revisarRecordatorios();
+      return;
+    }
+
+    var ir = t.closest('[data-rec-ir]');
+    if(!ir) return;
+    // La cintura se apunta en la pantalla del peso, en el campo que
+    // `pintarCintura` destapa cuando toca: no tiene pantalla propia.
+    var destino = ir.dataset.recIr === 'cintura' ? 'peso' : ir.dataset.recIr;
+    try{ volverA(destino, 'diario'); }
+    catch(err){
+      toast('toastComida', 'No pude abrirlo: ' + (err && err.message || err));
+    }
+  });
 
   function revisarAvisoDelCoach(){
     if(!sesion || !sesion.user || MI_NIVEL_IA !== 'plus') return;

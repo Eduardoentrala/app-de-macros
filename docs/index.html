@@ -60,7 +60,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '4f3b8b647b';
+    var SELLO = '7616a1c12e';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -117,6 +117,67 @@
           </div>
 
           <div id="pane-hoy">
+            <!-- LOS RECORDATORIOS.
+                 Van arriba del todo y no debajo del anillo: son lo único de
+                 esta pantalla que pide hacer algo AHORA, y debajo del anillo
+                 quedaban por fuera de la pantalla en un teléfono normal.
+
+                 Cada uno es una tarjeta con dos botones y no un botón con
+                 una × dentro: un <button> no puede contener otro <button>,
+                 y los navegadores lo arreglan sacándolo fuera, con lo que la
+                 × acababa colgando en un sitio que no era.
+
+                 La × no borra el recordatorio: lo calla hasta el ciclo
+                 siguiente -mañana, la semana que viene, el mes que viene-.
+                 Un aviso que se puede apagar para siempre por un toque sin
+                 querer no sirve para lo que se puso. -->
+            <div class="recordatorios">
+              <div class="rec rec-peso" id="recPeso" hidden>
+                <button class="rec-cuerpo" data-rec-ir="peso">
+                  <span class="rec-ico">⚖️</span>
+                  <span class="rec-txt">
+                    <b>Aún no registras tu peso</b>
+                    <span>Pésate en ayunas, antes de desayunar.</span>
+                  </span>
+                </button>
+                <button class="rec-x" data-rec-cerrar="peso" aria-label="Cerrar recordatorio">×</button>
+              </div>
+
+              <div class="rec rec-fotos" id="recFotos" hidden>
+                <button class="rec-cuerpo" data-rec-ir="fotos">
+                  <span class="rec-ico">📸</span>
+                  <span class="rec-txt">
+                    <b id="recFotosTit">Hoy toca subir tus 4 fotos</b>
+                    <span>Frente, espalda y los dos perfiles.</span>
+                  </span>
+                </button>
+                <button class="rec-x" data-rec-cerrar="fotos" aria-label="Cerrar recordatorio">×</button>
+              </div>
+
+              <div class="rec rec-cintura" id="recCintura" hidden>
+                <button class="rec-cuerpo" data-rec-ir="cintura">
+                  <span class="rec-ico">📏</span>
+                  <span class="rec-txt">
+                    <b>Toca medir tu cintura</b>
+                    <span>En el ombligo, soltando el aire.</span>
+                  </span>
+                </button>
+                <button class="rec-x" data-rec-cerrar="cintura" aria-label="Cerrar recordatorio">×</button>
+              </div>
+
+              <!-- La víspera. Estaba debajo del anillo y los otros tres
+                   arriba: dos avisos de fotos en dos sitios distintos de la
+                   misma pantalla. Se sube aquí con los demás. -->
+              <div class="aviso-fotos" id="avisoFotos" hidden>
+                <span class="af-ico">📸</span>
+                <div class="af-texto">
+                  <b>Prepara tus fotos para mañana</b>
+                  <span>Cierras semana — mañana toca subir tus 4 fotos de progreso.</span>
+                </div>
+                <button class="af-cerrar" id="avisoFotosCerrar" aria-label="Cerrar aviso">×</button>
+              </div>
+            </div>
+
             <div class="section-label">Tu día de hoy <small class="day-count">3/7 días</small></div>
             <div class="card ring-card" id="cardHoy">
               <div class="ring-label" id="ringLabelHoy">CALORÍAS CONSUMIDAS</div>
@@ -138,21 +199,6 @@
                 <div class="macro-row"><div class="macro-top"><span class="name">Grasas</span><span class="val" data-macro="G" >—</span></div><div class="bar-track"><div class="bar-fill"></div></div></div>
               </div>
               <div class="dots" id="ringDots"><span class="on"></span><span></span></div>
-            </div>
-
-            <!-- Solo sale si hay algo apartado. Una sección vacía
-                 permanente es ruido en una pantalla que ya está llena. -->
-            <!-- La víspera de cerrar semana, para que le dé tiempo a
-                 prepararse. Sale el sábado a partir de las 7 de la tarde:
-                 antes es demasiado pronto para "mañana", y por la mañana
-                 del sábado todavía queda un día entero por delante. -->
-            <div class="aviso-fotos" id="avisoFotos" hidden>
-              <span class="af-ico">📸</span>
-              <div class="af-texto">
-                <b>Prepara tus fotos para mañana</b>
-                <span>Cierras semana — mañana toca subir tus 4 fotos de progreso.</span>
-              </div>
-              <button class="af-cerrar" id="avisoFotosCerrar" aria-label="Cerrar aviso">×</button>
             </div>
 
             <!-- Lo que el entrenador quiso decirle sin que preguntara. -->
@@ -1578,7 +1624,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '4f3b8b647b';
+    var SELLO = '7616a1c12e';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que

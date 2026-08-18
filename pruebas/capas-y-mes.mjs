@@ -111,8 +111,15 @@ console.log('\n— Ninguna fecha de calendario sale de toISOString —');
 {
   // toISOString como marca de INSTANTE está bien (cancelado_en, visto_en).
   // Como FECHA de calendario, no: va en UTC.
+  //
+  // Se barre el CÓDIGO, no los comentarios. Un comentario que explica por
+  // qué NO se usa `toISOString().slice(0,7)` contiene esas mismas letras, y
+  // el barrido lo señalaba como si fuera el fallo. Se quitan solo las
+  // líneas que son comentario enteras: así no se puede recortar código que
+  // vaya detrás de un `//` a media línea y colarse un fallo de verdad.
+  const soloCodigo = t => t.split(/\r?\n/).filter(l => !/^\s*\/\//.test(l)).join('\n');
   const sospechosas = [];
-  for (const [n, txt] of [['app.js', APP], ['asistente', FN]]) {
+  for (const [n, txt] of [['app.js', soloCodigo(APP)], ['asistente', soloCodigo(FN)]]) {
     for (const m of txt.matchAll(/toISOString\(\)\s*\.\s*slice\(0,\s*(7|10)\)/g)) {
       sospechosas.push(n + ': ' + txt.slice(Math.max(0, m.index - 40), m.index + 40).replace(/\s+/g, ' '));
     }

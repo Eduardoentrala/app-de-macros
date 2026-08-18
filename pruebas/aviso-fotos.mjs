@@ -133,7 +133,15 @@ console.log('\n— Y se ve como se pidió —');
 
   // En azul: es lo único de esa pantalla que pide hacer algo FUERA de la
   // app -buscar luz, un espejo, tiempo-, y por eso destaca.
-  check('destaca sobre las tarjetas grises', /\.aviso-fotos\{[^}]*background:#5b93e0/s.test(CSS));
+  //
+  // El azul es #3d6fbd y ya no #5b93e0. El de antes dejaba el texto blanco
+  // en 3.14 de contraste, por debajo del mínimo de 4.5: se leía en un
+  // monitor a oscuras y se perdía al sol. Y tiene que ser EL MISMO que el
+  // de `.rec-fotos`, porque los dos avisos se ven juntos en esta pantalla
+  // y con dos azules parecerían dos cosas sin relación siendo la misma.
+  check('destaca sobre las tarjetas grises', /\.aviso-fotos\{[^}]*background:#3d6fbd/s.test(CSS));
+  check('y con el mismo azul que «te faltan las fotos»',
+    /\.rec-fotos\s*\{background:#3d6fbd;\}/.test(CSS));
   check('el tache es redondo', /\.af-cerrar\{[^}]*border-radius:50%/s.test(CSS));
   // Está pegado al borde de la pantalla: sin ampliar el blanco es fácil
   // fallar el toque.

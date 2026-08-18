@@ -117,6 +117,64 @@
 }
 .aviso-coach button:active{color:var(--ink);}
 
+/* ---- Los recordatorios de arriba ----
+   Tres tarjetas de color en una pantalla que por lo demás es blanca y gris.
+   El color es el que hace el trabajo: son cosas que hay que ir a hacer, y
+   una tarjeta gris más entre tarjetas grises no la ve nadie.
+
+   Duran poco a propósito. La del peso se va en cuanto te pesas, la de las
+   fotos en cuanto las subes, la de la cintura en cuanto la mides. Si alguna
+   se quedara puesta todo el día, este color pasaría de aviso a ruido. */
+.recordatorios{display:flex;flex-direction:column;gap:10px;padding:4px 0 2px;}
+.rec{
+  display:flex;align-items:stretch;gap:0;
+  margin:0 16px;border-radius:15px;overflow:hidden;color:#fff;
+}
+/* El cuerpo es el que se toca, y ocupa TODO lo que no ocupa la ×: el dedo
+   cae en cualquier parte de la tarjeta menos en el círculo de cerrar. */
+.rec-cuerpo{
+  flex:1;min-width:0;display:flex;align-items:center;gap:12px;
+  border:none;background:none;cursor:pointer;color:inherit;
+  padding:14px 6px 14px 16px;text-align:left;font:inherit;
+}
+.rec-cuerpo:active{opacity:.72;}
+.rec-ico{font-size:26px;flex:none;line-height:1;}
+/* min-width:0 o un texto largo estira la caja y empuja la × fuera. */
+.rec-txt{flex:1;min-width:0;}
+.rec-txt b{display:block;font:800 15px/1.25 sans-serif;}
+/* .94 y no .88: el subtitulo se quedaba en 4.2 de contraste, justo por
+   debajo del minimo de 4.5, solo por la transparencia. Sigue leyendose
+   como secundario frente al titulo, que es para lo que estaba. */
+.rec-txt span{display:block;font:500 12.5px/1.4 sans-serif;color:rgba(255,255,255,.94);margin-top:3px;}
+/* La × va fuera del cuerpo -son dos botones hermanos- porque un <button>
+   dentro de otro <button> no es HTML válido y el navegador lo desmonta. */
+.rec-x{
+  flex:none;align-self:center;margin-right:14px;
+  width:30px;height:30px;border-radius:50%;border:none;cursor:pointer;
+  background:rgba(255,255,255,.22);color:#fff;
+  font:400 17px/1 sans-serif;display:flex;align-items:center;justify-content:center;
+  position:relative;
+}
+/* El blanco táctil llega a 44 px sin agrandar el círculo, como en el resto
+   de la app. Aquí importa más que en ningún sitio: está pegado al borde de
+   la pantalla y justo al lado de algo que navega a otra pantalla. */
+.rec-x::after{content:'';position:absolute;inset:-7px;}
+.rec-x:active{background:rgba(255,255,255,.35);}
+
+/* Un color por cosa, y siempre el mismo. Así se reconoce de un vistazo cuál
+   es cuál sin leerla, que es lo que pasa a la tercera semana de usarla.
+   Los tres son colores planos y no los tokens del tema: tienen que verse
+   igual de bien en claro y en oscuro, y el texto encima es blanco fijo.
+
+   LOS TRES SON MÁS OSCUROS DE LO QUE PARECERÍA NATURAL, y es a propósito.
+   Con el naranja y el verde claros de partida, el texto blanco encima
+   quedaba en 2.6 y 3.3 de contraste; el mínimo legible es 4.5. Se ve bien
+   en un monitor a oscuras y se pierde en la calle, que es donde se usa una
+   app de esto. Estos tonos están todos por encima de 4.9. */
+.rec-peso   {background:#b85210;}   /* 4.94 sobre blanco */
+.rec-fotos  {background:#3d6fbd;}   /* 4.99 */
+.rec-cintura{background:#2c7a59;}   /* 5.20 */
+
 /* ---- "Prepara tus fotos para mañana" ----
    En azul y no en el gris de las tarjetas: es lo único de esta pantalla que
    pide hacer algo FUERA de la app -buscar luz, un espejo, tiempo-, y por eso
@@ -124,14 +182,20 @@
    permanente, este color sería agresivo. */
 .aviso-fotos{
   display:flex;align-items:center;gap:12px;
-  margin:0 16px 10px;padding:14px 14px 14px 16px;border-radius:15px;
-  background:#5b93e0;color:#fff;
+  /* Sin margen abajo: ahora vive dentro de `.recordatorios`, que ya separa
+     las tarjetas con `gap`. Con los dos, el hueco salía del doble. */
+  margin:0 16px;padding:14px 14px 14px 16px;border-radius:15px;
+  /* El mismo azul que `.rec-fotos`, y por el mismo motivo: el de antes
+     -#5b93e0- dejaba el texto blanco en 3.14 de contraste. Además las dos
+     tarjetas se ven juntas en esta pantalla, y con dos azules distintos
+     parecerían dos cosas sin relación cuando son la misma. */
+  background:#3d6fbd;color:#fff;
 }
 .af-ico{font-size:26px;flex:none;line-height:1;}
 /* min-width:0 o el texto largo estira la caja y empuja la × fuera. */
 .af-texto{flex:1;min-width:0;}
 .af-texto b{display:block;font:800 15px/1.25 sans-serif;}
-.af-texto span{display:block;font:500 12.5px/1.4 sans-serif;color:rgba(255,255,255,.88);margin-top:3px;}
+.af-texto span{display:block;font:500 12.5px/1.4 sans-serif;color:rgba(255,255,255,.94);margin-top:3px;}
 /* La × en su círculo, como en el resto de la app. Blanco translúcido para
    que se lea sobre el azul sin competir con el texto. */
 .af-cerrar{
