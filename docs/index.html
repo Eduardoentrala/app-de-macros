@@ -60,7 +60,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '9433151b77';
+    var SELLO = 'abe678f724';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -1578,7 +1578,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '9433151b77';
+    var SELLO = 'abe678f724';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que
@@ -1600,6 +1600,31 @@
     // El freno de `sessionStorage` no sobra: si algo fallara -un despliegue
     // a medias, un proxy raro- sin él la app se recargaría en bucle, y una
     // app que parpadea es peor que una desactualizada.
+
+    // ---- Y que la app ABRA aunque no haya señal ----
+    // Sin esto, cada apertura se bajaba los 390 KB del JavaScript otra vez:
+    // con señal mala salía una pantalla en blanco y sin señal no abría. Pasó
+    // de verdad, en Celaya.
+    //
+    // Va DESPUÉS de pedir el JavaScript y las hojas, no antes: registrar el
+    // service worker no debe retrasar ni un milisegundo lo que se ve.
+    //
+    // Y se le manda el sello para que tire de la caché las versiones viejas.
+    // Sin eso, cada despliegue deja un app.js?v=viejo ahí para siempre.
+    if('serviceWorker' in navigator){
+      window.addEventListener('load', function(){
+        navigator.serviceWorker.register('sw.js')
+          .then(function(){
+            if(navigator.serviceWorker.controller)
+              navigator.serviceWorker.controller.postMessage({ tipo:'limpiar', sello: SELLO });
+          })
+          ['catch'](function(){});
+          // Calla a propósito: que no se pueda guardar la app para usarla sin
+          // señal no impide usarla CON señal, y no hay nada que la persona
+          // pueda hacer al respecto.
+      });
+    }
+
     try{
       if(sessionStorage.getItem('macros.recargado') !== SELLO){
         fetch('version.txt', { cache: 'no-store' })
