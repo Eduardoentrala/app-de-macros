@@ -79,6 +79,34 @@ console.log('\n— No se le cobra una avería ajena —');
     /revoke all on function public\.devolver_consulta_ia\(uuid\) from public, anon, authenticated;/.test(SQL));
 }
 
+console.log('\n— Y el arreglo no puede tumbar la respuesta —');
+{
+  // ESTO PASÓ. La devolución estaba escrita como:
+  //     admin.rpc(...).catch(() => {})
+  // y `admin.rpc()` NO devuelve una promesa: devuelve el constructor de
+  // consulta de PostgREST, que no tiene `.catch()`. Lanzaba
+  // «TypeError: admin.rpc(...).catch is not a function».
+  //
+  // Y como esto vive DENTRO del catch general, no hay nadie más abajo que
+  // lo recoja: la función se moría sin responder y el teléfono veía
+  // «Load failed». Se arregló un mensaje malo y se convirtió en NADA.
+  const sinComentar = FN.replace(/\/\/[^\n]*/g, '');
+  check('nunca se encadena .catch a una consulta de PostgREST',
+    !/\.rpc\([^)]*\)\s*\.catch/.test(sinComentar) && !/admin\.[a-z]+\([^)]*\)\s*\.catch/.test(sinComentar),
+    'admin.rpc devuelve un constructor de consulta, no una promesa: .catch lanza TypeError');
+  check('la devolución va envuelta en try', /try \{ await admin\.rpc\('devolver_consulta_ia'/.test(FN));
+  check('y su fallo se recoge aquí mismo', /catch \(e2\) \{ console\.error/.test(FN),
+    'dentro del catch general no hay nadie mas abajo que lo recoja');
+  // Y que el `return json` venga DESPUES, o sea que contestar es lo que
+  // manda: devolver la consulta es lo de menos.
+  // Buscando DESDE la devolución: hay otros 503 mucho antes en el fichero y
+  // comparar contra el primero daba un rojo que no era.
+  const dev = FN.indexOf("try { await admin.rpc('devolver_consulta_ia'");
+  check('contestar va después, pase lo que pase',
+    dev > 0 && FN.indexOf('}, 503);', dev) > dev,
+    'devolver la consulta es lo de menos: lo que no puede fallar es contestar');
+}
+
 console.log('\n— Y se dice lo que pasa de verdad —');
 {
   check('se distingue saturado de roto', /const saturado = estado === 529/.test(FN));

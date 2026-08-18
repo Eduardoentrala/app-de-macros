@@ -1492,8 +1492,23 @@ Deno.serve(async (req) => {
     // consultas de las quince del día gastadas, y ni un mensaje a cambio.
     // Devolverla solo cuando el fallo es del servidor no abre ningún agujero:
     // nadie puede provocar un 529 a voluntad.
+    // OJO CON ESTE `try`. Estamos DENTRO del catch general: si algo revienta
+    // aquí, no hay nadie más abajo que lo recoja y la función se muere sin
+    // responder. El teléfono no ve un error, ve «Load failed».
+    //
+    // Pasó exactamente eso: esto estaba escrito como
+    //   admin.rpc(...).catch(() => {})
+    // y `admin.rpc()` NO devuelve una promesa de verdad, devuelve el
+    // constructor de consulta de PostgREST. No tiene `.catch()`. Lanzaba
+    // «TypeError: admin.rpc(...).catch is not a function», el error se
+    // escapaba del catch, y quien pulsaba "Revisar mi semana" se quedaba sin
+    // respuesta ninguna. Se arregló un mensaje malo y se convirtió en nada.
+    //
+    // Devolver la consulta es lo MENOS importante de este bloque: si falla,
+    // se pierde una consulta y ya. Lo que no puede fallar es contestar.
     if (saturado && quedan !== null) {
-      await admin.rpc('devolver_consulta_ia', { usuario: userId }).catch(() => {});
+      try { await admin.rpc('devolver_consulta_ia', { usuario: userId }); }
+      catch (e2) { console.error('no se pudo devolver la consulta:', e2); }
     }
 
     if (saturado) {
