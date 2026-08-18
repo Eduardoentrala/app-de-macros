@@ -139,9 +139,16 @@ console.log('\n— Y se ve como se pidió —');
   // monitor a oscuras y se perdía al sol. Y tiene que ser EL MISMO que el
   // de `.rec-fotos`, porque los dos avisos se ven juntos en esta pantalla
   // y con dos azules parecerían dos cosas sin relación siendo la misma.
-  check('destaca sobre las tarjetas grises', /\.aviso-fotos\{[^}]*background:#3d6fbd/s.test(CSS));
-  check('y con el mismo azul que «te faltan las fotos»',
-    /\.rec-fotos\s*\{background:#3d6fbd;\}/.test(CSS));
+  //
+  // Va en pastel, y el pastel solo se lee con tinta oscura: por eso son dos
+  // valores y no uno. Y salen del MISMO token que «te faltan las fotos»,
+  // que es la otra tarjeta de fotos: los dos avisos se ven juntos en esta
+  // pantalla, y compartir el token -no el numero copiado- es lo que impide
+  // que se separen el dia que se cambie uno.
+  check('destaca sobre las tarjetas grises',
+    /\.aviso-fotos\{[\s\S]*?background:var\(--rec-fotos-bg\);color:var\(--rec-fotos-ink\)/.test(CSS));
+  check('y con el mismo par que «te faltan las fotos»',
+    /\.rec-fotos\s*\{--rec-bg:var\(--rec-fotos-bg\);\s*--rec-ink:var\(--rec-fotos-ink\);\}/.test(CSS));
   check('el tache es redondo', /\.af-cerrar\{[^}]*border-radius:50%/s.test(CSS));
   // Está pegado al borde de la pantalla: sin ampliar el blanco es fácil
   // fallar el toque.

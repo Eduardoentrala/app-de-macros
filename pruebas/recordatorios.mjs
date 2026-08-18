@@ -26,6 +26,7 @@ const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
 const APP = readFileSync(join(RAIZ, 'docs', 'app.js'), 'utf8');
 const HTML = readFileSync(join(RAIZ, 'docs', 'index.html'), 'utf8');
 const CSS = readFileSync(join(RAIZ, 'docs', 'estilos', 'diario.css'), 'utf8');
+const BASE = readFileSync(join(RAIZ, 'docs', 'estilos', 'base.css'), 'utf8');
 
 let ok = 0, mal = 0;
 const check = (n, cond, extra = '') => {
@@ -239,31 +240,65 @@ console.log('\n— La × calla, no borra —');
 
 console.log('\n— Y se leen con el sol de frente —');
 {
-  // El texto es blanco fijo sobre color fijo, así que el contraste se puede
-  // calcular aquí sin navegador. El mínimo legible es 4.5.
+  // Van en PASTEL, y el pastel solo se lee si el texto es oscuro. Por eso
+  // cada tarjeta es un par -fondo suave y tinta del mismo tono- y aquí se
+  // comprueba el par entero, no el fondo suelto.
+  //
+  // Antes esto medía un color plano contra blanco fijo. Con el pastel esa
+  // cuenta no significa nada: un fondo claro contra texto blanco da 1.2 y
+  // la prueba lo habría dado por bueno si solo mirara el fondo.
   const lin = v => v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4);
   const lum = hex => { const n = parseInt(hex.slice(1), 16);
     return [16, 8, 0].map(s => lin(((n >> s) & 255) / 255))
       .reduce((a, v, i) => a + [.2126, .7152, .0722][i] * v, 0); };
-  const contra = hex => 1.05 / (lum(hex) + .05);
+  const contra = (a, b) => { const L = [lum(a), lum(b)];
+    return (Math.max(...L) + .05) / (Math.min(...L) + .05); };
 
-  const color = clase => (CSS.match(new RegExp('\\.' + clase + '\\s*\\{background:(#[0-9a-f]{6})')) || [])[1];
-  for (const [clase, nombre] of [['rec-peso', 'peso'], ['rec-fotos', 'fotos'], ['rec-cintura', 'cintura']]) {
-    const c = color(clase);
-    check(`${nombre}: ${c} da ${contra(c).toFixed(2)} de contraste`, c && contra(c) >= 4.5,
-      'los tonos de partida daban 2.6 y 3.3: se ven en un monitor a oscuras y se pierden en la calle');
+  // Los pares viven en base.css, y HAY TRES LISTAS: la fija, la que impone
+  // `data-theme="dark"` cuando se elige a mano, y la del ajuste del
+  // teléfono. Se comprueban las tres. Olvidar una deja el tema oscuro con
+  // el pastel claro de fondo, que a las once de la noche es un foco.
+  const listas = [
+    ['clara',            BASE.slice(BASE.indexOf(':root{'), BASE.indexOf(':root[data-theme="dark"]'))],
+    ['la de a mano',     BASE.slice(BASE.indexOf(':root[data-theme="dark"]'), BASE.indexOf('@media (prefers-color-scheme: dark)'))],
+    ['la del teléfono',  BASE.slice(BASE.indexOf('@media (prefers-color-scheme: dark)'))],
+  ];
+  for (const [nombre, lista] of listas) {
+    for (const cual of ['peso', 'fotos', 'cintura']) {
+      const bg  = (lista.match(new RegExp(`--rec-${cual}-bg:(#[0-9a-f]{6})`)) || [])[1];
+      const ink = (lista.match(new RegExp(`--rec-${cual}-ink:(#[0-9a-f]{6})`)) || [])[1];
+      const c = bg && ink ? contra(bg, ink) : 0;
+      check(`${nombre} · ${cual}: ${bg} + ${ink} = ${c.toFixed(2)}`, c >= 4.5,
+        bg && ink ? 'el minimo legible es 4.5' : 'falta el par en esta lista de tema');
+    }
   }
-  check('el subtítulo no se queda corto por la transparencia',
-    /\.rec-txt span\{[^}]*rgba\(255,255,255,\.94\)/.test(CSS),
-    'a .88 se quedaba en 4.2, justo por debajo del minimo');
+
+  // Y LA TARJETA TIENE QUE USAR ESA TINTA. Este hueco salió al probar en
+  // negativo: poniendo `color:#fff` sobre el fondo pastel, todo lo de
+  // arriba seguía verde -los pares están bien, nadie los tocó- mientras el
+  // texto real quedaba en 1.2 de contraste, o sea invisible. Medir la
+  // paleta no sirve de nada si luego no se usa.
+  check('la tarjeta usa la tinta del par, no blanco',
+    /\.rec\{[\s\S]*?background:var\(--rec-bg\);color:var\(--rec-ink\);/.test(CSS),
+    'con color:#fff sobre pastel el contraste cae a 1.2 y los pares seguirian pareciendo correctos');
+  check('y cada tarjeta engancha su par',
+    /\.rec-peso\s*\{--rec-bg:var\(--rec-peso-bg\);\s*--rec-ink:var\(--rec-peso-ink\);\}/.test(CSS) &&
+    /\.rec-cintura\{--rec-bg:var\(--rec-cintura-bg\); --rec-ink:var\(--rec-cintura-ink\);\}/.test(CSS));
+
+  // El subtítulo se aclara HACIA EL FONDO de la tarjeta, no hacia el
+  // blanco: sobre pastel el blanco desaparece. Y al 90%, no al 82% del
+  // primer intento, que lo dejaba en 4.1.
+  check('el subtítulo se aclara hacia el fondo, no hacia el blanco',
+    /\.rec-txt span\{[\s\S]*?color-mix\(in srgb, var\(--rec-ink\) 90%, var\(--rec-bg\)\)/.test(CSS),
+    'con blanco translucido sobre pastel el subtitulo se pierde');
 
   // El aviso de la víspera y el de «te faltan las fotos» se ven juntos en
   // la misma pantalla. Con dos azules distintos parecerían dos cosas sin
-  // relación cuando son la misma.
-  const azulRec = color('rec-fotos');
-  const azulAviso = (CSS.match(/\.aviso-fotos\{[\s\S]*?background:(#[0-9a-f]{6})/) || [])[1];
-  check('la víspera usa el mismo azul que las fotos', azulRec === azulAviso,
-    `rec-fotos=${azulRec} vs aviso-fotos=${azulAviso}`);
+  // relación cuando son la misma. Ahora comparten el mismo token, que es
+  // más fuerte que compartir el mismo valor escrito dos veces.
+  check('la víspera usa el mismo par que las fotos',
+    /\.aviso-fotos\{[\s\S]*?background:var\(--rec-fotos-bg\);color:var\(--rec-fotos-ink\)/.test(CSS),
+    'compartir el token, y no el numero, es lo que impide que se separen al cambiar uno');
 
   // La × está pegada al borde de la pantalla y justo al lado de algo que
   // navega a otra pantalla: fallarla sale caro.

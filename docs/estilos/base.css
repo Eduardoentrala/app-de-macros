@@ -24,6 +24,15 @@
      tarjetas se funden con el fondo. Esto es un pelo de negro, lo justo
      para que se sepa donde acaba una y empieza la otra. */
   --borde-tarjeta:rgba(20,20,25,.14);
+  /* Los recordatorios del Diario, en pastel.
+     Cada uno es un PAR: un fondo suave y una tinta del mismo tono. El
+     pastel solo funciona asi. Con texto blanco encima -que es como
+     estaban- el contraste se quedaba en 2.6, y eso se lee en un monitor a
+     oscuras y se pierde en la calle, que es donde se usa esto. Con la
+     tinta oscura del mismo color pasan todos de 5. */
+  --rec-peso-bg:#fdeadb;    --rec-peso-ink:#8a4409;
+  --rec-fotos-bg:#e0eaf9;   --rec-fotos-ink:#2b5590;
+  --rec-cintura-bg:#dcf0e6; --rec-cintura-ink:#1c6446;
   --chrome-bg:#f6f5f2;
   --chrome-ink:#1c1c1e;
   --chrome-line:#dedcd6;
@@ -48,6 +57,12 @@
   /* En oscuro el pelo tiene que ser de blanco: un borde negro sobre fondo
      oscuro no separa nada. */
   --borde-tarjeta:rgba(255,255,255,.16);
+  /* En oscuro se invierten los papeles: el fondo es el tono apagado y la
+     tinta la clara. Dejar el pastel claro sobre una pantalla negra seria
+     un foco en la cara a las once de la noche. */
+  --rec-peso-bg:#2c1d10;    --rec-peso-ink:#f0a96e;
+  --rec-fotos-bg:#141e2e;   --rec-fotos-ink:#95b8ee;
+  --rec-cintura-bg:#12241a; --rec-cintura-ink:#6fc99d;
   --chrome-bg:#141416;
   --chrome-ink:#eceae6;
   --chrome-line:#2c2b28;
@@ -73,6 +88,12 @@
     /* En oscuro el pelo tiene que ser de blanco: un borde negro sobre fondo
        oscuro no separa nada. */
     --borde-tarjeta:rgba(255,255,255,.16);
+    /* En oscuro se invierten los papeles: el fondo es el tono apagado y la
+       tinta la clara. Dejar el pastel claro sobre una pantalla negra seria
+       un foco en la cara a las once de la noche. */
+    --rec-peso-bg:#2c1d10;    --rec-peso-ink:#f0a96e;
+    --rec-fotos-bg:#141e2e;   --rec-fotos-ink:#95b8ee;
+    --rec-cintura-bg:#12241a; --rec-cintura-ink:#6fc99d;
     --chrome-bg:#141416;
     --chrome-ink:#eceae6;
     --chrome-line:#2c2b28;
