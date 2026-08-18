@@ -1526,7 +1526,12 @@
   var MESES_LARGO = ['enero','febrero','marzo','abril','mayo','junio','julio',
                      'agosto','septiembre','octubre','noviembre','diciembre'];
   // El día en que empieza SU semana. Lunes por defecto; cada persona puede
-  // tener el suyo, guardado en el perfil (`week_start_dow`).
+  // tener el suyo, guardado en `profiles.week_start_dow`.
+  //
+  // NO HAY CONTROL EN EL PERFIL PARA CAMBIARLO. Se lee de la base y ya. Hoy
+  // el único que no está en lunes es Eduardo, que está en martes porque se
+  // le puso a mano. Aquí decía que se elegía en el Perfil y no era verdad;
+  // queda escrito para que nadie vuelva a buscar ese control.
   //
   // OJO CON LO QUE SE ARREGLÓ AQUÍ, porque no es esto.
   //
@@ -3428,10 +3433,21 @@
   var CINTURAS = [];                    // [{fecha, cm}], de la vieja a la nueva
   var DIAS_ENTRE_CINTURAS = 28;
 
+  // SE CUENTAN DÍAS DE CALENDARIO, NO HORAS, y eso no es una sutileza.
+  //
+  // Estaba comparando `HOY` -que va a medianoche- contra el MEDIODÍA del día
+  // en que se midió. El día 28 solo habían pasado 27,5, así que no llegaba a
+  // 28 y el aviso salía el 29. Medio día de retraso, todos los meses, y
+  // acumulándose: la medida se corre un día cada dos meses.
+  //
+  // Ahora las dos fechas van a medianoche y la resta da días enteros. El
+  // `round` es por el cambio de horario: un día puede durar 23 o 25 horas,
+  // y sin él la resta daría 27,96 y volveríamos al mismo sitio.
   function tocaMedirCintura(){
     if(!CINTURAS.length) return true;   // nunca la ha medido
     var ultima = new Date(CINTURAS[CINTURAS.length - 1].fecha + 'T12:00:00');
-    return (HOY - ultima) / 86400000 >= DIAS_ENTRE_CINTURAS;
+    ultima.setHours(0, 0, 0, 0);
+    return Math.round((HOY - ultima) / 86400000) >= DIAS_ENTRE_CINTURAS;
   }
 
   function pintarCintura(){
@@ -4639,7 +4655,15 @@
 
   var FOTOS = {};              // clave "2026-W31" -> {frente:{src,bytes,w,h,tipo}, ...}
   var inicioPrograma = null;   // lunes de la semana en que se registró; lo pone cargarDatos()
-  var semanaFoto = new Date(HOY);
+  // Anclada al ARRANQUE de la semana de cada quien, no al día de hoy. Si
+  // apunta a hoy, quien empieza en martes y sube las fotos el lunes -que
+  // sigue siendo su semana- las archiva en la semana ISO SIGUIENTE, en un
+  // cajón distinto al que mira el recordatorio. El recordatorio no se
+  // apagaría nunca y esa semana quedaría partida en dos.
+  //
+  // Se vuelve a anclar al cargar el perfil, porque aquí `inicioSemana`
+  // todavía es el lunes por defecto.
+  var semanaFoto = inicioDeMiSemana();
   var poseEnCurso = null;
 
   function soportaWebp(){
@@ -6868,6 +6892,10 @@
         // Fuera del `if` de Plus a propósito: las fotos de progreso las sube
         // cualquiera, no son parte de la IA.
         revisarAvisoDeFotos();
+        // Con el día de arranque ya cargado: hasta aquí valía el lunes por
+        // defecto, y para quien no empieza en lunes eso apunta al cajón que
+        // no es.
+        semanaFoto = inicioDeMiSemana();
         revisarRecordatorios();
 
         // ---- Diario ----
@@ -7399,9 +7427,10 @@
   var HORA_AVISO_FOTOS = 19;
   var CLAVE_AVISO_FOTOS = 'macros.avisoFotos';
 
-  // La semana NO empieza el lunes para todo el mundo: cada quien elige su
-  // día en el Perfil y se guarda en `week_start_dow`. Atar esto a un sábado
-  // fijo habría estado mal para cualquiera que no empiece en lunes.
+  // La semana NO empieza el lunes para todo el mundo: sale de
+  // `profiles.week_start_dow`, que se pone en la base y no desde la app.
+  // Atar esto a un sábado fijo habría estado mal para cualquiera que no
+  // empiece en lunes.
   //
   // El aviso sale el ÚLTIMO día de la semana por la noche, que es la víspera
   // de que arranque la siguiente. Si tu semana empieza el martes, el último
@@ -7468,7 +7497,10 @@
   // de cada mes -a partir de las 18:00 en México- habría dado el siguiente.
   function cicloDeRecordatorio(cual){
     if(cual === 'peso')  return isoDe(HOY);
-    if(cual === 'fotos') return claveSemana(HOY);
+    // La semana de la persona y no la ISO: si no, a quien empieza en martes
+    // la × pulsada el domingo se le desharía sola el lunes, en mitad de su
+    // propia semana.
+    if(cual === 'fotos') return claveDeMisFotos();
     return isoDe(HOY).slice(0, 7);        // cintura: '2026-08'
   }
 
@@ -7495,27 +7527,43 @@
     // `pintarFotos()` corre unas líneas después en el mismo arranque y
     // vuelve a preguntar con los datos ya puestos.
     if(!FOTOS || !POSES) return false;
-    var set = FOTOS[claveSemana(HOY)] || {};
+    var set = FOTOS[claveDeMisFotos()] || {};
     return POSES.some(function(p){ return !set[p.k]; });
   }
 
-  // El día de fotos es el PRIMER día de la semana de cada quien, no un día
-  // fijo: la semana empieza donde dice `week_start_dow`, y para Eduardo es
-  // el martes. El aviso de la víspera ya avisa la noche de antes; este sale
-  // al día siguiente y se queda hasta que las suba.
+  // ---- La semana de fotos es LA DE CADA QUIEN ----
   //
-  // Que se quede es a propósito. Si saliera solo ese día y ese día no
-  // abriera la app, el recordatorio no habría servido para nada. Se va en
-  // cuanto están las cuatro, así que quien las sube el mismo día no lo ve
-  // más de un rato.
+  // Aquí había una cuenta que medía la posición de hoy dentro de la semana
+  // ISO -lunes a domingo- contra la posición del día de arranque. Encajaba
+  // con el aviso de la víspera, pero la ventana salía de un tamaño distinto
+  // para cada persona, porque la cortaba el domingo:
   //
-  // Las fotos se guardan por semana ISO -lunes a domingo-, así que la
-  // comparación se hace en esa escala: qué posición ocupa hoy dentro de la
-  // semana ISO frente a la que ocupa el día de arranque.
-  function yaEsDiaDeFotos(cuando, inicio){
-    var d = cuando || HOY;
+  //     empieza el lunes ..... 7 días de recordatorio
+  //     empieza el martes .... 6
+  //     empieza el jueves .... 4
+  //     empieza el domingo ... 1   <- si ese día no abre la app, se queda sin
+  //
+  // Y peor: las fotos se archivaban con `claveSemana(HOY)`, o sea la semana
+  // ISO del día en que se subían. Para quien no empieza en lunes, la MISMA
+  // semana suya caía en dos cajones distintos según el día que las subiera.
+  //
+  // La solución no es mover el archivo -eso le cambiaría el historial a
+  // todo el mundo- sino mirar siempre desde el ARRANQUE de la semana de
+  // cada quien. Para quien empieza en lunes esto da exactamente lo mismo
+  // que antes, y ésos son todos menos Eduardo.
+  function inicioDeMiSemana(cuando, inicio){
     var arranca = inicio == null ? inicioSemana : inicio;   // 0=domingo … 6=sábado
-    return ((d.getDay() + 6) % 7) >= ((arranca + 6) % 7);
+    var x = new Date(cuando || HOY);
+    x.setHours(0, 0, 0, 0);
+    x.setDate(x.getDate() - ((x.getDay() - arranca + 7) % 7));
+    return x;
+  }
+
+  // El cajón donde van las fotos de la semana en curso. No cambia en toda
+  // la semana de la persona, que es justo lo que faltaba: antes cambiaba
+  // sola al pasar el domingo.
+  function claveDeMisFotos(cuando, inicio){
+    return claveSemana(inicioDeMiSemana(cuando, inicio));
   }
 
   function revisarRecordatorios(){
@@ -7525,14 +7573,17 @@
     if(!peso || !fot || !cin) return;
 
     peso.hidden = !(PESOS[isoDe(HOY)] == null && !recordatorioCallado('peso'));
-    fot.hidden  = !(yaEsDiaDeFotos() && faltanFotosDeLaSemana() && !recordatorioCallado('fotos'));
+    // Sin "¿ya es mi día?": el cajón de `claveDeMisFotos` YA es el de la
+    // semana de esta persona, así que "faltan fotos" solo puede ser cierto
+    // dentro de su semana. La ventana sale de siete días para todos.
+    fot.hidden  = !(faltanFotosDeLaSemana() && !recordatorioCallado('fotos'));
     cin.hidden  = !(tocaMedirCintura() && !recordatorioCallado('cintura'));
 
     // "Hoy toca" solo es verdad el día que toca. A partir del segundo día es
     // mentira, y una app que te miente en algo comprobable deja de valer
     // para lo que no puedes comprobar.
     var tit = document.getElementById('recFotosTit');
-    if(tit) tit.textContent = yaEsDiaDeFotos(HOY, inicioSemana) && HOY.getDay() === inicioSemana
+    if(tit) tit.textContent = HOY.getDay() === inicioSemana
       ? 'Hoy toca subir tus 4 fotos'
       : 'Aún no subes tus 4 fotos';
   }

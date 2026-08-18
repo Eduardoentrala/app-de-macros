@@ -91,7 +91,10 @@ console.log('\n— Cada uno con su ciclo —');
   const fn = cuerpoDe(APP, 'cicloDeRecordatorio');
   check('la función existe', !!fn);
   check('peso: por día', /if\(cual === 'peso'\)\s+return isoDe\(HOY\);/.test(fn));
-  check('fotos: por semana', /if\(cual === 'fotos'\) return claveSemana\(HOY\);/.test(fn));
+  // La semana de la PERSONA, no la ISO. Con `claveSemana(HOY)`, a quien
+  // empieza en martes la × pulsada el domingo se le deshacía sola el lunes,
+  // en mitad de su propia semana.
+  check('fotos: por semana de cada quien', /if\(cual === 'fotos'\) return claveDeMisFotos\(\);/.test(fn));
   check('cintura: por mes', /return isoDe\(HOY\)\.slice\(0, 7\);/.test(fn));
 
   // El mes tiene que salir de `isoDe`, que ya usa la fecha del teléfono.
@@ -119,8 +122,11 @@ console.log('\n— Salen cuando toca —');
   check('la función existe', !!fn);
   check('peso: si no hay peso de hoy',
     /PESOS\[isoDe\(HOY\)\] == null && !recordatorioCallado\('peso'\)/.test(fn));
-  check('fotos: si es el día y faltan',
-    /yaEsDiaDeFotos\(\) && faltanFotosDeLaSemana\(\) && !recordatorioCallado\('fotos'\)/.test(fn));
+  // Sin «¿ya es mi día?»: el cajón de `claveDeMisFotos` YA es el de la
+  // semana de esta persona, así que «faltan fotos» solo puede ser cierto
+  // dentro de su semana. La ventana sale de siete días para todos.
+  check('fotos: si faltan las de su semana',
+    /faltanFotosDeLaSemana\(\) && !recordatorioCallado\('fotos'\)/.test(fn));
   check('cintura: si toca medirla',
     /tocaMedirCintura\(\) && !recordatorioCallado\('cintura'\)/.test(fn));
 
@@ -139,13 +145,19 @@ console.log('\n— Y se van solos, sin tocar la × —');
   check('se pregunta al repintar el peso',    pregunta('pintarPeso'));
   check('se pregunta al repintar la cintura', pregunta('pintarCintura'));
   check('se pregunta al repintar las fotos',  pregunta('pintarFotos'));
-  check('y al cargar los datos de la base', /revisarAvisoDeFotos\(\);\s*\n\s*revisarRecordatorios\(\);/.test(APP));
+  check('y al cargar los datos de la base',
+    /revisarAvisoDeFotos\(\);[\s\S]{0,400}revisarRecordatorios\(\);/.test(APP));
+  // Y con el día de arranque ya leído del perfil: antes de eso `inicioSemana`
+  // vale el lunes por defecto y apuntaría al cajón que no es.
+  check('y la semana de fotos se reancla tras cargar el perfil',
+    APP.indexOf('semanaFoto = inicioDeMiSemana();', APP.indexOf('inicioSemana = dow;')) > 0,
+    'sin esto, a quien no empieza en lunes las fotos se le archivan en otro cajon');
 
   // Las fotos se preguntan contra la semana de HOY. `pintarFotos` recibe
   // `semanaFoto`, que se mueve con las flechas: mirar las fotos de hace un
   // mes no puede apagar el recordatorio de esta semana.
-  check('las fotos se cuentan contra la semana de HOY',
-    /FOTOS\[claveSemana\(HOY\)\]/.test(cuerpoDe(APP, 'faltanFotosDeLaSemana')),
+  check('las fotos se cuentan contra el cajón de su semana',
+    /FOTOS\[claveDeMisFotos\(\)\]/.test(cuerpoDe(APP, 'faltanFotosDeLaSemana')),
     'con semanaFoto, pasar a ver un mes atras apagaria el recordatorio de esta semana');
 }
 
@@ -167,7 +179,7 @@ console.log('\n— Y no puede reventar el arranque —');
 
   // La guarda tiene que ir ANTES de la primera lectura, no después.
   check('y la guarda va antes de leerlos',
-    fn.indexOf('if(!FOTOS || !POSES)') < fn.indexOf('FOTOS[claveSemana'),
+    fn.indexOf('if(!FOTOS || !POSES)') < fn.indexOf('FOTOS[claveDeMisFotos'),
     'una guarda despues de la lectura no guarda nada');
 
   // Se declaran DESPUÉS del sitio donde se usan: por eso hace falta.
@@ -176,42 +188,115 @@ console.log('\n— Y no puede reventar el arranque —');
     'si algun dia FOTOS sube por encima, la guarda sobra pero no estorba');
 }
 
-console.log('\n— El día de fotos es el de cada quien —');
+console.log('\n— La semana de fotos es la de cada quien —');
 {
-  const fn = cuerpoDe(APP, 'yaEsDiaDeFotos');
-  check('la función existe', !!fn);
-  check('sale de inicioSemana, no de un día fijo', /inicio == null \? inicioSemana : inicio/.test(fn),
-    'la semana empieza donde dice week_start_dow: para Eduardo, el martes');
-
-  // Se ejecuta de verdad, no se lee. La cuenta de posiciones dentro de la
-  // semana ISO es justo el sitio donde es fácil equivocarse en uno.
+  // LO QUE ESTABA MAL, medido antes de tocarlo.
   //
-  // Y se ejecuta LA DEL FICHERO, no una copia escrita aquí. Al probar en
-  // negativo -cambiando `inicioSemana` por un lunes fijo- solo se puso roja
-  // la comprobación de texto: la copia seguía siendo la buena y daba verde
-  // sobre código malo. Una prueba funcional que no lee el código que dice
-  // probar mide su propia copia, y eso no es probar nada.
-  const fabricar = new Function('inicioSemana',
-    cuerpoDe(APP, 'yaEsDiaDeFotos') + '\nreturn yaEsDiaDeFotos;');
-  const yaEsDiaDeFotos = (cuando, inicio, arranquePorDefecto) =>
-    fabricar(arranquePorDefecto)(cuando, inicio);
-  const dia = n => new Date(2026, 7, 17 + n);   // 17 ago 2026 = lunes
-  const NOMBRES = ['lunes','martes','miércoles','jueves','viernes','sábado','domingo'];
-  // Se pasa el día de arranque por DEFECTO -`inicioSemana`- y no como
-  // argumento. Al principio se pasaba como argumento y el negativo no lo
-  // pillaba: cambiar `inicioSemana` por un lunes fijo no cambiaba nada
-  // porque el argumento siempre venía puesto y ganaba él. El camino que usa
-  // la app de verdad es el otro: `yaEsDiaDeFotos()`, sin argumentos.
-  const sale = inicio => NOMBRES.filter((_, n) => yaEsDiaDeFotos(dia(n), null, inicio));
+  // El recordatorio se apagaba al acabar la semana ISO -domingo- aunque la
+  // semana de la persona siguiera abierta, así que la ventana salía de un
+  // tamaño distinto para cada quien:
+  //
+  //     empieza el lunes ..... 7 días
+  //     empieza el martes .... 6
+  //     empieza el jueves .... 4
+  //     empieza el domingo ... 1   <- si ese día no abría la app, sin aviso
+  //
+  // Y las fotos se archivaban con la semana ISO del día en que se subían,
+  // así que la MISMA semana de quien no empieza en lunes caía en dos
+  // cajones según el día. Ahora todo se mide desde el ARRANQUE de su
+  // semana, y el cajón no se mueve en siete días.
+  const iniFn = cuerpoDe(APP, 'inicioDeMiSemana');
+  const claFn = cuerpoDe(APP, 'claveDeMisFotos');
+  check('existe el arranque de la semana propia', !!iniFn);
+  check('y el cajón que sale de él', !!claFn);
+  check('el arranque sale de inicioSemana, no de un día fijo',
+    /inicio == null \? inicioSemana : inicio/.test(iniFn),
+    'la semana empieza donde dice week_start_dow: para Eduardo, el martes');
+  check('el cajón se calcula desde el arranque, no desde hoy',
+    /return claveSemana\(inicioDeMiSemana\(cuando, inicio\)\);/.test(claFn),
+    'desde hoy, el cajon cambia solo al pasar el domingo en mitad de su semana');
 
-  // Eduardo empieza en martes: el lunes NO, porque ese día por la noche le
-  // sale el aviso de la víspera diciendo «mañana toca».
-  check('empezando en martes: del martes en adelante',
-    sale(2).join() === 'martes,miércoles,jueves,viernes,sábado,domingo',
-    'el lunes le sale el aviso de la vispera: los dos a la vez se contradicen');
-  check('empezando en lunes: toda la semana', sale(1).length === 7);
-  check('empezando en domingo: solo el domingo', sale(0).join() === 'domingo',
-    'su vispera es el sabado por la noche, asi que cuadra');
+  // Se ejecuta EL DEL FICHERO, no una copia escrita aquí, y por el camino
+  // por defecto -sin argumentos-, que es el que usa la app. Pasando el día
+  // como argumento el negativo no pillaba nada: el argumento ganaba y la
+  // copia seguía siendo la buena.
+  const lunesDe   = new Function(cuerpoDe(APP, 'lunesDe')   + '\nreturn lunesDe;')();
+  const numSemana = new Function(cuerpoDe(APP, 'numSemana') + '\nreturn numSemana;')();
+  const claveSemana = d => { const l = lunesDe(d);
+    return l.getFullYear() + '-W' + String(numSemana(l)).padStart(2, '0'); };
+  const cajon = (fecha, inicio) => new Function('inicioSemana', 'HOY', 'claveSemana',
+    iniFn + '\n' + claFn + '\nreturn claveDeMisFotos;')(inicio, fecha, claveSemana)();
+
+  const dia = n => { const d = new Date(2026, 7, 17 + n); d.setHours(0,0,0,0); return d; };
+  const N = ['dom','lun','mar','mié','jue','vie','sáb'];
+  for (let ini = 0; ini < 7; ini++) {
+    // Catorce días seguidos, para ver dos semanas enteras y el salto.
+    const cajones = [...Array(14)].map((_, n) => cajon(dia(n), ini));
+    const medio = cajones[7];
+    check(`empezando en ${N[ini]}: siete días en el mismo cajón`,
+      cajones.filter(c => c === medio).length === 7,
+      `dio ${cajones.filter(c => c === medio).length}: ${cajones.join(' ')}`);
+    // Y que salte justo en SU día, ni antes ni después.
+    const salta = cajones.findIndex((c, n) => n > 0 && c !== cajones[n - 1]);
+    check(`  · y salta el ${N[ini]}, que es su día`, dia(salta).getDay() === ini,
+      `salto un ${N[dia(salta).getDay()]}`);
+  }
+
+  // Y lo que NO puede pasar: que a quien empieza en lunes -o sea, todos
+  // menos Eduardo- se le mueva el historial. Su cajón tiene que seguir
+  // siendo exactamente la semana ISO de siempre.
+  check('quien empieza en lunes conserva su cajón de siempre',
+    [...Array(14)].every((_, n) => cajon(dia(n), 1) === claveSemana(dia(n))),
+    'cambiar el cajon de los que ya estaban bien les partiria el historial de fotos');
+
+  // La víspera avisa «mañana toca» la noche antes de que salte el cajón. Si
+  // no encajaran, la app diría dos cosas distintas el mismo día.
+  const vispera = new Function('inicioSemana', 'HORA_AVISO_FOTOS',
+    cuerpoDe(APP, 'esVisperaDeCerrarSemana') + '\nreturn esVisperaDeCerrarSemana;');
+  for (let ini = 0; ini < 7; ini++) {
+    const cajones = [...Array(14)].map((_, n) => cajon(dia(n), ini));
+    const salta = cajones.findIndex((c, n) => n > 0 && c !== cajones[n - 1]);
+    const anoche = dia(salta - 1);
+    check(`  · empezando en ${N[ini]}, la víspera avisa la noche antes`,
+      vispera(ini, 19)(new Date(anoche.getFullYear(), anoche.getMonth(), anoche.getDate(), 20)),
+      'si no encajan, la app dice «manana toca» un dia que no es');
+  }
+}
+
+console.log('\n— Y la cintura, el día 28 y no el 29 —');
+{
+  // EL FALLO, medido:  se midió el 21 de julio, DIAS_ENTRE_CINTURAS = 28
+  //
+  //     día 27 -> no      día 28 -> NO      día 29 -> le toca
+  //
+  // Se comparaba `HOY` -que va a medianoche- contra el MEDIODÍA del día en
+  // que se midió, así que el día 28 solo habían pasado 27,5. Medio día de
+  // retraso todos los meses, y acumulándose: la medida se corre un día cada
+  // dos meses. Ahora las dos fechas van a medianoche.
+  const fn = cuerpoDe(APP, 'tocaMedirCintura');
+  check('las dos fechas van a medianoche', /ultima\.setHours\(0, 0, 0, 0\);/.test(fn),
+    'sin esto se compara medianoche contra mediodia y falta medio dia');
+  check('y se redondea a días enteros', /Math\.round\(\(HOY - ultima\) \/ 86400000\)/.test(fn),
+    'un dia dura 23 o 25 horas al cambiar el horario: sin round la resta da 27,96');
+
+  // Se ejecuta la del fichero, no una copia.
+  const hacer = c => new Function('CINTURAS', 'HOY', 'DIAS_ENTRE_CINTURAS',
+    fn + '\nreturn tocaMedirCintura;');
+  const toca = (medida, cuando) => hacer()([{ fecha: medida }], cuando, 28)();
+  const masDias = (medida, n) => { const d = new Date(medida + 'T12:00:00');
+    d.setDate(d.getDate() + n); d.setHours(0, 0, 0, 0); return d; };
+
+  // Cuatro fechas que cruzan las trampas de calendario: el cambio de
+  // horario, el cambio de mes y el fin de año.
+  for (const [medida, que] of [['2026-07-21', 'un mes normal'],
+                               ['2026-03-15', 'cruzando el cambio de horario'],
+                               ['2026-01-20', 'cruzando el cambio de mes'],
+                               ['2025-12-15', 'cruzando el fin de año']]) {
+    check(`${que}: el día 27 todavía no`, !toca(medida, masDias(medida, 27)));
+    check(`  · y el 28 sí`,               toca(medida, masDias(medida, 28)),
+      'salia el 29: medio dia de retraso que se acumula');
+  }
+  check('y si nunca se la ha medido, le toca ya', hacer()([], new Date(), 28)());
 }
 
 console.log('\n— La × calla, no borra —');
