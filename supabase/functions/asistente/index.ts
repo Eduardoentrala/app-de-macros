@@ -821,7 +821,43 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const ia = new Anthropic({ apiKey: clave });
+    const iaCruda = new Anthropic({ apiKey: clave });
+
+    // ---- Reintento para lo que no es culpa de nadie ----
+    //
+    // Anthropic devuelve 529 «Overloaded» cuando está saturado. Es un
+    // tropiezo de un segundo, no una avería. Sin reintento, quien pulsaba
+    // "Revisar mi semana" veía «El asistente no pudo responder» y tenía que
+    // volver a pulsar; en los registros del 18 de agosto hay CUATRO 529
+    // seguidos, o sea cuatro intentos a mano que se podían haber evitado.
+    //
+    // Se reintenta 529, 429 y los 5xx. Un 400 NO: eso es que la petición
+    // está mal armada, y repetirla da el mismo error mientras se paga otra
+    // vez.
+    const reintentable = (e: unknown) => {
+      const s = (e && typeof e === 'object' && 'status' in e)
+        ? Number((e as { status: number }).status) : 0;
+      return s === 529 || s === 429 || (s >= 500 && s < 600);
+    };
+    const ia = {
+      messages: {
+        create: async (args: Record<string, unknown>) => {
+          let ultimo: unknown;
+          for (let i = 0; i < 3; i++) {
+            try { return await iaCruda.messages.create(args as never); }
+            catch (e) {
+              ultimo = e;
+              if (!reintentable(e) || i === 2) throw e;
+              // Se espera un poco más cada vez: si está saturado, insistir
+              // al instante es parte del problema.
+              await new Promise((r) => setTimeout(r, 900 * (i + 1)));
+            }
+          }
+          throw ultimo;
+        },
+        stream: (args: Record<string, unknown>) => iaCruda.messages.stream(args as never),
+      },
+    };
 
     if (accion === 'apuntar') {
       const texto = String(cuerpo.texto || '').trim().slice(0, 500);
@@ -1442,6 +1478,33 @@ Deno.serve(async (req) => {
     // la clave, o la respuesta cortada; se perdió un rato averiguándolo.
     // El nombre no lleva datos de nadie.
     console.error('asistente:', e);
+    const estado = (e && typeof e === 'object' && 'status' in e)
+      ? Number((e as { status: number }).status) : 0;
+    const saturado = estado === 529 || estado === 429 || (estado >= 500 && estado < 600);
+
+    // NO SE LE COBRA UNA AVERÍA AJENA.
+    //
+    // El tope se gasta ANTES de llamar a la IA, así tiene que ser: si se
+    // gastara después, mil peticiones a la vez pasarían todas el filtro. Pero
+    // eso significa que cuando Anthropic falla, la consulta ya está cobrada.
+    //
+    // El 18 de agosto se vio en los registros: cuatro 529 seguidos, cuatro
+    // consultas de las quince del día gastadas, y ni un mensaje a cambio.
+    // Devolverla solo cuando el fallo es del servidor no abre ningún agujero:
+    // nadie puede provocar un 529 a voluntad.
+    if (saturado && quedan !== null) {
+      await admin.rpc('devolver_consulta_ia', { usuario: userId }).catch(() => {});
+    }
+
+    if (saturado) {
+      return json({
+        error: 'El asistente está saturado ahora mismo. No es cosa tuya y no ' +
+               'gastaste ninguna consulta: espera un minuto y vuelve a intentarlo.',
+      }, 503);
+    }
+
+    // El NOMBRE del error sí viaja; el detalle se queda en el registro,
+    // porque un mensaje de la API puede llevar dentro trozos de la petición.
     const clase = (e && typeof e === 'object' && 'name' in e) ? String(e.name) : 'Error';
     return json({
       error: 'El asistente no pudo responder. Inténtalo de nuevo. (' + clase + ')',
