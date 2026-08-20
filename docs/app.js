@@ -6941,6 +6941,10 @@
         // Las cinturas medidas, para el historial y para saber si toca.
         CINTURAS = pesos.filter(function(f){ return f.cintura_cm != null; })
                         .map(function(f){ return { fecha: f.log_date, cm: Number(f.cintura_cm) }; });
+        // A partir de aquí PESOS y CINTURAS ya son los de verdad, no el
+        // arranque vacío: los recordatorios de peso y cintura pueden confiar
+        // en lo que digan.
+        PESO_CINTURA_LISTOS = true;
         pintarCintura();
         var hoyPeso = PESOS[hoy];
         // El `else` importa tanto como el `if`: sin él, el campo se quedaba
@@ -7005,6 +7009,10 @@
           sbCargarFotos().then(function(mapa){
             Object.keys(FOTOS).forEach(function(k){ delete FOTOS[k]; });
             Object.keys(mapa).forEach(function(k){ FOTOS[k] = mapa[k]; });
+            // Igual que con peso y cintura arriba: hasta que no llega el
+            // mapa real del bucket, FOTOS es el {} de arranque y no "esta
+            // semana no tiene ninguna".
+            FOTOS_LISTAS = true;
             pintarFotos();
             if(typeof llenarSelectores === 'function') llenarSelectores();
             // AQUÍ y no antes: mirar si toca comparar necesita saber cuántas
@@ -7488,6 +7496,20 @@
   // desde la base al abrir la app, por ejemplo-.
   var CLAVE_REC = 'macros.rec.';
 
+  // Antes de que lleguen los datos de la base, PESOS es {}, CINTURAS es []
+  // y FOTOS es {} -son sus valores de arranque, no "no hay nada que hacer"-.
+  // Preguntarles a esas alturas si "toca" algo siempre da que sí, y los tres
+  // recordatorios se encendían solos al abrir la app para apagarse un
+  // instante después, en cuanto `cargarDatos()` (o `sbCargarFotos()`, que va
+  // aparte y llega más tarde) traía lo real y corregía la respuesta.
+  //
+  // No es que la pregunta esté mal -`faltanFotosDeLaSemana()` ya se cuidaba
+  // de este mismo caso-, es que "no sé todavía" no es lo mismo que "toca", y
+  // hasta que estas dos banderas no se ponen a `true` ninguno de los tres
+  // tiene forma de distinguirlos.
+  var PESO_CINTURA_LISTOS = false;
+  var FOTOS_LISTAS = false;
+
   // El ciclo de cada uno. Es la clave de "ya lo cerré", y a la vez lo que
   // hace que vuelva: cuando cambia el ciclo, lo guardado deja de coincidir
   // y el recordatorio reaparece sin tener que borrar nada.
@@ -7572,12 +7594,12 @@
     var cin  = document.getElementById('recCintura');
     if(!peso || !fot || !cin) return;
 
-    peso.hidden = !(PESOS[isoDe(HOY)] == null && !recordatorioCallado('peso'));
+    peso.hidden = !(PESO_CINTURA_LISTOS && PESOS[isoDe(HOY)] == null && !recordatorioCallado('peso'));
     // Sin "¿ya es mi día?": el cajón de `claveDeMisFotos` YA es el de la
     // semana de esta persona, así que "faltan fotos" solo puede ser cierto
     // dentro de su semana. La ventana sale de siete días para todos.
-    fot.hidden  = !(faltanFotosDeLaSemana() && !recordatorioCallado('fotos'));
-    cin.hidden  = !(tocaMedirCintura() && !recordatorioCallado('cintura'));
+    fot.hidden  = !(FOTOS_LISTAS && faltanFotosDeLaSemana() && !recordatorioCallado('fotos'));
+    cin.hidden  = !(PESO_CINTURA_LISTOS && tocaMedirCintura() && !recordatorioCallado('cintura'));
 
     // "Hoy toca" solo es verdad el día que toca. A partir del segundo día es
     // mentira, y una app que te miente en algo comprobable deja de valer
