@@ -6523,6 +6523,14 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
+  // Cuántas llaves apagadas, dicho como se dice de viva voz. Seis de seis no
+  // es «6 apagadas»: es que no tiene IA.
+  function textoLlaves(n){
+    if(n >= 6) return 'sin IA';
+    if(n === 1) return '1 cosa de IA apagada';
+    return n + ' cosas de IA apagadas';
+  }
+
   function pintarPlanClientes(){
     var caja = document.getElementById('planCoach');
     var puedeEscribir = ROL === 'coach' || ROL === 'super_admin' || ROL === 'org_admin';
@@ -6539,7 +6547,16 @@
             // entrenador no lo ve porque su vista de clientes no lo trae.
             '<div class="info"><b>' + escapar(c.nombre) + '</b>' +
             (c.correo ? '<span class="cli-correo">' + escapar(c.correo) + '</span>' : '') +
-            '<span>' + (c.tienePlan ? 'con plan' : 'sin plan todavía') + '</span></div>' +
+            '<span>' + (c.tienePlan ? 'con plan' : 'sin plan todavía') +
+            // Lo que está apagado SOLO se dice cuando hay algo apagado. Poner
+            // «IA: todo» en cada renglón sería ruido en diez de cada diez
+            // filas para avisar de lo normal.
+            (c.iaApagadas ? ' · ' + textoLlaves(c.iaApagadas) : '') + '</span></div>' +
+            // La pastilla al lado del nombre. Siempre igual y sin color: es
+            // el mando, no el aviso. Lo que cambia según el estado es la
+            // línea de arriba.
+            '<button class="pill-ia" data-plan-ia="' + i + '" ' +
+              'aria-label="Qué hace la IA con ' + escapar(c.nombre) + '">IA</button>' +
             '<span style="color:var(--ink-faint)">›</span></div>';
         }).join('')
       : '<p class="calc-note" style="padding:4px 20px 0;">Aquí solo sale quien lleva plan. ' +
@@ -6686,7 +6703,14 @@
         sbRpc('plan_lista', {}).then(function(us){
           PLAN_CLIENTES = (us || []).map(function(u){
             return { id:u.id, nombre:(u.nombre || '').trim() || '(sin nombre)',
-                     correo:u.correo || '', tienePlan: !!u.tiene_plan };
+                     correo:u.correo || '', tienePlan: !!u.tiene_plan,
+                     // Cuántas de las seis llaves de IA tiene apagadas. Viene
+                     // en la misma consulta: preguntarlo por persona serían
+                     // diez peticiones para pintar diez renglones.
+                     //
+                     // El `|| 0` es por si la migración va por detrás del
+                     // despliegue: sin la columna, ninguna apagada.
+                     iaApagadas: u.ia_apagadas || 0 };
           });
         })['catch'](function(){ PLAN_CLIENTES = []; }));
     } else {
@@ -6751,6 +6775,16 @@
       // Si acaba de salir el menú de baja, este clic es el final de la
       // pulsación larga y no una intención de abrir el plan.
       if(salioLarga){ salioLarga = false; return; }
+
+      // La pastilla de IA va PRIMERO y corta aquí: sin esto, tocarla abriría
+      // además la ficha por debajo y las dos pantallas se pisarían.
+      var pIa = e.target.closest && e.target.closest('[data-plan-ia]');
+      if(pIa){
+        var ci = PLAN_CLIENTES[+pIa.getAttribute('data-plan-ia')];
+        if(ci) abrirLlavesIa(ci);
+        return;
+      }
+
       var c = quien(e);
       // A la FICHA, no al editor. El plan se escribe una vez y se consulta
       // veinte: lo que se quiere al tocar un nombre es saber cómo va esa
@@ -6758,6 +6792,172 @@
       if(c) abrirFichaCliente(c);
     });
   })();
+
+  // ================= LAS LLAVES DE LA IA =================
+  //
+  //  La app no cobra: es para la familia. Cada respuesta la paga Eduardo, y
+  //  hasta ahora era todo o nada por persona.
+  //
+  //  EL ORDEN DE LOS SEIS INTERRUPTORES no es el orden en que se
+  //  programaron: va de lo que MAS dinero ahorra a lo que menos, y eso no es
+  //  lo mismo que de lo mas caro a lo mas barato:
+  //
+  //    * la semana entera es lo mas caro de una sentada -veinticuatro mil
+  //      tokens de salida y esfuerzo alto- pero se pide una vez por semana;
+  //    * la foto de comida es barata cada vez y se usa varias veces al dia
+  //      todos los dias: sumada al mes, es el gasto de verdad.
+  //
+  //  Las dos primeras son las dos palancas que mueven la factura; las de
+  //  abajo se apagan por gusto, no por dinero. Cada una lo dice en su linea
+  //  para que la decision no dependa de acordarse de esto.
+  var LLAVES_DE = null;   // de quien son las que estan en pantalla
+
+  var LLAVES_IA = [
+    { k:'plan_semana', t:'Armar la semana entera',
+      d:'Lo más caro de todo, y con diferencia: siete días cuadrados de una vez. Es lo que más ahorra apagar.' },
+    { k:'foto', t:'Apuntar comida con foto',
+      d:'Barato cada vez, pero es lo que más se usa: varias veces al día. Sumado al mes, es el gasto de verdad.' },
+    { k:'plan_dia', t:'Armar el plan de un día',
+      d:'Cuesta como una quinta parte de la semana entera. Con esto le sigues armando los días sueltos.' },
+    { k:'analisis', t:'Analizar cómo va',
+      d:'El resumen que pides tú en su ficha. Se guarda, así que volver a entrar no gasta otro.' },
+    { k:'semanal', t:'Cierre del lunes y comparar fotos',
+      d:'Una vez por semana cada uno: cómo le fue la semana y qué cambió en sus fotos.' },
+    { k:'chat', t:'Preguntas y avisos',
+      d:'Lo más barato de la lista: respuestas cortas. Apagarlo casi no mueve la cuenta.' }
+  ];
+
+  // Los cuatro atajos. Son las cuatro posturas que de verdad se toman; los
+  // seis interruptores estan debajo para quien quiera afinar.
+  var ATAJOS_IA = {
+    todo:  { foto:true,  chat:true,  semanal:true,  plan_dia:true,  plan_semana:true,  analisis:true  },
+    justo: { foto:true,  chat:true,  semanal:true,  plan_dia:true,  plan_semana:false, analisis:true  },
+    foto:  { foto:true,  chat:false, semanal:false, plan_dia:false, plan_semana:false, analisis:false },
+    nada:  { foto:false, chat:false, semanal:false, plan_dia:false, plan_semana:false, analisis:false }
+  };
+  var TEXTO_ATAJO = {
+    todo:  'Todo encendido, como ha funcionado siempre.',
+    justo: 'Todo menos la semana entera. Los días sueltos se siguen armando solos, y cuestan cinco veces menos.',
+    foto:  'Solo apuntar comida con foto, que es lo que hace útil la app a diario. Lo demás, a mano.',
+    nada:  'Nada de IA. La app sigue entera: apuntar, peso, fotos y su plan. Solo deja de gastar.',
+    medida:'A tu medida.'
+  };
+
+  function abrirLlavesIa(c){
+    if(!c) return;
+    LLAVES_DE = { id:c.id, nombre:c.nombre, llaves:null };
+    document.getElementById('kiTitulo').textContent = c.nombre;
+    document.getElementById('kiResumen').textContent = 'Cargando…';
+    document.getElementById('kiLlaves').innerHTML = '';
+    goto('clienteia', true);
+
+    sbRpc('ia_permisos_ver', { p_cliente: c.id })
+      .then(function(v){
+        if(!LLAVES_DE || LLAVES_DE.id !== c.id) return;
+        LLAVES_DE.llaves = v || {};
+        pintarLlaves();
+      })
+      ['catch'](function(e){
+        if(!LLAVES_DE || LLAVES_DE.id !== c.id) return;
+        // NO se deja «Cargando…» puesto: se queda ahí para siempre y
+        // parece que la app se colgó.
+        document.getElementById('kiResumen').textContent =
+          'No pude traer sus ajustes: ' + traducirError(e.message);
+      });
+  }
+
+  // Cual de los cuatro atajos describe lo que hay puesto. Ninguno, si se
+  // afino a mano: entonces no se enciende ninguno, en vez de mentir con el
+  // que mas se parezca.
+  function atajoActual(l){
+    for(var a in ATAJOS_IA){
+      if(!Object.prototype.hasOwnProperty.call(ATAJOS_IA, a)) continue;
+      var igual = true;
+      for(var i=0;i<LLAVES_IA.length;i++){
+        var k = LLAVES_IA[i].k;
+        if((l[k] !== false) !== ATAJOS_IA[a][k]){ igual = false; break; }
+      }
+      if(igual) return a;
+    }
+    return 'medida';
+  }
+
+  function pintarLlaves(){
+    if(!LLAVES_DE || !LLAVES_DE.llaves) return;
+    var l = LLAVES_DE.llaves;
+    var cual = atajoActual(l);
+
+    var atajos = document.getElementById('kiAtajos');
+    [].forEach.call(atajos.querySelectorAll('button'), function(b){
+      b.classList.toggle('active', b.getAttribute('data-modo-ia') === cual);
+    });
+    document.getElementById('kiResumen').textContent = TEXTO_ATAJO[cual];
+
+    document.getElementById('kiLlaves').innerHTML = LLAVES_IA.map(function(f){
+      var on = l[f.k] !== false;
+      return '<div class="flag-row">' +
+        '<div class="txt"><b>' + f.t + '</b><span>' + f.d + '</span></div>' +
+        '<button class="switch' + (on ? ' on' : '') + '" data-llave="' + f.k + '" ' +
+          'role="switch" aria-checked="' + on + '" ' +
+          'aria-label="' + f.t + '"><i></i></button>' +
+      '</div>';
+    }).join('');
+  }
+
+  // Guardar. Se pinta ANTES de que conteste el servidor y se deshace si
+  // falla: un interruptor que tarda medio segundo en moverse se vuelve a
+  // tocar, y el segundo toque lo deja como estaba.
+  function guardarLlaves(cambio){
+    if(!LLAVES_DE || !LLAVES_DE.llaves) return;
+    var antes = {}, l = LLAVES_DE.llaves, k;
+    for(k in l) if(Object.prototype.hasOwnProperty.call(l, k)) antes[k] = l[k];
+    for(k in cambio) if(Object.prototype.hasOwnProperty.call(cambio, k)) l[k] = cambio[k];
+    pintarLlaves();
+
+    var dequien = LLAVES_DE.id;
+    sbRpc('ia_permisos_guardar', { p_cliente: dequien, p_llaves: cambio })
+      .then(function(v){
+        // Manda lo que diga el servidor, no lo que supuso la pantalla.
+        if(!LLAVES_DE || LLAVES_DE.id !== dequien || !v) return;
+        LLAVES_DE.llaves = v;
+        pintarLlaves();
+        apuntarApagadasEnLista(dequien, v);
+      })
+      ['catch'](function(e){
+        if(!LLAVES_DE || LLAVES_DE.id !== dequien) return;
+        LLAVES_DE.llaves = antes;
+        pintarLlaves();
+        toast('toastLlaves', 'No se pudo guardar: ' + traducirError(e.message));
+      });
+  }
+
+  // Que la lista de atras quede al dia sin volver a pedirla entera.
+  function apuntarApagadasEnLista(id, l){
+    for(var i=0;i<PLAN_CLIENTES.length;i++){
+      if(PLAN_CLIENTES[i].id !== id) continue;
+      var n = 0;
+      LLAVES_IA.forEach(function(f){ if(l[f.k] === false) n++; });
+      PLAN_CLIENTES[i].iaApagadas = n;
+      pintarPlanClientes();
+      return;
+    }
+  }
+
+  document.getElementById('kiLlaves').addEventListener('click', function(e){
+    var b = e.target.closest && e.target.closest('[data-llave]');
+    if(!b || !LLAVES_DE || !LLAVES_DE.llaves) return;
+    var k = b.getAttribute('data-llave'), cambio = {};
+    cambio[k] = LLAVES_DE.llaves[k] === false;
+    guardarLlaves(cambio);
+  });
+
+  document.getElementById('kiAtajos').addEventListener('click', function(e){
+    var b = e.target.closest && e.target.closest('[data-modo-ia]');
+    if(!b || !LLAVES_DE || !LLAVES_DE.llaves) return;
+    // Las seis de golpe y en una sola peticion: de una en una, tocar un
+    // atajo serian seis viajes y la pantalla se encenderia a trozos.
+    guardarLlaves(ATAJOS_IA[b.getAttribute('data-modo-ia')]);
+  });
 
   // ---- Editor ----
   // planComidas guarda TODO el plan (un día o los siete). El editor pinta
@@ -6922,6 +7122,11 @@
         return iaLlamar({
           accion: 'plan',
           semana: semana,
+          // DE QUIEN es el plan. Sin esto, el servidor miraria las llaves de
+          // IA del entrenador -que es quien pide- en vez de las de la
+          // persona a la que se le esta escribiendo, y apagarle la semana a
+          // alguien no serviria de nada.
+          cliente: planEditando.userId,
           nombre: planEditando.nombre,
           calorias: cal,
           proteina: p.goal_protein_g,
@@ -7797,11 +8002,21 @@
         sbPesos(UN_ANIO),
         sbAlimentos(),
         sbRecetas(),
-        sbEventos()
+        sbEventos(),
+        // Lo que su entrenador le dejó encendido de la IA.
+        //
+        // Con `catch` a nulo Y EN LA MISMA TANDA, no en una petición aparte
+        // que llegue después: si llegara tarde, los botones se pintarían
+        // encendidos y se apagarían solos medio segundo después, delante de
+        // la persona. Y si falla, nulo significa todo encendido: un
+        // problema de red no puede apagarle la IA a nadie.
+        sbRpc('ia_permisos_ver', { p_cliente: sesion.user.id })['catch'](function(){ return null; })
       ])
       .then(function(res){
         var p = res[0], filas = res[1] || [], pesos = res[2] || [],
             alimentos = res[3] || [], recetas = res[4] || [], eventos = res[5] || [];
+        MIS_LLAVES = res[6] || null;
+        aplicarLlavesIa();
 
         // ---- Eventos ----
         // Antes que nada: el balance del día se calcula con esto, así que
@@ -8125,7 +8340,31 @@
     { icono:'🍽️', texto:'¿Qué me recomiendas comer hoy?' }
   ];
 
+  // Lo que su entrenador le dejó encendido. Nace vacío y VACÍO SIGNIFICA
+  // TODO ENCENDIDO: si la consulta falla o la migración va por detrás del
+  // despliegue, la app funciona como siempre en vez de apagarse sola.
+  var MIS_LLAVES = null;
+
+  // De qué llave depende cada acción. Es el mismo reparto que hace la Edge
+  // Function, y tiene que seguir siéndolo: aquí solo se adelanta la
+  // respuesta para no hacer esperar a nadie por un "no".
+  var LLAVE_DE_ACCION = {
+    apuntar:'foto', chat:'chat', aviso:'chat', semana:'semanal', fotos:'semanal'
+  };
+
   function iaLlamar(cuerpo){
+    // CORTAR AQUÍ CUANDO YA SE SABE QUE NO. Sin esto, quien tenga algo
+    // apagado pulsa, ve «Pensando…», espera el viaje de ida y vuelta y
+    // recibe un no. El servidor lo comprueba igual —de esto no se fía
+    // nadie—; esto solo evita la espera.
+    //
+    // `plan` y `cliente` NO se miran aquí: los pide el entrenador SOBRE
+    // otra persona, y las llaves que hay en este teléfono son las suyas,
+    // no las de ella. Eso lo decide el servidor, que sí tiene las buenas.
+    var llave = LLAVE_DE_ACCION[String(cuerpo && cuerpo.accion || '')];
+    if(llave && MIS_LLAVES && MIS_LLAVES[llave] === false){
+      return Promise.reject(new Error('Tu entrenador desactivó esto en tu cuenta.'));
+    }
     return sbFetch('/functions/v1/asistente', {
       method: 'POST', body: JSON.stringify(cuerpo)
     });
@@ -8141,6 +8380,36 @@
   // asistente. De las cosas que más caras parecen y menos cuestan.
   var Reconocedor = window.SpeechRecognition || window.webkitSpeechRecognition;
   var oyendo = null;
+
+  // Esconder lo que ya no va a contestar.
+  //
+  //  Un boton que siempre responde «tu entrenador desactivo esto» es peor
+  //  que no tenerlo: se pulsa igual, hace esperar y deja la sensacion de que
+  //  la app esta rota. Esto no es la seguridad -de eso se encarga el
+  //  servidor, que no se fia de este telefono-; es no ofrecer lo que no hay.
+  //
+  //  El asistente es UNA pantalla con dos cosas dentro: la camara apunta
+  //  comida y el texto pregunta. Por eso se apagan por separado y solo
+  //  desaparece entero cuando no queda ninguna de las dos.
+  function aplicarLlavesIa(){
+    var l = MIS_LLAVES || {};
+    var foto = l.foto !== false, chat = l.chat !== false;
+
+    var mostrar = function(id, si){
+      var e = document.getElementById(id);
+      if(e) e.hidden = !si;
+    };
+
+    mostrar('iaBtn', foto || chat);
+    mostrar('iaTomarFoto', foto);
+    // El texto y el enviar van juntos: una caja de escribir sin boton de
+    // mandar es un sitio donde teclear para nada.
+    mostrar('iaTexto', chat);
+    mostrar('iaEnviar', chat);
+    // Y el dictado tambien es texto, aunque lo transcriba el telefono.
+    if(!chat) mostrar('iaHablar', false);
+    else pintarBotonHablar();
+  }
 
   function pintarBotonHablar(){
     var b = document.getElementById('iaHablar');
@@ -9275,6 +9544,10 @@
   // Se mira al arrancar y cada vez que se guarda una respuesta.
   function pintarChequeoPendiente(pendiente){
     var b = document.getElementById('chequeoPend');
+    // Va AQUI y no en `aplicarLlavesIa`: esto se vuelve a llamar cada vez
+    // que se guarda una respuesta, asi que apagarlo desde fuera duraria
+    // hasta el siguiente repintado y el aviso volveria solo.
+    if(MIS_LLAVES && MIS_LLAVES.semanal === false) pendiente = false;
     if(b) b.hidden = !pendiente;
   }
 

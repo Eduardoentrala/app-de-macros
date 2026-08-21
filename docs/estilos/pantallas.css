@@ -147,6 +147,23 @@
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
 
+/* La pastilla de IA, al lado del nombre. SIEMPRE IGUAL Y SIN COLOR, a
+   proposito: es el mando, no el aviso. Pintarla de verde cuando esta todo
+   encendido serian diez pastillas verdes para decir que no pasa nada.
+   Lo que esta apagado se dice en la linea de debajo del nombre, y solo
+   cuando hay algo apagado.
+
+   flex:none y el ancho fijo evitan que un nombre largo la estruje hasta
+   dejarla intocable; 30px de alto es lo minimo que se acierta con el dedo
+   sin que el renglon crezca. */
+.plan-cliente .pill-ia{
+  flex:none;border:none;cursor:pointer;
+  padding:0 11px;height:30px;border-radius:15px;
+  background:var(--pill-bg);color:var(--ink-soft);
+  font:800 11px/30px sans-serif;letter-spacing:.04em;
+}
+.plan-cliente .pill-ia:active{opacity:.55;}
+
 /* Los siete días. Se desplazan en horizontal en vez de apretarse: en un
    teléfono, siete botones legibles no caben en 375 px. */
 .plan-dias{

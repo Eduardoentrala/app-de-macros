@@ -80,7 +80,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '1ec54406ec';
+    var SELLO = 'a7b32f71fe';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -923,6 +923,45 @@
         <div class="toast" id="toastCliente">Listo</div>
       </div>
 
+      <!-- QUE HACE LA IA CON ESTA PERSONA
+           Se abre con la pastilla «IA» que hay al lado de su nombre en la
+           lista de Plan.
+
+           Los atajos van ARRIBA y los seis interruptores abajo, porque casi
+           siempre se quiere una de las cuatro posturas de siempre y no
+           afinar seis cosas. Quien quiera afinar, sigue bajando.
+
+           Y el orden de los seis no es el orden en que se programaron: es de
+           lo que MÁS dinero ahorra a lo que menos. Lo primero que se ve es
+           lo que de verdad mueve la factura. -->
+      <div class="app-view" data-view="clienteia">
+        <div class="back-header stacked">
+          <div class="back-header-inner">
+            <button class="back-btn" data-back>&lsaquo; Regresar</button>
+            <span class="back-title" id="kiTitulo">Inteligencia artificial</span>
+          </div>
+        </div>
+        <div class="scroll">
+          <div class="segmented" id="kiAtajos">
+            <button data-modo-ia="todo">Todo</button>
+            <button data-modo-ia="justo">Lo justo</button>
+            <button data-modo-ia="foto">Solo foto</button>
+            <button data-modo-ia="nada">Nada</button>
+          </div>
+          <p class="calc-note" style="padding:0 20px 6px;" id="kiResumen">&nbsp;</p>
+
+          <div class="section-label">Una por una</div>
+          <div id="kiLlaves"></div>
+
+          <p class="calc-note" style="padding:10px 20px 0;">
+            Nada de esto le quita la app: apuntar comida a mano, el peso, las
+            fotos y su plan siguen igual. Solo deja de gastar en la IA.
+          </p>
+          <div style="height:16px;"></div>
+        </div>
+        <div class="toast" id="toastLlaves">Listo</div>
+      </div>
+
       <!-- ESCRIBIR EL PLAN DE ALGUIEN -->
       <div class="app-view" data-view="planedit">
         <div class="back-header stacked">
@@ -1730,7 +1769,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '1ec54406ec';
+    var SELLO = 'a7b32f71fe';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que

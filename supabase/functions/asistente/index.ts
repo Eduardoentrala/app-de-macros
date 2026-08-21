@@ -944,6 +944,65 @@ Deno.serve(async (req) => {
 
   const accion = String(cuerpo.accion || '');
 
+  // --- ¿Le dejan ESTO en concreto? ---
+  //
+  //  `ia_habilitada` es la llave general: todo o nada. Esto es lo fino.
+  //
+  //  Y va aquí, ANTES del tope diario, a propósito: si algo está apagado no
+  //  puede gastar una de las consultas del día. Al revés, alguien perdería
+  //  sus consultas pulsando un botón que nunca le iba a contestar.
+  //
+  //  LAS LLAVES NO SON UNA POR ACCIÓN sino una por cosa que se apaga. Las
+  //  que van siempre juntas comparten llave: apagar el chat y dejar los
+  //  avisos escritos -que son el mismo modelo contestando lo mismo- sería
+  //  una casilla más para no ahorrar nada.
+  const LLAVE: Record<string, string> = {
+    apuntar: 'foto',      // apuntar comida con foto: lo que más se usa
+    chat:    'chat',
+    aviso:   'chat',
+    semana:  'semanal',   // el cierre de los lunes
+    fotos:   'semanal',   // comparar fotos de progreso
+    cliente: 'analisis',  // el resumen para el entrenador
+  };
+  // El plan es la excepción: la misma acción cuesta cinco veces más si es
+  // la semana entera, así que son dos llaves y no una. Poder dejar los
+  // planes de un día encendidos y apagar solo la semana es justo el ajuste
+  // que más dinero mueve.
+  const llave = accion === 'plan'
+    ? (cuerpo.semana === true ? 'plan_semana' : 'plan_dia')
+    : LLAVE[accion];
+
+  if (llave) {
+    // DE QUIÉN ES LA LLAVE. Casi siempre de quien pide, pero el plan y el
+    // análisis los pide el ENTRENADOR sobre otra persona: mirar las llaves
+    // del entrenador ahí sería mirar las de quien no las tiene apagadas.
+    //
+    // El `|| userId` es para la transición: si la app todavía no manda a
+    // quién, se mira al que pide. Se prefiere eso a rechazar la petición y
+    // dejar sin planes a quien no haya actualizado la app.
+    const sobre = (accion === 'plan' || accion === 'cliente')
+      ? (String(cuerpo.cliente || '') || userId)
+      : userId;
+
+    const { data: llaves } = await admin
+      .from('ia_permisos').select('*').eq('user_id', sobre).maybeSingle();
+
+    // Sin fila, todo encendido: nadie se queda sin nada porque se añadiera
+    // una tabla. Y si la consulta falla, `llaves` viene vacío y se deja
+    // pasar: un problema de base de datos no puede apagarle la IA a todos.
+    const puede = !llaves || (llaves as Record<string, unknown>)[llave] !== false;
+
+    if (!puede) {
+      const ajeno = sobre !== userId;
+      return json({
+        error: ajeno
+          ? 'Esa persona tiene esto apagado. Puedes encendérselo en su ficha.'
+          : 'Tu entrenador desactivó esto en tu cuenta.',
+        apagado: llave,
+      }, 403);
+    }
+  }
+
   // --- Tope diario ---
   //
   // La comparación de fotos queda FUERA. Es mensual, la pide la app sola y
