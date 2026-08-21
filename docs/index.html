@@ -80,7 +80,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '03a5aa3a0d';
+    var SELLO = 'e2bbeaca66';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -151,6 +151,22 @@
                  siguiente -mañana, la semana que viene, el mes que viene-.
                  Un aviso que se puede apagar para siempre por un toque sin
                  querer no sirve para lo que se puso. -->
+            <!-- SIN SUBIR TODAVÍA.
+                 Va por ENCIMA de los recordatorios porque no es una
+                 sugerencia: es el estado de los datos de la persona. Sin
+                 esto la app se ve igual con señal que sin ella, y quien
+                 apuntó sin conexión creería que ya está guardado.
+
+                 No lleva botón de cerrar, al revés que los recordatorios:
+                 esto no se calla, se va solo cuando sube lo que falta. -->
+            <div class="pendientes" id="avisoPendientes" hidden>
+              <span class="pend-ico" aria-hidden="true">☁️</span>
+              <span class="pend-txt">
+                <b>Faltan subir 0 apuntes</b>
+                <span>Están guardados en el teléfono. Se suben solos al volver la señal.</span>
+              </span>
+            </div>
+
             <div class="recordatorios">
               <div class="rec rec-peso" id="recPeso" hidden>
                 <button class="rec-cuerpo" data-rec-ir="peso">
@@ -1644,7 +1660,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '03a5aa3a0d';
+    var SELLO = 'e2bbeaca66';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que

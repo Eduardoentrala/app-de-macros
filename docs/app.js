@@ -4338,6 +4338,213 @@
     return sbFetch('/auth/v1/logout', { method:'POST' })['catch'](function(){});
   }
 
+  // ================= APUNTAR SIN SEÑAL =================
+  //
+  //  EL PROBLEMA
+  //
+  //  El service worker ya conseguía que la app ABRIERA sin señal, pero no
+  //  que se pudiera usar: se apuntaba una comida, el guardado fallaba, y la
+  //  app deshacía lo que acababas de escribir. Se perdía.
+  //
+  //  Y duele donde más se usa: se apunta en restaurantes, en el gimnasio,
+  //  viajando. Justo donde la señal es peor. Pasó de verdad en Celaya.
+  //
+  //  QUÉ HACE ESTO
+  //
+  //  Cuando una escritura falla PORQUE NO HAY RED, en vez de deshacerla se
+  //  guarda en una cola en el teléfono y se manda cuando vuelva la señal.
+  //  La pantalla se queda como está, que es lo que la persona espera.
+  //
+  //  LO QUE NO HACE: no toca las escrituras que fallan por otra cosa. Si el
+  //  servidor dice que no —permisos, un dato inválido, la sesión caducada—
+  //  eso sigue deshaciéndose como siempre. Encolar un error de verdad sería
+  //  reintentarlo para siempre y decirle a la persona que se guardó algo
+  //  que nunca se va a guardar.
+
+  var COLA_KEY = 'macros.cola';
+  var COLA = [];
+  var COLA_TOPE = 400;      // ~400 apuntes sin señal; por encima de eso el
+                            // problema es otro y llenar el almacenamiento
+                            // del teléfono rompería también la sesión.
+
+  // Un identificador propio para cada apunte.
+  //
+  // ES LO QUE HACE QUE REINTENTAR SEA SEGURO. `fetch` puede fallar DESPUÉS
+  // de que el servidor haya recibido la petición -se corta al volver la
+  // respuesta-, y entonces el apunte está guardado aunque aquí parezca que
+  // no. Reintentar a ciegas lo duplicaría.
+  //
+  // Mandando nosotros el id, el reintento choca contra la clave primaria y
+  // el servidor responde 409: "ya estaba". Eso no es un fallo, es la
+  // confirmación de que llegó.
+  function idNuevo(){
+    try{ if(crypto && crypto.randomUUID) return crypto.randomUUID(); }catch(e){}
+    // Navegadores viejos, y `randomUUID` solo existe en contextos seguros.
+    var b = new Uint8Array(16);
+    (crypto.getRandomValues ? crypto : { getRandomValues: function(a){
+      for(var i=0;i<a.length;i++) a[i] = Math.floor(Math.random()*256);
+    }}).getRandomValues(b);
+    b[6] = (b[6] & 0x0f) | 0x40;   // versión 4
+    b[8] = (b[8] & 0x3f) | 0x80;   // variante
+    var h = [].map.call(b, function(x){ return ('0'+x.toString(16)).slice(-2); }).join('');
+    return h.slice(0,8)+'-'+h.slice(8,12)+'-'+h.slice(12,16)+'-'+h.slice(16,20)+'-'+h.slice(20);
+  }
+
+  // ¿Esto fue "no hay red" o fue el servidor diciendo que no?
+  //
+  // Es LA decisión de todo el mecanismo, y equivocarse tiene precio en las
+  // dos direcciones: tomar un error real por falta de red deja al apunte
+  // reintentándose para siempre; tomar la falta de red por error real
+  // vuelve a perder la comida, que es justo lo que se venía a arreglar.
+  //
+  // Un `fetch` que no llega a hablar con nadie rechaza con TypeError y sin
+  // status. Cualquier respuesta del servidor —incluido un 500— pasa por
+  // sbFetch, que lanza un Error con el mensaje de la base. Por eso se mira
+  // el tipo y no el texto: los mensajes cambian entre navegadores y entre
+  // idiomas, y "Failed to fetch" en un iPhone es "Load failed".
+  function sinConexion(e){
+    if(navigator.onLine === false) return true;
+    if(!e) return false;
+    if(e.name === 'TypeError') return true;
+    return /failed to fetch|load failed|networkerror|network request failed|conexi/i
+      .test(String(e.message || ''));
+  }
+
+  function colaCargar(){
+    try{ COLA = JSON.parse(localStorage.getItem(COLA_KEY) || '[]'); }catch(e){ COLA = []; }
+    if(!Array.isArray(COLA)) COLA = [];
+  }
+  function colaGuardar(){
+    try{ localStorage.setItem(COLA_KEY, JSON.stringify(COLA)); }
+    catch(e){
+      // Sin sitio en el teléfono. Se tira lo más viejo antes que perder lo
+      // que se acaba de apuntar, que es lo que la persona tiene delante.
+      COLA = COLA.slice(-50);
+      try{ localStorage.setItem(COLA_KEY, JSON.stringify(COLA)); }catch(e2){}
+    }
+  }
+
+  // Mete una escritura en la cola. `dueno` es el id de quien la apuntó: sin
+  // eso, cerrar sesión y entrar con otra cuenta le mandaría los apuntes de
+  // la anterior a la nueva.
+  function encolar(item){
+    item.creado = item.creado || new Date().toISOString();
+    item.dueno = (sesion && sesion.user && sesion.user.id) || null;
+    COLA.push(item);
+    if(COLA.length > COLA_TOPE) COLA = COLA.slice(-COLA_TOPE);
+    colaGuardar();
+    pintarPendientes();
+  }
+
+  // Quita de la cola una escritura que ya no hace falta mandar. Se usa al
+  // borrar un apunte que todavía no había subido: en vez de encolar también
+  // el borrado —y mandar un DELETE de algo que el servidor no ha visto
+  // nunca— se cancela el alta y no queda rastro de ninguna de las dos.
+  function desencolar(id){
+    var antes = COLA.length;
+    COLA = COLA.filter(function(x){ return x.fila !== id; });
+    if(COLA.length !== antes){ colaGuardar(); pintarPendientes(); }
+    return COLA.length !== antes;
+  }
+
+  function hayPendientes(){
+    var yo = sesion && sesion.user && sesion.user.id;
+    return COLA.filter(function(x){ return !x.dueno || x.dueno === yo; }).length;
+  }
+
+  // Manda la cola, en orden y de una en una.
+  //
+  // EN ORDEN Y NO EN PARALELO a propósito: si se mandaran todas a la vez, un
+  // alta y su borrado podrían llegar al revés y el apunte quedaría vivo para
+  // siempre. Y EN CUANTO UNA FALLA POR RED, se para: seguir con las
+  // siguientes las adelantaría por el mismo motivo.
+  var colaVaciando = false;
+  function vaciarCola(){
+    if(colaVaciando) return Promise.resolve(0);
+    if(!sesion || !sesion.user) return Promise.resolve(0);
+    var yo = sesion.user.id;
+    var mios = COLA.filter(function(x){ return !x.dueno || x.dueno === yo; });
+    if(!mios.length) return Promise.resolve(0);
+
+    colaVaciando = true;
+    var subidos = 0, rechazados = 0;
+
+    function siguiente(){
+      var item = COLA.filter(function(x){ return !x.dueno || x.dueno === yo; })[0];
+      if(!item) return Promise.resolve();
+
+      return sbFetch(item.ruta, item.op)
+        .then(function(){ subidos++; })
+        ['catch'](function(e){
+          if(sinConexion(e)) throw e;          // se corta la vuelta entera
+          // 409 es la clave primaria repitiéndose: este apunte YA estaba
+          // guardado, la petición de antes sí llegó. No es un fallo.
+          if(/duplicate key|already exists|409/i.test(String(e.message || ''))) subidos++;
+          // Cualquier otro error del servidor: no se reintenta para siempre.
+          // Se cuenta y se tira, o la cola se atasca y nada de lo que venga
+          // detrás vuelve a subir nunca.
+          else rechazados++;
+        })
+        .then(function(){
+          COLA = COLA.filter(function(x){ return x !== item; });
+          colaGuardar();
+          return siguiente();
+        });
+    }
+
+    return siguiente()
+      ['catch'](function(){ /* sin red: lo que queda se queda para la próxima */ })
+      .then(function(){
+        colaVaciando = false;
+        pintarPendientes();
+        if(subidos) avisarSubidos(subidos, rechazados);
+        return subidos;
+      });
+  }
+
+  // Se intenta al volver la señal, y también al abrir: `online` no salta si
+  // el teléfono ya tenía red al arrancar.
+  window.addEventListener('online', function(){ vaciarCola(); });
+
+  // Y al volver a la app después de dejarla en segundo plano.
+  //
+  // No es redundante con `online`: el caso corriente es el wifi del
+  // restaurante, que da señal pero no sale a internet. Ahí `navigator.onLine`
+  // vale true todo el rato y el evento `online` NO llega nunca, así que sin
+  // esto la cola se quedaría esperando a que la app se cerrara y se
+  // volviera a abrir. Guardas el teléfono, sales a la calle, lo sacas: ahí
+  // se sube.
+  document.addEventListener('visibilitychange', function(){
+    if(!document.hidden) vaciarCola();
+  });
+
+  colaCargar();
+
+  // ---- Que se vea que hay cosas sin subir ----
+  //
+  // No es un adorno. Sin esto, la app se comporta EXACTAMENTE igual con
+  // señal que sin ella, y esa es la peor versión posible: la persona cree
+  // que su comida está guardada, borra la app o cambia de teléfono, y
+  // descubre que no estaba. Mientras haya algo en la cola tiene que verse.
+  function pintarPendientes(){
+    var el = document.getElementById('avisoPendientes');
+    if(!el) return;
+    var n = hayPendientes();
+    el.hidden = !n;
+    if(!n) return;
+    var t = el.querySelector('b');
+    if(t) t.textContent = n === 1 ? 'Falta subir 1 apunte' : 'Faltan subir ' + n + ' apuntes';
+  }
+
+  function avisarSubidos(subidos, rechazados){
+    var msg = subidos === 1 ? 'Se subió 1 apunte' : 'Se subieron ' + subidos + ' apuntes';
+    // Los rechazados se dicen, no se callan: son apuntes que la persona ve
+    // en pantalla y que el servidor no aceptó. Si no se avisa, desaparecen
+    // en la siguiente recarga sin explicación.
+    if(rechazados) msg += ' · ' + rechazados + (rechazados === 1 ? ' no se pudo' : ' no se pudieron');
+    toast('toastComida', msg);
+  }
+
   // Vuelca en `profiles` lo que el registro ya preguntó. El perfil lo creó
   // solo un trigger al darse de alta, así que aquí basta con actualizarlo.
   // Si la base va por detrás de la app, se reintenta sin los campos que no
@@ -4636,7 +4843,16 @@
   restaurarCuenta();
   if(sesion && sesion.access_token){
     goto('diario', false);
-    cargarDatos();
+    // La cola PRIMERO y la carga después, encadenadas.
+    //
+    // El orden importa: si se pidieran a la vez, la carga podría llegar
+    // antes de que suba lo pendiente y traer un diario sin ello, mientras la
+    // cola sigue llena. Se vería dos veces lo mismo —una del servidor y otra
+    // de la cola— o ninguna, según quién ganara.
+    //
+    // `vaciarCola` no rechaza nunca: sin señal se queda con lo suyo y sigue.
+    vaciarCola().then(function(){ cargarDatos(); });
+    pintarPendientes();
   }
 
   // ================= FOTOS DE PROGRESO =================
@@ -6698,24 +6914,58 @@
       '&entry_date=gte.' + desde + '&order=created_at.asc');
   }
   function sbAgregarAlimento(a, comida){
-    return sbFetch('/rest/v1/diary_entries', {
+    // El id y la hora se ponen AQUÍ y no en la base.
+    //
+    // El id, para que reintentar sea seguro: si esto se encola y se manda
+    // dos veces, la segunda choca contra la clave primaria en vez de crear
+    // un duplicado. Está explicado largo en `idNuevo`.
+    //
+    // La hora, porque el diario se lee ordenado por `created_at` y si la
+    // pusiera la base al subir, todo lo apuntado sin señal aparecería junto
+    // y al final, en el orden en que se sincronizó y no en el que se comió.
+    var fila = {
+      id: idNuevo(),
+      user_id: sesion.user.id,
+      entry_date: isoDe(diaDeApunte()),
+      meal: comida,
+      food_name: a.n,
+      // Cuánto se comió, en su unidad. Los macros van ya multiplicados por
+      // esta cantidad; guardarla aparte es lo que permite editarla después.
+      quantity: a.cant || 1,
+      unit: a.u || 'Gramos',
+      protein_g: a.P, carbs_g: a.C, fat_g: a.G,
+      created_at: new Date().toISOString()
+    };
+    var op = {
       method:'POST',
       headers:{ 'Prefer':'return=representation' },
-      body: JSON.stringify({
-        user_id: sesion.user.id,
-        entry_date: isoDe(diaDeApunte()),
-        meal: comida,
-        food_name: a.n,
-        // Cuánto se comió, en su unidad. Los macros van ya multiplicados por
-        // esta cantidad; guardarla aparte es lo que permite editarla después.
-        quantity: a.cant || 1,
-        unit: a.u || 'Gramos',
-        protein_g: a.P, carbs_g: a.C, fat_g: a.G
-      })
-    }).then(function(f){ return (f && f[0]) || null; });
+      body: JSON.stringify(fila)
+    };
+    return sbFetch('/rest/v1/diary_entries', op)
+      .then(function(f){ return (f && f[0]) || fila; })
+      ['catch'](function(e){
+        if(!sinConexion(e)) throw e;      // error de verdad: que lo deshaga quien llamó
+        encolar({ ruta:'/rest/v1/diary_entries', op: op, fila: fila.id, tipo:'comida' });
+        toast('toastComida', 'Sin señal: se subirá cuando vuelva');
+        // Se resuelve como si hubiera ido bien —con la fila que se mandó—
+        // para que la pantalla NO se deshaga. El apunte está a salvo en el
+        // teléfono; que no esté todavía en el servidor lo dice el aviso de
+        // pendientes, no el borrado de lo que acabas de escribir.
+        return fila;
+      });
   }
   function sbQuitarAlimento(id){
-    return sbFetch('/rest/v1/diary_entries?id=eq.' + id, { method:'DELETE' });
+    // Si el alta todavía está en la cola, se cancela y no se manda nada. Un
+    // DELETE de una fila que el servidor no ha visto nunca no borraría nada
+    // y encima dejaría un error en la cola.
+    if(desencolar(id)) return Promise.resolve();
+    var op = { method:'DELETE' };
+    return sbFetch('/rest/v1/diary_entries?id=eq.' + id, op)
+      ['catch'](function(e){
+        if(!sinConexion(e)) throw e;
+        encolar({ ruta:'/rest/v1/diary_entries?id=eq.' + id, op: op, tipo:'comida' });
+        return null;
+      });
   }
   // Los archivados no vuelven: la política de la 0007 ya los filtra en la
   // base, así que aquí no hay que acordarse de excluirlos.
@@ -6766,6 +7016,78 @@
       body: JSON.stringify(fila)
     });
   }
+  // Las altas de comida que están en la cola sin subir, con la MISMA forma
+  // que las filas que devuelve la base. Así se pueden mezclar con ellas y
+  // pintarlas con el mismo código.
+  //
+  // Los borrados de la cola se aplican aquí también: si alguien apuntó algo
+  // sin señal y luego lo quitó cuando el alta ya se había mandado, la fila
+  // sigue en el servidor y volvería a aparecer al recargar. Se descuenta.
+  function filasEnCola(){
+    var yo = sesion && sesion.user && sesion.user.id;
+    var altas = [], borrados = {};
+    COLA.forEach(function(x){
+      if(x.dueno && x.dueno !== yo) return;
+      if(x.tipo !== 'comida') return;
+      if(x.op && x.op.method === 'DELETE'){
+        var m = /id=eq\.([^&]+)/.exec(x.ruta || '');
+        if(m) borrados[m[1]] = true;
+        return;
+      }
+      try{ altas.push(JSON.parse(x.op.body)); }catch(e){}
+    });
+    return altas.filter(function(f){ return !borrados[f.id]; });
+  }
+
+  // Vuelca filas de diario en REGISTRO y COMIDAS.
+  //
+  // Estaba metido dentro de cargarDatos(). Se sacó para que lo pendiente de
+  // la cola pase por el mismo sitio, y sobre todo para poder pintarlo
+  // TAMBIÉN cuando la carga falla: sin señal no llega nada del servidor, y
+  // si esto no se llamara, lo que la persona apuntó sin conexión
+  // desaparecería de la pantalla en cuanto cerrara y abriera la app. Que es
+  // exactamente el fallo que se venía a arreglar.
+  function llenarDiario(filas){
+    // Se vacía antes de llenar; si no, se sumaría encima.
+    REGISTRO = {};
+    COMIDAS.Desayuno = []; COMIDAS.Comida = []; COMIDAS.Cena = [];
+    var hoy = isoDe(HOY);
+
+    // Por hora, no por el orden en que llegaron: lo de la cola se apuntó
+    // intercalado con lo que ya estaba subido, no después de todo.
+    filas.slice().sort(function(a, b){
+      return String(a.created_at || '').localeCompare(String(b.created_at || ''));
+    }).forEach(function(f){
+      var P = Number(f.protein_g) || 0,
+          C = Number(f.carbs_g)   || 0,
+          G = Number(f.fat_g)     || 0;
+
+      var r = REGISTRO[f.entry_date] || (REGISTRO[f.entry_date] = {P:0, C:0, G:0});
+      r.P += P; r.C += C; r.G += G;
+
+      // La base admite 'Snack', que el Diario todavía no muestra: se
+      // suma al día pero no se lista, en vez de reventar.
+      if(f.entry_date === hoy && COMIDAS[f.meal]){
+        var unidad = f.unit || 'Gramos';
+        var cantidad = Number(f.quantity) || null;
+
+        // COMPATIBILIDAD. Antes de que existiera la edición, todo se
+        // guardaba con quantity=1 queriendo decir "una porción", no
+        // "1 gramo". Sin esta corrección, prepararAlimento() deduce que
+        // si 1 g da 20 g de proteína, 100 g dan 2000: los macros salían
+        // multiplicados por cien.
+        if(cantidad === 1 && baseDeUnidad(unidad) === 100) cantidad = 100;
+
+        // prepararAlimento() deduce la porción base a partir de la
+        // cantidad y los macros consumidos, para poder volver a editarla.
+        COMIDAS[f.meal].push(prepararAlimento({
+          id:f.id, n:f.food_name, u:unidad,
+          cant: cantidad, P:P, C:C, G:G
+        }));
+      }
+    });
+  }
+
   function cargarDatos(){
     if(!sesion || !sesion.user) return Promise.resolve();
 
@@ -6899,40 +7221,12 @@
         revisarRecordatorios();
 
         // ---- Diario ----
-        // Se vacía lo de ejemplo antes de llenar; si no, se sumaría encima.
-        REGISTRO = {};
-        COMIDAS.Desayuno = []; COMIDAS.Comida = []; COMIDAS.Cena = [];
-        var hoy = isoDe(HOY);
-
-        filas.forEach(function(f){
-          var P = Number(f.protein_g) || 0,
-              C = Number(f.carbs_g)   || 0,
-              G = Number(f.fat_g)     || 0;
-
-          var r = REGISTRO[f.entry_date] || (REGISTRO[f.entry_date] = {P:0, C:0, G:0});
-          r.P += P; r.C += C; r.G += G;
-
-          // La base admite 'Snack', que el Diario todavía no muestra: se
-          // suma al día pero no se lista, en vez de reventar.
-          if(f.entry_date === hoy && COMIDAS[f.meal]){
-            var unidad = f.unit || 'Gramos';
-            var cantidad = Number(f.quantity) || null;
-
-            // COMPATIBILIDAD. Antes de que existiera la edición, todo se
-            // guardaba con quantity=1 queriendo decir "una porción", no
-            // "1 gramo". Sin esta corrección, prepararAlimento() deduce que
-            // si 1 g da 20 g de proteína, 100 g dan 2000: los macros salían
-            // multiplicados por cien.
-            if(cantidad === 1 && baseDeUnidad(unidad) === 100) cantidad = 100;
-
-            // prepararAlimento() deduce la porción base a partir de la
-            // cantidad y los macros consumidos, para poder volver a editarla.
-            COMIDAS[f.meal].push(prepararAlimento({
-              id:f.id, n:f.food_name, u:unidad,
-              cant: cantidad, P:P, C:C, G:G
-            }));
-          }
-        });
+        // Lo que está en la cola sin subir entra POR AQUÍ, mezclado con lo
+        // que vino del servidor y ordenado por hora. Es a propósito: así lo
+        // pendiente pasa por el mismo camino que lo demás —la corrección de
+        // las cantidades viejas, los 'Snack' que no se listan, todo— en vez
+        // de tener una copia aparte de esta lógica que se iría desviando.
+        llenarDiario(filas.concat(filasEnCola()));
 
         // ---- Peso ----
         // Se sustituye la serie de ejemplo entera, no se mezcla con ella.
@@ -7031,7 +7325,29 @@
         }
       })
       ['catch'](function(e){
-        toast('toastComida', 'No se pudieron cargar tus datos: ' + traducirError(e.message));
+        // SIN SEÑAL NO SE PIERDE LO APUNTADO.
+        //
+        // Aquí no llegó nada del servidor, así que REGISTRO y COMIDAS se
+        // quedan como nacieron: vacíos. Si esto no estuviera, quien apuntó
+        // su comida sin conexión y cerró la app la encontraría en blanco al
+        // volver a abrirla —y su comida sigue en la cola, a salvo, pero sin
+        // verse—. Volvería a apuntarla, y al recuperar la señal subirían
+        // las dos.
+        //
+        // Se pinta solo lo que hay en la cola. No es el diario entero, pero
+        // es lo único que existe ahora mismo y es justo lo que la persona
+        // acaba de escribir.
+        var pendientes = filasEnCola();
+        if(pendientes.length){
+          llenarDiario(pendientes);
+          actualizarMetas();
+          actualizarSemana();
+          pintarComida();
+        }
+        pintarPendientes();
+        toast('toastComida', sinConexion(e)
+          ? 'Sin señal: se ve lo que apuntaste, sin subir todavía'
+          : 'No se pudieron cargar tus datos: ' + traducirError(e.message));
       });
   }
 
