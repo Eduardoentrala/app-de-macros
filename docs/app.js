@@ -7704,6 +7704,18 @@
         // en lo que digan.
         PESO_CINTURA_LISTOS = true;
         pintarCintura();
+        // Se declara AQUÍ y no arriba. Antes venía del bloque del diario,
+        // que compartía este `hoy`; al sacar ese bloque a `llenarDiario()`
+        // la declaración se fue con él y esta línea se quedó apuntando a una
+        // variable que ya no existía.
+        //
+        // Reventaba con «hoy is not defined» a la mitad de la carga: el
+        // diario ya estaba puesto —va antes— pero lo de debajo no llegaba a
+        // correr NUNCA. Alimentos guardados, frecuentes, recetas, rutina,
+        // sesiones y fotos se quedaban vacíos en cada arranque, y como el
+        // error se recogía en el catch de abajo, lo único que se veía era un
+        // aviso de un segundo y medio.
+        var hoy = isoDe(HOY);
         var hoyPeso = PESOS[hoy];
         // El `else` importa tanto como el `if`: sin él, el campo se quedaba
         // con lo que hubiera antes —el 83.8 del maquetado, o el peso de la
