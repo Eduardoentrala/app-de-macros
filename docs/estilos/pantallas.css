@@ -735,3 +735,13 @@
   font:500 11.5px/1.45 sans-serif;color:var(--ink-faint);
   margin:-6px 16px 12px;
 }
+
+/* ---- Los ajustes de calorías, en la ficha ----
+   Cada uno es una línea con las dos cifras y, debajo, por qué. El motivo lo
+   escribe la IA al cerrar la semana y puede ser un párrafo: va en pequeño y
+   con aire, porque es lo que de verdad se lee aquí —la cifra sola no dice
+   si fue por hambre, por sueño o porque bajó demasiado rápido—. */
+.fc-ajuste{padding:11px 0;border-top:1px solid var(--line);}
+.fc-ajuste:first-of-type{border-top:none;padding-top:2px;}
+.fc-ajuste .fl{color:var(--ink-faint);font-weight:600;}
+.fc-motivo{font:500 12.5px/1.5 sans-serif;color:var(--ink-soft);margin-top:5px;}

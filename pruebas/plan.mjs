@@ -273,5 +273,36 @@ console.log('\n— El editor no corta el texto —');
   check('y al escribir también', /addEventListener\('input', function\(\)\{ crecer\(t\); \}\)/.test(e));
 }
 
+console.log('\n— El entrenador ve QUÉ calorías se cambiaron y POR QUÉ —');
+{
+  // El cierre de semana lleva ajustando calorías desde la 0024 y el motivo
+  // SIEMPRE se guardó —«para el historial, no para la pantalla»—. Pero no lo
+  // leía nadie: el entrenador se encontraba a alguien comiendo distinto sin
+  // saber por qué ni desde cuándo.
+  const p = APP.slice(APP.indexOf('function pintarMetricas('),
+                      APP.indexOf('function pintarAnalisisCliente('));
+  check('se pintan los ajustes', /Ajustes de calorías/.test(p));
+  check('con las dos cifras', /a\.cal_antes[\s\S]{0,220}a\.cal_despues/.test(p));
+  check('y con el motivo, que es lo que se lee', /a\.motivo/.test(p),
+    'la cifra sola no dice si fue por hambre, por sueño o por bajar rápido');
+  check('con flecha según suba o baje', /sube \? '↑' : '↓'/.test(p));
+  // Las semanas sin ajuste ya se ven en el hambre y la energía de arriba;
+  // listarlas diciendo «no se cambió nada» llena la tarjeta de filas mudas.
+  check('solo las semanas en que SÍ se movió algo',
+    /x\.ajusto && x\.cal_despues/.test(p));
+  check('y la tarjeta no sale si no hubo ninguno', /if\(ajustes\.length\)\{/.test(p));
+  check('se dice quién lo decide', /Lo decide el cierre de cada semana/.test(p));
+
+  // Y que el servidor los mande: sin esto la tarjeta nunca tendría datos.
+  const SQL = readFileSync(join(RAIZ, 'supabase', 'migrations',
+                                '0044_el_coach_ve_los_ajustes.sql'), 'utf8');
+  check('plan_metricas devuelve los cierres', /'chequeos', \(/.test(SQL));
+  check('con el motivo y las dos cifras',
+    /'motivo',\s+x\.motivo/.test(SQL) && /'cal_antes',\s+x\.cal_antes/.test(SQL));
+  // Seis y no uno: un ajuste suelto no dice nada, y lo que hace falta ver es
+  // la secuencia —«le subimos dos semanas seguidas y siguió subiendo»—.
+  check('y los seis últimos, no solo el último', /limit 6/.test(SQL));
+}
+
 console.log(`\n${ok} pasan · ${mal} fallan`);
 process.exit(mal ? 1 : 0);

@@ -7110,6 +7110,37 @@
         ])
       : tarjetaVacia('Entrenamiento', 'Sin entrenamientos ni cardio en el mes.');
 
+    // ---- Lo que la app le cambió, y por qué ----
+    //
+    //  Cada lunes el cierre de semana le puede mover las calorías. Eso lleva
+    //  funcionando desde hace tiempo y el motivo SIEMPRE se guardó... pero
+    //  no lo leía nadie: el entrenador se encontraba a alguien comiendo
+    //  distinto sin saber por qué ni desde cuándo.
+    //
+    //  Solo las semanas en que SÍ se movió algo. Las que no, ya se ven en el
+    //  hambre y la energía de arriba; listarlas aquí diciendo «no se cambió
+    //  nada» llenaría la tarjeta de filas que no informan.
+    var ajustes = (m.chequeos || []).filter(function(x){ return x.ajusto && x.cal_despues; });
+    if(ajustes.length){
+      html += '<div class="card"><div class="field-label" style="margin-top:0;">' +
+        'Ajustes de calorías</div>' +
+        ajustes.map(function(a){
+          var sube = Number(a.cal_despues) > Number(a.cal_antes || 0);
+          return '<div class="fc-ajuste">' +
+            '<div class="fc-fila" style="border:none;padding:0;">' +
+              '<span class="et">' + escapar(diaCorto(a.semana)) + '</span>' +
+              '<span class="va">' + escapar(mil(a.cal_antes)) +
+                ' <span class="fl">' + (sube ? '↑' : '↓') + '</span> ' +
+                escapar(mil(a.cal_despues)) + '</span>' +
+            '</div>' +
+            (a.motivo ? '<div class="fc-motivo">' + escapar(a.motivo) + '</div>' : '') +
+            '</div>';
+        }).join('') +
+        '<div class="fc-pie">Lo decide el cierre de cada semana con lo que ' +
+        'contestó y con sus números. Puedes cambiárselas a mano en su perfil.</div>' +
+        '</div>';
+    }
+
     // Esta se OMITE entera si no hay nada, no se colapsa: fotos y chequeo
     // son lo opcional del producto, y una tarjeta diciendo «no hay» por algo
     // que mucha gente no usa es ruido puro.
