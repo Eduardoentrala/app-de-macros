@@ -6522,23 +6522,106 @@
         'Inscribe a alguien por su correo para empezar.</p>';
   }
 
-  // Inscribir a alguien en Plan. Se pide el correo porque es lo único que
-  // distingue de verdad a dos personas que se llamen igual, y porque
-  // escribirlo obliga a saber a quién estás metiendo.
-  document.getElementById('planInscribir').addEventListener('click', function(){
-    var correo = prompt('¿Qué correo? Tiene que ser alguien ya registrado en la app.');
-    if(correo === null) return;
-    correo = correo.trim();
-    if(!correo) return;
+  // ---- Inscribir a alguien, buscándolo por su nombre ----
+  //
+  //  ANTES ERA UN prompt() PIDIENDO EL CORREO EXACTO. Para inscribir a Lety
+  //  había que sabérselo de memoria y escribirlo entero sin erratas; una
+  //  letra mal y salía «No hay ninguna cuenta con ese correo», sin decir
+  //  cuál de las que hay se le parece.
+  //
+  //  Ahora se escribe «lety» y van saliendo. El correo va debajo de cada
+  //  una porque dos personas pueden llamarse igual y es lo único que de
+  //  verdad las distingue.
+  //
+  //  La lista sale de `plan_buscar`, que filtra por `puede_ver`: un
+  //  entrenador solo encuentra a los suyos. Si buscara entre todos, con
+  //  escribir una letra leería los nombres y correos de los clientes de
+  //  otros.
+  var inscribirSheet = document.getElementById('inscribirSheet');
+  var inscribirBuscar = document.getElementById('inscribirBuscar');
+  var relojInscribir = null;
 
-    var btn = this;
-    btn.disabled = true; btn.textContent = 'Inscribiendo…';
-    sbRpc('plan_inscribir', { p_correo: correo })
-      .then(function(){ return cargarPlan(); })
-      .then(function(){ toast('toastPlan', 'Listo, ya aparece en tu lista.'); })
-      ['catch'](function(e){ toast('toastPlan', traducirError(e.message)); })
-      .then(function(){
-        btn.disabled = false; btn.textContent = '+ Inscribir por correo';
+  function cerrarInscribir(){
+    inscribirSheet.classList.remove('open');
+    inscribirBuscar.value = '';
+    document.getElementById('inscribirLista').innerHTML = '';
+  }
+
+  function pintarBusqueda(gente, texto){
+    var c = document.getElementById('inscribirLista');
+    if(!texto || texto.length < 2){ c.innerHTML = ''; return; }
+    if(!gente.length){
+      c.innerHTML = '<p class="calc-note" style="padding:4px 2px 8px;">' +
+        'Nadie que lleves se llama «' + escapar(texto) + '». Solo puedes ' +
+        'inscribir a las personas que ya son clientes tuyas.</p>';
+      return;
+    }
+    c.innerHTML = gente.map(function(u, i){
+      return '<div class="plan-cliente" data-inscribir="' + i + '">' +
+        '<div class="cliente-ava">' + iniciales(u.nombre) + '</div>' +
+        '<div class="info"><b>' + escapar(u.nombre || '(sin nombre)') + '</b>' +
+        '<span class="cli-correo">' + escapar(u.correo || '') + '</span>' +
+        // Sin esto, tocar a quien ya está dentro no hace nada visible —el
+        // alta es «si ya está, no hagas nada»— y parece que la app se colgó.
+        '<span>' + (u.ya_inscrito ? 'ya está en tu Plan' : 'tocar para inscribir') + '</span></div>' +
+        '<span style="color:var(--ink-faint)">›</span></div>';
+    }).join('');
+  }
+
+  var ULTIMA_BUSQUEDA = [];
+
+  function buscarParaInscribir(){
+    var texto = inscribirBuscar.value.trim();
+    if(texto.length < 2){ ULTIMA_BUSQUEDA = []; pintarBusqueda([], texto); return; }
+    sbRpc('plan_buscar', { p_texto: texto, p_limite: 20 })
+      .then(function(r){
+        // Si mientras llegaba se escribió otra cosa, esta respuesta ya no
+        // vale: pintarla enseñaría resultados de lo anterior.
+        if(inscribirBuscar.value.trim() !== texto) return;
+        ULTIMA_BUSQUEDA = r || [];
+        pintarBusqueda(ULTIMA_BUSQUEDA, texto);
+      })
+      ['catch'](function(e){
+        if(inscribirBuscar.value.trim() !== texto) return;
+        document.getElementById('inscribirLista').innerHTML =
+          '<p class="calc-note" style="padding:4px 2px 8px;">No pude buscar: ' +
+          escapar(traducirError(e.message)) + '</p>';
+      });
+  }
+
+  document.getElementById('planInscribir').addEventListener('click', function(){
+    inscribirSheet.classList.add('open');
+    document.getElementById('inscribirLista').innerHTML = '';
+    inscribirBuscar.value = '';
+    setTimeout(function(){ inscribirBuscar.focus(); }, 80);
+  });
+  document.getElementById('inscribirCerrar').addEventListener('click', cerrarInscribir);
+  inscribirSheet.addEventListener('click', function(e){
+    if(e.target === inscribirSheet) cerrarInscribir();
+  });
+  inscribirBuscar.addEventListener('input', function(){
+    clearTimeout(relojInscribir);
+    // Con retardo: una consulta por tecla satura por nada.
+    relojInscribir = setTimeout(buscarParaInscribir, 300);
+  });
+
+  document.getElementById('inscribirLista').addEventListener('click', function(e){
+    var f = e.target.closest('[data-inscribir]');
+    if(!f) return;
+    var u = ULTIMA_BUSQUEDA[Number(f.dataset.inscribir)];
+    if(!u) return;
+    if(u.ya_inscrito){ toast('toastPlan', u.nombre + ' ya está en tu Plan'); cerrarInscribir(); return; }
+
+    f.style.opacity = '.5';
+    // Por id y no por correo: ya se eligió a esta persona en concreto, y
+    // mandar el correo de vuelta para que el servidor lo busque otra vez
+    // sería dar un rodeo.
+    sbRpc('plan_inscribir_id', { p_cliente: u.id })
+      .then(function(){ cerrarInscribir(); return cargarPlan(); })
+      .then(function(){ toast('toastPlan', u.nombre + ' ya aparece en tu lista.'); })
+      ['catch'](function(e2){
+        f.style.opacity = '';
+        toast('toastPlan', traducirError(e2.message));
       });
   });
 

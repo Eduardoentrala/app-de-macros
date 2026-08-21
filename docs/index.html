@@ -80,7 +80,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '78ed3752f6';
+    var SELLO = 'a0e25181bb';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -838,10 +838,12 @@
           <div id="planCoach" hidden>
             <div class="section-label">Planes que escribes <small id="planCuenta"></small></div>
             <div id="planClientes"></div>
-            <!-- Por correo y no por un desplegable de todos: un desplegable
-                 con la lista entera es el mismo problema en otro sitio. -->
+            <!-- Buscando, no con un desplegable de todos: la lista entera
+                 es el mismo problema en otro sitio. Antes pedía el correo
+                 EXACTO en un prompt del navegador, y para inscribir a Lety
+                 había que sabérselo de memoria y escribirlo sin erratas. -->
             <button class="btn-sec" id="planInscribir"
-              style="margin:6px 16px 0;width:calc(100% - 32px);">+ Inscribir por correo</button>
+              style="margin:6px 16px 0;width:calc(100% - 32px);">+ Inscribir a alguien</button>
           </div>
 
           <div style="height:24px;"></div>
@@ -854,6 +856,25 @@
           <button data-tabbar="fotos"><span>📸</span>Fotos</button>
           <button data-tabbar="perfil"><span>👤</span>Perfil</button>
         </div>
+        <!-- BUSCAR A QUIEN INSCRIBIR
+             Se escribe el nombre y van saliendo. El correo va debajo de
+             cada uno porque dos personas pueden llamarse igual y es lo
+             único que de verdad las distingue. -->
+        <div class="sheet-backdrop" id="inscribirSheet">
+          <div class="sheet">
+            <h4>¿A quién inscribes?</h4>
+            <p class="hint">Escribe su nombre o su correo. Solo salen las
+              personas que ya llevas.</p>
+            <div class="searchbox" style="margin-bottom:10px;">
+              <span>🔍</span>
+              <input id="inscribirBuscar" placeholder="Ej. Lety" maxlength="60"
+                autocomplete="off" autocapitalize="off">
+            </div>
+            <div id="inscribirLista"></div>
+            <button class="btn-ghost-text" id="inscribirCerrar">Cancelar</button>
+          </div>
+        </div>
+
         <div class="toast" id="toastPlan">Listo</div>
       </div>
 
@@ -1705,7 +1726,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '78ed3752f6';
+    var SELLO = 'a0e25181bb';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que
