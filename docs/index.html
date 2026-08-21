@@ -27,7 +27,27 @@
      convierte algunos en enlaces de teléfono y los pinta en azul. -->
 <meta name="format-detection" content="telephone=no">
 
-<title>Macros App — Mockup interactivo</title>
+<!-- El icono. Se genera con `node herramientas/iconos.mjs` y es el anillo
+     del Diario: el mismo trazo, los mismos colores de base.css.
+
+     `apple-touch-icon` NO es opcional ni un detalle: sin él, al añadir la
+     app a la pantalla de inicio del iPhone, iOS pone una CAPTURA DE LA
+     PÁGINA de icono. Y solo acepta PNG —el SVG lo ignora—, por eso hay las
+     dos cosas y no solo el SVG.
+
+     Sin tamaño en el apple-touch-icon a propósito: cuando solo hay uno,
+     iOS coge ese y lo escala, y así no hay que mantener la lista de los
+     seis tamaños que cambia con cada modelo.
+
+     Las direcciones no llevan sello de versión, así que el service worker
+     las guarda para siempre: si se rediseña el icono hay que cambiarle el
+     NOMBRE al archivo. Está avisado también en herramientas/iconos.mjs. -->
+<link rel="apple-touch-icon" href="iconos/icono-180.png">
+<link rel="icon" type="image/svg+xml" href="iconos/icono.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="iconos/icono-32.png">
+<link rel="manifest" href="manifest.json">
+
+<title>Macros</title>
 
 <script>
   // Va aquí arriba, suelto y antes de los estilos, a propósito: se ejecuta
@@ -60,7 +80,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '14245951bd';
+    var SELLO = '03a5aa3a0d';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -1624,7 +1644,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '14245951bd';
+    var SELLO = '03a5aa3a0d';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que
