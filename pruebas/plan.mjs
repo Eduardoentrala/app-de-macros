@@ -127,5 +127,59 @@ console.log('\n— Y sin señal no se queda en blanco —');
     /if\(red && !MI_PLAN\) return;/.test(cp));
 }
 
+console.log('\n— Tocar un nombre abre cómo va, no el editor —');
+{
+  check('existe la ficha', /data-view="cliente"/.test(HTML));
+  // El plan se escribe una vez y se consulta veinte: lo que se quiere al
+  // tocar un nombre es saber como va esa persona.
+  const lista = APP.slice(APP.indexOf("caja.addEventListener('click'"), APP.indexOf('// ---- Editor ----'));
+  check('el nombre lleva a la ficha', /abrirFichaCliente\(c\)/.test(lista));
+  check('y ya no al editor', !/abrirEditorPlan\(c\)/.test(lista));
+  check('el editor queda en un botón de la ficha', HTML.includes('id="fcEditarPlan"'));
+  check('y la ficha tiene toast propio', /id="toastCliente"/.test(HTML));
+
+  const f = APP.slice(APP.indexOf('function abrirFichaCliente('), APP.indexOf("document.getElementById('fcEditarPlan')"));
+  // Si mientras llegan los numeros se abre otra persona, pintarlos mezclaria
+  // las cifras de uno con el nombre de otro.
+  check('una respuesta que llega tarde se descarta',
+    /if\(!fichaDe \|\| fichaDe\.id !== c\.id\) return;/.test(f));
+  // «Cargando…» puesto para siempre parece que la app se colgo.
+  check('si falla, no se queda en «Cargando»', /No pude traer sus números/.test(f));
+}
+
+console.log('\n— Los números van con su comparación —');
+{
+  const p = APP.slice(APP.indexOf('function pintarMetricas('), APP.indexOf('function pintarAnalisisCliente('));
+  // Un numero solo no dice nada: 1.850 calorias es mucho o poco segun la
+  // meta, y «3 dias» depende de cuantos.
+  check('las calorías llevan su meta al lado', /Su meta son ' \+ mil\(m\.meta_cal\)/.test(p));
+  check('la proteína también', /Su meta son ' \+ m\.meta_p/.test(p));
+  check('las sesiones llevan los días que le tocan', /Su plan son ' \+ m\.dias_entreno/.test(p));
+  check('y el cardio su meta', /Su meta son ' \+ m\.meta_cardio/.test(p));
+  // Es la trampa de la que avisa la propia funcion de base de datos.
+  check('se avisa de que la media es por día apuntado',
+    /no entre siete/i.test(p), 'sin eso se lee como media de la semana y se decide mal');
+  check('los cambios de peso llevan signo', /d > 0 \? '\+' : ''/.test(APP));
+  // Lo escribe una persona -la nota del chequeo- y acaba en innerHTML.
+  check('lo que escribe la persona va escapado', /escapar\(etiqueta\)[\s\S]{0,200}escapar\(/.test(APP));
+}
+
+console.log('\n— El análisis se guarda para no volver a pagarlo —');
+{
+  const a = APP.slice(APP.indexOf("document.getElementById('fcAnalizar')"), APP.indexOf('// ---- Los paneles'));
+  check('se pide con accion cliente', /accion: 'cliente'/.test(a));
+  check('y se le mandan las métricas', /metricas: METRICAS/.test(a));
+  // Un analisis cuesta una consulta del tope; con veinte clientes, abrir
+  // cada ficha se comeria el tope antes de acabar la lista.
+  check('se guarda al momento', /analisis_cliente\?on_conflict=cliente_id/.test(a));
+  check('pisando el anterior, no acumulando', /merge-duplicates/.test(a));
+  check('con los números que lo generaron', /datos: METRICAS/.test(a));
+  // El texto ya esta en pantalla: que no se guarde solo significa que la
+  // proxima costara otra consulta, no que se haya perdido.
+  check('si no se puede guardar, se dice sin borrarlo',
+    /costará otra consulta/.test(a));
+  check('nace oculto hasta que se pide', /id="fcAnalisisCard"[^>]*hidden/.test(HTML));
+}
+
 console.log(`\n${ok} pasan · ${mal} fallan`);
 process.exit(mal ? 1 : 0);

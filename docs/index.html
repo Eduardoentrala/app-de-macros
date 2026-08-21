@@ -80,7 +80,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = 'a4b4d63954';
+    var SELLO = '736388dc7f';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -855,6 +855,51 @@
           <button data-tabbar="perfil"><span>👤</span>Perfil</button>
         </div>
         <div class="toast" id="toastPlan">Listo</div>
+      </div>
+
+      <!-- CÓMO VA UNA PERSONA
+           Se abre al tocar su nombre en la lista de Plan. Antes eso llevaba
+           directo al editor; ahora el editor está detrás del botón de abajo.
+
+           El orden no es casual: primero lo que la IA resume, porque es lo
+           que se lee de un vistazo, y debajo los números en crudo, que son
+           los que sostienen ese resumen y hay que poder comprobar. -->
+      <div class="app-view" data-view="cliente">
+        <div class="back-header stacked">
+          <div class="back-header-inner">
+            <button class="back-btn" data-back>‹ Regresar</button>
+            <span class="back-title" id="fcTitulo">Cómo va</span>
+          </div>
+        </div>
+        <div class="scroll">
+          <!-- El resumen. Nace oculto: hasta que no se pide una vez, no hay
+               nada que enseñar y una tarjeta vacía solo genera la pregunta
+               de qué debería salir ahí. -->
+          <div class="card" id="fcAnalisisCard" hidden>
+            <div class="goal-head">
+              <div style="font:800 14.5px/1 sans-serif;">Cómo va</div>
+              <span class="goal-hint" id="fcAnalisisCuando">—</span>
+            </div>
+            <p class="analisis-txt" id="fcAnalisisTxt">—</p>
+          </div>
+
+          <div class="plan-armar">
+            <button id="fcAnalizar">✨ Analizar cómo va</button>
+          </div>
+          <p class="calc-note" style="padding:2px 20px 0;" id="fcAnalizarPie">
+            Gasta una de tus consultas del día. Se guarda, así que volver a
+            entrar no gasta otra.
+          </p>
+
+          <div class="section-label">Sus números</div>
+          <div id="fcMetricas"></div>
+
+          <div style="height:16px;"></div>
+        </div>
+        <div class="bottom-bar">
+          <button class="btn-primary" id="fcEditarPlan">Escribir su plan</button>
+        </div>
+        <div class="toast" id="toastCliente">Listo</div>
       </div>
 
       <!-- ESCRIBIR EL PLAN DE ALGUIEN -->
@@ -1660,7 +1705,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = 'a4b4d63954';
+    var SELLO = '736388dc7f';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que

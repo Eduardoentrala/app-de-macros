@@ -6645,7 +6645,10 @@
       // pulsación larga y no una intención de abrir el plan.
       if(salioLarga){ salioLarga = false; return; }
       var c = quien(e);
-      if(c) abrirEditorPlan(c);
+      // A la FICHA, no al editor. El plan se escribe una vez y se consulta
+      // veinte: lo que se quiere al tocar un nombre es saber cómo va esa
+      // persona. Escribirlo está en el botón de abajo de la ficha.
+      if(c) abrirFichaCliente(c);
     });
   })();
 
@@ -6835,6 +6838,184 @@
       })['catch'](function(e){
         toast('toastPlan', 'No se pudo quitar: ' + traducirError(e.message));
       });
+  });
+
+  // ================= CÓMO VA CADA PERSONA =================
+  //
+  //  Al tocar un nombre en la lista de Plan se abre esto, y el editor queda
+  //  detrás del botón de abajo. Antes el nombre llevaba directo a escribir
+  //  el plan, que es lo que menos veces se hace: se escribe una vez y se
+  //  consulta veinte.
+  //
+  //  El orden de la pantalla tampoco es casual: arriba el resumen de la IA,
+  //  que es lo que se lee de un vistazo, y debajo los números en crudo, que
+  //  son los que lo sostienen. Un resumen que no se puede comprobar contra
+  //  las cifras es una opinión.
+
+  var fichaDe = null;      // { id, nombre } de quien se está mirando
+  var METRICAS = null;
+
+  function sbMetricas(id){ return sbRpc('plan_metricas', { p_cliente: id }); }
+
+  function sbAnalisisDe(id){
+    return sbFetch('/rest/v1/analisis_cliente?select=mensaje,creado_en' +
+                   '&cliente_id=eq.' + id + '&limit=1')
+      .then(function(r){ return (r || [])[0] || null; });
+  }
+
+  // ---- Pintar los números ----
+  // Un número solo no dice nada: 1.850 calorías es mucho o poco según la
+  // meta, y "3 días" es bueno o malo según de cuántos. Por eso casi todo va
+  // como "esto de aquello" y con su comparación al lado.
+  function lineaFicha(etiqueta, valor, nota){
+    return '<div class="calc-line"><span>' + escapar(etiqueta) + '</span>' +
+           '<b>' + escapar(valor == null ? '—' : String(valor)) + '</b></div>' +
+           (nota ? '<div class="calc-note">' + escapar(nota) + '</div>' : '');
+  }
+
+  function tarjetaFicha(titulo, lineas){
+    return '<div class="card"><div class="field-label" style="margin-top:0;">' +
+           escapar(titulo) + '</div>' + lineas.join('') + '</div>';
+  }
+
+  // Un cambio de peso con su signo. `+` explícito porque sin él "0.4" y
+  // "-0.4" se distinguen solo por un guion pequeño en una lista de cifras.
+  function delta(ahora, antes, unidad){
+    if(ahora == null || antes == null) return null;
+    var d = Math.round((Number(ahora) - Number(antes)) * 10) / 10;
+    return (d > 0 ? '+' : '') + d + ' ' + unidad;
+  }
+
+  function pintarMetricas(){
+    var cont = document.getElementById('fcMetricas');
+    if(!cont) return;
+    var m = METRICAS;
+    if(!m){ cont.innerHTML = ''; return; }
+
+    var p = m.peso || {}, d = m.diario || {}, e = m.entreno || {},
+        c = m.cardio || {}, f = m.fotos || {}, q = m.chequeo || {};
+
+    var html = '';
+
+    // Adherencia primero: es la señal más honesta que hay. Quien deja de
+    // apuntar suele haber dejado el plan una semana antes.
+    html += tarjetaFicha('Está apuntando', [
+      lineaFicha('Días con comida apuntada', (d.dias_7 || 0) + ' de los últimos 7'),
+      lineaFicha('En el mes', (d.dias_30 || 0) + ' de 30'),
+      lineaFicha('Último apunte', d.ultimo ? fmtFecha(new Date(d.ultimo + 'T12:00:00')) : 'nunca'),
+      lineaFicha('Calorías por día apuntado', d.cal_dia_7 != null ? mil(d.cal_dia_7) : null,
+        m.meta_cal ? 'Su meta son ' + mil(m.meta_cal) + '. Es la media de los días que APUNTÓ, no entre siete.' : ''),
+      lineaFicha('Proteína por día', d.prot_dia_7 != null ? d.prot_dia_7 + ' g' : null,
+        m.meta_p ? 'Su meta son ' + m.meta_p + ' g.' : '')
+    ]);
+
+    html += tarjetaFicha('Peso y cintura', [
+      lineaFicha('Último peso', p.ultimo != null ? p.ultimo + ' kg' : null,
+        p.ultimo_dia ? 'Del ' + fmtFecha(new Date(p.ultimo_dia + 'T12:00:00')) + '.' : ''),
+      lineaFicha('En la semana', delta(p.ultimo, p.hace_7, 'kg')),
+      lineaFicha('En el mes', delta(p.ultimo, p.hace_30, 'kg')),
+      lineaFicha('Veces que se pesó', (p.apuntes_30 || 0) + ' en 30 días'),
+      lineaFicha('Última cintura', m.cintura && m.cintura.cm != null ? m.cintura.cm + ' cm' : null,
+        m.cintura && m.cintura.dia ? 'Del ' + fmtFecha(new Date(m.cintura.dia + 'T12:00:00')) + '.' : '')
+    ]);
+
+    html += tarjetaFicha('Entrenamiento', [
+      lineaFicha('Sesiones de fuerza', (e.sesiones_7 || 0) + ' esta semana',
+        m.dias_entreno ? 'Su plan son ' + m.dias_entreno + ' días.' : ''),
+      lineaFicha('En el mes', (e.sesiones_30 || 0)),
+      lineaFicha('Última', e.ultima ? fmtFecha(new Date(e.ultima + 'T12:00:00')) : 'nunca'),
+      lineaFicha('Cardio esta semana', (c.min_7 || 0) + ' min',
+        m.meta_cardio ? 'Su meta son ' + m.meta_cardio + ' min.' : ''),
+      lineaFicha('En el mes', (c.min_30 || 0) + ' min')
+    ]);
+
+    html += tarjetaFicha('Fotos y cómo se siente', [
+      lineaFicha('Semanas con las 4 fotos', (f.semanas_completas_90 || 0) + ' en 90 días'),
+      lineaFicha('Última completa', f.ultima_semana || 'ninguna'),
+      lineaFicha('Hambre', q.hambre != null ? q.hambre + ' de 5' : null),
+      lineaFicha('Energía', q.energia != null ? q.energia + ' de 5' : null),
+      lineaFicha('Sueño', q.sueno != null ? q.sueno + ' de 5' : null,
+        q.nota ? 'Dijo: ' + q.nota : '')
+    ]);
+
+    cont.innerHTML = html;
+  }
+
+  function pintarAnalisisCliente(a){
+    var caja = document.getElementById('fcAnalisisCard');
+    if(!caja) return;
+    caja.hidden = !a;
+    if(!a) return;
+    document.getElementById('fcAnalisisTxt').textContent = a.mensaje;
+    document.getElementById('fcAnalisisCuando').textContent =
+      a.creado_en ? fmtFecha(new Date(a.creado_en)) : '';
+  }
+
+  function abrirFichaCliente(c){
+    if(!c) return;
+    fichaDe = { id: c.id, nombre: c.nombre };
+    METRICAS = null;
+    document.getElementById('fcTitulo').textContent = c.nombre;
+    document.getElementById('fcMetricas').innerHTML =
+      '<p class="calc-note" style="padding:14px 20px 0;">Cargando sus números…</p>';
+    pintarAnalisisCliente(null);
+    goto('cliente', true);
+
+    Promise.all([ sbMetricas(c.id), sbAnalisisDe(c.id)['catch'](function(){ return null; }) ])
+      .then(function(r){
+        // Si mientras llegaba se abrió la ficha de otra persona, esto ya no
+        // vale: pintarlo mezclaría los números de uno con el nombre de otro.
+        if(!fichaDe || fichaDe.id !== c.id) return;
+        METRICAS = r[0];
+        pintarMetricas();
+        pintarAnalisisCliente(r[1]);
+      })
+      ['catch'](function(e){
+        if(!fichaDe || fichaDe.id !== c.id) return;
+        // NO se deja «Cargando…» puesto: se queda ahí para siempre y parece
+        // que la app se colgó.
+        document.getElementById('fcMetricas').innerHTML =
+          '<p class="calc-note" style="padding:14px 20px 0;">No pude traer sus números: ' +
+          escapar(traducirError(e.message)) + '</p>';
+        toast('toastCliente', 'No pude traer sus números');
+      });
+  }
+
+  document.getElementById('fcEditarPlan').addEventListener('click', function(){
+    if(fichaDe) abrirEditorPlan({ id: fichaDe.id, nombre: fichaDe.nombre });
+  });
+
+  // ---- Que la IA lo resuma ----
+  document.getElementById('fcAnalizar').addEventListener('click', function(){
+    if(!fichaDe || !sesion) return;
+    if(!METRICAS){ toast('toastCliente', 'Espera a que lleguen sus números'); return; }
+    var btn = this, antes = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Pensando…';
+
+    iaLlamar({ accion: 'cliente', nombre: fichaDe.nombre, metricas: METRICAS })
+      .then(function(r){
+        if(!fichaDe) return;
+        var msg = (r && r.mensaje) || '';
+        if(!msg) throw new Error('No devolvió nada.');
+        // Se guarda al momento: la gracia de que cueste una consulta es no
+        // volver a pagarla al reabrir la ficha.
+        var cuerpo = {
+          cliente_id: fichaDe.id, pedido_por: sesion.user.id,
+          mensaje: msg, datos: METRICAS
+        };
+        pintarAnalisisCliente({ mensaje: msg, creado_en: new Date().toISOString() });
+        return sbFetch('/rest/v1/analisis_cliente?on_conflict=cliente_id', {
+          method:'POST',
+          headers:{ 'Prefer':'resolution=merge-duplicates,return=minimal' },
+          body: JSON.stringify(cuerpo)
+        })['catch'](function(){
+          // El texto ya está en pantalla; que no se haya guardado solo
+          // significa que la próxima vez costará otra consulta.
+          toast('toastCliente', 'No pude guardarlo: al volver a entrar costará otra consulta');
+        });
+      })
+      ['catch'](function(e){ toast('toastCliente', traducirError(e.message)); })
+      .then(function(){ btn.disabled = false; btn.textContent = antes; });
   });
 
   // ---- Los paneles, con datos reales ----
