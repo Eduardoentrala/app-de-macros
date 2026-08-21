@@ -1341,8 +1341,46 @@
     toast('toastRutina', 'Descanso: ' + fmt(v));
   });
 
+  // Un aviso abajo, durante segundo y medio.
+  //
+  //  POR QUÉ NO BASTA CON getElementById
+  //
+  //  Cada toast vive DENTRO de una vista, y las vistas que no están activas
+  //  son `display:none`. Un toast pedido por su id se añade la clase y no se
+  //  pinta: mide 0×0 y nadie lo ve. La app no falla, simplemente se calla.
+  //
+  //  Y pasaba de verdad, en dos sitios que importan:
+  //
+  //   · El editor de planes (`planedit`) no tiene toast propio y pedía el de
+  //     `plan` o el de `admin`. Se perdían SEIS mensajes, entre ellos «No
+  //     pude cargar su plan: no guardes o lo sobrescribes», que existe justo
+  //     para evitar que un entrenador borre el plan de alguien sin querer.
+  //
+  //   · Los errores de carga (`cargarDatos`) piden `toastComida`, que vive
+  //     en `mealadd`, y salen estando en `diario`. Ahí se perdían «No pude
+  //     cargar tu rutina», «...tus fotos» y el «Sin señal: se ve lo que
+  //     apuntaste» que se añadió al arreglar lo de la señal.
+  //
+  //  Arreglarlo uno a uno dejaría el mismo agujero abierto para el
+  //  siguiente: hay doce vistas sin toast. Así que si el que se pide no se
+  //  ve, se usa el de la vista activa, y si esa tampoco tiene, se le pone
+  //  uno. Cuando el pedido SÍ se ve —que es lo normal— no cambia nada.
   function toast(id, msg){
     var el = document.getElementById(id);
+
+    // offsetParent nulo = no se está pintando. Es la comprobación barata:
+    // cubre tanto que el elemento no exista como que su vista esté oculta.
+    if(!el || el.offsetParent === null){
+      var activa = document.querySelector('.app-view.active');
+      if(!activa) return;                       // nada visible: no hay dónde
+      el = activa.querySelector('.toast');
+      if(!el){
+        el = document.createElement('div');
+        el.className = 'toast';
+        activa.appendChild(el);
+      }
+    }
+
     if(msg) el.textContent = msg;
     el.classList.add('show');
     setTimeout(function(){ el.classList.remove('show'); }, 1600);
@@ -4957,6 +4995,7 @@
       // fallo: es no dejar la lista de comidas de alguien en un teléfono
       // que puede no ser suyo.
       try{ localStorage.removeItem(DESPENSA_KEY); }catch(e){}
+      try{ localStorage.removeItem(PLAN_KEY); }catch(e){}
       goto('registro', false);
     });
   });
@@ -6358,14 +6397,54 @@
       .then(function(r){ return (r || [])[0] || null; });
   }
 
-  function pintarMiPlan(){
+  // ---- El plan, guardado en el teléfono ----
+  //
+  // Es lo que MÁS falta hace sin señal de toda la app: «qué me toca comer»
+  // se mira en la calle, y es texto puro. Antes no se guardaba en ninguna
+  // parte, así que sin conexión `cargarPlan()` fallaba, `pintarMiPlan()` no
+  // llegaba a llamarse y la pestaña se quedaba EN BLANCO —ni el plan, ni el
+  // «todavía no tienes uno», nada—.
+  //
+  // Copia por usuario, igual que la despensa, y se sustituye entera en
+  // cuanto la carga con señal sale bien.
+  var PLAN_KEY = 'macros.plan';
+
+  function guardarMiPlan(){
+    if(!sesion || !sesion.user) return;
+    try{
+      if(MI_PLAN) localStorage.setItem(PLAN_KEY,
+        JSON.stringify({ dueno: sesion.user.id, plan: MI_PLAN }));
+      // Si ya no hay plan -se lo quitaron- se borra la copia: dejarla haría
+      // que el teléfono siguiera enseñando un plan que ya no existe.
+      else localStorage.removeItem(PLAN_KEY);
+    }catch(e){}
+  }
+
+  function cargarMiPlanGuardado(){
+    if(!sesion || !sesion.user) return false;
+    var d = null;
+    try{ d = JSON.parse(localStorage.getItem(PLAN_KEY) || 'null'); }catch(e){}
+    if(!d || d.dueno !== sesion.user.id || !d.plan) return false;
+    MI_PLAN = d.plan;
+    return true;
+  }
+
+  // `sinRed` cambia lo que se dice cuando no hay plan que enseñar: «todavía
+  // no tienes un plan» es una afirmación, y sin conexión no se ha podido
+  // comprobar. Quien la lee se queda esperando a un entrenador que a lo
+  // mejor ya se lo escribió.
+  function pintarMiPlan(sinRed){
     var cont = document.getElementById('planMio');
     if(!MI_PLAN || !(MI_PLAN.comidas || []).length){
-      cont.innerHTML =
-        '<div class="plan-vacio"><div class="ico">🍽️</div>' +
-        '<b>Todavía no tienes un plan</b>' +
-        '<span>Cuando tu entrenador te escriba uno, aparecerá aquí: qué desayunar, ' +
-        'qué comer y qué cenar. Sin pesar ni apuntar nada.</span></div>';
+      cont.innerHTML = sinRed
+        ? '<div class="plan-vacio"><div class="ico">📡</div>' +
+          '<b>Sin conexión</b>' +
+          '<span>No pude comprobar si tienes un plan. Vuelve a abrir esta ' +
+          'pestaña cuando tengas señal.</span></div>'
+        : '<div class="plan-vacio"><div class="ico">🍽️</div>' +
+          '<b>Todavía no tienes un plan</b>' +
+          '<span>Cuando tu entrenador te escriba uno, aparecerá aquí: qué desayunar, ' +
+          'qué comer y qué cenar. Sin pesar ni apuntar nada.</span></div>';
       document.getElementById('planSub').textContent = 'Qué comer hoy';
       return;
     }
@@ -6478,6 +6557,11 @@
   function cargarPlan(){
     if(!sesion || !sesion.user) return Promise.resolve();
 
+    // Lo guardado se pinta YA, sin esperar a la red. Con señal, lo del
+    // servidor llega un segundo después y lo sustituye; sin ella, esto es lo
+    // único que va a haber y es justo lo que se viene a mirar.
+    if(cargarMiPlanGuardado()) pintarMiPlan();
+
     var tareas = [ sbPlanDe(sesion.user.id).then(function(p){ MI_PLAN = p; }) ];
 
     // Una sola llamada para los dos roles. Antes eran dos caminos —el coach
@@ -6506,10 +6590,27 @@
       // Quién tiene plan ya viene en plan_lista(): antes hacía falta una
       // segunda consulta a `planes` con todos los ids metidos en la URL,
       // que además se rompía sola en cuanto la lista crecía.
+      guardarMiPlan();
       pintarMiPlan();
       pintarPlanClientes();
     })['catch'](function(e){
-      toast('toastPlan', 'No se pudo cargar: ' + traducirError(e.message));
+      // AQUÍ NO SE PUEDE SALIR SIN PINTAR. Antes solo se avisaba, y como
+      // `planMio` nace vacío la pestaña se quedaba en blanco: ni el plan, ni
+      // el «todavía no tienes uno», nada. Sin señal, que es cuando más falta
+      // hace mirar qué toca comer.
+      //
+      // MI_PLAN vale aquí lo que dejó la copia del teléfono -si la había-,
+      // porque el `.then` que lo sustituye no llegó a correr.
+      var red = sinConexion(e);
+      pintarMiPlan(red && !MI_PLAN);
+      pintarPlanClientes();
+      // Sin plan guardado NO se dice nada: la pantalla ya explica que no hay
+      // conexión, y un aviso encima diciendo «este es tu último plan
+      // guardado» cuando no hay ninguno es peor que callarse.
+      if(red && !MI_PLAN) return;
+      toast('toastPlan', red
+        ? 'Sin conexión: esto es tu último plan guardado'
+        : 'No se pudo cargar: ' + traducirError(e.message));
     });
   }
 
@@ -6632,7 +6733,7 @@
       // persona no tiene plan, y lo que se guarde encima BORRA el que sí
       // tenía. Callarlo convierte un fallo de red en pérdida de datos de
       // otro.
-      toast('toastAdmin', 'No pude cargar su plan: ' + traducirError(e.message) +
+      toast('toastPlan', 'No pude cargar su plan: ' + traducirError(e.message) +
             ' No guardes o lo sobrescribes.');
     });
   }
