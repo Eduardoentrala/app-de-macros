@@ -985,12 +985,48 @@ Deno.serve(async (req) => {
         ? Number((e as { status: number }).status) : 0;
       return s === 529 || s === 429 || (s >= 500 && s < 600);
     };
+    // ---- Apuntar lo que costó ----
+    //
+    // La respuesta trae los tokens exactos y se estaban tirando. Sin esto,
+    // «¿cuánto me cuesta armar un plan?» solo se puede responder con una
+    // estimación, y con una estimación no se decide si cambiar de modelo.
+    //
+    // VA AQUÍ, en el envoltorio por el que pasan las siete acciones, y no
+    // en cada una: puestas siete veces, la próxima acción que se añada
+    // nacería sin registrar y nadie lo notaría hasta cuadrar la factura.
+    //
+    // Y NO PUEDE ROMPER NADA. Es contabilidad: si el apunte falla, la
+    // persona tiene que recibir su respuesta igual. Por eso va suelto, sin
+    // await y con los dos caminos del `then` tapados.
+    const apuntarGasto = (args: Record<string, unknown>, r: unknown) => {
+      try {
+        const u = (r as { usage?: Record<string, number> })?.usage;
+        if (!u) return;
+        admin.from('ia_gasto').insert({
+          user_id: userId,
+          accion: accion || 'desconocida',
+          modelo: String(args.model || MODELO),
+          // Los de caché se suman a la entrada: hoy no se usa caché, pero si
+          // algún día se enciende, sin esto la entrada saldría a cero y
+          // parecería que se abarató sola.
+          entrada: (u.input_tokens || 0) +
+                   (u.cache_read_input_tokens || 0) +
+                   (u.cache_creation_input_tokens || 0),
+          salida: u.output_tokens || 0,
+        }).then(() => {}, () => {});
+      } catch { /* nunca por esto */ }
+    };
+
     const ia = {
       messages: {
         create: async (args: Record<string, unknown>) => {
           let ultimo: unknown;
           for (let i = 0; i < 3; i++) {
-            try { return await iaCruda.messages.create(args as never); }
+            try {
+              const r = await iaCruda.messages.create(args as never);
+              apuntarGasto(args, r);
+              return r;
+            }
             catch (e) {
               ultimo = e;
               if (!reintentable(e) || i === 2) throw e;
@@ -1001,7 +1037,19 @@ Deno.serve(async (req) => {
           }
           throw ultimo;
         },
-        stream: (args: Record<string, unknown>) => iaCruda.messages.stream(args as never),
+        // En streaming los tokens no están hasta que termina, así que se
+        // apuntan al pedir el mensaje final. Se envuelve `finalMessage` en
+        // vez de pedirle a cada acción que apunte: así ninguna se olvida.
+        stream: (args: Record<string, unknown>) => {
+          const s = iaCruda.messages.stream(args as never);
+          const original = s.finalMessage.bind(s);
+          (s as unknown as { finalMessage: () => Promise<unknown> }).finalMessage = async () => {
+            const r = await original();
+            apuntarGasto(args, r);
+            return r;
+          };
+          return s;
+        },
       },
     };
 
