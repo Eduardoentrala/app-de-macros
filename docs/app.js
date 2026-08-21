@@ -6992,7 +6992,11 @@
     var btn = this, antes = btn.textContent;
     btn.disabled = true; btn.textContent = 'Pensando…';
 
-    iaLlamar({ accion: 'cliente', nombre: fichaDe.nombre, metricas: METRICAS })
+    // El id va aparte de los numeros: el servidor comprueba con el que
+    // quien pide el analisis puede ver a esa persona. Fiarse solo de los
+    // numeros del cuerpo dejaria pedir un "analisis" de cualquiera.
+    iaLlamar({ accion: 'cliente', cliente: fichaDe.id,
+               nombre: fichaDe.nombre, metricas: METRICAS })
       .then(function(r){
         if(!fichaDe) return;
         var msg = (r && r.mensaje) || '';

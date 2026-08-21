@@ -169,6 +169,10 @@ console.log('\n— El análisis se guarda para no volver a pagarlo —');
   const a = APP.slice(APP.indexOf("document.getElementById('fcAnalizar')"), APP.indexOf('// ---- Los paneles'));
   check('se pide con accion cliente', /accion: 'cliente'/.test(a));
   check('y se le mandan las métricas', /metricas: METRICAS/.test(a));
+  // El servidor comprueba con este id que quien pide puede ver a esa
+  // persona. Sin mandarlo, la funcion responde 400 y el boton no hace nada.
+  check('y el id de quien es', /cliente: fichaDe\.id/.test(a),
+    'el servidor lo exige para comprobar el permiso');
   // Un analisis cuesta una consulta del tope; con veinte clientes, abrir
   // cada ficha se comeria el tope antes de acabar la lista.
   check('se guarda al momento', /analisis_cliente\?on_conflict=cliente_id/.test(a));
@@ -179,6 +183,53 @@ console.log('\n— El análisis se guarda para no volver a pagarlo —');
   check('si no se puede guardar, se dice sin borrarlo',
     /costará otra consulta/.test(a));
   check('nace oculto hasta que se pide', /id="fcAnalisisCard"[^>]*hidden/.test(HTML));
+}
+
+console.log('\n— Y el servidor no se fía del cuerpo —');
+{
+  const FN = readFileSync(join(RAIZ, 'supabase', 'functions', 'asistente', 'index.ts'), 'utf8');
+  const a = FN.slice(FN.indexOf("if (accion === 'cliente')"),
+                     FN.indexOf("return json({ error: 'Acción desconocida.' }"));
+  check('existe la acción en la función', a.length > 100);
+  // La app ya saca los números con `plan_metricas`, que comprueba
+  // `puede_ver`. Pero la función los recibe por el CUERPO de la petición, y
+  // cualquiera puede mandar lo que quiera: sin esto, un cliente pediría el
+  // «análisis» de otro con solo su id.
+  check('exige el id de la persona', /Falta a quién/.test(a));
+  check('y consulta si es cliente suyo',
+    /from\('coach_clientes'\)[\s\S]{0,220}eq\('coach_id', userId\)/.test(a),
+    'sin esto cualquiera analizaría a cualquiera sabiendo su id');
+  // NO BASTA CON QUE LA CONSULTA ESTÉ: hay que USAR el resultado. Se probó
+  // borrando solo esta línea y la comprobación de arriba seguía pasando,
+  // porque el `select` seguía ahí. Es el mismo tropiezo que ya hubo con
+  // sbQuitarAlimento y con el guardado del alimento sin señal.
+  check('y CORTA si no lo es',
+    /if \(!suyo\) return json\([\s\S]{0,80}403\)/.test(a),
+    'la consulta sola no protege nada si nadie mira lo que devuelve');
+  check('el super admin pasa igual', /rol !== 'super_admin'/.test(a));
+  // Otra vez lo mismo: mirar solo que esté el MENSAJE «Esto es para
+  // entrenadores» no sirve, porque el texto sigue ahí aunque la condición
+  // que lleva a él se ponga en `false`. Se comprueba la CONDICIÓN.
+  check('y un cliente normal no',
+    /if \(rol !== 'coach' && rol !== 'org_admin'\)/.test(a),
+    'el mensaje puede estar ahí y no alcanzarse nunca');
+  check('con su motivo', /Esto es para entrenadores/.test(a));
+  // `puede_ver` no sirve aquí: la función corre con clave de servicio y
+  // dentro `auth.uid()` vale null, así que devolvería falso siempre.
+  check('y se explica por qué no se usa puede_ver', /auth\.uid\(\)`? vale null/.test(a));
+
+  const p = FN.slice(FN.indexOf('const SISTEMA_CLIENTE'), FN.indexOf('Deno.serve('));
+  // La tentación del modelo aquí es rellenar huecos con lo que suele pasar,
+  // y un entrenador que lee eso decide sobre algo que nadie midió.
+  check('se le prohíbe suponer', /SOLO LOS NÚMEROS QUE TE DOY/.test(p));
+  check('lo primero es si está apuntando', /LO PRIMERO, SI ESTÁ APUNTANDO/.test(p));
+  check('se le avisa de que las medias son por día apuntado',
+    /POR DÍA APUNTADO/.test(p));
+  check('y de que el peso de un día no es tendencia',
+    /EL PESO DE UN DÍA NO ES UNA TENDENCIA/.test(p));
+  check('no diagnostica ni receta', /NO DIAGNOSTICAS NI RECETAS/.test(p));
+  // Es lo unico que se escribe SOBRE alguien y no PARA alguien.
+  check('y sabe que no lo lee el cliente', /ella no va a leer esto/.test(p));
 }
 
 console.log(`\n${ok} pasan · ${mal} fallan`);

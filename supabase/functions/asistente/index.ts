@@ -798,6 +798,76 @@ Nunca escribas un número de calorías dentro del texto de una comida.
 `.trim();
 
 // ---------------------------------------------------------------------
+//  CÓMO VA UNA PERSONA — para su entrenador, no para ella
+// ---------------------------------------------------------------------
+//  Esto es lo ÚNICO de la app que se escribe SOBRE alguien y no PARA
+//  alguien. Lo lee su entrenador, y la tabla donde se guarda se lo esconde
+//  al cliente a propósito (0042). Por eso puede decir cosas que a la cara
+//  no se dicen: «lleva tres semanas sin apuntar, probablemente lo dejó».
+//
+//  LO QUE MÁS IMPORTA: que no invente. Le llegan números y solo números; si
+//  faltan, faltan. La tentación de un modelo aquí es rellenar huecos con lo
+//  que suele pasar —«seguramente está comiendo de más los fines de
+//  semana»— y un entrenador que lee eso toma decisiones sobre algo que
+//  nadie midió.
+const ESQUEMA_CLIENTE = {
+  type: 'object',
+  properties: {
+    mensaje: {
+      type: 'string',
+      description: 'El resumen para el entrenador. Máximo 900 caracteres.',
+    },
+  },
+  required: ['mensaje'],
+  additionalProperties: false,
+} as const;
+
+const SISTEMA_CLIENTE = `
+Le escribes a un ENTRENADOR sobre una de las personas que lleva. No le
+escribes a esa persona: ella no va a leer esto.
+
+Te llegan sus números de los últimos 7 y 30 días. Tu trabajo es decirle al
+entrenador CÓMO VA y QUÉ MIRAR, en pocas líneas y sin rodeos.
+
+REGLAS QUE NO SE SALTAN
+
+1. SOLO LOS NÚMEROS QUE TE DOY. Si algo no está, no está: dilo o cállatelo,
+   pero no lo supongas. Nada de «seguramente los fines de semana...» ni
+   «es probable que...». Un entrenador que lee una suposición escrita con
+   seguridad decide sobre algo que nadie midió.
+
+2. LO PRIMERO, SI ESTÁ APUNTANDO. Es la señal más honesta que hay: quien
+   deja de apuntar suele haber dejado el plan una semana antes. Si lleva
+   días sin apuntar, eso va en la primera línea y lo demás importa menos
+   —porque los demás números se calculan sobre lo poco que apuntó—.
+
+3. LAS MEDIAS DE CALORÍAS SON POR DÍA APUNTADO, no por día del calendario.
+   Si apuntó 2 días de 7, esa media habla de 2 días. Dilo cuando el número
+   de días sea bajo; sin eso, el entrenador la lee como media de la semana
+   y le baja las calorías a alguien que en realidad come de más.
+
+4. EL PESO DE UN DÍA NO ES UNA TENDENCIA. Dos kilos arriba o abajo son agua
+   y sal. Habla de la diferencia entre semanas, y solo si se pesó lo
+   bastante como para que signifique algo.
+
+5. NO DIAGNOSTICAS NI RECETAS. Ni enfermedades, ni suplementos, ni
+   calorías exactas que deba ponerle. Puedes sugerir qué revisar o qué
+   preguntarle.
+
+CÓMO ESCRIBIRLO
+
+Español de México, de profesional a profesional. Directo. Sin emojis, sin
+títulos, sin listas con viñetas: dos o tres párrafos cortos.
+
+Empieza por lo que hay que saber, no por un resumen de todo. Si va bien,
+dilo en una línea y no lo adornes. Si algo está mal, di QUÉ está mal y qué
+mirar, no diez cosas a la vez.
+
+Termina con una sola cosa concreta que el entrenador podría hacer o
+preguntarle esta semana. Una, no una lista.
+`.trim();
+
+// ---------------------------------------------------------------------
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
   if (req.method !== 'POST') return json({ error: 'Solo POST' }, 405);
@@ -1523,6 +1593,67 @@ Deno.serve(async (req) => {
             (gustos ? `Ten en cuenta: ${gustos}\n` : '') +
             `Desayuno, comida y cena. Añade un snack solo si hace falta ` +
             `para llegar a las calorías.`,
+        }],
+      });
+
+      const r = await flujo.finalMessage();
+      return json({ ...leerJson(r), quedan });
+    }
+
+    // ---- Cómo va una persona, para su entrenador ----
+    if (accion === 'cliente') {
+      const cliente = String(cuerpo.cliente || '').trim();
+      const nombre = String(cuerpo.nombre || '').trim().slice(0, 60);
+      const metricas = cuerpo.metricas;
+
+      if (!cliente || !/^[0-9a-f-]{36}$/i.test(cliente)) {
+        return json({ error: 'Falta a quién.' }, 400);
+      }
+      if (!metricas || typeof metricas !== 'object') {
+        return json({ error: 'Faltan sus números.' }, 400);
+      }
+
+      // QUIÉN PUEDE PEDIR ESTO.
+      //
+      // La app ya saca los números con `plan_metricas`, que comprueba
+      // `puede_ver` por dentro. Pero esta función no puede fiarse de eso:
+      // recibe los números por el cuerpo de la petición y cualquiera puede
+      // mandar lo que quiera. Sin esta comprobación, un cliente cualquiera
+      // pediría un "análisis" de otra persona con solo su id.
+      //
+      // Se rehace aquí la misma regla que `puede_ver`, y a mano, porque la
+      // función corre con la clave de servicio: `auth.uid()` vale null ahí
+      // dentro, así que llamar a `puede_ver` devolvería siempre falso.
+      const { data: yo } = await admin
+        .from('profiles').select('role').eq('id', userId).single();
+      const rol = yo?.role || 'cliente';
+
+      if (rol !== 'super_admin') {
+        if (rol !== 'coach' && rol !== 'org_admin') {
+          return json({ error: 'Esto es para entrenadores.' }, 403);
+        }
+        const { data: suyo } = await admin
+          .from('coach_clientes')
+          .select('cliente_id')
+          .eq('coach_id', userId).eq('cliente_id', cliente)
+          .maybeSingle();
+        if (!suyo) return json({ error: 'Esa persona no es cliente tuyo.' }, 403);
+      }
+
+      // Los números van como JSON tal cual y no redactados en una frase: el
+      // modelo lee mejor la estructura, y así lo que se le manda es
+      // exactamente lo que la app enseña en pantalla —si el texto y las
+      // tarjetas se contradicen, se sabe que el fallo está en el prompt y
+      // no en una traducción a medio camino—.
+      const flujo = ia.messages.stream({
+        model: MODELO,
+        max_tokens: 2000,
+        system: SISTEMA_CLIENTE,
+        output_config: { effort: 'medium', format: { type: 'json_schema', schema: ESQUEMA_CLIENTE } },
+        messages: [{
+          role: 'user',
+          content: `Cómo va ${nombre || 'esta persona'}. Sus números:\n\n` +
+            JSON.stringify(metricas, null, 1).slice(0, 6000),
         }],
       });
 
