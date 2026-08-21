@@ -6433,6 +6433,30 @@
   // no tienes un plan» es una afirmación, y sin conexión no se ha podido
   // comprobar. Quien la lee se queda esperando a un entrenador que a lo
   // mejor ya se lo escribió.
+  // ---- Cuánto le toca comer, arriba del plan ----
+  //
+  //  Para que la persona sepa cuánto está comiendo sin tener que contar, y
+  //  para que el entrenador vea contra qué números se armó el plan.
+  //
+  //  Sale del PERFIL, no se guarda con el plan. Si el entrenador le cambia
+  //  las metas, esta tira cambia y el plan de comida no: esa diferencia es
+  //  justo la señal de que hay que rearmarlo. Guardar aquí una copia de las
+  //  metas de aquel día la escondería.
+  function tiraDeMetas(m){
+    if(!m || !m.P) return '';
+    var cal = Math.round(m.P * 4 + m.C * 4 + m.G * 9);
+    var uno = function(valor, etiqueta){
+      return '<div class="plan-meta"><b>' + escapar(valor) + '</b>' +
+             '<span>' + escapar(etiqueta) + '</span></div>';
+    };
+    return '<div class="plan-metas">' +
+      uno(mil(cal), 'CALORÍAS') +
+      uno(m.P + ' g', 'PROTEÍNA') +
+      uno(m.C + ' g', 'CARBOS') +
+      uno(m.G + ' g', 'GRASAS') +
+      '</div>';
+  }
+
   function pintarMiPlan(sinRed){
     var cont = document.getElementById('planMio');
     if(!MI_PLAN || !(MI_PLAN.comidas || []).length){
@@ -6472,7 +6496,7 @@
       ? comidas.filter(function(c){ return c.dia === MI_PLAN.diaVisto; })
       : comidas;
 
-    cont.innerHTML = tabs + delDia.map(function(c){
+    cont.innerHTML = tiraDeMetas(leerMetas()) + tabs + delDia.map(function(c){
       var m = MOMENTOS.filter(function(x){ return x.k === c.momento; })[0];
       return '<div class="plan-comida">' +
         '<div class="plan-momento"><span>' + (m ? m.emoji : '•') + '</span>' + c.momento + '</div>' +
@@ -6755,6 +6779,15 @@
              (lleno ? ' lleno' : '') + '" data-dia="' + d + '">' + d.slice(0,3) + '</button>';
     }).join('') + '</div>';
 
+    // Crecen con el texto. Con `rows=3` fijo, una comida de cuatro renglones
+    // se queda con una barra de desplazamiento DENTRO del recuadro: se ve
+    // el texto cortado por arriba y por abajo, y hay que hacer scroll en un
+    // hueco de tres líneas para leer lo que uno mismo escribió.
+    var crecer = function(t){
+      t.style.height = 'auto';
+      t.style.height = (t.scrollHeight + 2) + 'px';
+    };
+
     cont.innerHTML = tabs + MOMENTOS.map(function(m){
       var c = planComidas.filter(function(x){
         return x.momento === m.k && x.dia === planDia; })[0];
@@ -6764,6 +6797,11 @@
         'placeholder="Ej. 2 huevos, pan integral y café">' +
         escapar(c ? c.texto : '') + '</textarea></div>';
     }).join('');
+
+    Array.prototype.forEach.call(cont.querySelectorAll('[data-momento]'), function(t){
+      crecer(t);
+      t.addEventListener('input', function(){ crecer(t); });
+    });
   }
 
   // Lo escrito se guarda en planComidas al cambiar de día o al guardar: si
@@ -6798,6 +6836,10 @@
   function abrirEditorPlan(cliente){
     if(!cliente) return;
     document.getElementById('peTitulo').textContent = 'Plan de ' + cliente.nombre;
+    // Sus metas arriba, si vienen. Sin ellas el entrenador escribe a ojo y
+    // luego el plan no cuadra con lo que la app le está pidiendo comer.
+    var caja = document.getElementById('peMetas');
+    if(caja) caja.innerHTML = cliente.metas ? tiraDeMetas(cliente.metas) : '';
     planComidas = [];
     planDia = null;
     pintarEditorComidas();
@@ -6883,6 +6925,11 @@
           nombre: planEditando.nombre,
           calorias: cal,
           proteina: p.goal_protein_g,
+          // Los tres, no solo la proteína: sin carbos ni grasas el modelo
+          // los reparte a su gusto y dos planes de las mismas calorías
+          // pueden salir con el doble de grasa uno que otro.
+          carbos: p.goal_carbs_g,
+          grasas: p.goal_fat_g,
           gustos: document.getElementById('peNota').value.trim()
         });
       })
@@ -6947,26 +6994,57 @@
   }
 
   // ---- Pintar los números ----
-  // Un número solo no dice nada: 1.850 calorías es mucho o poco según la
-  // meta, y "3 días" es bueno o malo según de cuántos. Por eso casi todo va
-  // como "esto de aquello" y con su comparación al lado.
-  function lineaFicha(etiqueta, valor, nota){
-    return '<div class="calc-line"><span>' + escapar(etiqueta) + '</span>' +
-           '<b>' + escapar(valor == null ? '—' : String(valor)) + '</b></div>' +
-           (nota ? '<div class="calc-note">' + escapar(nota) + '</div>' : '');
+  //
+  //  Un número solo no dice nada: 2.180 calorías es mucho o poco según la
+  //  meta, y «3 días» depende de cuántos. Por eso casi todo va con su
+  //  comparación pegada al valor.
+  //
+  //  PEGADA, y no en una nota debajo de cada línea: así estaba la primera
+  //  versión y la tarjeta se convertía en un muro de texto donde no se veía
+  //  ninguna cifra. Ahora la aclaración va una sola vez, al pie.
+  function filaFicha(etiqueta, valor, meta){
+    var vacio = (valor == null || valor === '');
+    return '<div class="fc-fila"><span class="et">' + escapar(etiqueta) + '</span>' +
+      '<span class="va' + (vacio ? ' vacio' : '') + '">' +
+      escapar(vacio ? '—' : String(valor)) +
+      (meta ? ' <small>' + escapar(meta) + '</small>' : '') +
+      '</span></div>';
   }
 
-  function tarjetaFicha(titulo, lineas){
+  function tarjetaFicha(titulo, filas, pie){
     return '<div class="card"><div class="field-label" style="margin-top:0;">' +
-           escapar(titulo) + '</div>' + lineas.join('') + '</div>';
+           escapar(titulo) + '</div>' + filas.join('') +
+           (pie ? '<div class="fc-pie">' + escapar(pie) + '</div>' : '') +
+           '</div>';
   }
 
-  // Un cambio de peso con su signo. `+` explícito porque sin él "0.4" y
-  // "-0.4" se distinguen solo por un guion pequeño en una lista de cifras.
+  // Un cambio de peso con su signo. El `+` explícito porque sin él «0.4» y
+  // «-0.4» se distinguen solo por un guion pequeño en una lista de cifras.
   function delta(ahora, antes, unidad){
     if(ahora == null || antes == null) return null;
     var d = Math.round((Number(ahora) - Number(antes)) * 10) / 10;
+    if(d === 0) return 'igual';
     return (d > 0 ? '+' : '') + d + ' ' + unidad;
+  }
+
+  // Una fecha corta, o «nunca». Las fechas de la base vienen como
+  // 'AAAA-MM-DD' y hay que anclarlas a mediodía: a medianoche, según la
+  // zona, se van al día anterior.
+  function diaCorto(iso){
+    return iso ? fmtFecha(new Date(iso + 'T12:00:00')) : 'nunca';
+  }
+
+  // Una tarjeta que no tiene nada que enseñar se dice en UNA línea.
+  //
+  //  Esto es la mitad del diseño. La primera versión pintaba las cuatro
+  //  tarjetas siempre, y para alguien que acaba de entrar eran VEINTE filas
+  //  con un guion cada una: parecía que la app estaba rota o que los datos
+  //  no habían cargado. Un «—» tan grande como una cifra de verdad hace que
+  //  el vacío pese más que la información.
+  function tarjetaVacia(titulo, frase){
+    return '<div class="card"><div class="field-label" style="margin-top:0;">' +
+           escapar(titulo) + '</div>' +
+           '<div class="fc-pie" style="margin-top:2px;">' + escapar(frase) + '</div></div>';
   }
 
   function pintarMetricas(){
@@ -6978,48 +7056,72 @@
     var p = m.peso || {}, d = m.diario || {}, e = m.entreno || {},
         c = m.cardio || {}, f = m.fotos || {}, q = m.chequeo || {};
 
+    var hayDiario  = (d.dias_30 || 0) > 0;
+    var hayPeso    = p.ultimo != null || (p.apuntes_30 || 0) > 0;
+    var hayEntreno = (e.sesiones_30 || 0) > 0 || (c.min_30 || 0) > 0;
+    var haySentir  = (f.semanas_completas_90 || 0) > 0 || q.hambre != null;
+
+    // Nadie ha hecho nada todavía: una frase y ya. Cuatro tarjetas vacías
+    // no informan de nada que esta línea no diga mejor.
+    if(!hayDiario && !hayPeso && !hayEntreno && !haySentir){
+      cont.innerHTML = '<div class="card"><div class="fc-pie" style="margin-top:0;">' +
+        'Todavía no hay nada suyo que mirar. En cuanto empiece a apuntar su ' +
+        'comida o a pesarse, aparecerá aquí.</div></div>';
+      return;
+    }
+
     var html = '';
 
     // Adherencia primero: es la señal más honesta que hay. Quien deja de
     // apuntar suele haber dejado el plan una semana antes.
-    html += tarjetaFicha('Está apuntando', [
-      lineaFicha('Días con comida apuntada', (d.dias_7 || 0) + ' de los últimos 7'),
-      lineaFicha('En el mes', (d.dias_30 || 0) + ' de 30'),
-      lineaFicha('Último apunte', d.ultimo ? fmtFecha(new Date(d.ultimo + 'T12:00:00')) : 'nunca'),
-      lineaFicha('Calorías por día apuntado', d.cal_dia_7 != null ? mil(d.cal_dia_7) : null,
-        m.meta_cal ? 'Su meta son ' + mil(m.meta_cal) + '. Es la media de los días que APUNTÓ, no entre siete.' : ''),
-      lineaFicha('Proteína por día', d.prot_dia_7 != null ? d.prot_dia_7 + ' g' : null,
-        m.meta_p ? 'Su meta son ' + m.meta_p + ' g.' : '')
-    ]);
+    html += hayDiario
+      ? tarjetaFicha('Está apuntando', [
+          filaFicha('Últimos 7 días',   (d.dias_7  || 0) + ' de 7'),
+          filaFicha('Últimos 30 días',  (d.dias_30 || 0) + ' de 30'),
+          filaFicha('Último apunte',    diaCorto(d.ultimo)),
+          filaFicha('Calorías por día', d.cal_dia_7 != null ? mil(d.cal_dia_7) : null,
+                    m.meta_cal ? 'de ' + mil(m.meta_cal) : ''),
+          filaFicha('Proteína por día', d.prot_dia_7 != null ? d.prot_dia_7 + ' g' : null,
+                    m.meta_p ? 'de ' + m.meta_p + ' g' : '')
+        ], 'Las medias son de los días que APUNTÓ, no entre siete.')
+      : tarjetaVacia('Está apuntando', 'No ha apuntado comida en los últimos 30 días.');
 
-    html += tarjetaFicha('Peso y cintura', [
-      lineaFicha('Último peso', p.ultimo != null ? p.ultimo + ' kg' : null,
-        p.ultimo_dia ? 'Del ' + fmtFecha(new Date(p.ultimo_dia + 'T12:00:00')) + '.' : ''),
-      lineaFicha('En la semana', delta(p.ultimo, p.hace_7, 'kg')),
-      lineaFicha('En el mes', delta(p.ultimo, p.hace_30, 'kg')),
-      lineaFicha('Veces que se pesó', (p.apuntes_30 || 0) + ' en 30 días'),
-      lineaFicha('Última cintura', m.cintura && m.cintura.cm != null ? m.cintura.cm + ' cm' : null,
-        m.cintura && m.cintura.dia ? 'Del ' + fmtFecha(new Date(m.cintura.dia + 'T12:00:00')) + '.' : '')
-    ]);
+    html += hayPeso
+      ? tarjetaFicha('Peso y cintura', [
+          filaFicha('Último peso', p.ultimo != null ? p.ultimo + ' kg' : null,
+                    p.ultimo_dia ? diaCorto(p.ultimo_dia) : ''),
+          filaFicha('En la semana', delta(p.ultimo, p.hace_7, 'kg')),
+          filaFicha('En el mes',    delta(p.ultimo, p.hace_30, 'kg')),
+          filaFicha('Se pesó',      (p.apuntes_30 || 0) + ' de 30 días'),
+          filaFicha('Última cintura', m.cintura && m.cintura.cm != null ? m.cintura.cm + ' cm' : null,
+                    m.cintura && m.cintura.dia ? diaCorto(m.cintura.dia) : '')
+        ])
+      : tarjetaVacia('Peso y cintura', 'No se ha pesado en los últimos 30 días.');
 
-    html += tarjetaFicha('Entrenamiento', [
-      lineaFicha('Sesiones de fuerza', (e.sesiones_7 || 0) + ' esta semana',
-        m.dias_entreno ? 'Su plan son ' + m.dias_entreno + ' días.' : ''),
-      lineaFicha('En el mes', (e.sesiones_30 || 0)),
-      lineaFicha('Última', e.ultima ? fmtFecha(new Date(e.ultima + 'T12:00:00')) : 'nunca'),
-      lineaFicha('Cardio esta semana', (c.min_7 || 0) + ' min',
-        m.meta_cardio ? 'Su meta son ' + m.meta_cardio + ' min.' : ''),
-      lineaFicha('En el mes', (c.min_30 || 0) + ' min')
-    ]);
+    html += hayEntreno
+      ? tarjetaFicha('Entrenamiento', [
+          filaFicha('Fuerza esta semana', (e.sesiones_7 || 0),
+                    m.dias_entreno ? 'de ' + m.dias_entreno : ''),
+          filaFicha('Fuerza en el mes',   (e.sesiones_30 || 0)),
+          filaFicha('Última sesión',      diaCorto(e.ultima)),
+          filaFicha('Cardio esta semana', (c.min_7 || 0) + ' min',
+                    m.meta_cardio ? 'de ' + m.meta_cardio : ''),
+          filaFicha('Cardio en el mes',   (c.min_30 || 0) + ' min')
+        ])
+      : tarjetaVacia('Entrenamiento', 'Sin entrenamientos ni cardio en el mes.');
 
-    html += tarjetaFicha('Fotos y cómo se siente', [
-      lineaFicha('Semanas con las 4 fotos', (f.semanas_completas_90 || 0) + ' en 90 días'),
-      lineaFicha('Última completa', f.ultima_semana || 'ninguna'),
-      lineaFicha('Hambre', q.hambre != null ? q.hambre + ' de 5' : null),
-      lineaFicha('Energía', q.energia != null ? q.energia + ' de 5' : null),
-      lineaFicha('Sueño', q.sueno != null ? q.sueno + ' de 5' : null,
-        q.nota ? 'Dijo: ' + q.nota : '')
-    ]);
+    // Esta se OMITE entera si no hay nada, no se colapsa: fotos y chequeo
+    // son lo opcional del producto, y una tarjeta diciendo «no hay» por algo
+    // que mucha gente no usa es ruido puro.
+    if(haySentir){
+      html += tarjetaFicha('Fotos y cómo se siente', [
+        filaFicha('Semanas con sus 4 fotos', (f.semanas_completas_90 || 0), 'en 90 días'),
+        filaFicha('Última completa', f.ultima_semana || null),
+        filaFicha('Hambre',  q.hambre  != null ? q.hambre  + ' de 5' : null),
+        filaFicha('Energía', q.energia != null ? q.energia + ' de 5' : null),
+        filaFicha('Sueño',   q.sueno   != null ? q.sueno   + ' de 5' : null)
+      ], q.nota ? 'Escribió: ' + q.nota : '');
+    }
 
     cont.innerHTML = html;
   }
@@ -7065,7 +7167,16 @@
   }
 
   document.getElementById('fcEditarPlan').addEventListener('click', function(){
-    if(fichaDe) abrirEditorPlan({ id: fichaDe.id, nombre: fichaDe.nombre });
+    if(!fichaDe) return;
+    // Las metas viajan con la persona: el editor las enseña arriba para que
+    // se vea contra qué se está escribiendo el plan. Ya están en METRICAS,
+    // así que no hace falta volver a pedirlas.
+    abrirEditorPlan({
+      id: fichaDe.id, nombre: fichaDe.nombre,
+      metas: METRICAS && METRICAS.meta_p
+        ? { P: METRICAS.meta_p, C: METRICAS.meta_c, G: METRICAS.meta_g }
+        : null
+    });
   });
 
   // ---- Que la IA lo resuma ----

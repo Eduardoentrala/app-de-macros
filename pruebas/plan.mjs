@@ -151,17 +151,32 @@ console.log('\n— Los números van con su comparación —');
 {
   const p = APP.slice(APP.indexOf('function pintarMetricas('), APP.indexOf('function pintarAnalisisCliente('));
   // Un numero solo no dice nada: 1.850 calorias es mucho o poco segun la
-  // meta, y «3 dias» depende de cuantos.
-  check('las calorías llevan su meta al lado', /Su meta son ' \+ mil\(m\.meta_cal\)/.test(p));
-  check('la proteína también', /Su meta son ' \+ m\.meta_p/.test(p));
-  check('las sesiones llevan los días que le tocan', /Su plan son ' \+ m\.dias_entreno/.test(p));
-  check('y el cardio su meta', /Su meta son ' \+ m\.meta_cardio/.test(p));
+  // meta, y «3 dias» depende de cuantos. La comparacion va PEGADA al valor
+  // y no en una nota debajo de cada linea, que convertia la tarjeta en un
+  // muro de texto donde no se veia ninguna cifra.
+  check('las calorías llevan su meta al lado', /'de ' \+ mil\(m\.meta_cal\)/.test(p));
+  check('la proteína también', /'de ' \+ m\.meta_p/.test(p));
+  check('las sesiones llevan los días que le tocan', /'de ' \+ m\.dias_entreno/.test(p));
+  check('y el cardio su meta', /'de ' \+ m\.meta_cardio/.test(p));
   // Es la trampa de la que avisa la propia funcion de base de datos.
   check('se avisa de que la media es por día apuntado',
     /no entre siete/i.test(p), 'sin eso se lee como media de la semana y se decide mal');
   check('los cambios de peso llevan signo', /d > 0 \? '\+' : ''/.test(APP));
   // Lo escribe una persona -la nota del chequeo- y acaba en innerHTML.
   check('lo que escribe la persona va escapado', /escapar\(etiqueta\)[\s\S]{0,200}escapar\(/.test(APP));
+
+  // LO QUE HACE QUE ESTO SEA MINIMALISTA: sin datos, la tarjeta se colapsa
+  // en una linea. La primera version pintaba las cuatro siempre, y para
+  // alguien recien llegado eran VEINTE filas con un guion cada una.
+  check('una tarjeta sin datos se colapsa', /function tarjetaVacia\(/.test(APP));
+  check('y si no hay NADA, una sola frase',
+    /Todavía no hay nada suyo que mirar/.test(p));
+  check('lo de fotos se omite entero si no hay', /if\(haySentir\)\{/.test(p),
+    'una tarjeta diciendo «no hay» de algo opcional es ruido puro');
+  // El valor ya no usa .calc-line, que es de 22 px y hacia que «0 de los
+  // ultimos 7» saliera enorme y partido encima de la etiqueta.
+  check('las filas tienen estilo propio, no el del número grande',
+    /class="fc-fila"/.test(APP) && !/calc-line/.test(p));
 }
 
 console.log('\n— El análisis se guarda para no volver a pagarlo —');
@@ -230,6 +245,32 @@ console.log('\n— Y el servidor no se fía del cuerpo —');
   check('no diagnostica ni receta', /NO DIAGNOSTICAS NI RECETAS/.test(p));
   // Es lo unico que se escribe SOBRE alguien y no PARA alguien.
   check('y sabe que no lo lee el cliente', /ella no va a leer esto/.test(p));
+}
+
+console.log('\n— Cuánto le toca comer, arriba del plan —');
+{
+  // Para que la persona sepa cuánto está comiendo sin contar, y el
+  // entrenador vea contra qué números se armó.
+  const t = APP.slice(APP.indexOf('function tiraDeMetas('), APP.indexOf('function pintarMiPlan('));
+  check('están los cuatro', /CALORÍAS/.test(t) && /PROTEÍNA/.test(t) &&
+                            /CARBOS/.test(t) && /GRASAS/.test(t));
+  check('las calorías salen de los macros', /m\.P \* 4 \+ m\.C \* 4 \+ m\.G \* 9/.test(t));
+  check('sale en el plan de la persona', /tiraDeMetas\(leerMetas\(\)\)/.test(APP));
+  check('y en el editor, con las del cliente', /cliente\.metas \? tiraDeMetas\(cliente\.metas\)/.test(APP));
+  check('hay sitio para ella en el editor', /id="peMetas"/.test(HTML));
+  // Sale del PERFIL y no se guarda con el plan: si el entrenador cambia las
+  // metas, la tira cambia y el plan no, y esa diferencia es justo la señal
+  // de que hay que rearmarlo.
+  check('se explica que sale del perfil', /Sale del PERFIL, no se guarda con el plan/.test(APP));
+}
+
+console.log('\n— El editor no corta el texto —');
+{
+  const e = APP.slice(APP.indexOf('function pintarEditorComidas('), APP.indexOf('function volcarDiaActual('));
+  // Con `rows=3` fijo, una comida de cuatro renglones se queda con scroll
+  // DENTRO del recuadro: se ve cortada arriba y abajo.
+  check('los campos crecen con el texto', /scrollHeight/.test(e));
+  check('y al escribir también', /addEventListener\('input', function\(\)\{ crecer\(t\); \}\)/.test(e));
 }
 
 console.log(`\n${ok} pasan · ${mal} fallan`);

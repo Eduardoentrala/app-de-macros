@@ -689,3 +689,49 @@
 .medida-fila .mf-dif.baja{color:var(--green);}
 .medida-fila .mf-dif.sube{color:var(--red);}
 .medida-fila .mf-dif.igual{color:var(--ink-faint);}
+
+/* ---- La ficha de «cómo va» ----
+   Las filas NO usan .calc-line, y ese fue el error de la primera versión:
+   esa clase está hecha para UN número grande solo -22 px, en negrita- y
+   aquí los valores son frases como «0 de los últimos 7». Salían enormes,
+   partidos en dos renglones y encima de la etiqueta.
+
+   Aquí la etiqueta manda y el valor la acompaña: mismo cuerpo de letra,
+   alineado a la derecha y sin partirse. Una línea por dato, separadas por
+   un pelo de línea en vez de por aire. */
+.fc-fila{
+  display:flex;align-items:baseline;justify-content:space-between;gap:16px;
+  padding:10px 0;border-top:1px solid var(--line);
+}
+.fc-fila:first-of-type{border-top:none;padding-top:2px;}
+.fc-fila .et{font:500 13.5px/1.35 sans-serif;color:var(--ink-soft);min-width:0;}
+.fc-fila .va{
+  font:700 14.5px/1.35 sans-serif;color:var(--ink);text-align:right;
+  white-space:nowrap;font-variant-numeric:tabular-nums;flex:none;
+}
+/* Lo que no hay se dice en gris y sin negrita: un «—» tan marcado como una
+   cifra de verdad hace que la tarjeta parezca llena de datos cuando está
+   vacía. */
+.fc-fila .va.vacio{color:var(--ink-faint);font-weight:600;}
+/* La meta, pegada al valor y en pequeño: «— · meta 2,315». Antes iba en una
+   nota debajo de CADA línea y la tarjeta se volvía un muro de texto. */
+.fc-fila .va small{font:600 12px/1 sans-serif;color:var(--ink-faint);}
+/* Una sola nota por tarjeta, al pie, para lo que de verdad hay que aclarar. */
+.fc-pie{font:500 11.5px/1.45 sans-serif;color:var(--ink-faint);margin-top:12px;}
+
+/* ---- Lo que le toca comer, arriba del plan ----
+   Para que la persona sepa cuánto está comiendo y el entrenador vea contra
+   qué se armó. Va en una tira de cuatro y no en cuatro líneas: son cifras
+   que se leen de un vistazo, no una lista que se recorre. */
+.plan-metas{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:1px;
+  margin:0 16px 12px;background:var(--line);
+  border-radius:14px;overflow:hidden;
+}
+.plan-meta{background:var(--card-bg);padding:11px 4px;text-align:center;}
+.plan-meta b{display:block;font:800 17px/1.15 sans-serif;color:var(--ink);font-variant-numeric:tabular-nums;}
+.plan-meta span{display:block;font:600 10.5px/1.2 sans-serif;color:var(--ink-faint);margin-top:3px;letter-spacing:.02em;}
+.plan-metas-pie{
+  font:500 11.5px/1.45 sans-serif;color:var(--ink-faint);
+  margin:-6px 16px 12px;
+}

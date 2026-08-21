@@ -765,16 +765,34 @@ Escribe en español de México, con comida mexicana normal y corriente que
 se consiga en cualquier mercado y se cocine sin complicaciones. Nada de
 ingredientes raros, básculas ni porcentajes.
 
+CÓMO SE DICEN LAS CANTIDADES. Esto importa más de lo que parece: de ello
+depende que la persona coma lo que dice el plan y no el doble.
+
+- EN GRAMOS todo lo que se sirve a bulto y cambia mucho según cómo se
+  sirva: carne, pollo, pescado, arroz, pasta, frijol, avena, queso, nueces,
+  verdura cocida. "Una taza de arroz" son 150 g o 250 g según quién la
+  sirva, y esa diferencia son 150 calorías.
+- EN PIEZAS lo que ya viene en unidades y nadie pesa nunca: tortilla de
+  maíz, bolillo, pan de caja, huevo, fruta entera, un aguacate. Escribir
+  "60 g de tortilla" es pedirle a alguien que pese tortillas; se dice "dos
+  tortillas".
+- Cucharadas para aceite, mantequilla, crema y azúcar: nadie pesa una
+  cucharada de aceite, pero todo el mundo sabe servirla.
+
+Cuando dudes, pregúntate si la persona lo pesaría de verdad en su cocina.
+Si la respuesta es no, no lo pongas en gramos.
+
 Reglas:
 - Cada comida se describe en una o dos frases, en lenguaje de cocina:
-  "dos huevos revueltos, una tortilla y un café con leche". Con medidas
-  caseras -una taza, un puño, una pieza-, nunca en gramos.
+  "dos huevos revueltos con 40 g de frijol, dos tortillas y un café".
 - El total del día debe acercarse a las calorías que te dan, sin pasarte
-  de un 5% ni quedarte corto de un 5%. Comprueba tus cuentas.
+  de un 5% ni quedarte corto de un 5%. Y los TRES macros -proteína,
+  carbohidratos y grasas- deben quedar dentro de un 10% de los que te doy.
+  Comprueba tus cuentas.
 - Reparte la proteína entre todas las comidas, no toda en una.
 - Varía: que no salgan tres comidas de pollo con arroz.
 - En la nota va un consejo corto y práctico, si hace falta. No hables de
-  macros ni de calorías: quien lo lee no quiere saber de eso.
+  macros ni de calorías: quien lo lee ya los tiene arriba en la pantalla.
 
 BARATO Y FÁCIL. Es un requisito, no un adorno:
 - Ingredientes de mercado o de la tienda de la esquina: huevo, pollo,
@@ -1588,8 +1606,15 @@ Deno.serve(async (req) => {
             (semana
               ? `Arma un plan de UNA SEMANA COMPLETA (lunes a domingo) para ${nombre || 'esta persona'}.\n`
               : `Arma un plan de un día para ${nombre || 'esta persona'}.\n`) +
-            `Objetivo: unas ${cal} calorías ${semana ? 'AL DÍA' : 'en total'}, con ` +
-            `${Math.round(Number(cuerpo.proteina) || 0)} g de proteína.\n` +
+            // LOS TRES MACROS, no solo la proteína. Antes se mandaban solo
+            // calorías y proteína, así que el modelo repartía carbohidratos
+            // y grasas a su gusto: dos planes de las mismas calorías podían
+            // salir uno con 90 g de grasa y otro con 30, y ninguno cuadraba
+            // con lo que la app le pide a esa persona.
+            `Objetivo: unas ${cal} calorías ${semana ? 'AL DÍA' : 'en total'}, ` +
+            `con ${Math.round(Number(cuerpo.proteina) || 0)} g de proteína, ` +
+            `${Math.round(Number(cuerpo.carbos) || 0)} g de carbohidratos y ` +
+            `${Math.round(Number(cuerpo.grasas) || 0)} g de grasa.\n` +
             (gustos ? `Ten en cuenta: ${gustos}\n` : '') +
             `Desayuno, comida y cena. Añade un snack solo si hace falta ` +
             `para llegar a las calorías.`,
