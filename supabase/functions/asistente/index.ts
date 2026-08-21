@@ -74,6 +74,64 @@ function json(cuerpo: unknown, status = 200) {
 }
 
 // ---------------------------------------------------------------------
+//  Las fotos que llegan con el mensaje
+// ---------------------------------------------------------------------
+//  Hasta cuatro. Antes era UNA, y apuntar un plato del que hacen falta dos
+//  ángulos —o una comida de varios platos— obligaba a mandarlas de una en
+//  una, gastando una consulta del tope por cada foto.
+//
+//  ACEPTA LAS DOS FORMAS, y no por gusto: la app se despliega en GitHub
+//  Pages y esta función en Supabase, por separado. Entre un despliegue y el
+//  otro hay minutos en que una versión vieja de la app le habla a la nueva
+//  función. Si solo entendiera `imagenes`, en esos minutos las fotos
+//  dejarían de funcionar sin que nadie lo notara.
+//
+//    · `imagen` + `tipo_imagen`  — una sola, como toda la vida
+//    · `imagenes: [{ datos, tipo }]` — hasta cuatro
+//
+//  Devuelve la lista, o un TEXTO con el motivo si algo no cuadra. Se
+//  devuelve el motivo en vez de lanzar para que cada acción conteste con su
+//  propio 400 y el tope diario no se gaste en una petición mal formada.
+const TOPE_FOTOS = 4;
+const TIPOS_FOTO = ['image/jpeg', 'image/png', 'image/webp'];
+
+function leerImagenes(cuerpo: Record<string, unknown>): Array<{ datos: string; tipo: string }> | string {
+  const crudas: Array<{ datos: string; tipo: string }> = [];
+
+  if (Array.isArray(cuerpo.imagenes)) {
+    for (const x of cuerpo.imagenes) {
+      const o = (x || {}) as Record<string, unknown>;
+      const datos = typeof o.datos === 'string' ? o.datos : '';
+      if (!datos) continue;
+      crudas.push({ datos, tipo: String(o.tipo || 'image/jpeg') });
+    }
+  }
+  // La forma antigua. Si vienen las dos, mandan las nuevas: una app que ya
+  // sabe mandar la lista pone la primera foto también en `imagen` para no
+  // romper a la función vieja, y contarla dos veces la duplicaría.
+  if (!crudas.length && typeof cuerpo.imagen === 'string' && cuerpo.imagen) {
+    crudas.push({ datos: cuerpo.imagen, tipo: String(cuerpo.tipo_imagen || 'image/jpeg') });
+  }
+
+  if (crudas.length > TOPE_FOTOS) {
+    return `Son demasiadas fotos: ${TOPE_FOTOS} como mucho.`;
+  }
+  // Los topes van por foto Y por total. Cuatro de siete megas y medio cada
+  // una pasarían el tope de una en una y sumarían treinta: la app las reduce
+  // antes de mandarlas, pero esto no se fía de la app —cualquiera puede
+  // llamar a la función por su cuenta, y los tokens son dinero—.
+  let suma = 0;
+  for (const f of crudas) {
+    if (f.datos.length > 8_000_000) return 'La foto es demasiado grande.';
+    if (!TIPOS_FOTO.includes(f.tipo)) return 'Ese formato de imagen no sirve.';
+    suma += f.datos.length;
+  }
+  if (suma > 16_000_000) return 'Entre todas las fotos pesan demasiado.';
+
+  return crudas;
+}
+
+// ---------------------------------------------------------------------
 //  Esquemas de salida
 //
 //  Van por `output_config.format`, no por "devuélveme JSON y ya": así la
@@ -861,33 +919,29 @@ Deno.serve(async (req) => {
 
     if (accion === 'apuntar') {
       const texto = String(cuerpo.texto || '').trim().slice(0, 500);
-      const imagen = typeof cuerpo.imagen === 'string' ? cuerpo.imagen : '';
-      const tipoImagen = String(cuerpo.tipo_imagen || 'image/jpeg');
+      const fotos = leerImagenes(cuerpo);
+      if (typeof fotos === 'string') return json({ error: fotos }, 400);
 
-      if (!texto && !imagen) {
+      if (!texto && !fotos.length) {
         return json({ error: 'Escribe qué comiste o toma una foto.' }, 400);
-      }
-      // La app ya reduce la foto antes de mandarla. Este tope es por si
-      // alguien llama a la función por su cuenta: una imagen enorme se
-      // traduce en muchos tokens, y los tokens son dinero.
-      if (imagen && imagen.length > 8_000_000) {
-        return json({ error: 'La foto es demasiado grande.' }, 413);
-      }
-      if (imagen && !['image/jpeg', 'image/png', 'image/webp'].includes(tipoImagen)) {
-        return json({ error: 'Ese formato de imagen no sirve.' }, 400);
       }
 
       const partes: unknown[] = [];
-      if (imagen) {
+      for (const f of fotos) {
         partes.push({
           type: 'image',
-          source: { type: 'base64', media_type: tipoImagen, data: imagen },
+          source: { type: 'base64', media_type: f.tipo, data: f.datos },
         });
       }
       partes.push({
         type: 'text',
-        text: texto || 'Esto es lo que me comí. Dime qué lleva y sus macros.',
+        text: texto || (fotos.length > 1
+          ? 'Esto es lo que me comí, en varias fotos del MISMO plato o comida. ' +
+            'No lo cuentes varias veces: son distintos ángulos de lo mismo, ' +
+            'salvo que se vea claramente que son platos distintos.'
+          : 'Esto es lo que me comí. Dime qué lleva y sus macros.'),
       });
+      const imagen = fotos.length ? '1' : '';   // solo para decidir el esfuerzo
 
       const r = await ia.messages.create({
         model: MODELO,
@@ -910,16 +964,13 @@ Deno.serve(async (req) => {
 
     if (accion === 'chat') {
       const historial = Array.isArray(cuerpo.mensajes) ? cuerpo.mensajes : [];
-      const imagen = typeof cuerpo.imagen === 'string' ? cuerpo.imagen : '';
-      const tipoImagen = String(cuerpo.tipo_imagen || 'image/jpeg');
+      const fotos = leerImagenes(cuerpo);
+      if (typeof fotos === 'string') return json({ error: fotos }, 400);
+      const imagen = fotos.length ? '1' : '';   // solo para decidir el esfuerzo
 
-      if (!historial.length && !imagen) {
+      if (!historial.length && !fotos.length) {
         return json({ error: 'Escribe algo o manda una foto.' }, 400);
       }
-      if (imagen && imagen.length > 8_000_000) {
-        return json({ error: 'La foto es demasiado grande.' }, 413);
-      }
-
       // El contexto del día va en el sistema y no en el mensaje: así no se
       // repite en cada turno de la conversación ni se puede confundir con
       // algo que escribió la persona.
@@ -974,17 +1025,29 @@ Deno.serve(async (req) => {
         content: String(x.texto || '').slice(0, 2000),
       })).filter((x) => x.content);
 
-      if (imagen) {
+      if (fotos.length) {
         const ultimo = mensajes[mensajes.length - 1];
         const texto = ultimo && ultimo.role === 'user' ? ultimo.content : '';
         if (ultimo && ultimo.role === 'user') mensajes.pop();
+        // Todas las fotos en el MISMO mensaje, y el texto al final. Si
+        // fueran mensajes separados, el modelo las trataria como cosas
+        // distintas y sumaria el plato varias veces.
+        const partes: unknown[] = fotos.map((f) => ({
+          type: 'image',
+          source: { type: 'base64', media_type: f.tipo, data: f.datos },
+        }));
+        partes.push({
+          type: 'text',
+          text: texto || (fotos.length > 1
+            ? 'Esto es lo que me comi, en varias fotos del MISMO plato o comida. ' +
+              'No lo cuentes varias veces: son distintos angulos de lo mismo, ' +
+              'salvo que se vea claramente que son platos distintos.'
+            : 'Esto es lo que me comí.'),
+        });
         mensajes.push({
           role: 'user',
           // deno-lint-ignore no-explicit-any
-          content: [
-            { type: 'image', source: { type: 'base64', media_type: tipoImagen, data: imagen } },
-            { type: 'text', text: texto || 'Esto es lo que me comí.' },
-          ] as any,
+          content: partes as any,
         });
       }
       if (!mensajes.length) return json({ error: 'Escribe algo.' }, 400);
