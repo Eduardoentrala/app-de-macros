@@ -102,37 +102,51 @@ console.log('\n— Y son PNG válidos, no archivos con nombre de PNG —');
 console.log('\n— Y el dibujo es el que se quería —');
 {
   // Se mira el de 512, que es donde la geometría se aprecia. Las posiciones
-  // salen de las proporciones de herramientas/iconos.mjs: radio .300 del
-  // lado, arco del 72% arrancando arriba y girando como las agujas.
+  // salen de las proporciones de herramientas/iconos.mjs: aro de radio .302
+  // del lado, del 72% y arrancando arriba, y la pesa dentro.
   const img = leerPng(join(DIR, 'icono-512.png'));
-  const S = 512, c = S / 2, R = 0.300 * S;
-  // Un punto del anillo a `giro` grados desde arriba, en el sentido de las
-  // agujas del reloj.
+  const S = 512, c = S / 2, R = 0.302 * S;
+  // Un punto del aro a `giro` grados desde arriba, como las agujas.
   const en = (giro) => {
     const t = (giro * Math.PI) / 180;
     return img.en(Math.round(c + R * Math.sin(t)), Math.round(c - R * Math.cos(t)));
   };
-  const verde = ([r, g, b]) => g > r + 40 && g > b + 30;
-  const gris  = ([r, g, b]) => Math.abs(r - g) < 14 && Math.abs(g - b) < 14;
+  // Va a la manera de Apple: el fondo es el color y el glifo es BLANCO. Al
+  // revés de como estaba antes, asi que estas dos son las que hay que mirar.
+  const blanco = ([r, g, b]) => r > 230 && g > 230 && b > 230;
+  const verde  = ([r, g, b]) => g > r + 40 && g > b + 40;
 
-  check('arriba del anillo hay arco verde', verde(en(0)), en(0).join(','));
-  check('a la derecha también', verde(en(90)), en(90).join(','));
-  check('abajo también', verde(en(180)), en(180).join(','));
-  // El hueco: el arco cubre el 72% (259.2°) desde arriba, así que de ahí a
-  // los 360° tiene que verse la pista gris y no arco. Si algún día se
-  // cierra el anillo, esto avisa.
-  check('y arriba a la izquierda queda el hueco', gris(en(310)), en(310).join(','));
+  check('arriba del aro hay trazo blanco', blanco(en(0)), en(0).join(','));
+  check('a la derecha también', blanco(en(90)), en(90).join(','));
+  check('abajo también', blanco(en(180)), en(180).join(','));
+  // El hueco: el aro cubre el 72% (259.2°) desde arriba, así que de ahí a
+  // los 360° tiene que verse el FONDO y no trazo. Si algún día se cierra el
+  // aro, esto avisa.
+  check('y arriba a la izquierda queda el hueco', verde(en(310)), en(310).join(','));
 
-  // El centro hueco y las esquinas de fondo: si el rasterizador se
-  // desbordara y rellenara de más, estos dos dejan de cumplirse.
-  const centro = img.en(c, c), esquina = img.en(4, 4);
-  check('el centro está hueco', gris(centro) && centro[1] < 60, centro.join(','));
-  check('el fondo es oscuro', esquina[0] < 60 && esquina[1] < 60, esquina.join(','));
-  // El degradado del fondo: arriba tiene que ser más claro que abajo. Es lo
-  // que se pierde primero si alguien simplifica el pintado.
-  check('el fondo va degradado', img.en(4, 4)[0] > img.en(4, S - 5)[0]);
+  // La pesa: el centro cae en mitad de la barra, así que ahí hay blanco. Es
+  // lo que distingue este icono del anillo pelado que había antes.
+  check('en el centro está la barra de la pesa', blanco(img.en(c, c)), img.en(c, c).join(','));
+  // Y los discos, a los lados de la barra.
+  const disco = Math.round(c + 0.178 * 0.62 * S);
+  check('y los discos a los lados', blanco(img.en(disco, c)), img.en(disco, c).join(','));
 
-  // Sin transparencia: iOS descarta el alfa y deja el hueco NEGRO, no
+  // Las esquinas son fondo: si el rasterizador se desbordara y rellenara de
+  // más, esto deja de cumplirse.
+  const esquina = img.en(4, 4);
+  check('las esquinas son del color de fondo', verde(esquina), esquina.join(','));
+  // El degradado del fondo: arriba más claro que abajo. Es lo primero que se
+  // pierde si alguien simplifica el pintado.
+  check('el fondo va degradado', img.en(4, 4)[1] > img.en(4, S - 5)[1] + 20,
+        img.en(4, 4).join(',') + ' arriba / ' + img.en(4, S - 5).join(',') + ' abajo');
+  // El glifo, en cambio, va PLANO. Un glifo degradado sobre fondo degradado
+  // es lo que hace que un icono no parezca de Apple, y es justo lo que se
+  // pidió evitar.
+  const gArriba = en(0), gAbajo = en(180);
+  check('el glifo NO va degradado', Math.abs(gArriba[1] - gAbajo[1]) < 8,
+        gArriba.join(',') + ' arriba / ' + gAbajo.join(',') + ' abajo');
+
+  // Sin transparencia: iOS descarta el alfa y deja el fondo NEGRO, no
   // transparente. Un icono con fondo transparente sale con un cuadro negro
   // en el iPhone.
   const b = readFileSync(join(DIR, 'icono-512.png'));
@@ -142,12 +156,33 @@ console.log('\n— Y el dibujo es el que se quería —');
 console.log('\n— Zona segura de Android —');
 {
   // Un icono `maskable` puede recortarse hasta un círculo del 80% del lado.
-  // Todo lo que importe tiene que caber dentro o Android le corta el
-  // anillo. Se comprueba con los números, no con la vista.
-  const radio = 0.300, grosor = 0.096;
+  // Todo lo que importe tiene que caber dentro o Android le corta el aro.
+  // Se comprueba con los números, no con la vista.
+  const radio = 0.302, grosor = 0.050;
   const borde = (radio + grosor / 2) * 2;          // diámetro que ocupa el dibujo
-  check('el anillo cabe en el círculo del 80%', borde <= 0.80,
+  check('el dibujo cabe en el círculo del 80%', borde <= 0.80,
         `ocupa ${(borde * 100).toFixed(1)}% y el tope es 80%`);
+}
+
+console.log('\n— Y el service worker no los deja fijos para siempre —');
+{
+  // LA TRAMPA QUE ESTO VIGILA: los iconos y el manifest no llevan `?v=` en
+  // la dirección, porque quien los lee es el sistema operativo y no pasa por
+  // el mecanismo del sello. Si el service worker los guardara, se quedarían
+  // fijos para siempre: se rediseña el icono, se publica, y en el teléfono
+  // sigue el de antes sin forma de enterarse.
+  //
+  // Ya pasó con la primera versión de este icono, y por eso hay prueba.
+  const SW = readFileSync(join(DOCS, 'sw.js'), 'utf8');
+  check('sw.js deja fuera la carpeta de iconos', /\/iconos\//.test(SW));
+  check('y también el manifest', /manifest\.json/.test(SW));
+  // Que estén nombrados no basta: tienen que salir con `return` ANTES de
+  // llegar al guardado, como hace version.txt.
+  // El `.*` y no `[^)]*`: la condición lleva paréntesis dentro
+  // —`includes('/iconos/')`— y una clase negada se para en el primero.
+  const salida = SW.match(/^\s*if \(.*iconos.*\) return;$/m);
+  check('y salen con return, no solo mencionados', !!salida,
+        salida ? salida[0] : 'no hay un if que corte');
 }
 
 console.log('\n— El manifest dice lo que debe —');

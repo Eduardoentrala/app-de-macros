@@ -78,6 +78,21 @@ self.addEventListener('fetch', (e) => {
   // al día para siempre.
   if (url.pathname.endsWith('version.txt')) return;
 
+  // Los iconos y el manifest, TAMBIÉN a la red, y por la misma razón.
+  //
+  // Sus direcciones no llevan `?v=SELLO` —el manifest lo lee el sistema
+  // operativo y el apple-touch-icon lo lee iOS del HTML, y ninguno de los
+  // dos pasa por el mecanismo del sello—. Sin sello en la dirección,
+  // guardarlos aquí los dejaría fijos PARA SIEMPRE: se rediseña el icono,
+  // se publica, y en el teléfono sigue el viejo sin forma de enterarse.
+  // Es la misma trampa que este archivo evita para el JavaScript, solo que
+  // por la puerta de atrás.
+  //
+  // No guardarlos no cuesta nada: el sistema se queda con el icono al
+  // instalar la app, y el de la pestaña del navegador no hace falta sin
+  // señal. Son cuatro archivos que se piden una vez y ya.
+  if (url.pathname.includes('/iconos/') || url.pathname.endsWith('manifest.json')) return;
+
   // El index: red primero. Así, en cuanto hay señal, llega el sello nuevo y
   // el propio index se encarga de recargar con la versión nueva.
   if (req.mode === 'navigate' || url.pathname.endsWith('/') || url.pathname.endsWith('index.html')) {
@@ -120,6 +135,15 @@ self.addEventListener('message', (e) => {
   if (d.tipo !== 'limpiar' || !d.sello) return;
   caches.open(CACHE).then((c) => c.keys().then((claves) => {
     claves.forEach((req) => {
+      const ruta = new URL(req.url).pathname;
+      // Restos de una versión anterior de este archivo, que SÍ guardaba los
+      // iconos y el manifest. Ahora no se guardan -está explicado arriba-,
+      // pero lo que se guardó entonces no se borra solo: no lleva sello, así
+      // que la regla de abajo no lo toca y se quedaría ahí para siempre.
+      if (ruta.includes('/iconos/') || ruta.endsWith('manifest.json')) {
+        c.delete(req);
+        return;
+      }
       const v = new URL(req.url).searchParams.get('v');
       // Solo se borra lo que TIENE sello y es de otra versión. Lo que no
       // lleva sello -el index- no se toca nunca: es lo que sostiene la app

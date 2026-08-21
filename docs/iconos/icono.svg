@@ -1,19 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
     <linearGradient id="fondo" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#1e2023"/>
-      <stop offset="1" stop-color="#0b0b0d"/>
-    </linearGradient>
-    <linearGradient id="arco" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#62e8a4"/>
-      <stop offset="1" stop-color="#1c9a56"/>
+      <stop offset="0" stop-color="#5ae27e"/>
+      <stop offset="1" stop-color="#1ba847"/>
     </linearGradient>
   </defs>
   <rect width="512" height="512" fill="url(#fondo)"/>
-  <g transform="rotate(-90 256 256)">
-    <circle cx="256" cy="256" r="153.6" fill="none" stroke="#2b2d31" stroke-width="49.152"/>
-    <circle cx="256" cy="256" r="153.6" fill="none" stroke="url(#arco)" stroke-width="49.152"
-      stroke-linecap="round" pathLength="100"
-      stroke-dasharray="72.00 100"/>
+  <g fill="none" stroke="#ffffff" stroke-linecap="round">
+    <circle cx="256" cy="256" r="154.62" stroke-width="25.6"
+      pathLength="100" stroke-dasharray="72 100"
+      transform="rotate(-90 256 256)"/>
+    <line x1="199.5" y1="256" x2="312.5" y2="256" stroke-width="26.62"/>
+    <line x1="199.5" y1="211.34" x2="199.5" y2="300.66" stroke-width="39.4"/>
+    <line x1="312.5" y1="211.34" x2="312.5" y2="300.66" stroke-width="39.4"/>
+    <line x1="172.15" y1="229.57" x2="172.15" y2="282.43" stroke-width="31.42"/>
+    <line x1="339.85" y1="229.57" x2="339.85" y2="282.43" stroke-width="31.42"/>
   </g>
 </svg>
