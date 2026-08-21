@@ -2896,7 +2896,14 @@
   // Dos fuentes, y el orden importa: primero el catálogo -datos de USDA,
   // medidos- y debajo lo que registra la gente, que es estimado. Quien
   // busca "pollo" debe encontrar antes el dato bueno.
-  function pintarSugerencias(lista, texto){
+  // `sinRed` = las dos búsquedas del servidor fallaron por falta de señal.
+  //
+  // NO ES UN DETALLE DE REDACCIÓN. Sin esto el mensaje decía «No encontré
+  // «salmón»» cuando en realidad no había mirado: el catálogo vive en el
+  // servidor y sin señal no se consulta. Quien lee eso concluye que ese
+  // alimento no está en la app y lo crea a mano con macros a ojo — cuando
+  // en el catálogo estaba, medido. La app afirmaba algo que no comprobó.
+  function pintarSugerencias(lista, texto, sinRed){
     if(!texto || texto.length < 2){ mealSugeridos.innerHTML = ''; return; }
 
     var deMios     = lista.filter(function(a){ return a.fuente === 'mio'; });
@@ -2905,11 +2912,25 @@
 
     if(!lista.length){
       mealSugeridos.innerHTML = '<p class="calc-note" style="padding:14px 20px 0;">' +
-        'No encontré «' + escapar(texto) + '». Créalo en la pestaña «Crear»: ' +
-        'quedará guardado para ti y, si otras personas lo registran también, ' +
-        'empezará a sugerirse solo.</p>';
+        (sinRed
+          ? 'Sin conexión: ahora solo puedo buscar entre tus alimentos guardados, ' +
+            'y «' + escapar(texto) + '» no está ahí. Puedes crearlo en la pestaña ' +
+            '«Crear» y se subirá cuando vuelva la señal, o esperar a tener red ' +
+            'para buscarlo en el catálogo.'
+          : 'No encontré «' + escapar(texto) + '». Créalo en la pestaña «Crear»: ' +
+            'quedará guardado para ti y, si otras personas lo registran también, ' +
+            'empezará a sugerirse solo.') +
+        '</p>';
       return;
     }
+
+    // Y si SÍ hay resultados pero eran solo los tuyos, se dice igual: ver
+    // dos alimentos donde normalmente salen doce hace pensar que el
+    // catálogo se quedó corto, no que no se ha consultado.
+    var aviso = sinRed
+      ? '<p class="calc-note" style="padding:12px 20px 0;">Sin conexión: solo tus ' +
+        'alimentos guardados. El catálogo vuelve con la señal.</p>'
+      : '';
 
     // Cada procedencia con su franja. Antes los dos bloques se distinguían
     // solo por un título del mismo color que el resto y las tarjetas se
@@ -2929,7 +2950,7 @@
         }).join('') + '</div>';
     };
 
-    mealSugeridos.innerHTML =
+    mealSugeridos.innerHTML = aviso +
       bloque('Tus guardados', 'lo que ya usas', deMios) +
       bloque('Base de datos', 'medido, en gramos', deCatalogo) +
       bloque('De otras personas', 'lo que registran otros', deGente);
@@ -2941,9 +2962,18 @@
 
     // Las dos búsquedas van a la vez. Si una falla, la otra sigue
     // sirviendo: quedarse sin catálogo no debe dejar sin sugerencias.
+    //
+    // Pero se APUNTA si el fallo fue por falta de señal, porque cambia lo
+    // que hay que decirle a la persona: «no lo encontré» y «no pude
+    // buscarlo» son cosas distintas y llevan a decisiones distintas.
+    var sinRed = false;
+    var falloBusqueda = function(e){
+      if(sinConexion(e)) sinRed = true;
+      return [];
+    };
     Promise.all([
-      sbRpc('buscar_catalogo',  { p_texto: texto, p_limite: 12 })['catch'](function(){ return []; }),
-      sbRpc('buscar_alimentos', { p_texto: texto, p_limite: 8  })['catch'](function(){ return []; })
+      sbRpc('buscar_catalogo',  { p_texto: texto, p_limite: 12 })['catch'](falloBusqueda),
+      sbRpc('buscar_alimentos', { p_texto: texto, p_limite: 8  })['catch'](falloBusqueda)
     ]).then(function(r){
       // Si mientras llegaba la respuesta ya se escribió otra cosa, esta sobra
       if(mealSearch.value.trim() !== texto) return;
@@ -3016,7 +3046,7 @@
       };
 
       SUGERIDOS = mios.concat(cat.filter(noRepetido), gente.filter(noRepetido));
-      pintarSugerencias(SUGERIDOS, texto);
+      pintarSugerencias(SUGERIDOS, texto, sinRed);
     });
   }
 
@@ -7226,6 +7256,18 @@
 
   function cargarDatos(){
     if(!sesion || !sesion.user) return Promise.resolve();
+
+    // La despensa guardada, ANTES de pedir nada.
+    //
+    // Va aquí y no solo en el arranque porque hay más caminos que llegan a
+    // cargar datos: entrar por el formulario, registrarse, volver de una
+    // sesión caducada. Se probó y fallaba justo ahí: quien entraba con su
+    // correo y contraseña sin señal se quedaba sin despensa —el arranque no
+    // había pasado por el `if(sesion)`— y al buscar «pollo» no salía su
+    // propia pechuga de pollo. Poniéndolo dentro, lo cubren todos.
+    //
+    // Si hay señal, lo del servidor llega después y lo sustituye.
+    cargarDespensa();
 
     // Va DENTRO de la función a propósito. Como constante suelta arriba
     // valdría `undefined` al arrancar: el bloque de datos está al final del

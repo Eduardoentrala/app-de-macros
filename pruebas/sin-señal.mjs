@@ -421,5 +421,43 @@ console.log('\n— En el código del peso y la despensa —');
     'dejaría la lista de comidas de alguien en un teléfono ajeno');
 }
 
+console.log('\n— Buscar sin señal no miente —');
+{
+  // EL FALLO: sin red, las dos búsquedas del servidor fallaban, se tragaban
+  // el error y la pantalla decía «No encontré «salmón»». No lo había
+  // buscado: el catálogo vive en el servidor. Quien lee eso concluye que no
+  // está en la app y lo crea a mano con macros a ojo, cuando en el catálogo
+  // estaba medido.
+  const bus = APP.slice(APP.indexOf('function pintarSugerencias('),
+                        APP.indexOf('function normalizarBusqueda('));
+  check('el pintado sabe si fue falta de red', /function pintarSugerencias\(lista, texto, sinRed\)/.test(bus));
+  check('y lo dice en vez de «no encontré»', /Sin conexión: ahora solo puedo buscar/.test(bus));
+  check('sin red no se sugiere que no existe', /sinRed[\s\S]{0,400}No encontré/.test(bus),
+    'las dos redacciones tienen que convivir, una por caso');
+  // Con resultados propios también se avisa: ver dos donde salen doce hace
+  // pensar que el catálogo se quedó corto, no que no se consultó.
+  check('y también avisa cuando sí hay resultados tuyos',
+    /Sin conexión: solo tus[\s\S]{0,120}alimentos guardados/.test(bus));
+
+  const fn = APP.slice(APP.indexOf('function buscarSugerencias('),
+                       APP.indexOf('function pintarSugerencias(') > APP.indexOf('function buscarSugerencias(')
+                         ? APP.indexOf('function pintarSugerencias(')
+                         : APP.indexOf('function normalizarBusqueda('));
+  check('el fallo de red se distingue del vacío', /if\(sinConexion\(e\)\) sinRed = true;/.test(APP));
+  check('y se le pasa al pintado', /pintarSugerencias\(SUGERIDOS, texto, sinRed\)/.test(APP));
+}
+
+console.log('\n— La despensa se carga por todos los caminos —');
+{
+  // Se probó y fallaba: entrar por el formulario de correo y contraseña sin
+  // señal dejaba sin despensa, porque `cargarDespensa` solo estaba en el
+  // arranque, dentro del `if(sesion)`. Quien entraba así buscaba «pollo» y
+  // no encontraba su propia pechuga de pollo.
+  const cd = APP.slice(APP.indexOf('function cargarDatos('), APP.indexOf('  // ---- Tema claro / oscuro ----'));
+  check('cargarDatos carga la despensa antes de pedir nada',
+    cd.indexOf('cargarDespensa();') > 0 && cd.indexOf('cargarDespensa();') < cd.indexOf('Promise.all'),
+    'entrar por el formulario se quedaba sin ella');
+}
+
 console.log(`\n${ok} pasan · ${mal} fallan`);
 process.exit(mal ? 1 : 0);
