@@ -7881,7 +7881,13 @@
   // teléfono y el repositorio es público.
   var iaChat = document.getElementById('iaChat');
   var iaTexto = document.getElementById('iaTexto');
-  var iaFoto = null;          // { base64, tipo, vista } ya reducida
+  // Hasta CUATRO fotos, cada una { base64, tipo, vista } ya reducida.
+  //
+  // Antes era una sola. Un plato del que hacen falta dos angulos —o una
+  // comida de varios platos— obligaba a mandarlas de una en una, y cada
+  // envio gasta una consulta del tope diario.
+  var IA_FOTOS = [];
+  var TOPE_FOTOS_IA = 4;
   var IA_MSGS = [];           // { rol:'yo'|'el', texto, foto?, alimentos? }
   var iaOcupado = false;
 
@@ -8027,25 +8033,50 @@
 
   function pintarFotoIA(){
     var z = document.getElementById('iaFotoZona');
-    z.innerHTML = iaFoto
-      ? '<div class="ia-foto-previa"><img src="' + iaFoto.vista + '" alt="">' +
-        '<button id="iaQuitarFoto" title="Quitar">✕</button></div>'
-      : '';
+    if(!IA_FOTOS.length){ z.innerHTML = ''; return; }
+    // La × lleva el indice: quitar la tercera de cuatro tiene que quitar
+    // ESA y no la ultima.
+    z.innerHTML = '<div class="ia-fotos' + (IA_FOTOS.length > 1 ? ' varias' : '') + '">' +
+      IA_FOTOS.map(function(f, i){
+        return '<div class="ia-foto-previa"><img src="' + f.vista + '" alt="">' +
+          '<button data-quita-foto="' + i + '" aria-label="Quitar foto ' + (i+1) + '">✕</button></div>';
+      }).join('') + '</div>';
   }
 
   document.getElementById('iaTomarFoto').addEventListener('click', function(){
     document.getElementById('iaArchivo').click();
   });
   document.getElementById('iaFotoZona').addEventListener('click', function(e){
-    if(e.target.closest('#iaQuitarFoto')){ iaFoto = null; pintarFotoIA(); }
+    var b = e.target.closest('[data-quita-foto]');
+    if(!b) return;
+    IA_FOTOS.splice(Number(b.dataset.quitaFoto), 1);
+    pintarFotoIA();
   });
   document.getElementById('iaArchivo').addEventListener('change', function(e){
-    var archivo = e.target.files && e.target.files[0];
-    e.target.value = '';                  // deja volver a elegir la misma
-    if(!archivo) return;
-    reducirFoto(archivo)
-      .then(function(f){ iaFoto = f; pintarFotoIA(); })
-      ['catch'](function(err){ toast('toastIA2', err.message); });
+    var elegidas = Array.prototype.slice.call(e.target.files || []);
+    e.target.value = '';                  // deja volver a elegir las mismas
+    if(!elegidas.length) return;
+
+    // Se SUMAN a las que ya hubiera: en el telefono la galeria y la camara
+    // son dos toques distintos, y quien hace una foto y luego elige otra de
+    // la galeria espera tener las dos.
+    var hueco = TOPE_FOTOS_IA - IA_FOTOS.length;
+    if(hueco <= 0){ toast('toastIA2', 'Ya tienes ' + TOPE_FOTOS_IA + ' fotos'); return; }
+    var sobran = elegidas.length - hueco;
+    if(sobran > 0) elegidas = elegidas.slice(0, hueco);
+
+    // De una en una y en orden: reducir cuatro a la vez en un telefono
+    // modesto las descomprime todas en memoria al mismo tiempo, y ahi es
+    // donde la pestaña se muere sin decir nada.
+    elegidas.reduce(function(cadena, archivo){
+      return cadena.then(function(){
+        return reducirFoto(archivo).then(function(f){ IA_FOTOS.push(f); pintarFotoIA(); });
+      });
+    }, Promise.resolve())
+      .then(function(){
+        if(sobran > 0) toast('toastIA2', 'Solo caben ' + TOPE_FOTOS_IA + ': dejé las primeras');
+      })
+      ['catch'](function(err){ toast('toastIA2', err.message); pintarFotoIA(); });
   });
 
   // ---- La conversación ----
@@ -8116,14 +8147,17 @@
   function enviarIA(textoForzado){
     if(iaOcupado) return;
     var texto = (textoForzado != null ? textoForzado : iaTexto.value).trim();
-    if(!texto && !iaFoto){ return; }
+    if(!texto && !IA_FOTOS.length){ return; }
     if(!sesion){ toast('toastIA2', 'Inicia sesión para usar el asistente'); return; }
 
-    IA_MSGS.push({ rol:'yo', texto: texto, foto: iaFoto ? iaFoto.vista : null });
-    var fotoEnvio = iaFoto;
+    // En la conversacion se enseña la primera; las demas van al servidor
+    // igual. Pintar cuatro miniaturas en la burbuja del chat la convierte
+    // en un mosaico y se pierde lo que se escribio.
+    IA_MSGS.push({ rol:'yo', texto: texto, foto: IA_FOTOS.length ? IA_FOTOS[0].vista : null });
+    var fotosEnvio = IA_FOTOS.slice();
     iaTexto.value = '';
     iaTexto.style.height = '';
-    iaFoto = null;
+    IA_FOTOS = [];
     pintarFotoIA();
 
     IA_MSGS.push({ rol:'el', texto:'…', pensando:true });
@@ -8135,8 +8169,19 @@
       accion: 'chat',
       mensajes: IA_MSGS.filter(function(m){ return !m.pensando; })
                        .map(function(m){ return { rol:m.rol, texto:m.texto }; }),
-      imagen: fotoEnvio ? fotoEnvio.base64 : undefined,
-      tipo_imagen: fotoEnvio ? fotoEnvio.tipo : undefined,
+      // Las dos formas a la vez, y no por gusto. La app y la funcion se
+      // despliegan por separado; entre un despliegue y el otro hay minutos
+      // en que esta app le habla a la funcion VIEJA, que solo entiende
+      // `imagen`. Mandando la primera tambien asi, en esos minutos se
+      // analiza una foto en vez de ninguna.
+      //
+      // La funcion nueva ignora `imagen` cuando viene `imagenes`, asi que
+      // no se cuenta dos veces.
+      imagen: fotosEnvio.length ? fotosEnvio[0].base64 : undefined,
+      tipo_imagen: fotosEnvio.length ? fotosEnvio[0].tipo : undefined,
+      imagenes: fotosEnvio.length
+        ? fotosEnvio.map(function(f){ return { datos: f.base64, tipo: f.tipo }; })
+        : undefined,
       macros: macrosDeHoy(),
       // El servidor corre en UTC. A las 8 de la noche en México allí ya es
       // mañana, y "el viernes" saldría corrido un día.

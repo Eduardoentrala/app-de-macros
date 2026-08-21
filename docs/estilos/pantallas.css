@@ -266,10 +266,18 @@
 .ia-foto-btn span{font-size:19px;}
 .ia-foto-btn:active{opacity:.6;}
 /* La foto elegida, con su botón para quitarla encima */
-.ia-foto-previa{position:relative;margin-bottom:10px;}
+/* Hasta cuatro fotos. Con una ocupa el ancho entero, como siempre; con
+   varias se reparten en dos columnas, que a cuatro es lo unico que deja
+   verlas y seguir viendo el campo de escribir sin desplazarse. */
+.ia-fotos{display:grid;grid-template-columns:1fr;gap:8px;margin-bottom:10px;}
+.ia-fotos.varias{grid-template-columns:1fr 1fr;}
+.ia-foto-previa{position:relative;margin-bottom:0;}
 .ia-foto-previa img{
   width:100%;max-height:190px;object-fit:cover;border-radius:14px;display:block;
 }
+/* En rejilla se bajan de alto: cuatro a 190 px empujarian el teclado fuera
+   de la pantalla en un telefono. */
+.ia-fotos.varias .ia-foto-previa img{max-height:110px;}
 .ia-foto-previa button{
   position:absolute;top:8px;right:8px;width:30px;height:30px;border-radius:50%;
   border:none;background:rgba(0,0,0,.62);color:#fff;cursor:pointer;
