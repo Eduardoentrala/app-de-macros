@@ -6,9 +6,10 @@
     "aplicar": "node aplicar.mjs",
     "seguridad": "node seguridad.mjs",
     "generar": "node generar.mjs",
-    "test": "node aplicar.mjs && node seguridad.mjs && node apuntes-sin-senal.mjs && node plan-archivado.mjs && node generar.mjs",
+    "test": "node aplicar.mjs && node seguridad.mjs && node apuntes-sin-senal.mjs && node plan-archivado.mjs && node metricas-cliente.mjs && node generar.mjs",
     "apuntes": "node apuntes-sin-senal.mjs",
-    "plan": "node plan-archivado.mjs"
+    "plan": "node plan-archivado.mjs",
+    "metricas": "node metricas-cliente.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.4"
