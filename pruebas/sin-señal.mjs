@@ -67,6 +67,9 @@ function montar({ online = true, respuestas = [], guardado = null } = {}) {
       removeItem: (k) => { almacen.delete(k); }
     },
     document: { getElementById: () => null, addEventListener: () => {}, hidden: false },
+    // Estructuras que el bloque toca ahora que cubre despensa y peso
+    MIS_ALIMENTOS: [], RECETAS: [], PESOS: {}, CINTURAS: [],
+    recalcularFrecuentes: () => {}, pintarListas: () => {},
     toast: (id, m) => { avisos.push(m); },
     // El `fetch` de la app pasa por aquí: cada llamada consume una respuesta.
     sbFetch: (ruta, op) => {
@@ -313,6 +316,109 @@ console.log('\n— Se ve que falta subir —');
     'un aviso de datos sin guardar que se puede callar no sirve de nada');
   check('dice cuántos faltan', /Faltan subir/.test(APP));
   check('y que están a salvo en el teléfono', /guardados en el tel/i.test(HTML));
+}
+
+console.log('\n— El peso: uno por día, no tres —');
+{
+  const m = montar();
+  // Pesarse tres veces sin señal tiene que dejar UN upsert, el último.
+  for (const kg of [80, 81, 82])
+    m.ctx.encolar({ ruta: '/w', op: { method: 'POST', body: JSON.stringify({ log_date: '2026-08-20', weight_kg: kg }) },
+                    tipo: 'peso', clave: 'peso:2026-08-20' });
+  check('queda una sola entrada para ese día', m.cola().length === 1, 'quedaron ' + m.cola().length);
+  check('y es el último valor tecleado',
+    JSON.parse(m.cola()[0].op.body).weight_kg === 82, m.cola()[0].op.body);
+  // Otro día es otra entrada: la clave lleva la fecha.
+  m.ctx.encolar({ ruta: '/w', op: { method: 'POST', body: '{}' }, tipo: 'peso', clave: 'peso:2026-08-21' });
+  check('otro día no pisa al anterior', m.cola().length === 2);
+  // Y la comida NO se pisa: dos platos iguales el mismo día son dos platos.
+  const c = montar();
+  c.ctx.encolar({ ruta: '/d', op: { method: 'POST', body: '{}' }, tipo: 'comida' });
+  c.ctx.encolar({ ruta: '/d', op: { method: 'POST', body: '{}' }, tipo: 'comida' });
+  check('la comida sigue sin pisarse', c.cola().length === 2);
+}
+
+console.log('\n— El peso apuntado sin señal se vuelve a ver —');
+{
+  const m = montar({
+    guardado: [{ ruta: '/w', tipo: 'peso', dueno: 'yo',
+                 op: { method: 'POST', body: JSON.stringify({ log_date: '2026-08-20', weight_kg: 79.4, cintura_cm: 84 }) } }]
+  });
+  m.ctx.aplicarPesosEnCola();
+  check('el peso vuelve a PESOS', m.ctx.PESOS['2026-08-20'] === 79.4, JSON.stringify(m.ctx.PESOS));
+  check('y la cintura a CINTURAS',
+    m.ctx.CINTURAS.some(x => x.fecha === '2026-08-20' && x.cm === 84), JSON.stringify(m.ctx.CINTURAS));
+  // Lo ajeno no: sería enseñarle a alguien el peso de otra persona.
+  const a = montar({ guardado: [{ ruta: '/w', tipo: 'peso', dueno: 'otro',
+    op: { method: 'POST', body: JSON.stringify({ log_date: '2026-08-20', weight_kg: 99 }) } }] });
+  a.ctx.aplicarPesosEnCola();
+  check('el peso de otra cuenta no se pinta', a.ctx.PESOS['2026-08-20'] === undefined);
+}
+
+console.log('\n— La despensa se guarda en el teléfono —');
+{
+  const m = montar();
+  m.ctx.MIS_ALIMENTOS.push({ n: 'Arroz', P: 4, C: 40, G: 1 });
+  m.ctx.RECETAS.push({ n: 'Pollo al horno', cal: 320 });
+  m.ctx.guardarDespensa();
+  // Vaciar la memoria, como al abrir la app de cero
+  m.ctx.MIS_ALIMENTOS.length = 0;
+  m.ctx.RECETAS.length = 0;
+  check('se recupera al abrir sin señal', m.ctx.cargarDespensa() === true);
+  check('con los alimentos', m.ctx.MIS_ALIMENTOS.length === 1 && m.ctx.MIS_ALIMENTOS[0].n === 'Arroz');
+  check('y las recetas', m.ctx.RECETAS.length === 1);
+  // Sin esto, abrir la app sin señal deja la despensa vacía y hay que
+  // teclear cada alimento y sus macros a mano.
+  check('sin copia no devuelve nada', montar().ctx.cargarDespensa() === false);
+}
+
+console.log('\n— Pero la despensa es de quien es —');
+{
+  const m = montar();
+  m.ctx.MIS_ALIMENTOS.push({ n: 'Arroz' });
+  m.ctx.guardarDespensa();
+  // Otra cuenta en el mismo teléfono
+  m.ctx.sesion = { user: { id: 'otro' }, access_token: 't' };
+  m.ctx.MIS_ALIMENTOS.length = 0;
+  check('no se le da a otra cuenta', m.ctx.cargarDespensa() === false,
+    'sería enseñarle la despensa de otra persona');
+  check('y no se le cuela ningún alimento', m.ctx.MIS_ALIMENTOS.length === 0);
+}
+
+console.log('\n— En el código del peso y la despensa —');
+{
+  const peso = APP.slice(APP.indexOf('function sbGuardarPeso('), APP.indexOf('function filasEnCola('));
+  // Sin `[\s\S]{0,N}` entre las dos: con un número fijo, esta comprobación
+  // se rompe en cuanto crece el comentario que va en medio —pasó con 400—
+  // y falla sin que el código tenga nada malo. Se mira que estén las dos
+  // cosas y en el orden correcto, que es lo que de verdad importa.
+  const corta = peso.indexOf('if(!sinConexion(e)) throw e;');
+  const cola  = peso.indexOf('encolar(');
+  check('el peso corta antes los errores de verdad', corta > 0,
+    'sin esto, un error del servidor se encolaría para siempre');
+  check('y encola si no hay red', cola > corta, 'el encolar tiene que ir DESPUÉS del throw');
+  check('con clave por día', /clave:'peso:' \+ fecha/.test(peso));
+
+  const desp = APP.slice(APP.indexOf('function sbGuardarAlimento('), APP.indexOf('function sbPesos('));
+  check('el alimento lleva id propio', /id: idNuevo\(\)/.test(desp));
+  // EL AVISO CONTRADICTORIO: antes salía «se subirá cuando vuelva» por el
+  // apunte y «No se pudo guardar el alimento» por la despensa, a la vez.
+  //
+  // Mirar solo que exista `encolar(...tipo:'despensa')` NO basta, y se
+  // comprobó: quitándole la guarda `sinConexion` la prueba seguía pasando,
+  // porque la línea del encolar seguía ahí. Hay que exigir las dos, y en
+  // orden. Es el mismo tropiezo que ya hubo con sbQuitarAlimento.
+  const dCorta = desp.indexOf('if(!sinConexion(e)) throw e;');
+  const dCola  = desp.indexOf("tipo:'despensa'");
+  check('corta antes los errores de verdad', dCorta > 0);
+  check('y encola en vez de borrarlo de la despensa', dCola > dCorta,
+    'el encolar tiene que ir DESPUÉS del throw');
+  check('y se guarda la copia del teléfono', /guardarDespensa\(\);/.test(desp));
+
+  check('al abrir se carga la despensa antes de pedir nada',
+    APP.indexOf('cargarDespensa();') < APP.indexOf('vaciarCola().then(function(){ cargarDatos(); })'));
+  check('al cerrar sesión se borra', /removeItem\(DESPENSA_KEY\)/.test(APP),
+    'dejaría la lista de comidas de alguien en un teléfono ajeno');
 }
 
 console.log(`\n${ok} pasan · ${mal} fallan`);

@@ -4427,9 +4427,15 @@
   // Mete una escritura en la cola. `dueno` es el id de quien la apuntó: sin
   // eso, cerrar sesión y entrar con otra cuenta le mandaría los apuntes de
   // la anterior a la nueva.
+  //
+  // `clave` es opcional y sirve para lo que SE PISA a sí mismo. El peso es
+  // uno por día: si alguien se pesa tres veces sin señal, lo que tiene que
+  // subir es el último valor, no tres. Los apuntes de comida NO llevan
+  // clave, porque dos platos iguales el mismo día son dos platos.
   function encolar(item){
     item.creado = item.creado || new Date().toISOString();
     item.dueno = (sesion && sesion.user && sesion.user.id) || null;
+    if(item.clave) COLA = COLA.filter(function(x){ return x.clave !== item.clave; });
     COLA.push(item);
     if(COLA.length > COLA_TOPE) COLA = COLA.slice(-COLA_TOPE);
     colaGuardar();
@@ -4534,6 +4540,88 @@
     if(!n) return;
     var t = el.querySelector('b');
     if(t) t.textContent = n === 1 ? 'Falta subir 1 apunte' : 'Faltan subir ' + n + ' apuntes';
+  }
+
+  // ---- La despensa, guardada en el teléfono ----
+  //
+  //  POR QUÉ
+  //
+  //  Tus alimentos guardados, tus recetas y tus frecuentes se piden al
+  //  servidor en cada arranque y no se guardaban en ninguna parte. Con eso,
+  //  abrir la app SIN señal desde cero dejaba la despensa vacía: se podía
+  //  apuntar, pero tecleando el nombre y los macros a mano, uno por uno.
+  //  O sea que lo de apuntar sin señal funcionaba de verdad solo si habías
+  //  abierto la app con señal ANTES de quedarte sin ella.
+  //
+  //  Son unos pocos KB. Guardarlos convierte el caso malo en el bueno.
+  //
+  //  ES UNA COPIA, NO LA VERDAD. Se sobrescribe entera cada vez que la
+  //  carga del servidor sale bien, así que no puede quedarse vieja más de
+  //  una apertura con señal. Y va por usuario: la despensa de uno no puede
+  //  aparecer en la sesión de otro.
+  var DESPENSA_KEY = 'macros.despensa';
+  var DESPENSA_TOPE = 600;      // alimentos; por encima de eso no cabe en el
+                                // almacenamiento y tampoco se busca a mano.
+
+  function guardarDespensa(){
+    if(!sesion || !sesion.user) return;
+    try{
+      localStorage.setItem(DESPENSA_KEY, JSON.stringify({
+        dueno: sesion.user.id,
+        alimentos: MIS_ALIMENTOS.slice(0, DESPENSA_TOPE),
+        recetas: RECETAS.slice(0, DESPENSA_TOPE)
+      }));
+    }catch(e){
+      // Sin sitio: se prefiere quedarse sin copia antes que reventar el
+      // arranque. La app sigue funcionando con señal, que es lo de siempre.
+      try{ localStorage.removeItem(DESPENSA_KEY); }catch(e2){}
+    }
+  }
+
+  // Se llama ANTES de pedir nada al servidor: si hay señal, lo de la red
+  // llegará un segundo después y lo sustituirá; si no la hay, esto es todo
+  // lo que va a haber y es mucho mejor que nada.
+  function cargarDespensa(){
+    if(!sesion || !sesion.user) return false;
+    var d = null;
+    try{ d = JSON.parse(localStorage.getItem(DESPENSA_KEY) || 'null'); }catch(e){}
+    if(!d || d.dueno !== sesion.user.id) return false;
+    MIS_ALIMENTOS.length = 0;
+    (d.alimentos || []).forEach(function(a){ MIS_ALIMENTOS.push(a); });
+    RECETAS.length = 0;
+    (d.recetas || []).forEach(function(r){ RECETAS.push(r); });
+    if(typeof recalcularFrecuentes === 'function') recalcularFrecuentes();
+    if(typeof pintarListas === 'function') pintarListas();
+    return true;
+  }
+
+  // Los pesos y cinturas que están en la cola sin subir. Igual que con la
+  // comida: sin esto, quien se pesa sin señal y cierra la app se encuentra
+  // el peso de hoy en blanco, lo vuelve a apuntar, y al volver la señal
+  // suben dos veces -que en el peso ni siquiera duplica, PISA, así que el
+  // segundo valor tecleado gana silenciosamente-.
+  function pesosEnCola(){
+    var yo = sesion && sesion.user && sesion.user.id;
+    return COLA.filter(function(x){
+      return x.tipo === 'peso' && (!x.dueno || x.dueno === yo);
+    }).map(function(x){
+      try{ return JSON.parse(x.op.body); }catch(e){ return null; }
+    }).filter(Boolean);
+  }
+
+  // Vuelca esos pesos en PESOS y CINTURAS, encima de lo que haya venido del
+  // servidor. Van DESPUÉS a propósito: si el mismo día está en los dos
+  // sitios, lo que vale es lo que la persona acaba de teclear.
+  function aplicarPesosEnCola(){
+    pesosEnCola().forEach(function(f){
+      var k = f.log_date;
+      if(f.weight_kg != null) PESOS[k] = Number(f.weight_kg);
+      if(f.cintura_cm != null){
+        CINTURAS = CINTURAS.filter(function(m){ return m.fecha !== k; });
+        CINTURAS.push({ fecha: k, cm: Number(f.cintura_cm) });
+        CINTURAS.sort(function(a, b){ return a.fecha < b.fecha ? -1 : 1; });
+      }
+    });
   }
 
   function avisarSubidos(subidos, rechazados){
@@ -4834,6 +4922,11 @@
     sbSalir().then(function(){
       guardarSesion(null);
       try{ localStorage.removeItem(CLAVE); }catch(e){}
+      // La despensa guardada se va con la sesión. `cargarDespensa` ya
+      // comprueba el dueño antes de usarla, así que esto no arregla un
+      // fallo: es no dejar la lista de comidas de alguien en un teléfono
+      // que puede no ser suyo.
+      try{ localStorage.removeItem(DESPENSA_KEY); }catch(e){}
       goto('registro', false);
     });
   });
@@ -4851,6 +4944,12 @@
     // de la cola— o ninguna, según quién ganara.
     //
     // `vaciarCola` no rechaza nunca: sin señal se queda con lo suyo y sigue.
+    //
+    // La despensa guardada va PRIMERO y sin esperar a nadie: si hay señal,
+    // lo del servidor llega un segundo después y la sustituye; si no la hay,
+    // esto es todo lo que va a haber, y con ello se puede apuntar eligiendo
+    // de tus alimentos en vez de teclearlos a mano.
+    cargarDespensa();
     vaciarCola().then(function(){ cargarDatos(); });
     pintarPendientes();
   }
@@ -6981,13 +7080,35 @@
   }
   function sbGuardarAlimento(a){
     if(!sesion || !sesion.user) return Promise.resolve(null);
-    return sbFetch('/rest/v1/saved_foods', {
+    // Id propio, por lo mismo que en la comida: si esto se encola y se manda
+    // dos veces, la segunda choca contra la clave primaria en vez de dejar
+    // el alimento repetido en la despensa.
+    var fila = {
+      id: idNuevo(),
+      user_id: sesion.user.id, name: a.n, unit: a.u || 'Gramos', base_qty: 100,
+      protein_g: a.P, carbs_g: a.C, fat_g: a.G
+    };
+    var op = {
       method:'POST', headers:{ 'Prefer':'return=representation' },
-      body: JSON.stringify({
-        user_id: sesion.user.id, name: a.n, unit: a.u || 'Gramos', base_qty: 100,
-        protein_g: a.P, carbs_g: a.C, fat_g: a.G
-      })
-    }).then(function(f){ return (f && f[0]) || null; });
+      body: JSON.stringify(fila)
+    };
+    return sbFetch('/rest/v1/saved_foods', op)
+      .then(function(f){ return (f && f[0]) || fila; })
+      ['catch'](function(e){
+        if(!sinConexion(e)) throw e;
+        // SIN ESTO SALÍAN DOS AVISOS QUE SE CONTRADECÍAN. Al crear un
+        // alimento nuevo sin señal, el apunte del diario se encolaba y decía
+        // «se subirá cuando vuelva», y un instante después este otro decía
+        // «No se pudo guardar el alimento» y lo borraba de la despensa.
+        // Las dos cosas eran ciertas por separado y juntas parecían que se
+        // había perdido algo. Ahora las dos se encolan y el mensaje es uno.
+        encolar({ ruta:'/rest/v1/saved_foods', op: op, fila: fila.id, tipo:'despensa' });
+        // Y a la copia del teléfono, o el alimento que acabas de crear sin
+        // señal desaparecería de tu despensa al cerrar y abrir la app —
+        // `guardarDespensa` solo se llama tras una carga con señal.
+        guardarDespensa();
+        return fila;
+      });
   }
   function sbPesos(desde){
     return sbFetch('/rest/v1/weight_logs?select=log_date,weight_kg,cintura_cm' +
@@ -7010,11 +7131,26 @@
     // entera, y quien apunta el peso a diario no vuelve a medirse la
     // cintura cada dia.
     if(cintura != null) fila.cintura_cm = cintura;
-    return sbFetch('/rest/v1/weight_logs?on_conflict=user_id,log_date', {
+    var ruta = '/rest/v1/weight_logs?on_conflict=user_id,log_date';
+    var op = {
       method:'POST',
       headers:{ 'Prefer':'resolution=merge-duplicates,return=minimal' },
       body: JSON.stringify(fila)
-    });
+    };
+    return sbFetch(ruta, op)
+      ['catch'](function(e){
+        if(!sinConexion(e)) throw e;   // error de verdad: que lo deshaga quien llamó
+        // Aquí no hace falta mandar un id propio como en la comida: la tabla
+        // tiene `unique (user_id, log_date)` y esto es un upsert, así que
+        // reintentarlo escribe la misma fila otra vez en vez de duplicarla.
+        // La idempotencia ya la da el esquema.
+        //
+        // La `clave` sí importa: uno por día. Pesarse tres veces sin señal
+        // tiene que subir el último valor, no tres upserts encadenados.
+        encolar({ ruta: ruta, op: op, tipo:'peso', clave:'peso:' + fecha });
+        toast('toastPeso', 'Sin señal: se subirá cuando vuelva');
+        return null;
+      });
   }
   // Las altas de comida que están en la cola sin subir, con la MISMA forma
   // que las filas que devuelve la base. Así se pueden mezclar con ellas y
@@ -7235,6 +7371,10 @@
         // Las cinturas medidas, para el historial y para saber si toca.
         CINTURAS = pesos.filter(function(f){ return f.cintura_cm != null; })
                         .map(function(f){ return { fecha: f.log_date, cm: Number(f.cintura_cm) }; });
+        // Y encima, lo que se pesó sin señal y aún no ha subido. Después del
+        // servidor a propósito: si el mismo día está en los dos sitios, vale
+        // lo que la persona acaba de teclear.
+        aplicarPesosEnCola();
         // A partir de aquí PESOS y CINTURAS ya son los de verdad, no el
         // arranque vacío: los recordatorios de peso y cintura pueden confiar
         // en lo que digan.
@@ -7270,6 +7410,10 @@
                          vis: r.is_public ? 'pública' : 'privada' });
         });
         pintarListas();
+        // Copia al teléfono, para poder abrir la app sin señal y seguir
+        // teniendo tus alimentos. Se hace AQUÍ, con lo recién llegado del
+        // servidor, que es lo único que se sabe correcto.
+        guardarDespensa();
 
         // ---- A pintar, con las funciones de siempre ----
         actualizarMetas();
@@ -7343,6 +7487,14 @@
           actualizarMetas();
           actualizarSemana();
           pintarComida();
+        }
+        // El peso apuntado sin señal, igual. Sin esto se ve el campo vacío,
+        // se vuelve a teclear, y al volver la señal el segundo valor pisa al
+        // primero sin que nadie se entere -el peso no duplica, sustituye-.
+        if(pesosEnCola().length){
+          aplicarPesosEnCola();
+          pintarPeso();
+          pintarCintura();
         }
         pintarPendientes();
         toast('toastComida', sinConexion(e)
