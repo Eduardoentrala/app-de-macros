@@ -1277,52 +1277,57 @@ Deno.serve(async (req) => {
       }
       if (!mensajes.length) return json({ error: 'Escribe algo.' }, 400);
 
-      const r = await ia.messages.create({
+      // ---- CACHÉ DE PROMPT ----
+      //
+      //  Estas instrucciones son ONCE MIL TOKENS que viajan IDÉNTICOS en
+      //  cada foto de comida y en cada pregunta. La entrada es el 60% de la
+      //  factura y esto es casi toda la entrada.
+      //
+      //  Leer de caché cuesta 0.1x y escribirla 1.25x, así que sale a
+      //  cuenta a partir del 22% de aciertos. Con cinco minutos de vida y
+      //  varias personas usándola a lo largo del día -la caché es de la
+      //  cuenta entera, no de cada quien- eso se pasa en cuanto dos
+      //  llamadas caen cerca: una conversación de cuatro turnos son una
+      //  escritura y tres lecturas.
+      //
+      //  SOLO AQUÍ, y no en el resto de acciones. El cierre de semana o la
+      //  comparación de fotos se usan una vez por semana o por mes: con
+      //  cinco minutos de vida no acertarían NUNCA y solo pagarían el
+      //  recargo de escribir. Se mide con `ia_gasto` y se extiende si los
+      //  números lo dicen.
+      //
+      //  DOS CORTES Y NO UNO. El primero deja fuera la parte que depende
+      //  del plan: así las once mil de `SISTEMA_CHAT` las comparte todo el
+      //  mundo, tenga Plus o no, en vez de haber dos cachés enteras.
+      //
+      //  Y lo que cambia -la fecha de hoy, sus macros, lo que lleva comido-
+      //  va DESPUÉS de los dos cortes. Delante invalidaría todo lo de
+      //  detrás en cada petición y la caché no serviría de nada.
+      const loQueCambia = hoyEs + contexto + loQueSe;
+      const sistemaEnBloques = [
+        { type: 'text', text: SISTEMA_CHAT,
+          cache_control: { type: 'ephemeral' } },
+        { type: 'text',
+          text: (esPlus ? SISTEMA_EVENTOS + SISTEMA_MEMORIA : '') +
+                SISTEMA_APUNTAR_REGLAS,
+          cache_control: { type: 'ephemeral' } },
+        // ...y el tercero solo SI HAY ALGO QUE PONER. Los tres datos pueden
+        // salir vacíos a la vez -alguien recién registrado, sin macros
+        // calculados, con una zona horaria que no se pudo leer- y un bloque
+        // de texto vacío es un 400. Antes daba igual porque todo se pegaba
+        // en una sola cadena que nunca estaba vacía.
+        ...(loQueCambia ? [{ type: 'text', text: loQueCambia }] : []),
+      ];
+
+      // El mismo prompt de siempre, en una sola cadena y sin caché.
+      const sistemaPlano = SISTEMA_CHAT +
+        (esPlus ? SISTEMA_EVENTOS + SISTEMA_MEMORIA : '') +
+        SISTEMA_APUNTAR_REGLAS + loQueCambia;
+
+      const pedirChat = (sistema: unknown) => ia.messages.create({
         model: MODELO,
         max_tokens: imagen ? 4000 : 2000,
-        // ---- CACHÉ DE PROMPT ----
-        //
-        //  Estas instrucciones son ONCE MIL TOKENS que viajan IDÉNTICOS en
-        //  cada foto de comida y en cada pregunta. La entrada es el 60% de
-        //  la factura y esto es casi toda la entrada.
-        //
-        //  Leer de caché cuesta 0.1x y escribirla 1.25x, así que sale a
-        //  cuenta a partir del 22% de aciertos. Con cinco minutos de vida y
-        //  varias personas usándola a lo largo del día -la caché es de la
-        //  cuenta entera, no de cada quien- eso se pasa de sobra en cuanto
-        //  dos llamadas caen cerca: una conversación de cuatro turnos son
-        //  una escritura y tres lecturas.
-        //
-        //  SOLO AQUÍ, y no en el resto de acciones. El cierre de semana o
-        //  la comparación de fotos se usan una vez por semana o por mes:
-        //  con cinco minutos de vida no acertarían NUNCA, y solo pagarían
-        //  el recargo de escribir. Se mide con `ia_gasto` y se extiende si
-        //  los números lo dicen.
-        //
-        //  DOS CORTES Y NO UNO. El primero deja fuera la parte que depende
-        //  del plan: así las once mil de `SISTEMA_CHAT` las comparte todo
-        //  el mundo, tenga Plus o no, en vez de haber dos cachés enteras.
-        //
-        //  Y lo que cambia -la fecha de hoy, sus macros, lo que lleva
-        //  comido- va DESPUÉS de los dos cortes. Delante invalidaría todo
-        //  lo de detrás en cada petición y la caché no serviría de nada.
-        system: [
-          { type: 'text', text: SISTEMA_CHAT,
-            cache_control: { type: 'ephemeral' } },
-          { type: 'text',
-            text: (esPlus ? SISTEMA_EVENTOS + SISTEMA_MEMORIA : '') +
-                  SISTEMA_APUNTAR_REGLAS,
-            cache_control: { type: 'ephemeral' } },
-          // ...y solo SI HAY ALGO QUE PONER. Los tres pueden salir vacios a
-          // la vez -alguien recien registrado, sin macros calculados, con
-          // una zona horaria que no se pudo leer- y un bloque de texto
-          // vacio es un error 400 de la API. Antes daba igual porque todo
-          // se pegaba en una sola cadena que nunca estaba vacia; al
-          // partirlo en bloques, eso se convirtio en un fallo.
-          ...(hoyEs + contexto + loQueSe
-            ? [{ type: 'text', text: hoyEs + contexto + loQueSe }]
-            : []),
-        ],
+        system: sistema,
         ...(imagen ? { thinking: { type: 'adaptive' as const } } : {}),
         output_config: {
           effort: imagen ? 'medium' : 'low',
@@ -1330,6 +1335,33 @@ Deno.serve(async (req) => {
         },
         messages: mensajes,
       });
+
+      // ---- Y LA CACHÉ NO PUEDE ROMPER EL CHAT ----
+      //
+      //  Esto es lo que más se usa de la app: apuntar comida. Si la forma
+      //  con bloques fuera rechazada, se caería el apuntado de todo el
+      //  mundo a la vez.
+      //
+      //  No se pudo probar de punta a punta antes de desplegar -hace falta
+      //  una sesión de verdad y las contraseñas no se tocan-, así que en
+      //  vez de confiar, se pone red: ante un 400 se rehace la petición con
+      //  el prompt de siempre y la persona ni se entera. Solo el 400, que
+      //  es «esta petición está mal armada»; los demás errores suben como
+      //  siempre, que para eso está el reintento de arriba.
+      //
+      //  Si algún día sobra, se vera en `ia_gasto`: con la red puesta, una
+      //  caché rota daría cero lecturas y cero escrituras en vez de un
+      //  chat caído.
+      let r;
+      try {
+        r = await pedirChat(sistemaEnBloques);
+      } catch (e) {
+        const codigo = (e && typeof e === 'object' && 'status' in e)
+          ? Number((e as { status: number }).status) : 0;
+        if (codigo !== 400) throw e;
+        console.error('cache de prompt rechazada, se reintenta sin ella:', e);
+        r = await pedirChat(sistemaPlano);
+      }
 
       const salida = leerJson(r);
       salida.alimentos = await afinarConCatalogo(admin, salida.alimentos || []);

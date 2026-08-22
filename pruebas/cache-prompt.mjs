@@ -1,4 +1,4 @@
-// La caché de prompt: ¿está donde ahorra, y no donde cuesta?
+// La caché de prompt: ¿está donde ahorra, no donde cuesta, y no puede romper?
 //
 // LA REGLA QUE LO DECIDE TODO: la caché es una coincidencia de PREFIJO.
 // Un solo byte distinto delante invalida todo lo de detrás. Así que lo que
@@ -6,13 +6,15 @@
 // comido— tiene que ir DESPUÉS del último corte. Delante, la caché no
 // acierta jamás y solo se paga el recargo de escribirla.
 //
-// Y LA OTRA MITAD: no cachear lo que se usa poco. Leer cuesta 0.1x y
+// LA SEGUNDA MITAD: no cachear lo que se usa poco. Leer cuesta 0.1x y
 // escribir 1.25x, así que hace falta un 22% de aciertos para empezar a
 // ahorrar. El cierre de semana se usa UNA VEZ POR SEMANA y la caché vive
 // cinco minutos: ahí no acertaría nunca y cada llamada costaría un 25% más.
 //
-// Por eso esta prueba comprueba las dos cosas: que `chat` la lleva, y que
-// las demás NO.
+// Y LA TERCERA: que no pueda romper nada. Esto es lo que más se usa de la
+// app —apuntar comida— y no se pudo probar de punta a punta antes de
+// desplegar, porque hace falta una sesión de verdad. Así que lleva red:
+// ante un 400 se rehace la petición con el prompt de siempre.
 
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -36,54 +38,84 @@ function accion(nombre) {
   return FUN.slice(i, j > 0 ? j : FUN.length);
 }
 
+const CHAT = accion('chat');
+// El array de bloques, del `const` a su cierre.
+const iBloques = CHAT.indexOf('const sistemaEnBloques = [');
+const BLOQUES = iBloques < 0 ? '' : CHAT.slice(iBloques, CHAT.indexOf('\n      ];', iBloques));
+
 // ------------------------------------------------------------------
 console.log('\nLa lleva el chat, que es el 79% de la factura');
 {
-  const chat = accion('chat');
-  ok(/cache_control: \{ type: 'ephemeral' \}/.test(chat),
-     'el chat cachea sus instrucciones');
+  ok(iBloques > 0, 'el chat arma su prompt en bloques');
+  ok(/cache_control: \{ type: 'ephemeral' \}/.test(BLOQUES),
+     'y los cachea');
 
-  const cortes = (chat.match(/cache_control/g) || []).length;
+  const cortes = (BLOQUES.match(/cache_control/g) || []).length;
   ok(cortes === 2, `dos cortes y no uno (hay ${cortes})`);
+  ok(cortes <= 4, 'sin pasarse de los cuatro que admite la API');
 
-  // El primero DEJA FUERA lo que depende del plan. Si no, habría dos
-  // cachés enteras -una de Plus y otra normal- en vez de compartir las
-  // once mil de SISTEMA_CHAT.
-  const primero = chat.indexOf('cache_control');
-  const trozoAntes = chat.slice(chat.indexOf('system: ['), primero);
-  ok(/text: SISTEMA_CHAT,/.test(trozoAntes) && !/esPlus/.test(trozoAntes),
-     'y el primero deja fuera lo que depende del plan: SISTEMA_CHAT lo comparten todos');
-
-  // Máximo cuatro por petición.
-  ok(cortes <= 4, 'sin pasarse de los cuatro cortes que admite la API');
+  // El primero DEJA FUERA lo que depende del plan. Si no, habría dos cachés
+  // enteras -una de Plus y otra normal- en vez de compartir las once mil.
+  const primero = BLOQUES.indexOf('cache_control');
+  const antes = BLOQUES.slice(0, primero);
+  ok(/text: SISTEMA_CHAT,/.test(antes) && !/esPlus/.test(antes),
+     'y el primero deja fuera lo del plan: SISTEMA_CHAT lo comparten todos');
 }
 
 // ------------------------------------------------------------------
 console.log('\nY LO QUE CAMBIA VA DETRÁS DE LOS CORTES');
 {
-  const chat = accion('chat');
-  const i = chat.indexOf('system: [');
-  const fin = chat.indexOf('],', i);
-  const bloque = chat.slice(i, fin);
+  const ultimoCorte = BLOQUES.lastIndexOf('cache_control');
+  const donde = BLOQUES.indexOf('loQueCambia');
+  ok(donde > ultimoCorte,
+     'lo que cambia va después del último corte' +
+     (donde > ultimoCorte ? '' : ' — delante invalidaría la caché en cada petición'));
 
-  const ultimoCorte = bloque.lastIndexOf('cache_control');
-  for (const dato of ['hoyEs', 'contexto', 'loQueSe']) {
-    const donde = bloque.indexOf(dato);
-    ok(donde > ultimoCorte,
-       `«${dato}» va después del último corte` +
-       (donde > ultimoCorte ? '' : ' — delante invalidaría la caché en cada petición'));
-  }
+  // Y que sean las tres cosas, no una: moverlas detrás no puede perderlas.
+  ok(/const loQueCambia = hoyEs \+ contexto \+ loQueSe;/.test(CHAT),
+     'y son las tres: la fecha, sus macros y lo que se recuerda de ella');
+}
 
-  // Y que sigan estando: moverlas detrás no puede haberlas perdido.
-  ok(/hoyEs \+ contexto \+ loQueSe/.test(bloque),
-     'y siguen estando las tres: mover no es perder');
+// ------------------------------------------------------------------
+console.log('\nNingún bloque puede salir vacío');
+{
+  // Los tres datos pueden salir vacíos A LA VEZ: alguien recién registrado,
+  // sin macros, sin Plus y con una zona horaria ilegible. Un bloque de
+  // texto vacío es un 400. Antes daba igual porque todo se pegaba en una
+  // sola cadena que empezaba por SISTEMA_CHAT.
+  ok(/\.\.\.\(loQueCambia \? \[\{ type: 'text', text: loQueCambia \}\] : \[\]\)/.test(BLOQUES),
+     'el tercero solo se pone si hay algo que poner');
+  ok(/text: SISTEMA_CHAT,/.test(BLOQUES),
+     'el primero es una constante del archivo: no puede quedar vacío');
+  ok(/SISTEMA_APUNTAR_REGLAS,/.test(BLOQUES),
+     'y el segundo acaba siempre en SISTEMA_APUNTAR_REGLAS, que no es opcional');
+}
+
+// ------------------------------------------------------------------
+console.log('\nY NO PUEDE ROMPER EL CHAT');
+{
+  ok(/const sistemaPlano = SISTEMA_CHAT \+/.test(CHAT),
+     'existe el prompt de siempre, en una sola cadena y sin caché');
+  ok(/r = await pedirChat\(sistemaEnBloques\);/.test(CHAT),
+     'se pide primero con la caché');
+  ok(/if \(codigo !== 400\) throw e;/.test(CHAT),
+     'y ante un 400 -«esta petición está mal armada»- no se rinde');
+  ok(/r = await pedirChat\(sistemaPlano\);/.test(CHAT),
+     'sino que la rehace sin caché: la persona ni se entera');
+
+  // Y SOLO el 400. Los demás errores suben, que para eso está el reintento
+  // de 529/429/5xx del envoltorio.
+  const iCatch = CHAT.indexOf('} catch (e) {');
+  const iPlano = CHAT.indexOf('pedirChat(sistemaPlano)');
+  ok(iCatch > 0 && iPlano > iCatch,
+     'el reintento va dentro del catch, no suelto');
+  ok(/throw e;[\s\S]{0,200}pedirChat\(sistemaPlano\)/.test(CHAT),
+     'y lo que no es un 400 se relanza ANTES de reintentar');
 }
 
 // ------------------------------------------------------------------
 console.log('\nLo que se usa poco NO se cachea');
 {
-  // Cinco minutos de vida contra una vez por semana o por mes: no
-  // acertaría nunca y cada llamada costaría un 25% más.
   for (const a of ['semana', 'fotos', 'plan', 'cliente', 'aviso']) {
     ok(!/cache_control/.test(accion(a)),
        `«${a}» no la lleva: se usa demasiado poco para que la caché acierte`);
@@ -102,35 +134,7 @@ console.log('\nY se puede saber si está funcionando');
   ok(/entrada: u\.input_tokens \|\| 0,/.test(bloque),
      'y la entrada es solo lo que se pagó entero, sin sumarle la caché');
   ok(!/cache_read_input_tokens \|\|[\s\S]{0,40}\+/.test(bloque),
-     'sumadas no se podría saber si acierta, y una caché que no acierta CUESTA más');
-}
-
-// ------------------------------------------------------------------
-console.log('\nY NINGUN BLOQUE PUEDE SALIR VACIO');
-{
-  // Un bloque de texto vacio es un error 400 de la API, y los tres datos
-  // del ultimo bloque PUEDEN salir vacios a la vez: alguien recien
-  // registrado -sin macros calculados-, sin Plus -sin memoria- y con una
-  // zona horaria que no se pudo leer.
-  //
-  // Antes daba igual: todo se pegaba en una sola cadena que empezaba por
-  // SISTEMA_CHAT y nunca estaba vacia. Al partirlo en bloques para cachear,
-  // eso se convirtio en un fallo que habria roto el chat de quien acabara
-  // de registrarse.
-  const chat = accion('chat');
-  const i2 = chat.indexOf('system: [');
-  const bloque = chat.slice(i2, chat.indexOf('],', i2));
-
-  ok(/\.\.\.\(hoyEs \+ contexto \+ loQueSe/.test(bloque),
-     'el ultimo bloque solo se pone si hay algo que poner');
-  ok(/: \[\]\)/.test(bloque),
-     'y si no, no se pone: un bloque vacio es un 400');
-
-  // Los dos primeros nunca pueden estar vacios: son constantes del archivo.
-  ok(/text: SISTEMA_CHAT,/.test(bloque),
-     'el primero es una constante: no puede quedar vacio');
-  ok(/SISTEMA_APUNTAR_REGLAS,/.test(bloque),
-     'y el segundo acaba siempre en SISTEMA_APUNTAR_REGLAS, que no es opcional');
+     'sumadas no se sabría si acierta, y una caché que no acierta CUESTA más');
 }
 
 console.log('\n' + pasan + ' bien, ' + fallan + ' mal');
