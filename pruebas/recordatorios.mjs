@@ -9,6 +9,17 @@
 //    solo una vez a la semana cuando te toque subir tu foto, asi mismo la
 //    medicion [...] una vez al mes cuando toque»
 //
+// Y LO QUE SE ACLARO DESPUES, sobre la cintura:
+//
+//   «necesito que si se quite la notificacion al precionar la equis que lo
+//    cierra pero al otro dia mande de nuevo la notificacion asi
+//    susecivamente hasta que se registre la medicion y entonces si hasta su
+//    proxima vez que le toque medir»
+//
+// «Una vez al mes» era CUANDO TOCA -los 28 dias de `tocaMedirCintura`-, no
+// cuanto dura la ×. Aqui se habia leido como lo segundo y la × callaba el
+// aviso hasta el mes siguiente.
+//
 // Son cuatro reglas por tarjeta, y las cuatro se comprueban aquí:
 //   · sale cuando toca
 //   · al tocarla, lleva a hacerlo
@@ -90,20 +101,36 @@ console.log('\n— Cada uno con su ciclo —');
 {
   const fn = cuerpoDe(APP, 'cicloDeRecordatorio');
   check('la función existe', !!fn);
-  check('peso: por día', /if\(cual === 'peso'\)\s+return isoDe\(HOY\);/.test(fn));
+  // PESO Y CINTURA, POR DÍA. La cintura callaba un MES —se guardaba
+  // '2026-08'— y eso salía de leer «una vez al mes cuando toque» como si
+  // hablara de la ×. No hablaba de eso: habla de CUÁNDO TOCA, que es lo que
+  // decide `tocaMedirCintura()` con sus 28 días. Textualmente:
+  //
+  //   «necesito que si se quite la notificacion al precionar la equis que
+  //    lo cierra pero al otro dia mande de nuevo la notificacion asi
+  //    susecivamente hasta que se registre la medicion y entonces si hasta
+  //    su proxima vez que le toque medir»
+  //
+  // Cerrar un aviso es «hoy no», no «ya no». Y como el campo para apuntar
+  // la cintura solo aparece cuando toca, un mes de silencio se comía el mes.
+  check('peso y cintura: por día',
+    /if\(cual === 'peso' \|\| cual === 'cintura'\) return isoDe\(HOY\);/.test(fn),
+    'la × es «hoy no»: mañana el aviso vuelve, hasta que se registre el dato');
+  check('y la cintura ya NO se calla un mes entero',
+    !/slice\(0, ?7\)/.test(fn),
+    'guardar el mes la dejaba muda hasta el 1, aunque nunca se midiera');
+
   // La semana de la PERSONA, no la ISO. Con `claveSemana(HOY)`, a quien
   // empieza en martes la × pulsada el domingo se le deshacía sola el lunes,
   // en mitad de su propia semana.
-  check('fotos: por semana de cada quien', /if\(cual === 'fotos'\) return claveDeMisFotos\(\);/.test(fn));
-  check('cintura: por mes', /return isoDe\(HOY\)\.slice\(0, 7\);/.test(fn));
+  check('fotos: por semana de cada quien', /return claveDeMisFotos\(\);/.test(fn));
 
-  // El mes tiene que salir de `isoDe`, que ya usa la fecha del teléfono.
-  // `toISOString().slice(0,7)` da el mes en UTC, y la última noche de cada
-  // mes -desde las 18:00 en México- devolvería el siguiente: la × pulsada
-  // el 31 de agosto se guardaría como "septiembre" y el recordatorio no
-  // volvería a salir hasta octubre.
-  check('el mes NO sale de toISOString', !/toISOString\(\)\.slice\(0, ?7\)/.test(fn),
-    'seria el mes en UTC: la ultima noche del mes daria el siguiente');
+  // El día tiene que salir de `isoDe`, que usa la fecha del teléfono.
+  // `toISOString()` da la fecha en UTC, y desde las 18:00 en México ya es
+  // el día siguiente: la × pulsada por la noche se guardaría como mañana y
+  // el recordatorio se saltaría un día entero.
+  check('el día NO sale de toISOString', !/toISOString\(\)/.test(fn),
+    'seria la fecha en UTC: por la noche en Mexico ya es el dia siguiente');
 
   // Lo que hace que vuelva no es borrar nada, es que la clave deje de
   // coincidir. Si se guardara un simple "ya lo cerré", no volvería jamás.
