@@ -7325,24 +7325,54 @@
     //  Solo las semanas en que SÍ se movió algo. Las que no, ya se ven en el
     //  hambre y la energía de arriba; listarlas aquí diciendo «no se cambió
     //  nada» llenaría la tarjeta de filas que no informan.
-    var ajustes = (m.chequeos || []).filter(function(x){ return x.ajusto && x.cal_despues; });
+    //  Y desde que el entrenador puede moverlas a mano, LAS DOS COSAS van en
+    //  la misma lista. Separadas, la tarjeta decía «bajó a 1800 el lunes» y
+    //  la persona comía 1600 desde el miércoles, sin que nada explicara el
+    //  salto: unas calorías tienen UNA historia, no una de la máquina y otra
+    //  de las personas que hay que juntar de cabeza.
+    var ajustes = (m.chequeos || [])
+      .filter(function(x){ return x.ajusto && x.cal_despues; })
+      .map(function(x){
+        return { cuando: x.semana, antes: x.cal_antes, despues: x.cal_despues,
+                 motivo: x.motivo, quien: 'El cierre de la semana' };
+      })
+      .concat((m.ajustes_mano || []).map(function(x){
+        return { cuando: x.cuando, antes: x.cal_antes, despues: x.cal_despues,
+                 motivo: x.motivo, quien: x.quien || 'A mano' };
+      }))
+      // Por fecha, del más nuevo al más viejo. Los del cierre traen el día de
+      // la semana ('2026-08-18') y los de mano una hora entera; comparados
+      // como texto siguen ordenando bien, porque los dos empiezan por la
+      // fecha en el mismo formato.
+      .sort(function(a, b){ return String(b.cuando).localeCompare(String(a.cuando)); })
+      .slice(0, 8);
+
     if(ajustes.length){
       html += '<div class="card"><div class="field-label" style="margin-top:0;">' +
         'Ajustes de calorías</div>' +
         ajustes.map(function(a){
-          var sube = Number(a.cal_despues) > Number(a.cal_antes || 0);
+          var hay = a.antes != null;
+          var sube = hay && Number(a.despues) > Number(a.antes);
           return '<div class="fc-ajuste">' +
             '<div class="fc-fila" style="border:none;padding:0;">' +
-              '<span class="et">' + escapar(diaCorto(a.semana)) + '</span>' +
-              '<span class="va">' + escapar(mil(a.cal_antes)) +
-                ' <span class="fl">' + (sube ? '↑' : '↓') + '</span> ' +
-                escapar(mil(a.cal_despues)) + '</span>' +
+              '<span class="et">' + escapar(diaCorto(a.cuando)) + '</span>' +
+              '<span class="va">' + (hay ? escapar(mil(a.antes)) + ' ' : '') +
+                '<span class="fl">' + (hay ? (sube ? '↑' : '↓') : '') + '</span> ' +
+                escapar(mil(a.despues)) + '</span>' +
             '</div>' +
-            (a.motivo ? '<div class="fc-motivo">' + escapar(a.motivo) + '</div>' : '') +
+            // QUIÉN lo hizo, siempre. Con las dos fuentes en la misma lista,
+            // sin esto no se distingue lo que decidió la máquina de lo que
+            // decidiste tú, que es justo lo que hay que poder distinguir.
+            '<div class="fc-motivo"><b>' + escapar(a.quien) + '</b>' +
+            (a.motivo ? ' · ' + escapar(a.motivo) : '') + '</div>' +
             '</div>';
         }).join('') +
-        '<div class="fc-pie">Lo decide el cierre de cada semana con lo que ' +
-        'contestó y con sus números. Puedes cambiárselas a mano en su perfil.</div>' +
+        // La frase del botón va ENTERA en una línea, sin partirla entre dos
+        // cadenas: es el nombre de algo que hay en pantalla, y partido no se
+        // puede buscar ni aquí ni en una prueba.
+        '<div class="fc-pie">El cierre de cada semana las decide con lo que ' +
+        'contestó y con sus números. Para moverlas tú, ' +
+        '«Ajustar sus calorías» aquí arriba.</div>' +
         '</div>';
     }
 
@@ -7372,6 +7402,45 @@
       a.creado_en ? fmtFecha(new Date(a.creado_en)) : '';
   }
 
+  // Las llaves de IA de la persona cuya ficha está abierta. Nulo mientras no
+  // llegan Y si la consulta falla, y nulo significa TODO ENCENDIDO: un
+  // problema de red no puede esconderle botones al entrenador.
+  var LLAVES_SUYAS = null;
+
+  // Esconder lo que esa persona tiene apagado. Es la misma idea que
+  // `aplicarLlavesIa` pero del otro lado del mostrador: allí se esconde lo
+  // que no me van a contestar a mí, aquí lo que no van a contestar sobre
+  // ella. El servidor lo comprueba igual —de esto no se fía nadie—; esto
+  // solo evita ofrecer algo que ya se sabe que no va a pasar.
+  function aplicarLlavesSuyas(){
+    var l = LLAVES_SUYAS || {};
+    var poner = function(id, si){
+      var e = document.getElementById(id);
+      if(e) e.hidden = !si;
+    };
+
+    // El botón Y su explicación: dejar el pie «gasta una de tus consultas»
+    // sin el botón al que se refiere es peor que no decir nada.
+    var analisis = l.analisis !== false;
+    poner('fcAnalizar',    analisis);
+    poner('fcAnalizarPie', analisis);
+    // Y la caja que lo envuelve, que tiene margen propio: escondiendo solo
+    // el botón queda un hueco sin nada dentro.
+    var cajaA = document.getElementById('fcAnalizar');
+    if(cajaA && cajaA.parentNode) cajaA.parentNode.hidden = !analisis;
+
+    // ---- Los dos de armar plan ----
+    var dia = l.plan_dia !== false, sem = l.plan_semana !== false;
+    poner('peGenerar',       dia);
+    poner('peGenerarSemana', sem);
+    var cajaP = document.getElementById('peGenerar');
+    if(cajaP && cajaP.parentNode){
+      cajaP.parentNode.hidden = !dia && !sem;
+      // Si queda uno solo, que ocupe la fila entera en vez de la mitad.
+      cajaP.parentNode.classList.toggle('sola', dia !== sem);
+    }
+  }
+
   function abrirFichaCliente(c){
     if(!c) return;
     fichaDe = { id: c.id, nombre: c.nombre };
@@ -7380,16 +7449,32 @@
     document.getElementById('fcMetricas').innerHTML =
       '<p class="calc-note" style="padding:14px 20px 0;">Cargando sus números…</p>';
     pintarAnalisisCliente(null);
+    // A cero mientras llegan las suyas. Sin esto, abrir la ficha de alguien
+    // con la IA apagada y luego la de otra persona dejaba los botones
+    // escondidos para quien sí los tiene.
+    LLAVES_SUYAS = null;
+    aplicarLlavesSuyas();
     goto('cliente', true);
 
-    Promise.all([ sbMetricas(c.id), sbAnalisisDe(c.id)['catch'](function(){ return null; }) ])
+    Promise.all([
+        sbMetricas(c.id),
+        sbAnalisisDe(c.id)['catch'](function(){ return null; }),
+        // Sus llaves de IA, para no ofrecerle al entrenador lo que esa
+        // persona tiene apagado. A ella ya se le esconden sus botones; sin
+        // esto, el entrenador pulsaba «Analizar» y el servidor le contestaba
+        // que no. Va en la MISMA tanda: llegando aparte, el botón se pintaría
+        // y desaparecería medio segundo después, delante de él.
+        sbRpc('ia_permisos_ver', { p_cliente: c.id })['catch'](function(){ return null; })
+      ])
       .then(function(r){
         // Si mientras llegaba se abrió la ficha de otra persona, esto ya no
         // vale: pintarlo mezclaría los números de uno con el nombre de otro.
         if(!fichaDe || fichaDe.id !== c.id) return;
         METRICAS = r[0];
+        LLAVES_SUYAS = r[2] || null;
         pintarMetricas();
         pintarAnalisisCliente(r[1]);
+        aplicarLlavesSuyas();
       })
       ['catch'](function(e){
         if(!fichaDe || fichaDe.id !== c.id) return;
@@ -8530,6 +8615,23 @@
     apuntar:'foto', chat:'chat', aviso:'chat', semana:'semanal', fotos:'semanal'
   };
 
+  // De qué llave depende una petición concreta.
+  //
+  // LA FOTO DE COMIDA VIAJA COMO `chat`, no como `apuntar`: la cámara vive
+  // dentro del asistente, así que mandar el plato es un chat con imágenes.
+  // Sin esta distinción los dos interruptores mentirían —apagar «foto» no
+  // pararía la foto, y apagar «preguntas» sí—, y esta cuenta tiene que dar
+  // lo mismo que la del servidor.
+  function llaveDe(cuerpo){
+    var a = String(cuerpo && cuerpo.accion || '');
+    if(a === 'chat'){
+      var hayFoto = !!cuerpo.imagen ||
+        (Array.isArray(cuerpo.imagenes) && cuerpo.imagenes.length > 0);
+      return hayFoto ? 'foto' : 'chat';
+    }
+    return LLAVE_DE_ACCION[a];
+  }
+
   function iaLlamar(cuerpo){
     // CORTAR AQUÍ CUANDO YA SE SABE QUE NO. Sin esto, quien tenga algo
     // apagado pulsa, ve «Pensando…», espera el viaje de ida y vuelta y
@@ -8539,7 +8641,7 @@
     // `plan` y `cliente` NO se miran aquí: los pide el entrenador SOBRE
     // otra persona, y las llaves que hay en este teléfono son las suyas,
     // no las de ella. Eso lo decide el servidor, que sí tiene las buenas.
-    var llave = LLAVE_DE_ACCION[String(cuerpo && cuerpo.accion || '')];
+    var llave = llaveDe(cuerpo);
     if(llave && MIS_LLAVES && MIS_LLAVES[llave] === false){
       return Promise.reject(new Error('Tu entrenador desactivó esto en tu cuenta.'));
     }
@@ -8580,13 +8682,15 @@
 
     mostrar('iaBtn', foto || chat);
     mostrar('iaTomarFoto', foto);
-    // El texto y el enviar van juntos: una caja de escribir sin boton de
-    // mandar es un sitio donde teclear para nada.
     mostrar('iaTexto', chat);
-    mostrar('iaEnviar', chat);
-    // Y el dictado tambien es texto, aunque lo transcriba el telefono.
-    if(!chat) mostrar('iaHablar', false);
-    else pintarBotonHablar();
+    // ENVIAR se queda si queda CUALQUIERA de las dos. Con él se manda
+    // también la foto —el asistente acepta una foto sin texto—, así que
+    // atarlo solo al chat dejaba a quien tuviera las preguntas apagadas con
+    // una cámara y ninguna forma de mandar lo que acababa de fotografiar.
+    mostrar('iaEnviar', foto || chat);
+    // El dictado lo resuelve `pintarBotonHablar`, que ya mira la llave del
+    // chat por dentro. Aquí solo hay que volver a pedírselo.
+    pintarBotonHablar();
   }
 
   function pintarBotonHablar(){
@@ -8594,7 +8698,14 @@
     if(!b) return;
     // Sin soporte no se enseña un botón que no va a hacer nada. Y solo con
     // Plus: es parte de lo que se paga.
-    b.hidden = !Reconocedor || MI_NIVEL_IA !== 'plus';
+    //
+    // La llave del chat VA AQUÍ DENTRO y no en `aplicarLlavesIa`. Esta
+    // función se vuelve a llamar cada vez que se repinta el nivel de IA
+    // -desde `pintarPlanIA`-, así que apagarlo desde fuera duraba hasta el
+    // siguiente repintado y el micrófono reaparecía solo. Dictar es escribir
+    // aunque lo transcriba el teléfono: si el chat está apagado, sobra.
+    var chat = !MIS_LLAVES || MIS_LLAVES.chat !== false;
+    b.hidden = !Reconocedor || MI_NIVEL_IA !== 'plus' || !chat;
   }
 
   var relojOido = null, algoOido = false;

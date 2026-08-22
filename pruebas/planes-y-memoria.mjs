@@ -116,9 +116,18 @@ console.log('\n— Dictar, en Plus —');
   check('nace escondido', /id="iaHablar"[^>]*hidden/.test(HTML),
     'ensenarlo y que no haga nada es peor que no tenerlo');
 
+  // Hasta el final de la función, NO 400 caracteres. Una ventana fija se
+  // desborda en cuanto alguien añade un comentario, y entonces la prueba
+  // deja de mirar el código sin que nadie lo note.
   const i = APP.indexOf('function pintarBotonHablar(');
-  const p = APP.slice(i, i + 400);
+  const p = APP.slice(i, APP.indexOf('\n  }', i));
   check('solo se enseña con soporte del navegador', /!Reconocedor/.test(p));
+  // Dictar es escribir aunque lo transcriba el teléfono. Y la comprobación
+  // tiene que estar DENTRO de esta función: `pintarPlanIA` la vuelve a
+  // llamar cada vez que se repinta el nivel de IA, así que apagar el botón
+  // desde fuera duraba hasta el siguiente repintado y reaparecía solo.
+  check('y no si le apagaron las preguntas', /MIS_LLAVES\.chat !== false/.test(p),
+    'si no, el microfono reaparece al repintar el nivel de IA');
   check('y solo con Plus', /MI_NIVEL_IA !== 'plus'/.test(p));
   check('se repinta al saber el plan',
     (APP.match(/pintarBotonHablar\(\)/g) || []).length >= 2,

@@ -957,20 +957,36 @@ Deno.serve(async (req) => {
   //  avisos escritos -que son el mismo modelo contestando lo mismo- sería
   //  una casilla más para no ahorrar nada.
   const LLAVE: Record<string, string> = {
-    apuntar: 'foto',      // apuntar comida con foto: lo que más se usa
-    chat:    'chat',
+    apuntar: 'foto',      // no la usa la app, pero si algún día se usa
+    chat:    'chat',      // OJO: con imágenes va por 'foto'. Ver abajo.
     aviso:   'chat',
     semana:  'semanal',   // el cierre de los lunes
     fotos:   'semanal',   // comparar fotos de progreso
     cliente: 'analisis',  // el resumen para el entrenador
   };
-  // El plan es la excepción: la misma acción cuesta cinco veces más si es
-  // la semana entera, así que son dos llaves y no una. Poder dejar los
+  // LA FOTO DE COMIDA VIAJA COMO `chat`, NO COMO `apuntar`.
+  //
+  //  Esto costó encontrarlo. `apuntar` existe en esta función pero la app no
+  //  la llama NUNCA: la cámara vive dentro del asistente, así que mandar una
+  //  foto del plato es un `chat` que lleva imágenes.
+  //
+  //  Sin distinguirlo, las dos llaves mentían: apagar «apuntar comida con
+  //  foto» no paraba nada en el servidor, y apagar «preguntas» paraba
+  //  también las fotos. Justo al revés de lo que dicen los interruptores.
+  //
+  //  `apuntar` se deja mapeada de todos modos: el día que se use, ya está.
+  const hayImagen = !!cuerpo.imagen ||
+    (Array.isArray(cuerpo.imagenes) && cuerpo.imagenes.length > 0);
+
+  // El plan es la otra excepción: la misma acción cuesta cinco veces más si
+  // es la semana entera, así que son dos llaves y no una. Poder dejar los
   // planes de un día encendidos y apagar solo la semana es justo el ajuste
   // que más dinero mueve.
   const llave = accion === 'plan'
     ? (cuerpo.semana === true ? 'plan_semana' : 'plan_dia')
-    : LLAVE[accion];
+    : accion === 'chat'
+      ? (hayImagen ? 'foto' : 'chat')
+      : LLAVE[accion];
 
   if (llave) {
     // DE QUIÉN ES LA LLAVE. Casi siempre de quien pide, pero el plan y el
@@ -1490,8 +1506,11 @@ Deno.serve(async (req) => {
         // la persona leería una cosa y vería otra.
         (movidasAMano
           ? `- OJO: su entrenador ya le ajustó las calorías a mano hace ` +
-            `menos de una semana (de ${movidasAMano.cal_antes} a ` +
-            `${movidasAMano.cal_despues}` +
+            `menos de una semana (` +
+            // El "de cuánto" solo si se sabe. Sin esto saldría «de null a
+            // 1800» metido en el contexto del modelo.
+            (movidasAMano.cal_antes ? `de ${movidasAMano.cal_antes} ` : ``) +
+            `a ${movidasAMano.cal_despues}` +
             (movidasAMano.motivo ? `, porque "${movidasAMano.motivo}"` : '') +
             `). NO se las muevas: son de esta semana y hay que darles ` +
             `tiempo. Dile cómo le fue y ya. Puedes mencionar el cambio si ` +

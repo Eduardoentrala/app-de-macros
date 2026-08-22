@@ -107,6 +107,21 @@ console.log('\nY queda escrito quién y por qué');
     `select cal_despues, motivo from public.ajustes_calorias where cliente_id='${LETY}'`);
   check('y ELLA lo ve: son sus calorías', r3.rows.length === 1,
     'enterarse de que te cambiaron la comida sin saber quién es perder la confianza');
+
+  // `plan_metricas` se rehizo entera para añadir `ajustes_mano` —en Postgres
+  // una función se reemplaza completa, no por trozos—, así que hay que
+  // comprobar que en la copia no se cayó nada por el camino. Se mira contra
+  // el esquema VIVO y no contra el archivo de la 0044: leyendo el archivo,
+  // esta prueba pasaría igual aunque la versión buena hubiera perdido media
+  // docena de claves.
+  const ESPERADAS = ['nombre', 'objetivo', 'meta_cal', 'meta_p', 'meta_c', 'meta_g',
+    'dias_entreno', 'meta_cardio', 'peso', 'cintura', 'diario', 'entreno',
+    'cardio', 'fotos', 'chequeo', 'chequeos', 'plan', 'ajustes_mano'];
+  const { r: r4 } = await como(COACH,
+    `select array(select jsonb_object_keys(public.plan_metricas('${LETY}'))) as k`);
+  const faltan = ESPERADAS.filter((k) => r4.rows[0].k.indexOf(k) < 0);
+  check('y `plan_metricas` sigue devolviendo TODO lo que devolvía',
+    faltan.length === 0, 'se perdieron al rehacerla: ' + faltan.join(', '));
 }
 
 // ------------------------------------------------------------------

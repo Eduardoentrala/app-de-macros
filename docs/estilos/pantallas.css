@@ -118,6 +118,15 @@
   background:var(--card-bg);color:var(--ink);cursor:pointer;
   font:700 12.5px/1.2 sans-serif;
 }
+/* UN SOLO BOTON OCUPA LA FILA ENTERA. Sin esto queda a media anchura y
+   pegado a la izquierda, como si le faltara el de al lado. Pasa en la ficha
+   -«Analizar como va» y «Ajustar sus calorias» van solos- y en el editor
+   cuando a esa persona le apagaron uno de los dos planes.
+
+   `.sola` la pone la app: `:only-child` no vale cuando el hermano sigue ahi
+   pero escondido. */
+.plan-armar button:only-child{grid-column:1 / -1;}
+.plan-armar.sola{grid-template-columns:1fr;}
 .plan-armar button:active{opacity:.6;}
 .plan-armar button:disabled{opacity:.5;cursor:default;}
 

@@ -151,6 +151,55 @@ console.log('\nEl plan de un día y la semana entera son llaves distintas');
 }
 
 // ------------------------------------------------------------------
+console.log('\nLA FOTO DE COMIDA VIAJA COMO «chat», no como «apuntar»');
+{
+  // Esto se escapó la primera vez. `apuntar` existe en la función pero la
+  // app NO LA LLAMA NUNCA: la cámara vive dentro del asistente, así que
+  // mandar el plato es un `chat` que lleva imágenes.
+  //
+  // Sin distinguirlo los dos interruptores mentían: apagar «apuntar comida
+  // con foto» no paraba nada, y apagar «preguntas y avisos» paraba también
+  // las fotos. Justo al revés de lo que dicen.
+  const arch = join(TMP, 'llave.ts');
+  const { mirar } = await import(pathToFileURL(arch).href);
+  const fingir = (fila) => ({ from: () => ({ select: () => ({ eq: () => ({
+    maybeSingle: async () => ({ data: fila }) }) }) }) });
+  const json = (b, s) => ({ cuerpo: b, estado: s });
+
+  // Solo la foto apagada. Preguntar por texto tiene que seguir funcionando.
+  const SIN_FOTO = { foto: false, chat: true, semanal: true,
+                     plan_dia: true, plan_semana: true, analisis: true };
+
+  const texto = await mirar(fingir(SIN_FOTO), 'u', 'chat', { accion: 'chat' }, json);
+  ok(texto === null, 'con la foto apagada, preguntar por texto sigue pasando');
+
+  const conFoto = await mirar(fingir(SIN_FOTO), 'u', 'chat',
+    { accion: 'chat', imagenes: [{ datos: 'x', tipo: 'image/jpeg' }] }, json);
+  ok(conFoto && conFoto.estado === 403, 'y mandar una foto de comida SE PARA');
+
+  // Y la forma vieja del cuerpo, la de una sola imagen, cuenta igual.
+  const vieja = await mirar(fingir(SIN_FOTO), 'u', 'chat',
+    { accion: 'chat', imagen: 'x', tipo_imagen: 'image/jpeg' }, json);
+  ok(vieja && vieja.estado === 403, 'también con la forma vieja de mandar una sola foto');
+
+  // Y al revés: solo las preguntas apagadas.
+  const SIN_CHAT = { foto: true, chat: false, semanal: true,
+                     plan_dia: true, plan_semana: true, analisis: true };
+
+  const t2 = await mirar(fingir(SIN_CHAT), 'u', 'chat', { accion: 'chat' }, json);
+  ok(t2 && t2.estado === 403, 'con las preguntas apagadas, el texto se para');
+
+  const f2 = await mirar(fingir(SIN_CHAT), 'u', 'chat',
+    { accion: 'chat', imagenes: [{ datos: 'x', tipo: 'image/jpeg' }] }, json);
+  ok(f2 === null, 'pero la foto de comida sigue pasando: es la otra llave');
+
+  // Un array vacío no es una foto.
+  const vacio = await mirar(fingir(SIN_CHAT), 'u', 'chat',
+    { accion: 'chat', imagenes: [] }, json);
+  ok(vacio && vacio.estado === 403, 'y «imagenes: []» no cuela como foto');
+}
+
+// ------------------------------------------------------------------
 console.log('\nQuien ya usa la app no nota nada');
 {
   const arch = join(TMP, 'llave.ts');
@@ -195,6 +244,23 @@ console.log('\nLa pantalla: los dos lados dicen lo mismo');
        'y en lo que sí reparte, dice exactamente lo mismo que el servidor' +
        (distintas.length ? ' — difieren: ' + distintas.join(', ') : ''));
   }
+
+  // Y lo de la foto también, que es donde el mapa no basta: se EJECUTA el
+  // `llaveDe` de la app y se compara con lo que decidiría el servidor.
+  const i = APP.indexOf('  function llaveDe(cuerpo){');
+  const trozo = APP.slice(APP.indexOf('  var LLAVE_DE_ACCION = {'),
+                          APP.indexOf('\n  }', i) + 4);
+  const llaveDe = new Function(trozo + '; return llaveDe;')();
+
+  ok(llaveDe({ accion: 'chat' }) === 'chat', 'la app: un chat sin foto es «chat»');
+  ok(llaveDe({ accion: 'chat', imagenes: [{ datos: 'x' }] }) === 'foto',
+     'y un chat CON foto es «foto», igual que en el servidor');
+  ok(llaveDe({ accion: 'chat', imagen: 'x' }) === 'foto',
+     'también con la forma vieja de una sola imagen');
+  ok(llaveDe({ accion: 'chat', imagenes: [] }) === 'chat',
+     'y un array vacío no es una foto');
+  ok(llaveDe({ accion: 'plan' }) === undefined,
+     'y del plan sigue sin opinar: no son sus llaves');
 }
 
 // ------------------------------------------------------------------
@@ -235,6 +301,19 @@ console.log('\nLos cuatro atajos');
   ok(ATAJOS_IA.foto.foto === true &&
      Object.keys(ATAJOS_IA.foto).filter((k) => ATAJOS_IA.foto[k]).length === 1,
      '«solo foto» deja encendida exactamente una cosa');
+}
+
+// ------------------------------------------------------------------
+console.log('\nY el botón de enviar no se va con la foto encendida');
+{
+  const i = APP.indexOf('  function aplicarLlavesIa(){');
+  const trozo = APP.slice(i, APP.indexOf('\n  }', i));
+  ok(/mostrar\('iaEnviar', foto \|\| chat\)/.test(trozo),
+     'enviar se queda si queda cualquiera de las dos');
+  ok(/mostrar\('iaTexto', chat\)/.test(trozo),
+     'y la caja de escribir solo con las preguntas encendidas');
+  ok(/mostrar\('iaTomarFoto', foto\)/.test(trozo),
+     'y la cámara solo con la foto encendida');
 }
 
 // ------------------------------------------------------------------

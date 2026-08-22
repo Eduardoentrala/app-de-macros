@@ -282,16 +282,30 @@ console.log('\n— El entrenador ve QUÉ calorías se cambiaron y POR QUÉ —')
   const p = APP.slice(APP.indexOf('function pintarMetricas('),
                       APP.indexOf('function pintarAnalisisCliente('));
   check('se pintan los ajustes', /Ajustes de calorías/.test(p));
-  check('con las dos cifras', /a\.cal_antes[\s\S]{0,220}a\.cal_despues/.test(p));
+  check('con las dos cifras', /a\.antes[\s\S]{0,260}a\.despues/.test(p));
   check('y con el motivo, que es lo que se lee', /a\.motivo/.test(p),
     'la cifra sola no dice si fue por hambre, por sueño o por bajar rápido');
   check('con flecha según suba o baje', /sube \? '↑' : '↓'/.test(p));
+
+  // ---- Y desde que el entrenador las mueve a mano, LAS DOS EN LA MISMA
+  //      LISTA. Separadas, la tarjeta decía «bajó a 1800 el lunes» mientras
+  //      la persona comía 1600 desde el miércoles, y nada explicaba el salto.
+  check('los ajustes a mano se mezclan con los del cierre',
+    /\.concat\(\(m\.ajustes_mano \|\| \[\]\)/.test(p),
+    'unas calorías tienen UNA historia, no una de la máquina y otra de las personas');
+  check('y la lista va ordenada por fecha', /\.sort\(function\(a, b\)/.test(p),
+    'sin ordenar, lo de mano sale todo junto al final y no se lee la secuencia');
+  check('diciendo de quién fue cada uno', /escapar\(a\.quien\)/.test(p),
+    'con las dos fuentes juntas hay que poder distinguir quién decidió qué');
   // Las semanas sin ajuste ya se ven en el hambre y la energía de arriba;
   // listarlas diciendo «no se cambió nada» llena la tarjeta de filas mudas.
   check('solo las semanas en que SÍ se movió algo',
     /x\.ajusto && x\.cal_despues/.test(p));
   check('y la tarjeta no sale si no hubo ninguno', /if\(ajustes\.length\)\{/.test(p));
-  check('se dice quién lo decide', /Lo decide el cierre de cada semana/.test(p));
+  check('se dice quién lo decide', /El cierre de cada semana las decide/.test(p));
+  // Y DÓNDE se cambian. El pie decía «en su perfil», que es donde NO está:
+  // el botón vive en esta misma ficha.
+  check('y dónde cambiarlas a mano', /Ajustar sus [\s\S]{0,12}calorías/.test(p));
 
   // Y que el servidor los mande: sin esto la tarjeta nunca tendría datos.
   const SQL = readFileSync(join(RAIZ, 'supabase', 'migrations',
