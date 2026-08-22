@@ -7402,6 +7402,184 @@
       });
   }
 
+  // ================= MOVERLE LAS CALORIAS =================
+  //
+  //  Sus calorias son tres columnas de su perfil -proteina, carbos, grasas-
+  //  y hasta ahora las movian dos: ella misma, recalculando sus macros, y la
+  //  IA cada lunes. Su entrenador no: la politica de `profiles` le deja VER
+  //  el perfil de sus clientes, no escribirlo.
+  //
+  //  Ahora las mueve con `ajustar_calorias`, que solo deja tocar esos tres
+  //  numeros y deja escrito quien fue y por que.
+  //
+  //  LA PROTEINA NO SE MUEVE. Se calcula por el peso de la persona, no por
+  //  lo que come; bajarla mientras se recorta es como se pierde musculo en
+  //  vez de grasa. La diferencia sale de carbohidratos y grasas, con un
+  //  suelo para la grasa que pone el servidor.
+  var CAL_DE = null;   // { id, nombre, p, c, g, cal }
+
+  // El mismo reparto que hace el servidor, para poder ensenar el resultado
+  // ANTES de guardar. Es una copia, si: la alternativa es pedirle al
+  // servidor una simulacion en cada toque del boton, y entonces el numero
+  // llegaria medio segundo tarde en un mando que se pulsa seguido.
+  //
+  // Si los dos se separan, la pantalla promete algo que no pasa. Por eso la
+  // prueba compara los dos repartos con numeros de verdad.
+  //
+  // P, C y G en MAYUSCULAS porque es lo que lee `tiraDeMetas`, que es quien
+  // los pinta: con minusculas devuelve cadena vacia sin quejarse y la
+  // pantalla sale en blanco.
+  function repartir(base, cal){
+    var P = base.P;
+    if(P * 4 > cal * 0.40) P = Math.floor(cal * 0.40 / 4);
+    var resto = cal - P * 4;
+    var noProt = base.C * 4 + base.G * 9;
+    var rat = noProt > 0 ? (base.G * 9) / noProt : 0.35;
+    var gcal = resto * rat;
+    if(gcal < cal * 0.20) gcal = cal * 0.20;
+    if(gcal > cal * 0.45) gcal = cal * 0.45;
+    if(gcal > resto)      gcal = resto;
+    var G = Math.round(gcal / 9);
+    if(G > 400) G = 400;
+
+    var C = Math.round((resto - G * 9) / 4);
+    if(C < 0) C = 0;
+
+    // Los topes de las columnas del perfil: 600 de proteina, 900 de carbos,
+    // 400 de grasa. Con 6000 calorias y poca grasa el reparto pide 1071 g de
+    // carbos y el servidor lo rechaza; sin esto, la pantalla ensenaria unos
+    // numeros que no se pueden guardar.
+    if(C > 900){
+      G = Math.min(400, G + Math.floor((C - 900) * 4 / 9));
+      C = 900;
+    }
+    return { P:P, C:C, G:G, cal: Math.round(P * 4 + C * 4 + G * 9) };
+  }
+
+  function abrirCalorias(){
+    if(!fichaDe) return;
+    if(!METRICAS || !METRICAS.meta_p){
+      toast('toastCliente', 'Esa persona todavía no tiene sus macros calculados');
+      return;
+    }
+    var base = { P: Number(METRICAS.meta_p), C: Number(METRICAS.meta_c),
+                 G: Number(METRICAS.meta_g) };
+    base.cal = Math.round(base.P * 4 + base.C * 4 + base.G * 9);
+    CAL_DE = { id: fichaDe.id, nombre: fichaDe.nombre,
+               P:base.P, C:base.C, G:base.G, cal: base.cal };
+
+    document.getElementById('acTitulo').textContent = fichaDe.nombre;
+    document.getElementById('acCal').value = base.cal;
+    document.getElementById('acMotivo').value = '';
+    document.getElementById('acAhora').innerHTML = tiraDeMetas(base);
+    pintarCaloriasNuevas();
+    pintarHistoriaCalorias();
+    goto('calorias', true);
+  }
+
+  function pintarCaloriasNuevas(){
+    if(!CAL_DE) return;
+    var campo = document.getElementById('acCal');
+    var cal = Math.round(Number(campo.value) || 0);
+    var caja = document.getElementById('acDespues');
+    var btn = document.getElementById('acGuardar');
+
+    // Los mismos limites que el servidor, dichos antes de pulsar. Dejar
+    // guardar para que conteste que no es hacer esperar para nada.
+    if(cal < 800 || cal > 6000){
+      caja.innerHTML = '<p class="calc-note" style="padding:0 20px;">' +
+        'Entre 800 y 6000 calorías.</p>';
+      btn.disabled = true;
+      return;
+    }
+    var r = repartir(CAL_DE, cal);
+    btn.disabled = (r.cal === CAL_DE.cal);
+    caja.innerHTML = tiraDeMetas(r) +
+      '<p class="calc-note" style="padding:6px 20px 0;">' +
+      (r.cal === CAL_DE.cal
+        ? 'Es lo que ya come.'
+        : (r.cal > CAL_DE.cal ? 'Sube ' : 'Baja ') +
+          mil(Math.abs(r.cal - CAL_DE.cal)) + ' calorías' +
+          (r.P !== CAL_DE.P
+            ? '. Y la proteína baja a ' + r.P + ' g porque con esas calorías no cabía.'
+            : '. La proteína se queda en ' + r.P + ' g.')) +
+      '</p>';
+  }
+
+  function pintarHistoriaCalorias(){
+    var caja = document.getElementById('acHistoria');
+    var lista = (METRICAS && METRICAS.ajustes_mano) || [];
+    if(!lista.length){
+      caja.innerHTML = '<p class="calc-note" style="padding:0 20px;">' +
+        'Todavía nadie se las ha movido a mano.</p>';
+      return;
+    }
+    caja.innerHTML = lista.map(function(a){
+      var hay = a.cal_antes != null;
+      var sube = hay && Number(a.cal_despues) > Number(a.cal_antes);
+      return '<div class="cal-hist">' +
+        // De cuánto a cuánto. Sin el «de cuánto» no se sabe si 1800 fue
+        // subir o bajar, que es lo único que se quiere ver de un vistazo.
+        '<div class="va">' + (hay ? escapar(mil(a.cal_antes)) + ' ' : '') +
+        '<i class="' + (sube ? 'sube' : 'baja') + '">' + (hay ? (sube ? '↑' : '↓') : '') + '</i> ' +
+        '<b>' + escapar(mil(a.cal_despues)) + '</b></div>' +
+        '<div class="txt"><b>' + escapar(a.quien || 'alguien') + '</b>' +
+        '<span>' + escapar(diaCorto(a.cuando)) +
+        (a.motivo ? ' · ' + escapar(a.motivo) : '') + '</span></div>' +
+      '</div>';
+    }).join('');
+  }
+
+  document.getElementById('fcCalorias').addEventListener('click', abrirCalorias);
+  document.getElementById('acCal').addEventListener('input', pintarCaloriasNuevas);
+  document.getElementById('acMenos').addEventListener('click', function(){ mover(-100); });
+  document.getElementById('acMas').addEventListener('click', function(){ mover(100); });
+
+  function mover(n){
+    var campo = document.getElementById('acCal');
+    var v = Math.round(Number(campo.value) || 0) + n;
+    campo.value = Math.max(800, Math.min(6000, v));
+    pintarCaloriasNuevas();
+  }
+
+  document.getElementById('acGuardar').addEventListener('click', function(){
+    if(!CAL_DE) return;
+    var cal = Math.round(Number(document.getElementById('acCal').value) || 0);
+    if(cal < 800 || cal > 6000){ toast('toastCal', 'Entre 800 y 6000 calorías'); return; }
+
+    var btn = this, antes = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Guardando…';
+    var quien = CAL_DE.id;
+
+    sbRpc('ajustar_calorias', {
+      p_cliente: quien, p_calorias: cal,
+      p_motivo: document.getElementById('acMotivo').value.trim() || null
+    })
+      .then(function(r){
+        btn.textContent = antes;
+        // Manda lo que devuelve el servidor: el redondeo de los gramos mueve
+        // las calorias unas pocas, y ensenar las pedidas seria mentir.
+        if(!r) throw new Error('No devolvió nada.');
+        // Sus numeros cambiaron, asi que la ficha de atras ya no vale. Se
+        // vuelven a pedir enteros en vez de parchear METRICAS a mano: hay
+        // media pantalla que depende de las metas.
+        // Primero salir y DESPUÉS avisar. Al revés, el aviso sale en una
+        // pantalla que se está cerrando y no se llega a leer; así cae en la
+        // ficha, que es donde se ve el cambio.
+        back();
+        toast('toastCliente', 'Ahora come ' + mil(r.cal) + ' calorías');
+        return sbMetricas(quien).then(function(m){
+          if(!fichaDe || fichaDe.id !== quien) return;
+          METRICAS = m;
+          pintarMetricas();
+        });
+      })
+      ['catch'](function(e){
+        btn.disabled = false; btn.textContent = antes;
+        toast('toastCal', 'No se pudo: ' + traducirError(e.message));
+      });
+  });
+
   document.getElementById('fcEditarPlan').addEventListener('click', function(){
     if(!fichaDe) return;
     // Las metas viajan con la persona: el editor las enseña arriba para que

@@ -1341,6 +1341,24 @@ Deno.serve(async (req) => {
       // una media que significa algo; con menos, no.
       const hayMaterial = diasApuntados >= 4 && pesos.length >= 2;
 
+      // ---- ¿Ya se las movió una persona esta semana? ----
+      //
+      //  Si su entrenador le bajó 200 calorías el miércoles y el lunes esto
+      //  se las vuelve a mover, la decisión del entrenador dura cinco días y
+      //  nadie se entera de que se deshizo. Peor todavía: el lunes se estaría
+      //  juzgando una semana que se comió con OTRAS calorías.
+      //
+      //  Así que cuando una persona las ha tocado hace menos de siete días,
+      //  la máquina no las toca. Sigue diciéndole cómo le fue —eso es lo que
+      //  la persona espera del lunes— pero no decide sobre las calorías.
+      const { data: aMano } = await admin
+        .rpc('calorias_movidas_a_mano', { p_cliente: userId });
+
+      // Si la migración va por detrás del despliegue, `aMano` viene nulo y
+      // esto se comporta exactamente como antes.
+      const movidasAMano = aMano && typeof aMano === 'object'
+        ? aMano as Record<string, unknown> : null;
+
       const encuesta = (cuerpo.chequeo ?? {}) as Record<string, number>;
       // `unknown` y no `number`: además de los totales trae `por_semana`,
       // que es una lista. Tiparlo como números haría fallar la comprobación
@@ -1466,7 +1484,19 @@ Deno.serve(async (req) => {
         historial +
         cinturas +
         (cuerpo.nota ? `- Dice: "${String(cuerpo.nota).slice(0, 300)}"\n` : '') +
-        `- ¿Hay material para ajustar?: ${hayMaterial ? 'sí' : 'NO'}`;
+        `- ¿Hay material para ajustar?: ${hayMaterial ? 'sí' : 'NO'}\n` +
+        // Se le DICE además de forzarlo abajo. Forzándolo solo, el mensaje
+        // diría «te subo a 2000» y las calorías se quedarían donde estaban:
+        // la persona leería una cosa y vería otra.
+        (movidasAMano
+          ? `- OJO: su entrenador ya le ajustó las calorías a mano hace ` +
+            `menos de una semana (de ${movidasAMano.cal_antes} a ` +
+            `${movidasAMano.cal_despues}` +
+            (movidasAMano.motivo ? `, porque "${movidasAMano.motivo}"` : '') +
+            `). NO se las muevas: son de esta semana y hay que darles ` +
+            `tiempo. Dile cómo le fue y ya. Puedes mencionar el cambio si ` +
+            `viene a cuento, sin juzgarlo.`
+          : '');
 
       const r = await ia.messages.create({
         model: MODELO,
@@ -1485,6 +1515,10 @@ Deno.serve(async (req) => {
       // convencido de que puede ayudar ajusta igual, y ese es justo el
       // gasto de tokens y de confianza que se quiere evitar.
       if (!hayMaterial) { salida.ajusto = false; salida.cal_nueva = null; }
+      // Lo mismo, y por la misma razón: esto lo decide el código. Un modelo
+      // convencido de que hace falta ajustar ajusta igual aunque se le pida
+      // que no, y aquí lo que hay al otro lado es la decisión de una persona.
+      if (movidasAMano) { salida.ajusto = false; salida.cal_nueva = null; }
       return json({ ...salida, quedan, nivel });
     }
 

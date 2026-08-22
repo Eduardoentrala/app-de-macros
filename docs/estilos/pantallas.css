@@ -762,3 +762,58 @@
 .fc-ajuste:first-of-type{border-top:none;padding-top:2px;}
 .fc-ajuste .fl{color:var(--ink-faint);font-weight:600;}
 .fc-motivo{font:500 12.5px/1.5 sans-serif;color:var(--ink-soft);margin-top:5px;}
+
+
+/* ---- Moverle las calorias a alguien ---- */
+
+/* El mando: menos, el numero, mas. Ajustar es casi siempre mover cien
+   arriba o cien abajo, no teclear una cifra nueva, asi que los botones son
+   grandes y el campo va en medio para quien si quiera teclearla. */
+.cal-mando{display:flex;align-items:center;gap:10px;margin:12px 16px 0;}
+.cal-mando button{
+  flex:none;width:78px;height:52px;border:none;border-radius:14px;cursor:pointer;
+  background:var(--pill-bg);color:var(--ink);font:800 15px/1 sans-serif;
+}
+.cal-mando button:active{opacity:.55;}
+
+/* El numero, grande y centrado: es la cifra que se esta decidiendo. Las
+   flechitas del input number sobran -para eso estan los botones- y en
+   iPhone no salen nunca. */
+.cal-mando input{
+  flex:1;min-width:0;height:52px;border:none;border-radius:14px;
+  background:var(--card-bg);box-shadow:var(--shadow);color:var(--ink);
+  text-align:center;font:800 22px/52px sans-serif;-moz-appearance:textfield;
+}
+.cal-mando input::-webkit-outer-spin-button,
+.cal-mando input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+
+.cal-motivo{
+  width:100%;border:none;border-radius:14px;padding:13px 15px;resize:none;
+  background:var(--card-bg);box-shadow:var(--shadow);color:var(--ink);
+  font:500 13.5px/1.45 sans-serif;
+}
+.cal-motivo::placeholder{color:var(--ink-faint);}
+
+/* Lo que ya se le movio. El «de cuanto venia» delante y mas apagado: lo que
+   importa es a cuanto quedo; de donde venia es el contexto que hace que
+   1800 signifique algo. */
+.cal-hist{
+  display:flex;align-items:center;gap:12px;background:var(--card-bg);
+  margin:0 16px 8px;padding:12px 15px;border-radius:14px;box-shadow:var(--shadow);
+}
+.cal-hist .va{
+  flex:none;display:flex;align-items:center;gap:2px;
+  font:600 12.5px/1 sans-serif;color:var(--ink-faint);
+}
+.cal-hist .va b{font:800 15px/1 sans-serif;color:var(--ink);}
+.cal-hist .va i{font-style:normal;font-size:12px;}
+/* Bajar va en verde y subir en gris, y no al reves: aqui casi siempre se
+   baja, y pintar de rojo lo que se hace a diario convierte la pantalla en
+   una alarma. */
+.cal-hist .va i.baja{color:var(--green);}
+.cal-hist .va i.sube{color:var(--ink-soft);}
+.cal-hist .txt{flex:1;min-width:0;}
+.cal-hist .txt b{display:block;font:700 13px/1.2 sans-serif;}
+.cal-hist .txt span{
+  display:block;font:500 11.5px/1.35 sans-serif;color:var(--ink-faint);margin-top:3px;
+}

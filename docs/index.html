@@ -80,7 +80,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = 'a7b32f71fe';
+    var SELLO = '9dfd2583c6';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -907,6 +907,13 @@
           <div class="plan-armar">
             <button id="fcAnalizar">✨ Analizar cómo va</button>
           </div>
+
+          <!-- Moverle las calorias. Va junto al analisis y no en la barra de
+               abajo, que ya tiene «Escribir su plan»: son dos cosas que se
+               hacen despues de MIRAR sus numeros, no antes. -->
+          <div class="plan-armar">
+            <button id="fcCalorias">Ajustar sus calor&iacute;as</button>
+          </div>
           <p class="calc-note" style="padding:2px 20px 0;" id="fcAnalizarPie">
             Gasta una de tus consultas del día. Se guarda, así que volver a
             entrar no gasta otra.
@@ -921,6 +928,61 @@
           <button class="btn-primary" id="fcEditarPlan">Escribir su plan</button>
         </div>
         <div class="toast" id="toastCliente">Listo</div>
+      </div>
+
+      <!-- MOVERLE LAS CALORIAS
+           Se abre desde su ficha. Va en su propia pantalla y no en un
+           di&aacute;logo porque hay que ver contra qu&eacute; se decide: lo que come
+           ahora, lo que va a comer, y lo que ya se le movi&oacute; antes.
+
+           Los botones de -100 y +100 est&aacute;n antes que el campo a
+           prop&oacute;sito: ajustar es casi siempre mover cien arriba o cien
+           abajo, no teclear un n&uacute;mero nuevo. -->
+      <div class="app-view" data-view="calorias">
+        <div class="back-header stacked">
+          <div class="back-header-inner">
+            <button class="back-btn" data-back>&lsaquo; Regresar</button>
+            <span class="back-title" id="acTitulo">Sus calor&iacute;as</span>
+          </div>
+        </div>
+        <div class="scroll">
+          <div class="section-label">Come ahora</div>
+          <div id="acAhora"></div>
+
+          <div class="section-label">Pasar&iacute;a a comer</div>
+          <div id="acDespues"></div>
+
+          <div class="cal-mando">
+            <button id="acMenos" aria-label="Cien calor&iacute;as menos">&minus;100</button>
+            <input id="acCal" type="number" inputmode="numeric"
+                   min="800" max="6000" step="10" aria-label="Calor&iacute;as">
+            <button id="acMas" aria-label="Cien calor&iacute;as m&aacute;s">+100</button>
+          </div>
+          <p class="calc-note" style="padding:2px 20px 0;" id="acAviso">
+            La prote&iacute;na no se mueve: se calcula por su peso, no por lo que
+            come. La diferencia sale de carbohidratos y grasas.
+          </p>
+
+          <div class="section-label">Por qu&eacute;</div>
+          <div style="padding:0 16px;">
+            <textarea id="acMotivo" rows="2" maxlength="200" class="cal-motivo"
+              placeholder="Tres semanas sin bajar apuntando todo"></textarea>
+          </div>
+          <p class="calc-note" style="padding:6px 20px 0;">
+            Se guarda con tu nombre y la fecha. Ella tambi&eacute;n lo ve: son sus
+            calor&iacute;as. Y el cierre del lunes no se las volver&aacute; a mover en
+            siete d&iacute;as.
+          </p>
+
+          <div class="section-label">Lo que ya se le movi&oacute;</div>
+          <div id="acHistoria"></div>
+
+          <div style="height:16px;"></div>
+        </div>
+        <div class="bottom-bar">
+          <button class="btn-primary" id="acGuardar">Ponerle estas calor&iacute;as</button>
+        </div>
+        <div class="toast" id="toastCal">Listo</div>
       </div>
 
       <!-- QUE HACE LA IA CON ESTA PERSONA
@@ -1769,7 +1831,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = 'a7b32f71fe';
+    var SELLO = '9dfd2583c6';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que
