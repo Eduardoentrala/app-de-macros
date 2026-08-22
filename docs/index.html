@@ -80,7 +80,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '3f47a12f79';
+    var SELLO = '0d636eb392';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -1287,6 +1287,25 @@
           </div>
         </div>
 
+        <!-- PREGUNTAR ANTES DE HACER ALGO
+             Una hoja y no el `confirm()` del navegador: en iPhone ese sale
+             con «eduardoentrala.github.io dice:» encima, que delata que
+             esto es una pagina web y no una app.
+
+             Es generica a proposito -titulo, texto y el nombre del boton
+             que confirma- para que la siguiente pregunta no traiga otra
+             hoja mas. -->
+        <div class="sheet-backdrop" id="preguntaSheet">
+          <div class="sheet">
+            <h4 id="preguntaTitulo">Confirmar</h4>
+            <p class="hint" id="preguntaTexto">&nbsp;</p>
+            <div class="pregunta-botones">
+              <button id="preguntaNo">Cancelar</button>
+              <button class="btn-primary" id="preguntaSi">S&iacute;</button>
+            </div>
+          </div>
+        </div>
+
         <div class="sheet-backdrop" id="nameSheet">
           <div class="sheet">
             <h4 id="nameSheetTitle">Nombre del día</h4>
@@ -1840,7 +1859,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '3f47a12f79';
+    var SELLO = '0d636eb392';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que

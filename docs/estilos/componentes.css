@@ -341,3 +341,18 @@ table.week-table tr.today td{font-weight:800;}
   border-color:#e0574a;
   box-shadow:0 0 0 3px rgba(224,87,74,.18);
 }
+
+
+/* ---- Preguntar antes de hacer algo ----
+   Dos botones en una fila: cancelar a la izquierda y confirmar a la
+   derecha, como en iOS. El de cancelar NO es rojo ni gris apagado -no es
+   una advertencia, es la otra mitad de una pregunta normal- y va con el
+   mismo peso visual que las pastillas del resto de la app. */
+.pregunta-botones{display:flex;gap:10px;margin-top:16px;}
+.pregunta-botones button{
+  flex:1;height:48px;border:none;border-radius:14px;cursor:pointer;
+  font:700 14px/1 sans-serif;
+}
+#preguntaNo{background:var(--pill-bg);color:var(--ink);}
+.pregunta-botones .btn-primary{margin:0;width:auto;}
+.pregunta-botones button:active{opacity:.6;}

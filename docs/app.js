@@ -2674,6 +2674,45 @@
     if(!a || a.guardado) { toast('toastComida', a && a.guardado ? 'Ya está en Guardados' : ''); return; }
     if(!sesion){ toast('toastComida', 'Inicia sesión para guardar'); return; }
 
+    // ---- ¿YA LO TIENE, CON OTROS MACROS? ----
+    //
+    //  Este camino tambien se estrellaba: el `insert` chocaba con el indice
+    //  unico, se devolvia la estrella a su sitio y salia «Ese ya estaba en
+    //  Guardados». Cierto, pero callejon sin salida: si la ficha guardada
+    //  estaba mal, no habia forma de corregirla desde aqui.
+    //
+    //  Se comprueba ANTES de tocar nada, con lo que ya esta en memoria.
+    var yaEsta = guardadoIgual(a.n, a.u || 'Gramos');
+    if(yaEsta){
+      var nueva = { P: a.porBase ? a.porBase.P : a.P,
+                    C: a.porBase ? a.porBase.C : a.C,
+                    G: a.porBase ? a.porBase.G : a.G };
+      var mismos = Math.round(nueva.P * 10) === Math.round(yaEsta.P * 10) &&
+                   Math.round(nueva.C * 10) === Math.round(yaEsta.C * 10) &&
+                   Math.round(nueva.G * 10) === Math.round(yaEsta.G * 10);
+      // Si son los mismos macros no hay nada que preguntar: se dice y ya.
+      if(mismos){
+        a.guardado = true; a.id_guardado = yaEsta.id;
+        pintarComida();
+        toast('toastComida', 'Ya lo tenías guardado ★');
+        return;
+      }
+      preguntar(
+        'Ya lo tienes guardado',
+        '«' + a.n + '» ya está en tus guardados con otros macros: ' +
+        mil(Math.round(yaEsta.P * 4 + yaEsta.C * 4 + yaEsta.G * 9)) + ' cal por ' +
+        (UNIDAD_BASE[a.u || 'Gramos'] || '100g') + ', y este tiene ' +
+        mil(Math.round(nueva.P * 4 + nueva.C * 4 + nueva.G * 9)) +
+        '. ¿Le cambio los macros a los de este?',
+        'Sí, cambiarlos'
+      ).then(function(cambiar){
+        if(cambiar) actualizarGuardado(yaEsta, nueva.P, nueva.C, nueva.G);
+        a.guardado = true; a.id_guardado = yaEsta.id;
+        pintarComida();
+      });
+      return;
+    }
+
     a.guardado = true;
     pintarComida();
 
@@ -3184,6 +3223,63 @@
   }
   document.getElementById('pillCrear').addEventListener('click', limpiarFormularioAlimento);
 
+  // ---- Preguntar antes de hacer algo ----
+  //
+  //  Devuelve una promesa que se resuelve con true o false, para poder
+  //  escribir `preguntar(...).then(function(si){ ... })` en vez de partir la
+  //  funcion en dos por culpa de un dialogo.
+  //
+  //  Es una hoja y no el `confirm()` del navegador: en iPhone ese sale con
+  //  «eduardoentrala.github.io dice:» encima, que delata que esto es una
+  //  pagina web. Los cuatro `confirm()` que quedan son de cosas que se hacen
+  //  una vez al ano -suspender a alguien, borrar-; este se va a ver seguido.
+  function preguntar(titulo, texto, textoSi){
+    return new Promise(function(listo){
+      var hoja = document.getElementById('preguntaSheet');
+      var si = document.getElementById('preguntaSi');
+      var no = document.getElementById('preguntaNo');
+      document.getElementById('preguntaTitulo').textContent = titulo;
+      document.getElementById('preguntaTexto').textContent = texto;
+      si.textContent = textoSi || 'Sí';
+
+      var cerrar = function(respuesta){
+        hoja.classList.remove('open');
+        si.removeEventListener('click', alSi);
+        no.removeEventListener('click', alNo);
+        hoja.removeEventListener('click', alFondo);
+        listo(respuesta);
+      };
+      var alSi = function(){ cerrar(true); };
+      var alNo = function(){ cerrar(false); };
+      // Tocar fuera es cancelar, como en todas las hojas de la app.
+      var alFondo = function(e){ if(e.target === hoja) cerrar(false); };
+
+      si.addEventListener('click', alSi);
+      no.addEventListener('click', alNo);
+      hoja.addEventListener('click', alFondo);
+      hoja.classList.add('open');
+    });
+  }
+
+  // ¿Ya tiene guardado un alimento que se llame así y en la misma unidad?
+  //
+  //  NOMBRE Y UNIDAD, no solo el nombre: la base tiene un indice unico sobre
+  //  (persona, nombre, unidad), asi que «Churro de azucar» en Gramos y en
+  //  Pieza son dos fichas distintas y las dos son legitimas -cien gramos de
+  //  churro y un churro no tienen los mismos macros-. Preguntar por el
+  //  nombre a secas estorbaria en un caso que funciona bien.
+  //
+  //  Sin acentos ni mayusculas: quien escribe «platano» tiene que encontrar
+  //  su «Plátano», que es justo el duplicado que se quiere evitar.
+  function guardadoIgual(nombre, unidad){
+    var n = normalizarBusqueda(nombre);
+    for(var i = 0; i < MIS_ALIMENTOS.length; i++){
+      var a = MIS_ALIMENTOS[i];
+      if(normalizarBusqueda(a.n) === n && (a.u || 'Gramos') === unidad) return a;
+    }
+    return null;
+  }
+
   document.getElementById('nfSave').addEventListener('click', function(){
     var nombre = document.getElementById('nfName').value.trim();
     if(!nombre){ document.getElementById('nfName').focus(); return; }
@@ -3214,12 +3310,42 @@
       return;
     }
 
-    var a = {n:nombre, P:Number(nfP.value)||0, C:Number(nfC.value)||0, G:Number(nfG.value)||0, u:unidadActual};
+    var P = Number(nfP.value)||0, C = Number(nfC.value)||0, G = Number(nfG.value)||0;
+
+    // ---- ¿YA LO TIENE GUARDADO? ----
+    //
+    //  Antes esto se estrellaba. Se creaba la ficha, se apuntaba la comida,
+    //  y el `insert` chocaba con el índice único de (persona, nombre,
+    //  unidad): la ficha se borraba de la lista y salía «No se pudo guardar
+    //  el alimento: ...». O sea que corregir los macros de algo que ya
+    //  tenías era imposible desde aquí, y el error no decía qué hacer.
+    //
+    //  Ahora se pregunta antes. Y pase lo que pase, LA COMIDA SE APUNTA: se
+    //  entró aquí a apuntar algo, y cancelar la pregunta de los macros no
+    //  puede llevarse por delante eso.
+    var yaLoTiene = guardadoIgual(nombre, unidadActual);
+    if(yaLoTiene){
+      var cal = Math.round(P * 4 + C * 4 + G * 9);
+      var calAntes = Math.round(yaLoTiene.P * 4 + yaLoTiene.C * 4 + yaLoTiene.G * 9);
+      preguntar(
+        'Ya lo tienes guardado',
+        '«' + nombre + '» ya está en tus guardados por ' + (UNIDAD_BASE[unidadActual] || '100g') +
+        ': ' + mil(calAntes) + ' cal. Lo que acabas de escribir son ' +
+        mil(cal) + '. ¿Le cambio los macros a los nuevos?',
+        'Sí, cambiarlos'
+      ).then(function(cambiar){
+        if(cambiar) actualizarGuardado(yaLoTiene, P, C, G);
+        // Apuntar la comida de hoy con lo que se acaba de escribir, se haya
+        // actualizado la ficha o no: es lo que la persona vino a hacer.
+        apuntarYLimpiar({ n:nombre, P:P, C:C, G:G, u:unidadActual, id:yaLoTiene.id });
+      });
+      return;
+    }
+
+    var a = {n:nombre, P:P, C:C, G:G, u:unidadActual};
     MIS_ALIMENTOS.unshift(a);
     pintarListas();
-    document.getElementById('nfName').value = '';
-    nfP.value = ''; nfC.value = ''; nfG.value = ''; calcNuevo();
-    agregarAlimento(a);
+    apuntarYLimpiar(a);
 
     // Queda en tu despensa para volver a usarlo, no solo apuntado hoy.
     sbGuardarAlimento(a).then(function(f){
@@ -3230,6 +3356,35 @@
       toast('toastComida', 'No se pudo guardar el alimento: ' + traducirError(e.message));
     });
   });
+
+  // Apuntar lo que se acaba de escribir y dejar el formulario listo para
+  // otro. Sale aparte porque ahora hay dos caminos que acaban igual: el
+  // alimento nuevo y el que ya estaba guardado.
+  function apuntarYLimpiar(a){
+    document.getElementById('nfName').value = '';
+    nfP.value = ''; nfC.value = ''; nfG.value = ''; calcNuevo();
+    agregarAlimento(a);
+  }
+
+  // Cambiarle los macros a una ficha que ya existe. En pantalla al momento y
+  // en la base después; si la base dice que no, se deshace y se avisa —una
+  // ficha que dice 300 cal y guarda 200 es peor que un error.
+  function actualizarGuardado(g, P, C, G){
+    var antes = { P:g.P, C:g.C, G:g.G };
+    g.P = P; g.C = C; g.G = G;
+    pintarListas();
+    toast('toastComida', '«' + g.n + '» actualizado');
+
+    if(!g.id || !sesion) return;
+    sbFetch('/rest/v1/saved_foods?id=eq.' + g.id, {
+      method:'PATCH', headers:{ 'Prefer':'return=minimal' },
+      body: JSON.stringify({ protein_g:P, carbs_g:C, fat_g:G })
+    })['catch'](function(e){
+      g.P = antes.P; g.C = antes.C; g.G = antes.G;
+      pintarListas();
+      toast('toastComida', 'No se pudo actualizar: ' + traducirError(e.message));
+    });
+  }
 
   pintarComida();
 
