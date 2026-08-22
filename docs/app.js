@@ -9524,13 +9524,29 @@
   // El mes sale de `isoDe`, que ya usa la fecha del teléfono. Con
   // `toISOString().slice(0,7)` habría sido el mes en UTC, y la última noche
   // de cada mes -a partir de las 18:00 en México- habría dado el siguiente.
+  // CUÁNTO DURA LA × DE CADA RECORDATORIO.
+  //
+  //  Se guarda el ciclo en curso al cerrarlo, y vuelve a salir cuando el
+  //  ciclo cambia. O sea que esto decide si la × calla el aviso un día, una
+  //  semana o un mes.
   function cicloDeRecordatorio(cual){
-    if(cual === 'peso')  return isoDe(HOY);
-    // La semana de la persona y no la ISO: si no, a quien empieza en martes
-    // la × pulsada el domingo se le desharía sola el lunes, en mitad de su
-    // propia semana.
-    if(cual === 'fotos') return claveDeMisFotos();
-    return isoDe(HOY).slice(0, 7);        // cintura: '2026-08'
+    // Peso y CINTURA: un día. La × es «hoy no», no «ya no».
+    //
+    //  La cintura callaba un MES ENTERO: se guardaba '2026-08' y no volvía
+    //  hasta septiembre. Quien la cerraba sin querer —o la cerraba pensando
+    //  «ahorita»— se quedaba sin aviso hasta el mes siguiente, y como el
+    //  campo para apuntarla solo aparece cuando toca, era bastante fácil
+    //  no medirse en todo el mes sin enterarse.
+    //
+    //  Con el día, el aviso vuelve mañana y pasado hasta que se mida. Y en
+    //  cuanto se mide, `tocaMedirCintura()` lo apaga solo hasta los 28 días
+    //  siguientes: la × no tiene que hacer ese trabajo.
+    if(cual === 'peso' || cual === 'cintura') return isoDe(HOY);
+
+    // Fotos: la semana de la persona y no la ISO. Si no, a quien empieza en
+    // martes la × pulsada el domingo se le desharía sola el lunes, en mitad
+    // de su propia semana.
+    return claveDeMisFotos();
   }
 
   function recordatorioCallado(cual){
