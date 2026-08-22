@@ -37,7 +37,7 @@ mkdirSync(TMP, { recursive: true });
 const arch = join(TMP, 'envoltorio.ts');
 writeFileSync(arch, [
   'export function armar(admin: any, userId: any, accion: any, MODELO: any,',
-  '                      iaCruda: any, reintentable: any) {',
+  '                      iaCruda: any, reintentable: any, llave: any) {',
   BLOQUE,
   '  return ia;',
   '}',
@@ -71,7 +71,7 @@ console.log('\nLo que cuesta una respuesta normal queda apuntado');
   const admin = fingirAdmin();
   const ia = armar(admin, 'u-1', 'plan', 'claude-opus-5', {
     messages: { create: async () => ({ usage: { input_tokens: 1200, output_tokens: 9000 } }) },
-  }, reintentable);
+  }, reintentable, 'plan_dia');
 
   const r = await ia.messages.create({ model: 'claude-opus-5' });
   await dejarQueTermine();
@@ -84,7 +84,10 @@ console.log('\nLo que cuesta una respuesta normal queda apuntado');
   ok(f.accion === 'plan', 'sabiendo qué acción fue');
   ok(f.user_id === 'u-1', 'y de quién');
   ok(f.modelo === 'claude-opus-5', 'y con qué modelo (los precios son por modelo)');
-  ok(Object.keys(f).length === 5, 'y NADA del contenido: solo números');
+  ok(f.llave === 'plan_dia',
+     'y LA LLAVE, no solo la acción: la foto de comida viaja como «chat», ' +
+     'y sin esto lo más caro de la app se mezclaría con lo más barato');
+  ok(Object.keys(f).length === 6, 'y NADA del contenido: solo números y etiquetas');
 }
 
 // ------------------------------------------------------------------
@@ -96,7 +99,7 @@ console.log('\nLos tokens de caché cuentan como entrada');
       input_tokens: 100, cache_read_input_tokens: 4000,
       cache_creation_input_tokens: 500, output_tokens: 300,
     } }) },
-  }, reintentable);
+  }, reintentable, 'chat');
   await ia.messages.create({ model: 'claude-opus-5' });
   await dejarQueTermine();
   ok(admin.filas.length === 1 && admin.filas[0].fila.entrada === 4600,
@@ -111,7 +114,7 @@ console.log('\nEn streaming también, y una sola vez');
     messages: { stream: () => ({
       async finalMessage() { return { usage: { input_tokens: 3000, output_tokens: 20000 } }; },
     }) },
-  }, reintentable);
+  }, reintentable, 'semanal');
 
   const flujo = ia.messages.stream({ model: 'claude-opus-5' });
   const r = await flujo.finalMessage();
@@ -133,7 +136,7 @@ console.log('\nSi reintenta, NO se apunta dos veces');
       if (veces === 1) { const e = new Error('saturado'); e.reintentable = true; throw e; }
       return { usage: { input_tokens: 50, output_tokens: 60 } };
     } },
-  }, reintentable);
+  }, reintentable, 'foto');
 
   await ia.messages.create({ model: 'claude-opus-5' });
   await dejarQueTermine();
@@ -152,7 +155,7 @@ console.log('\nY LO QUE MÁS IMPORTA: apuntar no puede tumbar la respuesta');
     const admin = fingirAdmin(modo);
     const ia = armar(admin, 'u-4', 'fotos', 'claude-opus-5', {
       messages: { create: async () => ({ usage: { input_tokens: 10, output_tokens: 20 } }) },
-    }, reintentable);
+    }, reintentable, 'semanal');
 
     let cayo = null;
     const r = await ia.messages.create({ model: 'claude-opus-5' })
@@ -168,7 +171,7 @@ console.log('\nY LO QUE MÁS IMPORTA: apuntar no puede tumbar la respuesta');
   const admin = fingirAdmin('rechaza');
   const ia = armar(admin, 'u-4', 'aviso', 'claude-opus-5', {
     messages: { create: async () => ({ usage: { input_tokens: 1, output_tokens: 1 } }) },
-  }, reintentable);
+  }, reintentable, 'chat');
   await ia.messages.create({ model: 'claude-opus-5' });
   await new Promise((r) => setTimeout(r, 40));
   ok(suelta === null, 'y no queda ninguna promesa rechazada suelta que tumbe la función');
@@ -180,7 +183,7 @@ console.log('\nSin `usage` no se inventa nada');
   const admin = fingirAdmin();
   const ia = armar(admin, 'u-5', 'cliente', 'claude-opus-5', {
     messages: { create: async () => ({ content: [] }) },
-  }, reintentable);
+  }, reintentable, 'analisis');
   await ia.messages.create({ model: 'claude-opus-5' });
   await dejarQueTermine();
   ok(admin.filas.length === 0, 'una respuesta sin tokens no deja fila fantasma');

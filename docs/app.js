@@ -6186,11 +6186,114 @@
     });
   });
 
+  // ================= LO QUE CUESTA LA IA =================
+  //
+  //  Los tokens se llevan apuntando desde que se monto `ia_gasto`, pero no
+  //  habia forma de MIRARLOS: la unica respuesta a «cuanto me cuesta» era
+  //  una estimacion hecha a mano. Esto es lo que faltaba.
+  //
+  //  LOS PRECIOS VIVEN AQUI y no en la base a proposito. Cambian -Anthropic
+  //  ajusta tarifas y el dolar se mueve todos los dias-, y guardarlos con
+  //  cada fila congelaria un tipo de cambio de hace tres meses. Aqui son dos
+  //  numeros que se editan y ya.
+  var PRECIO_IA = {
+    'claude-opus-5':  { ent: 5,  sal: 25 },   // dolares por millon de tokens
+    'claude-sonnet-5':{ ent: 3,  sal: 15 },
+    'claude-haiku-4-5-20251001': { ent: 1, sal: 5 }
+  };
+  var USD_MXN = 18.5;
+
+  // El nombre que sale en los interruptores, para que el informe y la
+  // pantalla de llaves hablen de lo mismo. Sin esto, aqui pondria
+  // «plan_semana» y alli «Armar la semana entera».
+  var NOMBRE_LLAVE = {
+    foto:        'Apuntar comida con foto',
+    chat:        'Preguntas y avisos',
+    semanal:     'Cierre del lunes y fotos',
+    plan_dia:    'Plan de un día',
+    plan_semana: 'Armar la semana entera',
+    analisis:    'Analizar cómo va'
+  };
+
+  var GASTO = null, gastoDias = 30, gastoCargando = false;
+
+  function pesosDe(f){
+    var p = PRECIO_IA[f.modelo] || PRECIO_IA['claude-opus-5'];
+    return ((Number(f.entrada) * p.ent + Number(f.salida) * p.sal) / 1e6) * USD_MXN;
+  }
+
+  function cargarGasto(){
+    if(gastoCargando) return;
+    gastoCargando = true;
+    sbRpc('ia_gasto_resumen', { p_dias: gastoDias })
+      .then(function(r){ GASTO = r || []; })
+      ['catch'](function(){ GASTO = 'error'; })
+      .then(function(){ gastoCargando = false; if(admVista === 'gasto') pintarAdmin(); });
+  }
+
+  function pintarGasto(){
+    if(GASTO === 'error') return '<p class="cmp-aviso">No pude traer el gasto.</p>';
+    if(!GASTO) return '<p class="cmp-aviso">Cargando…</p>';
+
+    var dias = '<div class="src-pills adm-tabs" style="margin:0 16px 10px;">' +
+      [7, 30, 90].map(function(d){
+        return '<button class="' + (d === gastoDias ? 'active' : '') + '" ' +
+               'data-gdias="' + d + '">' + d + ' días</button>';
+      }).join('') + '</div>';
+
+    if(!GASTO.length){
+      return dias + '<p class="cmp-aviso">Todavía no hay nada apuntado en ' +
+        'estos ' + gastoDias + ' días. Se apunta solo, cada vez que alguien ' +
+        'usa la IA.</p>';
+    }
+
+    // Se suma POR LLAVE y no por fila: la misma llave puede venir con dos
+    // modelos distintos, y lo que se decide -apagar o no- es la llave.
+    var porLlave = {}, total = 0, llamadas = 0;
+    GASTO.forEach(function(f){
+      var k = f.llave || f.accion;
+      var g = porLlave[k] || (porLlave[k] = { k: k, pesos: 0, n: 0 });
+      g.pesos += pesosDe(f);
+      g.n += Number(f.llamadas) || 0;
+      total += pesosDe(f);
+      llamadas += Number(f.llamadas) || 0;
+    });
+    var filas = Object.keys(porLlave).map(function(k){ return porLlave[k]; })
+      .sort(function(a, b){ return b.pesos - a.pesos; });
+
+    return dias +
+      '<div class="kpi-grid">' +
+        '<div class="kpi"><b>$' + total.toFixed(0) + '</b><span>en ' + gastoDias + ' días</span>' +
+          '<span class="sub">' + mil(llamadas) + ' respuestas</span></div>' +
+        '<div class="kpi"><b>$' + (total / Math.max(gastoDias, 1) * 30).toFixed(0) + '</b>' +
+          '<span>al mes, a este ritmo</span>' +
+          '<span class="sub">$' + (llamadas ? (total / llamadas).toFixed(2) : '0') +
+          ' cada una</span></div>' +
+      '</div>' +
+      filas.map(function(g){
+        // La barra dice de un vistazo cuánto pesa cada cosa. Un porcentaje
+        // en texto se lee; una barra se ve.
+        var pct = total > 0 ? Math.round(g.pesos / total * 100) : 0;
+        return '<div class="gasto-row">' +
+          '<div class="txt"><b>' + escapar(NOMBRE_LLAVE[g.k] || g.k) + '</b>' +
+            '<span>' + mil(g.n) + (g.n === 1 ? ' vez' : ' veces') +
+            ' · $' + (g.pesos / Math.max(g.n, 1)).toFixed(2) + ' cada una</span>' +
+            '<i class="barra"><u style="width:' + pct + '%"></u></i></div>' +
+          '<div class="val"><b>$' + g.pesos.toFixed(0) + '</b><span>' + pct + '%</span></div>' +
+        '</div>';
+      }).join('') +
+      '<p class="cmp-aviso">Son los tokens EXACTOS que devolvió Anthropic, a ' +
+      '$' + PRECIO_IA['claude-opus-5'].ent + ' y $' + PRECIO_IA['claude-opus-5'].sal +
+      ' por millón y ' + USD_MXN + ' pesos por dólar. Lo que más pese aquí es ' +
+      'lo que más ahorra apagar en las llaves de cada persona.</p>';
+  }
+
   function pintarAdmin(){
     var c = document.getElementById('admCuerpo');
     c.innerHTML = admVista === 'tablero' ? pintarTablero()
                 : admVista === 'usuarios' ? pintarUsuarios()
                 : admVista === 'alimentos' ? pintarAlimentos()
+                : admVista === 'gasto' ? pintarGasto()
                 : pintarConfig();
     // La del catálogo va a la base en cada búsqueda -son cientos de filas
     // y no están todas en memoria-, con retardo para no lanzar una
@@ -6223,9 +6326,21 @@
     // El catálogo se trae al entrar en su pestaña, no al abrir el panel:
     // son cientos de filas que casi nunca se miran.
     if(admVista === 'alimentos' && !CATALOGO.length) cargarCatalogo();
+    // Igual que el catálogo: se pide al entrar en su pestaña, no al abrir
+    // el panel. Es una consulta que agrupa toda la tabla.
+    if(admVista === 'gasto' && !GASTO) cargarGasto();
   });
 
   document.getElementById('admCuerpo').addEventListener('click', function(e){
+    var gd = e.target.closest('[data-gdias]');
+    if(gd){
+      gastoDias = Number(gd.getAttribute('data-gdias'));
+      GASTO = null;
+      pintarAdmin();      // «Cargando…» al momento; los datos llegan después
+      cargarGasto();
+      return;
+    }
+
     var fl = e.target.closest('[data-flag]');
     if(fl){
       var f = FLAGS.filter(function(x){ return x.k === fl.dataset.flag; })[0];
@@ -6560,7 +6675,7 @@
             '<span style="color:var(--ink-faint)">›</span></div>';
         }).join('')
       : '<p class="calc-note" style="padding:4px 20px 0;">Aquí solo sale quien lleva plan. ' +
-        'Inscribe a alguien por su correo para empezar.</p>';
+        'Busca a alguien por su nombre para empezar.</p>';
   }
 
   // ---- Inscribir a alguien, buscándolo por su nombre ----

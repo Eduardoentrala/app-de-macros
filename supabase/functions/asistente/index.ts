@@ -1080,6 +1080,12 @@ Deno.serve(async (req) => {
         admin.from('ia_gasto').insert({
           user_id: userId,
           accion: accion || 'desconocida',
+          // Y LA LLAVE, que es la unidad en la que se decide. Sin ella, la
+          // foto de comida -que viaja como `chat`- y las preguntas de texto
+          // caen en el mismo saco, y son lo mas caro y lo mas barato de la
+          // app. Con ella, el informe habla el mismo idioma que los seis
+          // interruptores de la pantalla de llaves.
+          llave: llave || null,
           modelo: String(args.model || MODELO),
           // Los de caché se suman a la entrada: hoy no se usa caché, pero si
           // algún día se enciende, sin esto la entrada saldría a cero y

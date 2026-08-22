@@ -80,7 +80,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = 'bbdd7ed604';
+    var SELLO = '227e6b7b65';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -697,6 +697,7 @@
           <button class="active" data-adm="tablero">Tablero</button>
           <button data-adm="usuarios">Usuarios</button>
           <button data-adm="alimentos">Alimentos</button>
+          <button data-adm="gasto">Gasto</button>
           <button data-adm="config">Ajustes</button>
         </div>
         <div class="scroll"><div id="admCuerpo"></div></div>
@@ -1495,10 +1496,26 @@
             <button class="btn-primary" id="abrirPanel" style="width:100%;margin-top:10px;">Abrir panel</button>
           </div>
 
-          <div class="card">
+          <!-- METAS DE MACROS — la unica tarjeta de Perfil que SE EDITA.
+               Todo lo de arriba se lee; esto se toca. Por eso va en azul
+               cielo y no en blanco como las demas: el color no dice "bien"
+               ni "mal", dice "esto es tuyo".
+
+               Y las calorias van ARRIBA, no debajo de los tres campos: es
+               el numero que se mira al mover los gramos, y mirarlo obligaba
+               a bajar la vista al final de la tarjeta cada vez. -->
+          <div class="card card-azul">
             <div class="goal-head">
               <div style="font:800 14.5px/1 sans-serif;">Metas de macros</div>
-              <span class="goal-hint">Edita los gramos</span>
+              <span class="goal-hint">Tú pones los gramos</span>
+            </div>
+
+            <div class="calc-box calc-hero">
+              <div class="calc-line">
+                <span>Calorías al día</span>
+                <b id="calDay">2,315</b>
+              </div>
+              <div class="calc-note">Salen solas de los tres números de abajo: proteína y carbos ×4, grasas ×9.</div>
             </div>
 
             <div class="goal-row">
@@ -1512,14 +1529,6 @@
             <div class="goal-row">
               <label for="goalG">Grasas</label>
               <div class="goal-field"><input id="goalG" type="number" min="0" max="400" value="75" inputmode="numeric"><span>g</span></div>
-            </div>
-
-            <div class="calc-box">
-              <div class="calc-line">
-                <span>Calorías al día</span>
-                <b id="calDay">2,315</b>
-              </div>
-              <div class="calc-note">Se calculan solas: proteína y carbos ×4 cal, grasas ×9 cal.</div>
             </div>
 
             <!-- Su gasto real. Sale solo cuando hay semanas suficientes para
@@ -1831,7 +1840,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = 'bbdd7ed604';
+    var SELLO = '227e6b7b65';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que

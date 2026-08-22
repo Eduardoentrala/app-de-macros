@@ -154,6 +154,61 @@ table.week-table tr.today td{font-weight:800;}
 }
 .goal-field input:focus{outline:2px solid var(--ink);outline-offset:1px;}
 .goal-field span{font:600 13px/1 sans-serif;color:var(--ink-faint);width:12px;}
+
+/* ---- LA TARJETA QUE SE EDITA ----
+   Perfil es una pila de tarjetas blancas iguales y esta se perdia entre
+   ellas, aunque sea la unica donde se cambia algo. El azul cielo no es
+   decoracion: separa «esto lo lees» de «esto lo tocas».
+
+   El borde acompana al fondo. Solo con el fondo, la tarjeta parecia un
+   recuadro pintado; con el borde del mismo tono, una tarjeta de verdad. */
+.card.card-azul{
+  background:var(--azul-soft);
+  border:1px solid var(--azul-linea);
+  box-shadow:none;
+}
+.card-azul .goal-hint{color:var(--azul);}
+
+/* Las lineas entre filas, en azul y no en gris: el gris sobre el fondo
+   claro se veia sucio. */
+.card-azul .goal-row{border-bottom-color:var(--azul-linea);}
+.card-azul .goal-row:last-child{border-bottom:none;padding-bottom:2px;}
+
+/* EL CAMPO Y SU UNIDAD, UNA SOLA PIEZA.
+   Antes eran dos: un recuadro con el numero y una «g» suelta al lado, con
+   siete pixeles de aire en medio. Se leia como si a la fila le sobrara algo.
+
+   Ahora la pieza blanca es el envoltorio y dentro van el numero y la «g»
+   juntos, como en una etiqueta de balanza. El borde gris de 1.5px se quita:
+   una linea encima de un fondo de color son dos bordes peleandose, y era
+   justo lo que se veia tosco. */
+.card-azul .goal-field{
+  gap:3px;background:var(--card-bg);border-radius:12px;
+  padding:11px 14px;min-width:96px;justify-content:flex-end;
+  box-shadow:0 1px 2px rgba(20,20,25,.05);
+}
+.card-azul .goal-field input{
+  width:56px;border:none;background:none;padding:0;font-size:18px;
+  box-shadow:none;
+}
+/* El foco va en la PIEZA ENTERA, no en el numero de dentro: si no, el aro
+   azul rodea medio campo y deja la «g» fuera. */
+.card-azul .goal-field input:focus{outline:none;}
+.card-azul .goal-field:focus-within{
+  outline:2px solid var(--azul);outline-offset:1px;
+}
+.card-azul .goal-field span{color:var(--ink-faint);width:auto;}
+
+/* Las calorias, arriba y en grande: es el numero que se mira al mover los
+   gramos. Va sin fondo propio -el de la tarjeta ya es de color- porque dos
+   recuadros de dos azules distintos era justo lo que se veia tosco. */
+.calc-box.calc-hero{
+  margin:10px 0 4px;padding:0 0 13px;
+  background:none;border-bottom:1px solid var(--azul-linea);
+}
+.calc-hero .calc-line b{font-size:34px;letter-spacing:-.02em;color:var(--azul);}
+.calc-hero .calc-line span{font-size:14px;color:var(--ink-soft);}
+.calc-hero .calc-note{color:var(--ink-soft);opacity:.85;}
 /* ---- Chequeo semanal ----
    Cinco opciones en fila. Sin números en pantalla: "Bastante" se contesta
    sin pensar y un "4/5" obliga a traducir. El número existe, pero por

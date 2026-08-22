@@ -14,6 +14,12 @@
   --pill-ink:#4a4d53;
   --green:#1c9a56;
   --green-soft:#e4f6ec;
+  /* Azul cielo. No es un estado -no dice ni bien ni mal-: dice «esto lo
+     tocas tu». Lo llevan las metas de macros, que es lo unico de Perfil
+     que se edita en vez de solo leerse. */
+  --azul:#0a7ea4;
+  --azul-soft:#e6f4fa;
+  --azul-linea:#bfe3f0;
   --red:#e0473e;
   --red-soft:#fbe9e8;
   --amber:#c8790a;
@@ -49,6 +55,11 @@
   --pill-ink:#c7c9cd;
   --green:#3ecb7e;
   --green-soft:#12271b;
+  /* En oscuro se invierte: tinta clara y fondo muy apagado.
+     El pastel de arriba sobre negro deslumbra. */
+  --azul:#5cc6e8;
+  --azul-soft:#0e2029;
+  --azul-linea:#1b3b48;
   --red:#ff6b62;
   --red-soft:#2c1615;
   --amber:#e2a13a;
@@ -80,6 +91,11 @@
     --pill-ink:#c7c9cd;
     --green:#3ecb7e;
     --green-soft:#12271b;
+    /* En oscuro se invierte: tinta clara y fondo muy apagado.
+       El pastel de arriba sobre negro deslumbra. */
+    --azul:#5cc6e8;
+    --azul-soft:#0e2029;
+    --azul-linea:#1b3b48;
     --red:#ff6b62;
     --red-soft:#2c1615;
     --amber:#e2a13a;

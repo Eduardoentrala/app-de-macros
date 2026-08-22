@@ -353,3 +353,34 @@
 .usr-acc .b-key{background:var(--pill-bg);color:var(--pill-ink);}
 .apagado{opacity:.5;}
 
+
+
+/* ---- Lo que cuesta la IA, por llave ----
+   Cada fila es UNA de las seis llaves de `ia_permisos`, para que este
+   informe y la pantalla de interruptores hablen de lo mismo: lo que mas
+   pesa aqui es lo que mas ahorra apagar alli.
+
+   La barra no es decoracion. Un porcentaje en texto se lee de fila en fila;
+   una barra se ve de un vistazo, y lo unico que hay que ver es cual es la
+   grande. */
+.gasto-row{
+  display:flex;align-items:center;gap:12px;background:var(--card-bg);
+  margin:0 16px 8px;padding:13px 15px;border-radius:14px;box-shadow:var(--shadow);
+}
+.gasto-row .txt{flex:1;min-width:0;}
+.gasto-row .txt b{display:block;font:700 13.5px/1.2 sans-serif;}
+.gasto-row .txt span{
+  display:block;font:500 11.5px/1.3 sans-serif;color:var(--ink-faint);margin-top:4px;
+}
+.gasto-row .barra{
+  display:block;height:4px;border-radius:2px;background:var(--pill-bg);
+  margin-top:8px;overflow:hidden;
+}
+.gasto-row .barra u{display:block;height:100%;background:var(--ink);text-decoration:none;}
+.gasto-row .val{flex:none;text-align:right;}
+.gasto-row .val b{
+  display:block;font:800 17px/1 sans-serif;font-variant-numeric:tabular-nums;
+}
+.gasto-row .val span{
+  display:block;font:600 11px/1 sans-serif;color:var(--ink-faint);margin-top:5px;
+}
