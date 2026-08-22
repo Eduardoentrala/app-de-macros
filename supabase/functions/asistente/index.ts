@@ -1087,12 +1087,20 @@ Deno.serve(async (req) => {
           // interruptores de la pantalla de llaves.
           llave: llave || null,
           modelo: String(args.model || MODELO),
-          // Los de caché se suman a la entrada: hoy no se usa caché, pero si
-          // algún día se enciende, sin esto la entrada saldría a cero y
-          // parecería que se abarató sola.
-          entrada: (u.input_tokens || 0) +
-                   (u.cache_read_input_tokens || 0) +
-                   (u.cache_creation_input_tokens || 0),
+          // LAS TRES CLASES DE TOKEN, SEPARADAS. Antes iban sumadas en
+          // `entrada` para que la cifra no se fuera a cero al encender la
+          // caché. Pero eso la volvía ciega, y una caché que no acierta no
+          // ahorra: CUESTA UN 25% MÁS.
+          //
+          //   entrada normal  1x     ·  escribir caché  1.25x  (al fallar)
+          //   leer caché      0.1x   (al acertar)
+          //
+          // Con 5 minutos de vida sale a cuenta a partir del 22% de
+          // aciertos. Sin separarlas no hay forma de saber de qué lado se
+          // está.
+          entrada: u.input_tokens || 0,
+          cache_lee: u.cache_read_input_tokens || 0,
+          cache_escribe: u.cache_creation_input_tokens || 0,
           salida: u.output_tokens || 0,
         }).then(() => {}, () => {});
       } catch { /* nunca por esto */ }
@@ -1272,8 +1280,41 @@ Deno.serve(async (req) => {
       const r = await ia.messages.create({
         model: MODELO,
         max_tokens: imagen ? 4000 : 2000,
-        system: SISTEMA_CHAT + (esPlus ? SISTEMA_EVENTOS + SISTEMA_MEMORIA : '') +
-                SISTEMA_APUNTAR_REGLAS + hoyEs + contexto + loQueSe,
+        // ---- CACHÉ DE PROMPT ----
+        //
+        //  Estas instrucciones son ONCE MIL TOKENS que viajan IDÉNTICOS en
+        //  cada foto de comida y en cada pregunta. La entrada es el 60% de
+        //  la factura y esto es casi toda la entrada.
+        //
+        //  Leer de caché cuesta 0.1x y escribirla 1.25x, así que sale a
+        //  cuenta a partir del 22% de aciertos. Con cinco minutos de vida y
+        //  varias personas usándola a lo largo del día -la caché es de la
+        //  cuenta entera, no de cada quien- eso se pasa de sobra en cuanto
+        //  dos llamadas caen cerca: una conversación de cuatro turnos son
+        //  una escritura y tres lecturas.
+        //
+        //  SOLO AQUÍ, y no en el resto de acciones. El cierre de semana o
+        //  la comparación de fotos se usan una vez por semana o por mes:
+        //  con cinco minutos de vida no acertarían NUNCA, y solo pagarían
+        //  el recargo de escribir. Se mide con `ia_gasto` y se extiende si
+        //  los números lo dicen.
+        //
+        //  DOS CORTES Y NO UNO. El primero deja fuera la parte que depende
+        //  del plan: así las once mil de `SISTEMA_CHAT` las comparte todo
+        //  el mundo, tenga Plus o no, en vez de haber dos cachés enteras.
+        //
+        //  Y lo que cambia -la fecha de hoy, sus macros, lo que lleva
+        //  comido- va DESPUÉS de los dos cortes. Delante invalidaría todo
+        //  lo de detrás en cada petición y la caché no serviría de nada.
+        system: [
+          { type: 'text', text: SISTEMA_CHAT,
+            cache_control: { type: 'ephemeral' } },
+          { type: 'text',
+            text: (esPlus ? SISTEMA_EVENTOS + SISTEMA_MEMORIA : '') +
+                  SISTEMA_APUNTAR_REGLAS,
+            cache_control: { type: 'ephemeral' } },
+          { type: 'text', text: hoyEs + contexto + loQueSe },
+        ],
         ...(imagen ? { thinking: { type: 'adaptive' as const } } : {}),
         output_config: {
           effort: imagen ? 'medium' : 'low',

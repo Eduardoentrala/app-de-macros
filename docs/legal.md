@@ -63,6 +63,14 @@ mensaje, tus calorías y macros del día, y —si tienes IA Plus— las notas qu
 ha ido guardando sobre ti. Si mandas una foto de un platillo, se manda la
 foto. **Anthropic no usa esos datos para entrenar sus modelos.**
 
+**Tus fotos de progreso también, si lo autorizas.** Una vez al mes, y solo
+si activaste «Analizar mis fotos», la app manda a Anthropic dos series de
+cuatro fotos tuyas —de frente, de espalda y de los dos perfiles— para
+compararlas y decirte qué cambió. Son fotos de tu cuerpo: se te pregunta
+antes, en una pantalla aparte, y puedes decir que no o cambiar de opinión
+cuando quieras desde Perfil. Si dices que no, la comparación no se hace y
+todo lo demás sigue funcionando igual.
+
 Si tienes un entrenador asignado, esa persona ve tus datos de progreso: tu
 peso, tus comidas, tus entrenamientos y tus fotos. Es lo que necesita para
 llevarte.
@@ -139,15 +147,19 @@ Tiene un límite de consultas al día según tu plan.
 
 ## Los planes
 
-| Plan | Precio | Qué incluye |
-|---|---|---|
-| Sin IA | Gratis | La app completa, sin asistente |
-| IA normal | $99 MXN al mes | Chat y foto del platillo, 3 consultas al día |
-| IA Plus | $199 MXN al mes | Además memoria, eventos, chequeo y ajuste semanal, 15 consultas al día |
+**Hoy la aplicación no cobra nada.** No hay pagos, no se te pide una
+tarjeta y no hay forma de que se te cobre: no existe ningún cobro
+conectado. Los planes los activa el administrador a mano.
 
-**[PENDIENTE: condiciones de cobro, renovación y cancelación. Rellenar
-cuando el cobro esté conectado — hoy los planes los activa el
-administrador a mano.]**
+| Plan | Qué incluye |
+|---|---|
+| Sin IA | La app completa, sin asistente |
+| IA normal | Chat y foto del platillo, 3 consultas al día |
+| IA Plus | Además memoria, eventos, chequeo y ajuste semanal, 15 consultas al día |
+
+Si algún día se cobrara, se avisaría antes y aquí se explicarían las
+condiciones de cobro, renovación y cancelación. Mientras esta frase siga
+puesta, no se cobra.
 
 ## Tu cuenta
 

@@ -128,5 +128,24 @@ console.log('\n— Se puede leer antes de aceptar —');
   check('se abre apilada, con boton de regresar', /goto\('legal', true\)/.test(APP));
 }
 
+// ------------------------------------------------------------------
+console.log('\n- Dos cosas que estuvieron mal -');
+{
+  // 1. El aviso decia que la foto DEL PLATILLO va a Anthropic, y callaba
+  //    que las de progreso -ocho fotos del cuerpo- tambien.
+  check('dice que las fotos de progreso tambien van a la IA',
+    /fotos de progreso también/i.test(MD) && /cuatro fotos tuyas/i.test(MD),
+    'son fotos del cuerpo: callarlo en el aviso no vale');
+  check('y que hace falta autorizarlo antes',
+    /si lo autorizas/i.test(MD) && /puedes decir que no/i.test(MD));
+
+  // 2. Anunciaba planes de $99 y $199 al mes en una app que no cobra. Su
+  //    familia podia abrirlo y pensar que se les iba a facturar.
+  check('no anuncia precios que nadie cobra',
+    !/\$99|\$199/.test(MD),
+    'la app no cobra: poner precios asusta para nada');
+  check('y lo dice claro', /no cobra nada/i.test(MD));
+}
+
 console.log(`\n${ok} pasan · ${mal} fallan`);
 process.exit(mal ? 1 : 0);

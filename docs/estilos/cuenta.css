@@ -384,3 +384,32 @@
 .gasto-row .val span{
   display:block;font:600 11px/1 sans-serif;color:var(--ink-faint);margin-top:5px;
 }
+
+
+/* La cache, arriba del todo y aparte de las llaves: no es una cosa que se
+   apague a alguien, es una decision tecnica sobre todos. Y no lleva el
+   mismo formato que las filas porque no compite con ellas.
+
+   `.floja` cuando no llega al 22% de aciertos: ahi la cache no ahorra,
+   CUESTA, y eso hay que verlo de lejos. */
+.gasto-cache{
+  display:flex;align-items:center;gap:12px;margin:0 16px 8px;
+  padding:13px 15px;border-radius:14px;
+  background:var(--azul-soft);border:1px solid var(--azul-linea);
+}
+.gasto-cache .txt{flex:1;min-width:0;}
+.gasto-cache .txt b{display:block;font:700 13.5px/1.2 sans-serif;color:var(--azul);}
+.gasto-cache .txt span{
+  display:block;font:500 11.5px/1.3 sans-serif;color:var(--ink-soft);margin-top:4px;
+}
+.gasto-cache .val{flex:none;text-align:right;}
+.gasto-cache .val b{
+  display:block;font:800 17px/1 sans-serif;color:var(--azul);
+  font-variant-numeric:tabular-nums;
+}
+.gasto-cache .val span{
+  display:block;font:600 11px/1 sans-serif;color:var(--ink-faint);margin-top:5px;
+}
+.gasto-cache.floja{background:var(--amber-soft);border-color:var(--amber);}
+.gasto-cache.floja .txt b,
+.gasto-cache.floja .val b{color:var(--amber);}

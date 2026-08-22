@@ -87,12 +87,16 @@ console.log('\nLo que cuesta una respuesta normal queda apuntado');
   ok(f.llave === 'plan_dia',
      'y LA LLAVE, no solo la acción: la foto de comida viaja como «chat», ' +
      'y sin esto lo más caro de la app se mezclaría con lo más barato');
-  ok(Object.keys(f).length === 6, 'y NADA del contenido: solo números y etiquetas');
+  ok(Object.keys(f).length === 8, 'y NADA del contenido: solo números y etiquetas');
 }
 
 // ------------------------------------------------------------------
-console.log('\nLos tokens de caché cuentan como entrada');
+console.log('\nLos tres tipos de token van SEPARADOS');
 {
+  // Sumados no se puede saber si la cache acierta. Y una cache que no
+  // acierta no ahorra: cuesta un 25% mas. Cada token vale distinto
+  // -entrada 1x, escribir cache 1.25x, leer cache 0.1x- asi que con todo
+  // en una columna es imposible ponerle precio a nada.
   const admin = fingirAdmin();
   const ia = armar(admin, 'u-1', 'chat', 'claude-opus-5', {
     messages: { create: async () => ({ usage: {
@@ -102,9 +106,28 @@ console.log('\nLos tokens de caché cuentan como entrada');
   }, reintentable, 'chat');
   await ia.messages.create({ model: 'claude-opus-5' });
   await dejarQueTermine();
-  ok(admin.filas.length === 1 && admin.filas[0].fila.entrada === 4600,
-     'si algún día se enciende la caché, la entrada no saldrá a cero');
+  const f = admin.filas.length ? admin.filas[0].fila : {};
+  ok(f.entrada === 100, 'la entrada es solo lo que se pago a precio entero');
+  ok(f.cache_lee === 4000, 'lo leido de cache va aparte (cuesta 0.1x)');
+  ok(f.cache_escribe === 500, 'y lo escrito tambien (cuesta 1.25x)');
+  ok(f.entrada + f.cache_lee + f.cache_escribe === 4600,
+     'y los tres suman el prompt entero: no se pierde nada por el camino');
 }
+
+// ------------------------------------------------------------------
+console.log('\nSin cache encendida, las columnas nuevas van a cero');
+{
+  const admin = fingirAdmin();
+  const ia = armar(admin, 'u-1', 'semana', 'claude-opus-5', {
+    messages: { create: async () => ({ usage: { input_tokens: 900, output_tokens: 100 } }) },
+  }, reintentable, 'semanal');
+  await ia.messages.create({ model: 'claude-opus-5' });
+  await dejarQueTermine();
+  const f = admin.filas[0].fila;
+  ok(f.entrada === 900 && f.cache_lee === 0 && f.cache_escribe === 0,
+     'las acciones sin cache siguen contando como siempre');
+}
+
 
 // ------------------------------------------------------------------
 console.log('\nEn streaming también, y una sola vez');

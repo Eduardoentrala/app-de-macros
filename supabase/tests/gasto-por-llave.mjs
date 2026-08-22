@@ -46,13 +46,16 @@ await db.exec('alter table public.profiles enable trigger trg_bloquear_escalada_
 
 // Como lo escribe la Edge Function con la clave de servicio. Fijate en las
 // dos primeras: MISMA accion, llaves distintas.
+// La primera foto FALLA la cache (la escribe) y la segunda ACIERTA (la lee).
+// Es el caso que hay que poder distinguir: sumadas, las dos parecerian
+// iguales y no habria forma de saber si la cache sirve.
 await db.exec(`insert into public.ia_gasto
-  (user_id, accion, llave, modelo, entrada, salida) values
-  ('${LETY}','chat','foto',       'claude-opus-5', 12750, 1200),
-  ('${LETY}','chat','foto',       'claude-opus-5', 12800, 1150),
-  ('${LETY}','chat','chat',       'claude-opus-5', 11500,  700),
-  ('${LETY}','plan','plan_semana','claude-opus-5',  5500,14000),
-  ('${LETY}','plan','plan_dia',   'claude-opus-5',  5500, 3500)`);
+  (user_id, accion, llave, modelo, entrada, salida, cache_escribe, cache_lee) values
+  ('${LETY}','chat','foto',       'claude-opus-5',  1200, 1200, 11500,     0),
+  ('${LETY}','chat','foto',       'claude-opus-5',  1250, 1150,     0, 11500),
+  ('${LETY}','chat','chat',       'claude-opus-5', 11500,  700,     0,     0),
+  ('${LETY}','plan','plan_semana','claude-opus-5',  5500,14000,     0,     0),
+  ('${LETY}','plan','plan_dia',   'claude-opus-5',  5500, 3500,     0,     0)`);
 
 // ------------------------------------------------------------------
 console.log('\nLa foto y las preguntas dejan de ir en el mismo saco');
@@ -69,8 +72,21 @@ console.log('\nLa foto y las preguntas dejan de ir en el mismo saco');
     f.foto && f.chat && f.foto.accion === 'chat' && f.chat.accion === 'chat',
     'que es justo lo que las mezclaba antes');
   check('con sus tokens sin mezclar',
-    f.foto && Number(f.foto.entrada) === 25550 && Number(f.foto.salida) === 2350,
+    f.foto && Number(f.foto.entrada) === 2450 && Number(f.foto.salida) === 2350,
     f.foto ? JSON.stringify(f.foto) : '');
+
+  // Lo que decide si la cache vale la pena. Leer cuesta 0.1x y escribir
+  // 1.25x: por debajo del 22% de aciertos, la cache CUESTA en vez de
+  // ahorrar. Sumadas en una sola columna, esto seria invisible.
+  check('y con la cache separada de lo demas',
+    f.foto && Number(f.foto.cache_escribe) === 11500 && Number(f.foto.cache_lee) === 11500,
+    f.foto ? JSON.stringify(f.foto) : '');
+  check('para poder sacar el porcentaje de aciertos',
+    f.foto && Math.round(100 * f.foto.cache_lee /
+      (Number(f.foto.cache_lee) + Number(f.foto.cache_escribe))) === 50,
+    'con 50% de aciertos la cache ahorra; por debajo del 22% estorba');
+  check('y lo que no la usa sigue en cero',
+    f.chat && Number(f.chat.cache_lee) === 0 && Number(f.chat.cache_escribe) === 0);
 
   check('el plan de un día y la semana entera, separados',
     f.plan_dia && f.plan_semana && Number(f.plan_semana.salida) === 14000,

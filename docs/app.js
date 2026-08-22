@@ -6201,6 +6201,11 @@
     'claude-sonnet-5':{ ent: 3,  sal: 15 },
     'claude-haiku-4-5-20251001': { ent: 1, sal: 5 }
   };
+  // La cache no es gratis ni cuesta lo mismo segun se acierte o se falle:
+  // leer sale a la decima parte, escribir un 25% mas caro. Por eso hace
+  // falta un 22% de aciertos para que compense -1.25 - 1.15h < 1-, y por
+  // eso se ensena el porcentaje: por debajo de ahi la cache ESTORBA.
+  var CACHE_LEE = 0.1, CACHE_ESCRIBE = 1.25, CACHE_UMBRAL = 0.217;
   var USD_MXN = 18.5;
 
   // El nombre que sale en los interruptores, para que el informe y la
@@ -6219,7 +6224,21 @@
 
   function pesosDe(f){
     var p = PRECIO_IA[f.modelo] || PRECIO_IA['claude-opus-5'];
-    return ((Number(f.entrada) * p.ent + Number(f.salida) * p.sal) / 1e6) * USD_MXN;
+    var ent = Number(f.entrada) || 0;
+    var lee = Number(f.cache_lee) || 0;
+    var esc = Number(f.cache_escribe) || 0;
+    return (((ent + lee * CACHE_LEE + esc * CACHE_ESCRIBE) * p.ent +
+             (Number(f.salida) || 0) * p.sal) / 1e6) * USD_MXN;
+  }
+
+  // Lo que habria costado esto MISMO sin cache: todos los tokens del prompt
+  // a precio entero. La diferencia con lo de arriba es lo que la cache
+  // ahorro -o lo que costo, si sale en negativo-.
+  function pesosSinCache(f){
+    var p = PRECIO_IA[f.modelo] || PRECIO_IA['claude-opus-5'];
+    var todo = (Number(f.entrada) || 0) + (Number(f.cache_lee) || 0) +
+               (Number(f.cache_escribe) || 0);
+    return ((todo * p.ent + (Number(f.salida) || 0) * p.sal) / 1e6) * USD_MXN;
   }
 
   function cargarGasto(){
@@ -6250,13 +6269,17 @@
     // Se suma POR LLAVE y no por fila: la misma llave puede venir con dos
     // modelos distintos, y lo que se decide -apagar o no- es la llave.
     var porLlave = {}, total = 0, llamadas = 0;
+    var lee = 0, escribe = 0, sinCache = 0;
     GASTO.forEach(function(f){
       var k = f.llave || f.accion;
       var g = porLlave[k] || (porLlave[k] = { k: k, pesos: 0, n: 0 });
       g.pesos += pesosDe(f);
       g.n += Number(f.llamadas) || 0;
       total += pesosDe(f);
+      sinCache += pesosSinCache(f);
       llamadas += Number(f.llamadas) || 0;
+      lee += Number(f.cache_lee) || 0;
+      escribe += Number(f.cache_escribe) || 0;
     });
     var filas = Object.keys(porLlave).map(function(k){ return porLlave[k]; })
       .sort(function(a, b){ return b.pesos - a.pesos; });
@@ -6270,6 +6293,27 @@
           '<span class="sub">$' + (llamadas ? (total / llamadas).toFixed(2) : '0') +
           ' cada una</span></div>' +
       '</div>' +
+      // ---- La cache, y si esta valiendo la pena ----
+      //
+      //  No basta con decir «hay cache»: por debajo del 22% de aciertos
+      //  CUESTA MAS que no tenerla, porque escribirla vale 1.25x. Asi que
+      //  lo que se ensena es el porcentaje y, al lado, lo que ha ahorrado
+      //  o costado en pesos. Con eso se decide si dejarla o quitarla.
+      (lee + escribe > 0
+        ? (function(){
+            var pct = lee / (lee + escribe);
+            var dif = sinCache - total;
+            var bien = pct >= CACHE_UMBRAL;
+            return '<div class="gasto-cache' + (bien ? '' : ' floja') + '">' +
+              '<div class="txt"><b>Caché de instrucciones</b>' +
+                '<span>' + Math.round(pct * 100) + '% de aciertos' +
+                ' · hace falta ' + Math.round(CACHE_UMBRAL * 100) +
+                '% para que compense</span></div>' +
+              '<div class="val"><b>' + (dif >= 0 ? '−$' : '+$') +
+                Math.abs(dif).toFixed(0) + '</b>' +
+                '<span>' + (dif >= 0 ? 'ahorrados' : 'de más') + '</span></div>' +
+            '</div>'; })()
+        : '') +
       filas.map(function(g){
         // La barra dice de un vistazo cuánto pesa cada cosa. Un porcentaje
         // en texto se lee; una barra se ve.
@@ -6913,46 +6957,56 @@
   //  La app no cobra: es para la familia. Cada respuesta la paga Eduardo, y
   //  hasta ahora era todo o nada por persona.
   //
-  //  EL ORDEN DE LOS SEIS INTERRUPTORES no es el orden en que se
-  //  programaron: va de lo que MAS dinero ahorra a lo que menos, y eso no es
-  //  lo mismo que de lo mas caro a lo mas barato:
+  //  EL ORDEN DE LOS SEIS INTERRUPTORES va de lo que MAS dinero ahorra a lo
+  //  que menos. Y ESO NO ES LO MISMO que de lo mas caro a lo mas barato:
   //
-  //    * la semana entera es lo mas caro de una sentada -veinticuatro mil
-  //      tokens de salida y esfuerzo alto- pero se pide una vez por semana;
-  //    * la foto de comida es barata cada vez y se usa varias veces al dia
-  //      todos los dias: sumada al mes, es el gasto de verdad.
+  //    * armar la semana entera es lo mas caro de una sentada -veinticuatro
+  //      mil tokens y esfuerzo alto, unos siete pesos- pero se pide UNA VEZ
+  //      POR SEMANA: unos veintiocho pesos al mes;
+  //    * apuntar comida con foto cuesta menos de dos pesos, pero se usa
+  //      varias veces al dia todos los dias: ciento cincuenta al mes.
   //
-  //  Las dos primeras son las dos palancas que mueven la factura; las de
-  //  abajo se apagan por gusto, no por dinero. Cada una lo dice en su linea
-  //  para que la decision no dependa de acordarse de esto.
+  //  ESTE ORDEN ESTUVO MAL. La semana entera iba primera, diciendo que era
+  //  «lo que mas ahorra apagar». Al medirlo con los precios reales salio que
+  //  la foto la adelanta a partir de DIECISEIS FOTOS AL MES -media al dia-,
+  //  o sea en cualquier uso real. La pantalla estaba aconsejando apagar lo
+  //  que menos ahorra.
+  //
+  //  Los tres primeros son el 91% de la factura; los de abajo se apagan por
+  //  gusto, no por dinero. Cada uno lo dice en su linea para que la decision
+  //  no dependa de acordarse de esto.
   var LLAVES_DE = null;   // de quien son las que estan en pantalla
 
   var LLAVES_IA = [
-    { k:'plan_semana', t:'Armar la semana entera',
-      d:'Lo más caro de todo, y con diferencia: siete días cuadrados de una vez. Es lo que más ahorra apagar.' },
     { k:'foto', t:'Apuntar comida con foto',
-      d:'Barato cada vez, pero es lo que más se usa: varias veces al día. Sumado al mes, es el gasto de verdad.' },
-    { k:'plan_dia', t:'Armar el plan de un día',
-      d:'Cuesta como una quinta parte de la semana entera. Con esto le sigues armando los días sueltos.' },
-    { k:'analisis', t:'Analizar cómo va',
-      d:'El resumen que pides tú en su ficha. Se guarda, así que volver a entrar no gasta otro.' },
-    { k:'semanal', t:'Cierre del lunes y comparar fotos',
-      d:'Una vez por semana cada uno: cómo le fue la semana y qué cambió en sus fotos.' },
+      d:'Lo que más ahorra, con diferencia. Cuesta poco cada vez —menos de dos pesos— pero se usa varias veces al día: es dos tercios de la factura.' },
+    { k:'plan_semana', t:'Armar la semana entera',
+      d:'Lo más caro de una sola vez, unos siete pesos. Pero se pide una vez por semana, así que suma menos que la foto.' },
     { k:'chat', t:'Preguntas y avisos',
-      d:'Lo más barato de la lista: respuestas cortas. Apagarlo casi no mueve la cuenta.' }
+      d:'Respuestas cortas, pero se preguntan seguido. Apagarlo deja la cámara: son llaves distintas.' },
+    { k:'plan_dia', t:'Armar el plan de un día',
+      d:'Una quinta parte de la semana entera. Con esto le sigues armando los días sueltos.' },
+    { k:'semanal', t:'Cierre del lunes y comparar fotos',
+      d:'Una vez por semana y una vez al mes. Apagarlo casi no mueve la cuenta.' },
+    { k:'analisis', t:'Analizar cómo va',
+      d:'El resumen que pides tú en su ficha. Se guarda, así que volver a entrar no gasta otro.' }
   ];
 
   // Los cuatro atajos. Son las cuatro posturas que de verdad se toman; los
   // seis interruptores estan debajo para quien quiera afinar.
   var ATAJOS_IA = {
     todo:  { foto:true,  chat:true,  semanal:true,  plan_dia:true,  plan_semana:true,  analisis:true  },
-    justo: { foto:true,  chat:true,  semanal:true,  plan_dia:true,  plan_semana:false, analisis:true  },
+    // «Lo justo» apagaba SOLO la semana entera: un 12% de ahorro con un
+    // nombre que promete mucho mas. Ahora apaga tambien lo de arriba del
+    // todo -las preguntas- y deja lo que hace util la app a diario: la foto
+    // y los planes. Ahi si hay un tercio de diferencia.
+    justo: { foto:true,  chat:false, semanal:false, plan_dia:true,  plan_semana:false, analisis:true  },
     foto:  { foto:true,  chat:false, semanal:false, plan_dia:false, plan_semana:false, analisis:false },
     nada:  { foto:false, chat:false, semanal:false, plan_dia:false, plan_semana:false, analisis:false }
   };
   var TEXTO_ATAJO = {
     todo:  'Todo encendido, como ha funcionado siempre.',
-    justo: 'Todo menos la semana entera. Los días sueltos se siguen armando solos, y cuestan cinco veces menos.',
+    justo: 'La foto y los planes del día, que es lo que se usa. Sin preguntas, sin cierre del lunes y sin la semana entera.',
     foto:  'Solo apuntar comida con foto, que es lo que hace útil la app a diario. Lo demás, a mano.',
     nada:  'Nada de IA. La app sigue entera: apuntar, peso, fotos y su plan. Solo deja de gastar.',
     medida:'A tu medida.'

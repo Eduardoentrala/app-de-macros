@@ -275,10 +275,13 @@ console.log('\nLos cuatro atajos');
   const { LLAVES_IA, ATAJOS_IA, TEXTO_ATAJO, atajoActual } = f();
 
   ok(LLAVES_IA.length === 6, 'seis interruptores');
-  ok(LLAVES_IA[0].k === 'plan_semana',
-     'y el primero es la semana entera: lo que más ahorra apagar, arriba del todo');
-  ok(LLAVES_IA[1].k === 'foto',
-     'y el segundo la foto, que es barata por uso pero la que más se usa');
+  ok(LLAVES_IA[0].k === 'foto',
+     'y el primero es la foto: cuesta poco cada vez pero se usa a diario, ' +
+     'y eso son dos tercios de la factura');
+  ok(LLAVES_IA[1].k === 'plan_semana',
+     'y la semana entera va SEGUNDA: es lo mas caro de una vez, pero se ' +
+     'pide una vez por semana. Estuvo primera, aconsejando apagar lo que ' +
+     'menos ahorra');
 
   const claves = LLAVES_IA.map((x) => x.k).sort().join(',');
   for (const a of Object.keys(ATAJOS_IA)) {
@@ -296,8 +299,14 @@ console.log('\nLos cuatro atajos');
   ok(atajoActual({ ...ATAJOS_IA.todo, chat: false }) === 'medida',
      'y algo afinado a mano no se disfraza del atajo que más se le parezca');
 
-  ok(ATAJOS_IA.justo.plan_semana === false && ATAJOS_IA.justo.plan_dia === true,
-     '«lo justo» apaga la semana entera y deja los días: ahí está el ahorro');
+  // Apagaba SOLO la semana entera: un 12% con un nombre que promete mucho
+  // mas. Un atajo que no ahorra es un atajo que engana.
+  ok(ATAJOS_IA.justo.foto === true && ATAJOS_IA.justo.plan_dia === true,
+     '«lo justo» deja lo que se usa a diario: la foto y los planes del dia');
+  ok(ATAJOS_IA.justo.plan_semana === false && ATAJOS_IA.justo.chat === false,
+     'y apaga lo caro de una vez y lo que se pregunta seguido');
+  const apagadas = Object.keys(ATAJOS_IA.justo).filter((k) => !ATAJOS_IA.justo[k]).length;
+  ok(apagadas >= 3, `y apaga al menos tres cosas (apaga ${apagadas}): con una sola, el nombre prometia mas de lo que daba`);
   ok(ATAJOS_IA.foto.foto === true &&
      Object.keys(ATAJOS_IA.foto).filter((k) => ATAJOS_IA.foto[k]).length === 1,
      '«solo foto» deja encendida exactamente una cosa');
