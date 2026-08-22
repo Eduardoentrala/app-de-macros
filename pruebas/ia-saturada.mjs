@@ -49,11 +49,22 @@ console.log('\n— Lo pasajero se reintenta —');
   check('y a la tercera se rinde', /if \(!reintentable\(e\) \|\| i === 2\) throw e;/.test(FN));
 
   // Que lo cubra TODO, no solo la llamada donde se vio el fallo.
-  const cubiertas = (FN.match(/await ia\.messages\.create/g) || []).length;
+  //
+  // Se cuenta `ia.messages.` SIN exigir el `await` delante. Contandolo con
+  // `await` esta comprobacion se puso en rojo el 21 ago 2026 por un
+  // refactor que saco una llamada a una funcion auxiliar -`pedirChat`- que
+  // devuelve la promesa en vez de esperarla. El envoltorio seguia
+  // cubriendola: lo que fallaba era la forma de contar, no el codigo.
+  const cubiertas = (FN.match(/\bia\.messages\.(create|stream)\b/g) || []).length;
   check(`cubre las ${cubiertas} llamadas de una vez`, cubiertas >= 6,
     'se envuelve el cliente, no cada llamada: asi no se olvida ninguna');
-  check('el cliente crudo solo se usa dentro del reintento',
-    (FN.match(/iaCruda\.messages\.create/g) || []).length === 1);
+
+  // Y LO QUE DE VERDAD IMPORTA: que ninguna se salte el envoltorio. Las dos
+  // unicas veces que puede aparecer el cliente crudo son las dos lineas que
+  // lo envuelven.
+  const crudas = (FN.match(/iaCruda\.messages\.(create|stream)/g) || []).length;
+  check('y ninguna llamada se salta el reintento', crudas === 2,
+    `el cliente crudo aparece ${crudas} veces; solo valen las dos del envoltorio`);
 }
 
 console.log('\n— No se le cobra una avería ajena —');
