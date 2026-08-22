@@ -356,3 +356,21 @@ table.week-table tr.today td{font-weight:800;}
 #preguntaNo{background:var(--pill-bg);color:var(--ink);}
 .pregunta-botones .btn-primary{margin:0;width:auto;}
 .pregunta-botones button:active{opacity:.6;}
+
+
+/* ---- «Aceptar» de las metas de macros ----
+   Aparece solo cuando hay algo distinto que guardar. Que ESTE ahi es el
+   aviso: puesto siempre, no diria nada.
+
+   Va dentro de la tarjeta azul y con su color, no como un boton negro
+   suelto: forma parte de lo que se esta editando, no es una accion sobre
+   la pantalla entera. */
+.goal-guardar{margin-top:14px;}
+.goal-sin-guardar{
+  font:700 11.5px/1 sans-serif;color:var(--azul);
+  text-transform:uppercase;letter-spacing:.05em;margin:0 0 8px;text-align:center;
+}
+.card-azul .goal-guardar .btn-primary{
+  margin:0;width:100%;background:var(--azul);color:#fff;
+}
+.card-azul .goal-guardar .btn-primary:active{opacity:.75;}

@@ -4,6 +4,20 @@
   var stack = ['registro'];
 
   function show(id){
+    // SALIR DE PERFIL SIN ACEPTAR DESHACE LO TECLEADO.
+    //
+    //  `actualizarMetas()` corre en cada tecla y escribe DIRECTO en el
+    //  anillo del Diario y en las metas de hoy. Eso esta bien mientras se
+    //  esta en la tarjeta -es lo que enseña a donde se esta llegando- pero
+    //  si se sale sin pulsar «Aceptar», el resto de la app se quedaria
+    //  enseñando unas metas que no estan guardadas en ningun sitio.
+    //
+    //  Antes no hacia falta: el aviso saltaba al salir de cada campo, asi
+    //  que nunca habia nada pendiente mas de un segundo. Al mover el aviso
+    //  a un boton, esto se convirtio en un cabo suelto.
+    if(typeof revertirMetasSinGuardar === 'function' && id !== 'perfil') {
+      revertirMetasSinGuardar();
+    }
     views.forEach(function(v){ v.classList.toggle('active', v.dataset.view === id); });
     // Al mostrarse la pantalla ya se puede medir el ancho: revisar las flechas
     if(typeof refrescarFlechas === 'function') setTimeout(refrescarFlechas, 0);
@@ -1834,6 +1848,7 @@
     if(!metasPendientes) return;
     apuntarCambioDeMeta(calDe(metasVigentes), calDe(metasPendientes));
     metasVigentes = metasPendientes;
+    pintarMetasPendientes();      // guardado: el botón se va
 
     // La semana NO se corta. Sigue de lunes a domingo y los macros nuevos
     // valen desde hoy. Cortarla aquí dejaba el inicio en el día en que se
@@ -1929,6 +1944,7 @@
     if(metasVigentes) escribirMetas(metasVigentes);
     cerrarConfirm();
     actualizarMetas();
+    pintarMetasPendientes();
   }
   document.getElementById('wcCancel').addEventListener('click', cancelarMetas);
   weekConfirm.addEventListener('click', function(e){ if(e.target === weekConfirm) cancelarMetas(); });
@@ -2152,14 +2168,45 @@
     document.getElementById('weekSummary').textContent =
       'P ' + P + ' · C ' + C + ' · G ' + G + ' · ' + mil(calDia) + ' cal/día · se reinicia cada ' + DIAS[inicioSemana];
   }
-  // Se pregunta en 'change' y no en 'input': 'input' salta con cada tecla,
-  // así que escribir "170" abriría el aviso tres veces. 'change' salta una
-  // sola vez, al salir del campo, y solo si el valor cambió de verdad.
+  // NO SE PREGUNTA AL SALIR DE CADA CAMPO.
+  //
+  //  Antes sí: el aviso colgaba del 'change' de los tres campos, así que
+  //  tocabas carbos y, antes de llegar a las grasas, ya estaba preguntando
+  //  si querías esas calorías. Cambiar los tres macros —que es UNA decisión—
+  //  eran tres avisos seguidos, y los dos primeros sobre números a medias.
+  //
+  //  Ahora se cambian los tres con calma y se pulsa «Aceptar». El 'input'
+  //  se queda: es lo que va enseñando las calorías mientras se teclea, y sin
+  //  eso no se sabe a dónde se está llegando hasta pulsar.
   [goalP, goalC, goalG].forEach(function(el){
-    el.addEventListener('input', actualizarMetas);
-    el.addEventListener('blur', function(){ el.value = num(el, 900); actualizarMetas(); });
-    el.addEventListener('change', pedirConfirmacionMetas);
+    el.addEventListener('input', function(){ actualizarMetas(); pintarMetasPendientes(); });
+    el.addEventListener('blur', function(){
+      el.value = num(el, 900); actualizarMetas(); pintarMetasPendientes();
+    });
   });
+
+  // El botón solo sale cuando hay algo distinto de lo guardado. Puesto
+  // siempre no diría nada; así, que esté ahí ES el aviso de que falta
+  // guardar.
+  function pintarMetasPendientes(){
+    var caja = document.getElementById('metasPendientesCaja');
+    if(!caja) return;
+    caja.hidden = mismasMetas(leerMetas(), metasVigentes);
+  }
+  document.getElementById('metasAceptar').addEventListener('click', pedirConfirmacionMetas);
+
+  // Deshacer lo tecleado y no guardado. La llama `show()` al salir de
+  // Perfil; sin esto, el Diario se quedaria con unas metas que no existen.
+  //
+  // Con la hoja de confirmar abierta NO se toca nada: ahi ya se esta
+  // decidiendo, y `cancelarMetas` se encarga si se cancela.
+  function revertirMetasSinGuardar(){
+    if(!metasVigentes || metasPendientes) return;
+    if(mismasMetas(leerMetas(), metasVigentes)) return;
+    escribirMetas(metasVigentes);
+    actualizarMetas();
+    pintarMetasPendientes();
+  }
   // Punto de partida: lo que hay en pantalla al arrancar. Va AQUÍ y no
   // arriba con las demás variables porque goalP/C/G se asignan en estas
   // líneas; leerlas antes daría error.

@@ -80,7 +80,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '0d636eb392';
+    var SELLO = 'c2ea0d5a3f';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -1550,6 +1550,20 @@
               <div class="goal-field"><input id="goalG" type="number" min="0" max="400" value="75" inputmode="numeric"><span>g</span></div>
             </div>
 
+            <!-- GUARDAR, Y NO ANTES.
+                 El aviso saltaba al SALIR DE CADA CAMPO: tocabas carbos y
+                 antes de llegar a las grasas ya estaba preguntando si
+                 querias esas calorias. Cambiar los tres macros son tres
+                 avisos seguidos para una sola decision.
+
+                 Ahora se cambian los tres con calma y se pulsa aqui. El
+                 boton solo aparece cuando hay algo distinto que guardar:
+                 puesto siempre, no diria nada. -->
+            <div class="goal-guardar" id="metasPendientesCaja" hidden>
+              <p class="goal-sin-guardar">Sin guardar</p>
+              <button class="btn-primary" id="metasAceptar">Aceptar</button>
+            </div>
+
             <!-- Su gasto real. Sale solo cuando hay semanas suficientes para
                  medirlo: hasta entonces no se enseña ni se menciona, porque
                  un hueco que dice "todavía no" solo genera la pregunta de
@@ -1859,7 +1873,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '0d636eb392';
+    var SELLO = 'c2ea0d5a3f';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que
