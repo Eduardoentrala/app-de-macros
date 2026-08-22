@@ -105,5 +105,33 @@ console.log('\nY se puede saber si está funcionando');
      'sumadas no se podría saber si acierta, y una caché que no acierta CUESTA más');
 }
 
+// ------------------------------------------------------------------
+console.log('\nY NINGUN BLOQUE PUEDE SALIR VACIO');
+{
+  // Un bloque de texto vacio es un error 400 de la API, y los tres datos
+  // del ultimo bloque PUEDEN salir vacios a la vez: alguien recien
+  // registrado -sin macros calculados-, sin Plus -sin memoria- y con una
+  // zona horaria que no se pudo leer.
+  //
+  // Antes daba igual: todo se pegaba en una sola cadena que empezaba por
+  // SISTEMA_CHAT y nunca estaba vacia. Al partirlo en bloques para cachear,
+  // eso se convirtio en un fallo que habria roto el chat de quien acabara
+  // de registrarse.
+  const chat = accion('chat');
+  const i2 = chat.indexOf('system: [');
+  const bloque = chat.slice(i2, chat.indexOf('],', i2));
+
+  ok(/\.\.\.\(hoyEs \+ contexto \+ loQueSe/.test(bloque),
+     'el ultimo bloque solo se pone si hay algo que poner');
+  ok(/: \[\]\)/.test(bloque),
+     'y si no, no se pone: un bloque vacio es un 400');
+
+  // Los dos primeros nunca pueden estar vacios: son constantes del archivo.
+  ok(/text: SISTEMA_CHAT,/.test(bloque),
+     'el primero es una constante: no puede quedar vacio');
+  ok(/SISTEMA_APUNTAR_REGLAS,/.test(bloque),
+     'y el segundo acaba siempre en SISTEMA_APUNTAR_REGLAS, que no es opcional');
+}
+
 console.log('\n' + pasan + ' bien, ' + fallan + ' mal');
 process.exit(fallan ? 1 : 0);

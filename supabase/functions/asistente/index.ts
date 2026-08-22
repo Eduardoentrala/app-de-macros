@@ -1313,7 +1313,15 @@ Deno.serve(async (req) => {
             text: (esPlus ? SISTEMA_EVENTOS + SISTEMA_MEMORIA : '') +
                   SISTEMA_APUNTAR_REGLAS,
             cache_control: { type: 'ephemeral' } },
-          { type: 'text', text: hoyEs + contexto + loQueSe },
+          // ...y solo SI HAY ALGO QUE PONER. Los tres pueden salir vacios a
+          // la vez -alguien recien registrado, sin macros calculados, con
+          // una zona horaria que no se pudo leer- y un bloque de texto
+          // vacio es un error 400 de la API. Antes daba igual porque todo
+          // se pegaba en una sola cadena que nunca estaba vacia; al
+          // partirlo en bloques, eso se convirtio en un fallo.
+          ...(hoyEs + contexto + loQueSe
+            ? [{ type: 'text', text: hoyEs + contexto + loQueSe }]
+            : []),
         ],
         ...(imagen ? { thinking: { type: 'adaptive' as const } } : {}),
         output_config: {
