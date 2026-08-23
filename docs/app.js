@@ -5594,12 +5594,22 @@
       return sbFetch('/rest/v1/progress_photos?user_id=eq.' + sesion.user.id +
                      '&week_key=eq.' + clave + '&pose=eq.' + pose, { method:'DELETE' });
     }).then(function(){
+      // DE AQUÍ EN ADELANTE LA ANTERIOR YA NO ESTÁ.
+      //
+      // Si esto falla, ese hueco se queda vacío en el servidor: la vieja
+      // apartada y la nueva sin ficha. Quien recoge el error tiene que
+      // saberlo, porque si repone la de antes en pantalla -que es lo
+      // razonable cuando no ha pasado nada- le está diciendo a la persona
+      // que no perdió nada, y se entera al recargar.
       return sbFetch('/rest/v1/progress_photos', {
         method:'POST', headers:{ 'Prefer':'return=representation' },
         body: JSON.stringify({
           user_id: sesion.user.id, week_key: clave, pose: pose,
           storage_path: ruta, bytes: res.bytes, width: res.w, height: res.h
         })
+      })['catch'](function(e){
+        e.laAnteriorSeAparto = true;
+        throw e;
       });
     });
   }
@@ -5764,9 +5774,17 @@
       })['catch'](function(e){
         // Si no subió, se quita: una foto que solo existe en este teléfono
         // y desaparece al recargar es peor que no haberla puesto.
-        if(antes) FOTOS[c][pose] = antes; else delete FOTOS[c][pose];
+        //
+        // Y la de antes se repone SOLO si de verdad sigue guardada. Cuando
+        // falla el último paso, la anterior ya está apartada en el servidor:
+        // reponerla aquí sería enseñar una foto que ya no existe y dar por
+        // hecho que no se perdió nada.
+        if(antes && !(e && e.laAnteriorSeAparto)) FOTOS[c][pose] = antes;
+        else delete FOTOS[c][pose];
         pintarFotos(); llenarSelectores();
-        toast('toastFotos', 'No se pudo subir: ' + traducirError(e.message));
+        toast('toastFotos', (e && e.laAnteriorSeAparto)
+          ? 'No se pudo guardar, y la anterior quedó apartada. Ese hueco está vacío: vuelve a poner una.'
+          : 'No se pudo subir: ' + traducirError(e.message));
       });
     });
   });
