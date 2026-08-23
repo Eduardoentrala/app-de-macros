@@ -422,6 +422,26 @@ QUÉ MIRAS, EN ESTE ORDEN
    - Peso plano y entrenó poco o nada → no le faltan calorías, le falta
      estímulo. Ajustar aquí no arregla nada.
 
+   Y si te paso EJERCICIO POR EJERCICIO, léelo antes de llamar a nada
+   «estancamiento». El volumen total esconde lo que pasa dentro: subir un
+   10% en piernas y bajar un 10% en espalda da una suma plana, y no es lo
+   mismo que no avanzar en nada.
+
+   - Un ejercicio con «3 semanas sin subir de peso» es lo más accionable
+     que tienes: ahí es donde hay que empujar, no en las calorías.
+   - Si SUBIÓ en alguno, dilo por su nombre. Es lo que la persona reconoce
+     como progreso, y en una semana de peso plano puede ser lo único bueno
+     que tiene para leer.
+   - Que un ejercicio baje una semana no es nada: se duerme mal, se entrena
+     cansado. Dos o tres seguidas ya es otra cosa.
+   - Uno marcado NUEVO no ha subido ni bajado: lo acaba de meter en su
+     rutina. No lo cuentes como progreso ni como retroceso.
+
+   PERO NOMBRA COMO MUCHO UNO. Esto es un mensaje corto de lunes, no un
+   informe: el que más diga, y en una frase. Si ninguno dice nada claro, no
+   menciones ninguno —rellenar con «tus ejercicios van bien» no informa y
+   gasta la atención de quien lo lee—.
+
 5. La cintura, si te la paso. Es lo único que distingue perder grasa de
    perder peso, y manda sobre la báscula cuando se contradicen.
 
@@ -1534,6 +1554,35 @@ Deno.serve(async (req) => {
           ).join('\n') + `\n`
         : '';
 
+      // ---- EJERCICIO POR EJERCICIO ----
+      //
+      //  El volumen total esconde lo que pasa dentro. Si sube un 10% en
+      //  piernas y baja un 10% en espalda, la suma sale plana y se lee
+      //  «estancado» cuando hay una mitad avanzando y otra frenada.
+      //
+      //  Va el PESO MÁXIMO de la semana, no el volumen: subir de 25 a 27 kg
+      //  es progreso aunque hiciera una serie menos, y es lo que la persona
+      //  reconoce como «subí». El volumen va detrás, para no perder el otro
+      //  camino de progresar —las mismas pesas, más repeticiones—.
+      const porEjercicio = (e && Array.isArray(e.ejercicios) && e.ejercicios.length)
+        ? `\nEJERCICIO POR EJERCICIO (peso máximo de la semana):\n` +
+          (e.ejercicios as unknown as Record<string, number | string>[]).map((x) => {
+            // Sin `peso_antes` no hay con qué comparar: es un estreno, y
+            // decir «subió» de un ejercicio que se acaba de añadir a la
+            // rutina es inventarse un progreso que no hubo.
+            const nuevo = x.nuevo === true || !Number(x.peso_antes);
+            const subio = !nuevo && Number(x.peso) > Number(x.peso_antes);
+            const bajo  = !nuevo && Number(x.peso) < Number(x.peso_antes) && Number(x.peso) > 0;
+            const atorado = Number(x.semanas_sin_subir) >= 3;
+            return `- ${x.nombre}: ${x.peso} kg` +
+              (nuevo ? ' · NUEVO, primera vez que lo hace' : '') +
+              (!nuevo ? ` (antes ${x.peso_antes})` : '') +
+              (subio ? ' ↑ SUBIÓ' : bajo ? ' ↓ bajó' : '') +
+              (atorado ? ` · ${x.semanas_sin_subir} semanas sin subir de peso` : '') +
+              ` · volumen ${x.vol}` + (nuevo ? '' : ` (antes ${x.vol_antes})`);
+          }).join('\n') + `\n`
+        : '';
+
       // La meta pudo cambiar A MITAD de la semana que se cierra. Entonces
       // «meta diaria» solo vale para los últimos días y el promedio mezcla
       // dos objetivos: sin avisar, esto se lee como un exceso que no hubo.
@@ -1580,6 +1629,7 @@ Deno.serve(async (req) => {
         gastoReal +
         `- Pesos (últimas 4 semanas): ${listaPesos}` +
         entreno + `\n` +
+        porEjercicio +
         semanas +
         trend +
         `- Hambre: ${encuesta.hambre ?? '—'}/5 · Energía: ${encuesta.energia ?? '—'}/5 · ` +

@@ -10504,8 +10504,12 @@
     var iniTendencia = new Date(anclaSemana); iniTendencia.setDate(iniTendencia.getDate() - 28);
 
     var desde = isoDe(iniTendencia);
+    // `exercises` viene DESDE SIEMPRE en cada sesión —nombre, volumen y las
+    // series con su peso— y no lo pedía nadie. Es lo que alimenta el
+    // «+9% vs anterior» de la pantalla; al cierre de semana solo llegaba el
+    // volumen total, así que la IA no podía saber en QUÉ ejercicio subiste.
     return sbFetch('/rest/v1/workout_sessions' +
-        '?select=session_date,total_volume&session_date=gte.' + desde +
+        '?select=session_date,total_volume,exercises&session_date=gte.' + desde +
         '&user_id=eq.' + sesion.user.id + '&order=session_date.asc')
       .then(function(filas){
         var corte = isoDe(iniCerrada);
@@ -10532,12 +10536,109 @@
           });
         }
 
+        // ---- EJERCICIO POR EJERCICIO ----
+        //
+        //  El volumen total esconde lo que de verdad pasa: si subes un 10%
+        //  en piernas y bajas un 10% en espalda, la suma sale plana y se lee
+        //  «estancado» cuando hay una mitad avanzando y otra frenada.
+        //
+        //  Se mira el PESO MÁXIMO de cada semana y no el volumen: subir de
+        //  25 a 27 kg es progreso aunque hicieras una serie menos, y es lo
+        //  que la persona reconoce como «subí».
+        var ventanas = [];
+        for(var k = 4; k >= 1; k--){
+          var vi = new Date(anclaSemana); vi.setDate(vi.getDate() - 7 * k);
+          var vf = new Date(vi);          vf.setDate(vf.getDate() + 7);
+          ventanas.push({ a: isoDe(vi), b: isoDe(vf) });
+        }
+
+        var porEj = {};
+        (filas || []).forEach(function(f){
+          var w = -1;
+          for(var j = 0; j < ventanas.length; j++){
+            if(f.session_date >= ventanas[j].a && f.session_date < ventanas[j].b) w = j;
+          }
+          if(w < 0) return;
+          (f.exercises || []).forEach(function(ej){
+            if(!ej || !ej.nombre) return;
+            var fila = porEj[ej.nombre] || (porEj[ej.nombre] =
+              [{p:0,v:0},{p:0,v:0},{p:0,v:0},{p:0,v:0}]);
+            fila[w].v += Number(ej.volumen) || 0;
+            (ej.series || []).forEach(function(x){
+              var pe = Number(x.peso) || 0;
+              if(pe > fila[w].p) fila[w].p = pe;
+            });
+          });
+        });
+
+        var ejercicios = Object.keys(porEj).map(function(n){
+          var w = porEj[n], ahora = w[3];
+
+          // LA ÚLTIMA VEZ QUE LO HIZO ANTES DE ESTA SEMANA, no «la semana
+          // pasada» a secas. Quien entrena un ejercicio cada quince días
+          // tenía la semana anterior en cero, y comparar contra ese cero lo
+          // convertía en un estreno: «↑ SUBIÓ de 0 a 40».
+          var antes = { p: 0, v: 0 };
+          for(var j = 2; j >= 0; j--){
+            if(w[j].p){ antes = w[j]; break; }
+          }
+
+          // Semanas seguidas sin superar el mejor peso de antes. Las
+          // semanas que no hizo el ejercicio no cuentan: no haberlo hecho
+          // no es estar atorado.
+          var mejor = 0, sinSubir = 0;
+          for(var j = 0; j < 4; j++){
+            if(!w[j].p) continue;
+            if(w[j].p > mejor){ mejor = w[j].p; sinSubir = 0; }
+            else sinSubir++;
+          }
+
+          return {
+            nombre: n,
+            peso: ahora.p, peso_antes: antes.p,
+            vol: Math.round(ahora.v), vol_antes: Math.round(antes.v),
+            semanas_sin_subir: sinSubir,
+            // ESTRENO, y no una subida. Sin esto, un ejercicio que se añade
+            // a la rutina -o uno al que se le cambia el nombre, que para
+            // esta cuenta es lo mismo- salía como «↑ SUBIÓ de 0 a 12».
+            nuevo: !antes.p && ahora.p > 0
+          };
+        // SOLO LO QUE HIZO ESTA SEMANA. Al comparar contra «la última vez
+        // que lo hizo» en vez de contra la semana pasada, un ejercicio que
+        // se dejó de hacer empezó a salir como «0 kg (antes 20) ↓ bajó»:
+        // se lee como un derrumbe y lo que pasó es que ya no lo hace.
+        //
+        // Esta lista es «qué hiciste esta semana y cómo se compara». Lo que
+        // no se hizo no tiene nada que comparar.
+        }).filter(function(e){ return e.peso > 0; });
+
+        // Los OCHO que más dicen, no todos. Con veinte ejercicios y cuatro
+        // semanas esto se vuelve una hoja de cálculo, y lo que sale al otro
+        // lado es un mensaje corto de lunes.
+        //
+        // «Lo que más dice» es lo que más se movió -arriba o abajo- o lo que
+        // más tiempo lleva atorado: lo demás es ruido de fondo.
+        ejercicios.sort(function(x, y){
+          var pesa = function(e){
+            // UN ESTRENO NO ES UNA NOTICIA. Contándolo como «subió de 0»
+            // puntuaba 100 y se llevaba los primeros puestos: bastaba
+            // añadir tres ejercicios para que el que lleva un mes atorado
+            // —lo único accionable que hay— se cayera de la lista.
+            if(e.nuevo) return 1;
+            var base = e.peso_antes || 1;
+            return Math.max(Math.abs(e.peso - e.peso_antes) / base * 100,
+                            e.semanas_sin_subir * 15);
+          };
+          return pesa(y) - pesa(x);
+        });
+
         return {
           sesiones: estaSemana.length,
           sesiones_antes: anterior.length,
           volumen: Math.round(suma(estaSemana)),
           volumen_antes: Math.round(suma(anterior)),
-          por_semana: porSemana
+          por_semana: porSemana,
+          ejercicios: ejercicios.slice(0, 8)
         };
       })['catch'](function(){ return null; });   // sin esto, igual se ajusta
   }
