@@ -827,6 +827,9 @@
         var ins = tr.querySelectorAll('.set-input');
         if(ins.length < 2) return;                     // la fila de encabezados
         series.push({
+          // La fila misma, para poder apuntarle su id cuando vuelva el
+          // servidor sin tener que buscarla otra vez por su posición.
+          el: tr,
           id: tr.dataset.id || null,
           orden: series.length + 1,
           reps: Math.max(0, Number(ins[0].value) || 0),
@@ -835,6 +838,7 @@
         });
       });
       return {
+        el: card,
         id: card.dataset.id || null,
         // childNodes[0] y no textContent: el nombre convive con la insignia
         // de notas dentro del mismo elemento.
@@ -880,12 +884,68 @@
   // Se lee lo que hay en la base para ese día y se compara con el DOM: lo
   // nuevo se inserta, lo que cambió se actualiza y lo que desapareció se
   // borra (que en estas tablas significa archivar).
+  // UN GUARDADO CADA VEZ, Y EN FILA.
+  //
+  // El retardo de 900 ms evita mandar una petición por tecla, pero no que dos
+  // guardados se SOLAPEN: con la red lenta el anterior sigue en el aire
+  // cuando sale el siguiente. Y el id del día no existe hasta que vuelve el
+  // POST, así que los dos leían `tab.dataset.id` vacío, los dos se creían el
+  // primero, y se insertaban DOS filas: el día repetido en la rutina. Igual
+  // con cada ejercicio y cada serie nuevos.
+  //
+  // No hace falta mala fe para provocarlo: crear un día, ponerle nombre -eso
+  // guarda por su cuenta, saltándose el retardo- y tocar algo antes de que
+  // conteste el servidor. Por eso el turno se pide AQUÍ y no en el retardo:
+  // hay dos puertas, y vigilar una sola no sirve de nada.
+  var colaRutina = Promise.resolve();
+
   function guardarDia(tab){
     if(!sesion || !sesion.user || !tab) return Promise.resolve();
 
-    var nombre = tab.textContent.trim();
-    var orden = Array.from(dayTabs.querySelectorAll('.day-tab:not(.add)')).indexOf(tab);
-    var ejercicios = leerEjerciciosDelDOM();
+    // La pantalla se lee AHORA, no cuando le toque el turno. Para entonces
+    // puede estar enseñando otro día -se cambió de pestaña mientras subía- y
+    // se guardarían los ejercicios de ese otro día con el id de este.
+    var foto = {
+      nombre: tab.textContent.trim(),
+      orden: Array.from(dayTabs.querySelectorAll('.day-tab:not(.add)')).indexOf(tab),
+      ejercicios: leerEjerciciosDelDOM()
+    };
+
+    var mio = colaRutina.then(function(){ return volcarDia(tab, foto); },
+                              function(){ return volcarDia(tab, foto); });
+    // Este catch CALLA A PROPÓSITO y no se pierde nada con ello: el error va
+    // por `mio`, que es lo que se devuelve a quien pidió el guardado y quien
+    // enseña el aviso. Esta copia perdonada existe solo para que la fila siga
+    // corriendo; encadenar el rechazo dejaría una promesa sin recoger y el
+    // siguiente guardado heredaría el fallo del anterior.
+    colaRutina = mio['catch'](function(){});
+    return mio;
+  }
+
+  // El id de la fila que acaba de devolver el servidor. Sin esto, una
+  // respuesta vacía daba un TypeError a media escritura y el guardado se
+  // quedaba a mitad sin decir por qué.
+  function idDevuelto(r){
+    if(!r || !r[0] || !r[0].id) throw new Error('El servidor no devolvió lo que guardó');
+    return r[0].id;
+  }
+
+  function volcarDia(tab, foto){
+    var nombre = foto.nombre, orden = foto.orden, ejercicios = foto.ejercicios;
+
+    // LOS VALORES SON DE LA FOTO; EL ID, EL DE AHORA.
+    //
+    // Entre pedir el turno y recibirlo, el guardado de delante pudo haber
+    // creado ya este ejercicio y haberle apuntado su id en la tarjeta. Si se
+    // hiciera caso al id de la foto -vacío, porque entonces no existía- se
+    // insertaría otra vez: el ejercicio duplicado, que es el mismo fallo del
+    // día pero un piso más abajo.
+    ejercicios.forEach(function(ej){
+      if(ej.el && ej.el.dataset.id) ej.id = ej.el.dataset.id;
+      ej.series.forEach(function(se){
+        if(se.el && se.el.dataset.id) se.id = se.el.dataset.id;
+      });
+    });
 
     var pDia = tab.dataset.id
       ? sbFetch('/rest/v1/routine_days?id=eq.' + tab.dataset.id, {
@@ -895,7 +955,7 @@
       : sbFetch('/rest/v1/routine_days', {
           method:'POST', headers:{ 'Prefer':'return=representation' },
           body: JSON.stringify({ user_id: sesion.user.id, name: nombre, sort_order: orden })
-        }).then(function(r){ tab.dataset.id = r[0].id; return r[0].id; });
+        }).then(function(r){ tab.dataset.id = idDevuelto(r); return tab.dataset.id; });
 
     return pDia.then(function(diaId){
       // Lo que la base cree que hay ahora mismo en este día
@@ -933,10 +993,12 @@
       : sbFetch('/rest/v1/routine_exercises', {
           method:'POST', headers:{ 'Prefer':'return=representation' }, body: JSON.stringify(cuerpo)
         }).then(function(r){
-          var id = r[0].id;
-          // Se apunta en la tarjeta para que el próximo guardado actualice
-          var card = exList.querySelectorAll('.exercise-card')[ej.orden];
-          if(card) card.dataset.id = id;
+          var id = idDevuelto(r);
+          // Se apunta en LA MISMA tarjeta que se leyó, no en la que ocupe
+          // ahora esa posición: entre que salió la petición y volvió, la
+          // lista puede haber cambiado de orden o de día, y el id acabaría
+          // en el ejercicio de otro.
+          if(ej.el) ej.el.dataset.id = id;
           return id;
         });
 
@@ -963,11 +1025,8 @@
               : sbFetch('/rest/v1/exercise_sets', {
                   method:'POST', headers:{ 'Prefer':'return=representation' }, body: JSON.stringify(c)
                 }).then(function(r){
-                  // Igual que arriba: la fila se queda con su id
-                  var card = exList.querySelectorAll('.exercise-card')[ej.orden];
-                  var trs = card ? card.querySelectorAll('.sets-table tr') : [];
-                  var tr = trs[s.orden];        // +1 por el encabezado, y orden empieza en 1
-                  if(tr && !tr.dataset.id) tr.dataset.id = r[0].id;
+                  // Igual que arriba: la fila que se leyó se queda con su id.
+                  if(s.el && !s.el.dataset.id) s.el.dataset.id = idDevuelto(r);
                 });
           });
 
