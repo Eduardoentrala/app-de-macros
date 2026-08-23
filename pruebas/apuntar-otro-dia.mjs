@@ -98,14 +98,17 @@ console.log('\n— Y al salir se vuelve a hoy —');
   // COMIDAS guarda el día que se estaba mirando. Sin esto, el Diario se
   // quedaría enseñando las comidas del lunes mientras el anillo cuenta las
   // de hoy.
-  check('salir devuelve a hoy',
-    /if\(DIA_APUNTE && typeof cargarComidasDelDia === 'function'\)\{[\s\S]{0,200}cargarComidasDelDia\(HOY\);/.test(APP));
-  check('y entrar también, si se quedó en otro día',
-    /if\(veniaDeOtroDia && typeof cargarComidasDelDia === 'function'\) cargarComidasDelDia\(HOY\);/.test(APP));
+  //
+  // Esto estaba escrito contra el código EN LÍNEA de cada salida, así que se
+  // puso rojo al llevarlo a una función —que es lo que hacía falta, porque
+  // faltaba una tercera salida, la barra de abajo—. Lo que hace la función se
+  // ejecuta en salir-de-apuntar; aquí solo importa que estas dos salidas la
+  // llamen, y esa prueba comprueba además que no queda ninguna suelta.
+  check('salir devuelve a hoy', /volverAHoyElApunte\(\);\s*\n\s*back\(\); return;/.test(APP));
   // Entrar a apuntar siempre empieza en hoy: un selector que recuerda el día
   // anterior acaba metiendo la cena de hoy en el lunes pasado.
   check('entrar a apuntar empieza en hoy',
-    /if\(push\.dataset\.push === 'mealadd'\)\{[\s\S]{0,120}DIA_APUNTE = null;/.test(APP));
+    /if\(push\.dataset\.push === 'mealadd'\) volverAHoyElApunte\(\);/.test(APP));
 }
 
 console.log('\n— El selector sigue donde estaba —');

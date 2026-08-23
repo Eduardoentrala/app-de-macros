@@ -128,32 +128,19 @@
       // Entrar a apuntar SIEMPRE empieza en hoy. Un selector que recuerda el
       // día anterior acaba metiendo la cena de hoy en el martes pasado, y
       // nadie revisa una fecha que ya estaba puesta.
-      if(push.dataset.push === 'mealadd'){
-        var veniaDeOtroDia = !!DIA_APUNTE;
-        DIA_APUNTE = null;
-        if(typeof pintarSelectorDia === 'function') pintarSelectorDia();
-        // Si la vez anterior se quedó en otro día, hay que rehacer la lista:
-        // COMIDAS todavía tiene la de aquel día.
-        if(veniaDeOtroDia && typeof cargarComidasDelDia === 'function') cargarComidasDelDia(HOY);
-      }
+      if(push.dataset.push === 'mealadd') volverAHoyElApunte();
       goto(push.dataset.push, true);
       return;
     }
     var backBtn = e.target.closest('[data-back]');
     if(backBtn){
-      // Al salir de apuntar se vuelve a HOY. COMIDAS guarda el día que se
-      // estaba mirando, y sin esto el Diario se quedaría enseñando las
-      // comidas del martes pasado mientras el anillo cuenta las de hoy.
-      if(DIA_APUNTE && typeof cargarComidasDelDia === 'function'){
-        DIA_APUNTE = null;
-        if(typeof pintarSelectorDia === 'function') pintarSelectorDia();
-        cargarComidasDelDia(HOY);
-      }
+      volverAHoyElApunte();
       back(); return;
     }
     var tabbar = e.target.closest('[data-tabbar]');
     if(tabbar){
       var destino = tabbar.dataset.tabbar;
+      volverAHoyElApunte();       // la barra también es salir de apuntar
       // Peso y Fotos conservan su cabecera con "Regresar", así que se abren
       // con el Diario debajo en la pila: al regresar se vuelve ahí. Si se
       // abrieran como raíz, ese botón no tendría a dónde ir y parecería roto.
@@ -1643,6 +1630,30 @@
   // vale undefined en ese momento y tumba el arranque entero.
   var DIA_APUNTE = null;
   function diaDeApunte(){ return DIA_APUNTE || HOY; }
+
+  // Salir de apuntar vuelve a HOY, y por TODAS las salidas.
+  //
+  // Apuntar en otro día deja dos cosas puestas: DIA_APUNTE, que decide en qué
+  // día se escribe, y la lista de COMIDAS de aquel día. Volvían a hoy al
+  // entrar de nuevo a apuntar y al salir con el botón de regresar, pero no al
+  // salir por la barra de abajo, que es una salida como las otras.
+  //
+  // Y no era solo cosmético: el asistente también apunta comida, y apunta en
+  // diaDeApunte(). Elegir el miércoles, salir tocando una pestaña de abajo y
+  // apuntar lo que propuso el asistente guardaba esa comida en el miércoles
+  // pasado, en silencio.
+  //
+  // Vive en un solo sitio para que la próxima salida que se añada no se
+  // quede sin la mitad: poner el día a hoy sin rehacer la lista deja el
+  // Diario enseñando las comidas del martes mientras el anillo cuenta las de
+  // hoy.
+  function volverAHoyElApunte(){
+    var veniaDeOtroDia = !!DIA_APUNTE;
+    DIA_APUNTE = null;
+    if(typeof pintarSelectorDia === 'function') pintarSelectorDia();
+    if(veniaDeOtroDia && typeof cargarComidasDelDia === 'function') cargarComidasDelDia(HOY);
+    return veniaDeOtroDia;
+  }
   function apuntandoEnHoy(){ return isoDe(diaDeApunte()) === isoDe(HOY); }
 
   // De qué día es la lista que hay ahora mismo en COMIDAS. Null quiere decir
@@ -2545,7 +2556,7 @@
     var inp = document.getElementById('mealFecha');
     if(!inp) return;
     inp.addEventListener('change', function(){
-      if(!this.value){ DIA_APUNTE = null; pintarSelectorDia(); cargarComidasDelDia(HOY); return; }
+      if(!this.value){ volverAHoyElApunte(); return; }
       // Mediodía y no medianoche: con las horas a cero, una zona horaria
       // por detrás de UTC convierte la fecha en el día anterior.
       var d = new Date(this.value + 'T12:00:00');

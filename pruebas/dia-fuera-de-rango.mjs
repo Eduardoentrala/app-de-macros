@@ -37,19 +37,28 @@ const anclaSemana = new Date(2026, 7, 17);               // lunes 17 ago
 const isoDe = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
                      '-' + String(d.getDate()).padStart(2, '0');
 
-const probar = (escrito) => {
+// Volver a hoy también es la de verdad, no un remedo: es la que decide si
+// hay que rehacer la lista, y un remedo aquí solo comprobaría lo que yo creo
+// que hace.
+const VOLVER = (() => {
+  const i = APP.indexOf('  function volverAHoyElApunte(){');
+  return APP.slice(i, APP.indexOf('\n  }', i) + 4);
+})();
+
+// `desde` es el día en que se estaba antes de tocar la fecha.
+const probar = (escrito, desde) => {
   const visto = { cargado: [], avisos: [], repintado: 0 };
-  let DIA_APUNTE = null;
-  const caja = new Function('valor', 'HOY', 'anclaSemana', 'isoDe', 'visto', `
-    var DIA_APUNTE = null;
+  const caja = new Function('valor', 'desde', 'HOY', 'anclaSemana', 'isoDe', 'visto', `
+    var DIA_APUNTE = desde || null;
     var self = { value: valor };
     function pintarSelectorDia(){ visto.repintado++; }
     function cargarComidasDelDia(d){ visto.cargado.push(isoDe(d)); }
     function diaDeApunte(){ return DIA_APUNTE || HOY; }
     function toast(donde, txt){ visto.avisos.push(txt); }
+    ${VOLVER}
     (function(){${CUERPO}}).call(self);
     return DIA_APUNTE;`);
-  visto.dia = caja(escrito, HOY, anclaSemana, isoDe, visto);
+  visto.dia = caja(escrito, desde || null, HOY, anclaSemana, isoDe, visto);
   return visto;
 };
 
@@ -74,9 +83,12 @@ console.log('\nLo de dentro del rango sigue igual');
   ok(lunes.dia !== null && isoDe(lunes.dia) === '2026-08-17',
      'el lunes, que es el borde de abajo, entra');
 
-  const vacio = probar('');
-  ok(vacio.dia === null && vacio.cargado[0] === isoDe(HOY),
-     'borrar la fecha vuelve a hoy');
+  // Borrar la fecha estando en otro día: hay que volver a hoy Y rehacer la
+  // lista, que todavía tiene la del miércoles.
+  const vacio = probar('', new Date(2026, 7, 19));
+  ok(vacio.dia === null, 'borrar la fecha vuelve a hoy');
+  ok(vacio.cargado[0] === isoDe(HOY), 'y se rehace la lista con la de hoy',
+     'cargado: ' + JSON.stringify(vacio.cargado));
 }
 
 // ------------------------------------------------------------------
