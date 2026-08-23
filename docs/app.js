@@ -4619,8 +4619,14 @@
           }
 
           if(!r.ok){
-            throw new Error((d && (d.msg || d.message || d.error_description || d.error))
-                            || ('Error ' + r.status));
+            var fallo = new Error((d && (d.msg || d.message || d.error_description || d.error))
+                                  || ('Error ' + r.status));
+            // El código va aparte del mensaje a propósito. Quien decide si
+            // algo se reintenta -la cola- necesita distinguir un 400 de un
+            // 503, y el mensaje no sirve: cuando la base manda el suyo, el
+            // número no aparece por ningún lado.
+            fallo.status = r.status;
+            throw fallo;
           }
           return d;
         });
@@ -4784,6 +4790,10 @@
   // el borrado —y mandar un DELETE de algo que el servidor no ha visto
   // nunca— se cancela el alta y no queda rastro de ninguna de las dos.
   function desencolar(id){
+    // Sin id no hay nada que quitar. Y colarse aquí con undefined se
+    // llevaría por delante todo lo que no lleva `fila` -los borrados-,
+    // porque undefined !== undefined es falso.
+    if(!id) return false;
     var antes = COLA.length;
     COLA = COLA.filter(function(x){ return x.fila !== id; });
     if(COLA.length !== antes){ colaGuardar(); pintarPendientes(); }
@@ -4801,6 +4811,23 @@
   // alta y su borrado podrían llegar al revés y el apunte quedaría vivo para
   // siempre. Y EN CUANTO UNA FALLA POR RED, se para: seguir con las
   // siguientes las adelantaría por el mismo motivo.
+  // ¿Esto fue el servidor diciendo que NO, o teniendo un mal minuto?
+  //
+  // Es la hermana de sinConexion(), y se le parece en lo que importa: los
+  // dos casos significan "ahora no, luego". Un 500 o un 503 es Supabase
+  // caído un rato; un 429 es haber mandado mucho de golpe, que es justo lo
+  // que pasa al volver de un viaje con la cola llena. Tratarlos como un dato
+  // inválido tiraba la comida apuntada sin señal por un rato malo del
+  // servidor.
+  //
+  // Un 4xx normal SÍ es un no de verdad -un dato que no pasa una
+  // restricción, un permiso- y ese hay que tirarlo: reintentarlo para
+  // siempre atasca la cola y nada de lo que venga detrás vuelve a subir.
+  function esperaMejorMomento(e){
+    var c = e && e.status;
+    return c === 408 || c === 429 || (c >= 500 && c <= 599);
+  }
+
   var colaVaciando = false;
   function vaciarCola(){
     if(colaVaciando) return Promise.resolve(0);
@@ -4819,7 +4846,10 @@
       return sbFetch(item.ruta, item.op)
         .then(function(){ subidos++; })
         ['catch'](function(e){
-          if(sinConexion(e)) throw e;          // se corta la vuelta entera
+          // Las dos formas de "ahora no": sin red, o el servidor de mal día.
+          // Cortan la vuelta entera, porque seguir con los siguientes los
+          // adelantaría y un alta podría llegar después de su borrado.
+          if(sinConexion(e) || esperaMejorMomento(e)) throw e;
           // 409 es la clave primaria repitiéndose: este apunte YA estaba
           // guardado, la petición de antes sí llegó. No es un fallo.
           if(/duplicate key|already exists|409/i.test(String(e.message || ''))) subidos++;
@@ -4840,7 +4870,10 @@
       .then(function(){
         colaVaciando = false;
         pintarPendientes();
-        if(subidos) avisarSubidos(subidos, rechazados);
+        // Aunque no subiera NINGUNO. Si el servidor los rechazó todos, los
+        // apuntes desaparecen de la cola y de la pantalla, y callarlo es la
+        // peor versión posible: la persona cree que su comida está guardada.
+        if(subidos || rechazados) avisarSubidos(subidos, rechazados);
         return subidos;
       });
   }
