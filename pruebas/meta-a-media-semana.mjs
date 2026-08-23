@@ -83,8 +83,12 @@ console.log('\n— Se apunta el cambio de meta, con su fecha —');
 
 console.log('\n— Y viaja al cierre de semana —');
 {
+  // Hasta el final de la función, NO 1400 caracteres. La ventana fija se
+  // desbordó en cuanto se añadió un comentario dentro de la función, y esta
+  // comprobación se puso roja sin que nada se hubiera roto. Ya había pasado
+  // en otra prueba por lo mismo.
   const i = APP.indexOf('function datosDeLaSemana(');
-  const trozo = APP.slice(i, i + 1400);
+  const trozo = APP.slice(i, APP.indexOf('\n  }', i));
   check('se manda con los datos de la semana', /cambios_de_meta: cambiosDeMetaEn\(desde, hasta\)/.test(trozo));
   // Solo a mano. Los de la IA caen en lunes y ya los tiene en su historial;
   // apuntarlos aquí también sería contárselos dos veces.
