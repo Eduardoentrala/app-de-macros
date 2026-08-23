@@ -120,7 +120,14 @@ console.log('\n— Y el arreglo no puede tumbar la respuesta —');
 
 console.log('\n— Y se dice lo que pasa de verdad —');
 {
-  check('se distingue saturado de roto', /const saturado = estado === 529/.test(FN));
+  // Esto estaba clavado al principio EXACTO de la línea, así que se puso
+  // rojo al añadirle delante el caso de la llamada que no llegó a salir —un
+  // fallo de conexión, que no trae código de estado—. Lo que importa es que
+  // los códigos de "vuelve luego" sigan ahí, no en qué orden se escriban.
+  check('se distingue saturado de roto',
+    /const saturado = [\s\S]{0,60}estado === 529 \|\| estado === 429 \|\| \(estado >= 500/.test(FN));
+  check('y una conexión que no llegó cuenta igual', /noSalio \|\|/.test(FN),
+    'sin código de estado, el 0 no era saturado y la consulta se cobraba');
   check('el mensaje dice que no es cosa suya', /No es cosa tuya y no/.test(FN));
   check('que no gastó consulta', /gastaste ninguna consulta/.test(FN));
   check('y qué hacer', /espera un minuto y vuelve a intentarlo/.test(FN));
