@@ -2,6 +2,38 @@
 <html lang="es">
 <meta charset="utf-8">
 
+<!-- ---- Lo que esta pagina PUEDE hacer, y nada mas ----
+
+     Esta app es autocontenida: no carga ni un script, ni una hoja, ni una
+     fuente de fuera, y solo habla con un servidor, el de Supabase. Cuando eso
+     es asi, escribirlo aqui cuesta cinco lineas y quita de golpe todo lo que
+     una inyeccion necesitaria para servir de algo.
+
+     Se pinta bastante HTML con datos de personas -nombres, alimentos, notas-.
+     Se escapan, y hay pruebas que lo vigilan, pero eso es cuidado y el cuidado
+     se salta un dia. Esto es lo que queda debajo cuando se salta:
+
+       connect-src  lo apuntado no puede irse a un servidor de nadie
+       script-src   no se puede cargar codigo de fuera ni usar eval()
+       object-src   nada de plugins ni de <object>
+       base-uri     no se puede reescribir a donde apuntan las rutas
+       form-action  no hay formularios: nada puede enviarse a ningun sitio
+
+     `unsafe-inline` en script-src NO sobra ni es descuido: hay tres
+     scripts dentro de este archivo. Se podria firmar cada uno con su hash,
+     pero el sello se reescribe en cada publicacion y un hash mal recalculado
+     deja la app en blanco para todos. Con `unsafe-inline` se pierde una
+     parte -codigo inyectado DENTRO de la pagina- y se conservan las demas,
+     que son las que impiden que ese codigo se lleve nada a ningun lado.
+
+     Las imagenes necesitan `data:` -la foto recien comprimida se pinta
+     como base64 antes de subirla- y `blob:` -createObjectURL al
+     encuadrarla-. Las de progreso llegan firmadas desde Supabase. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://jeeoxcsbkcthpwtkimdt.supabase.co; connect-src 'self' https://jeeoxcsbkcthpwtkimdt.supabase.co; font-src 'self'; media-src 'self' blob:; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+
+<!-- Las direcciones de esta app no se le cuentan a nadie de fuera. -->
+<meta name="referrer" content="same-origin">
+
 <!-- Sin esta línea el teléfono asume ancho de escritorio y dibuja todo
      diminuto. `viewport-fit=cover` deja que la app llegue hasta los bordes
      y es lo que hace que env(safe-area-inset-*) devuelva algo distinto de 0. -->
@@ -80,7 +112,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = 'ab6ccd5a8e';
+    var SELLO = 'd11c2db9ad';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -1902,7 +1934,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = 'ab6ccd5a8e';
+    var SELLO = 'd11c2db9ad';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que
