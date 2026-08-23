@@ -1457,7 +1457,20 @@ Deno.serve(async (req) => {
 
       const d = (cuerpo.datos ?? {}) as Record<string, number>;
       const diasApuntados = Math.max(0, Math.round(Number(d.dias_apuntados) || 0));
-      const pesos = Array.isArray(cuerpo.pesos) ? cuerpo.pesos.slice(-8) : [];
+      // CUARENTA, NO OCHO. La app manda las cuatro semanas de pesos y la
+      // etiqueta de abajo dice «últimas 4 semanas»; con un tope de 8, quien
+      // se pesa TODOS LOS DÍAS mandaba 28 y el modelo veía los últimos 8:
+      // poco más de una semana, con el cartel diciendo cuatro.
+      //
+      // O sea que cuanto mejor se portaba la persona, MENOS veía la IA:
+      // quien se pesa una vez por semana manda 4 y las ve todas; quien se
+      // pesa a diario perdía tres cuartas partes de su historial. Y todo el
+      // razonamiento del cierre se apoya justo en eso —«una semana suelta
+      // miente, el peso se mueve un kilo por agua y sal»—.
+      //
+      // Cuarenta cubre 28 días de báscula diaria con margen, y son unos 180
+      // tokens una vez por semana: nada.
+      const pesos = Array.isArray(cuerpo.pesos) ? cuerpo.pesos.slice(-40) : [];
 
       // El corte está en 4 de 7 y no en 7 de 7: exigir la semana perfecta
       // dejaría a casi todo el mundo sin ajuste nunca. Con cuatro días hay
