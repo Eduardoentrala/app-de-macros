@@ -25,6 +25,32 @@ const ok = (c, q) => {
   else { fallan++; console.log('  FALLA  ' + q); }
 };
 
+// Un Supabase de mentira: devuelve la fila que se le diga y apunta a
+// quién se la pidieron.
+//
+// Contesta a tres consultas distintas. Las dos que hace `mandaSobre` -el
+// rol de quien llama y si lleva a esa persona- dicen que SÍ puede: lo que
+// se prueba aquí son las LLAVES, y para llegar a ellas hay que pasar el
+// permiso. Quién puede sobre quién se prueba en plan-de-otro.mjs.
+const fingir = (fila) => {
+  const pedido = { a: null };
+  const paso = (tabla, v) => ({
+    eq: () => paso(tabla, v),                       // coach_clientes encadena dos
+    single: async () => ({ data: { role: 'coach' } }),
+    maybeSingle: async () => ({
+      data: tabla === 'coach_clientes' ? { cliente_id: v } : fila,
+    }),
+  });
+  return {
+    pedido,
+    from: (tabla) => ({ select: () => ({ eq: (_c, v) => {
+      if (tabla === 'ia_permisos') pedido.a = v;
+      return paso(tabla, v);
+    } }) }),
+  };
+};
+const json = (b, s) => ({ cuerpo: b, estado: s });
+
 const FUN = readFileSync(TS, 'utf8');
 const APP = readFileSync(JS, 'utf8');
 
@@ -47,8 +73,15 @@ console.log('\nEl servidor: ninguna acción se queda sin llave');
   const BLOQUE = FUN.slice(desde, hasta + 4);
 
   mkdirSync(TMP, { recursive: true });
+  // La regla de "¿puedo pedir sobre otra persona?" viaja con el bloque: se
+  // llama desde dentro, y sin ella el módulo fabricado no arranca. Va la de
+  // verdad y no un remedo — lo que decide se prueba en plan-de-otro.mjs.
+  const REGLA = FUN.slice(FUN.indexOf('async function mandaSobre('),
+                          FUN.indexOf('\n}', FUN.indexOf('async function mandaSobre(')) + 2);
+
   const arch = join(TMP, 'llave.ts');
   writeFileSync(arch, [
+    REGLA,
     'export async function mirar(admin: any, userId: any, accion: any,',
     '                            cuerpo: any, json: any) {',
     BLOQUE,
@@ -58,18 +91,6 @@ console.log('\nEl servidor: ninguna acción se queda sin llave');
 
   const { mirar } = await import(pathToFileURL(arch).href);
 
-  // Un Supabase de mentira: devuelve la fila que se le diga y apunta a
-  // quién se la pidieron.
-  const fingir = (fila) => {
-    const pedido = { a: null };
-    return {
-      pedido,
-      from: () => ({ select: () => ({ eq: (_c, v) => { pedido.a = v; return {
-        maybeSingle: async () => ({ data: fila }),
-      }; } }) }),
-    };
-  };
-  const json = (b, s) => ({ cuerpo: b, estado: s });
 
   const ACCIONES = ['apuntar', 'chat', 'aviso', 'semana', 'fotos', 'plan', 'cliente'];
   const YO = 'yo-1', ELLA = 'ella-2';
@@ -100,12 +121,6 @@ console.log('\nY mira las llaves DE QUIEN TOCA');
 {
   const arch = join(TMP, 'llave.ts');
   const { mirar } = await import(pathToFileURL(arch).href);
-  const fingir = (fila) => {
-    const pedido = { a: null };
-    return { pedido, from: () => ({ select: () => ({ eq: (_c, v) => { pedido.a = v; return {
-      maybeSingle: async () => ({ data: fila }) }; } }) }) };
-  };
-  const json = (b, s) => ({ cuerpo: b, estado: s });
   const YO = 'coach-1', ELLA = 'lety-2';
 
   for (const accion of ['plan', 'cliente']) {
@@ -133,9 +148,6 @@ console.log('\nEl plan de un día y la semana entera son llaves distintas');
 {
   const arch = join(TMP, 'llave.ts');
   const { mirar } = await import(pathToFileURL(arch).href);
-  const fingir = (fila) => ({ from: () => ({ select: () => ({ eq: () => ({
-    maybeSingle: async () => ({ data: fila }) }) }) }) });
-  const json = (b, s) => ({ cuerpo: b, estado: s });
 
   // Justo el ajuste que más dinero mueve: días sí, semana no.
   const SOLO_DIA = { foto: true, chat: true, semanal: true,
@@ -162,9 +174,6 @@ console.log('\nLA FOTO DE COMIDA VIAJA COMO «chat», no como «apuntar»');
   // las fotos. Justo al revés de lo que dicen.
   const arch = join(TMP, 'llave.ts');
   const { mirar } = await import(pathToFileURL(arch).href);
-  const fingir = (fila) => ({ from: () => ({ select: () => ({ eq: () => ({
-    maybeSingle: async () => ({ data: fila }) }) }) }) });
-  const json = (b, s) => ({ cuerpo: b, estado: s });
 
   // Solo la foto apagada. Preguntar por texto tiene que seguir funcionando.
   const SIN_FOTO = { foto: false, chat: true, semanal: true,
@@ -204,7 +213,6 @@ console.log('\nQuien ya usa la app no nota nada');
 {
   const arch = join(TMP, 'llave.ts');
   const { mirar } = await import(pathToFileURL(arch).href);
-  const json = (b, s) => ({ cuerpo: b, estado: s });
 
   const sinFila = { from: () => ({ select: () => ({ eq: () => ({
     maybeSingle: async () => ({ data: null }) }) }) }) };

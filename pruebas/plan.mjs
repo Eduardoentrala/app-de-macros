@@ -211,27 +211,42 @@ console.log('\n— Y el servidor no se fía del cuerpo —');
   // cualquiera puede mandar lo que quiera: sin esto, un cliente pediría el
   // «análisis» de otro con solo su id.
   check('exige el id de la persona', /Falta a quién/.test(a));
-  check('y consulta si es cliente suyo',
-    /from\('coach_clientes'\)[\s\S]{0,220}eq\('coach_id', userId\)/.test(a),
+
+  // ESTO COMPROBABA LA REGLA ESCRITA A MANO AQUÍ DENTRO, y por eso se puso
+  // rojo al sacarla a `mandaSobre()`. Sacarla era el arreglo: la misma regla
+  // hacía falta en la acción `plan`, que recibe un id ajeno igual y no
+  // comprobaba nada. Escrita en un solo sitio, se arregla una vez.
+  //
+  // Lo que HACE la regla —quién puede sobre quién— se ejecuta de verdad en
+  // plan-de-otro.mjs, con roles y asignaciones de mentira. Aquí solo importa
+  // que esta acción la llame y CORTE con lo que devuelva.
+  check('y comprueba si puede pedir sobre esa persona',
+    /const noPuede = await mandaSobre\(admin, userId, cliente\)/.test(a),
     'sin esto cualquiera analizaría a cualquiera sabiendo su id');
-  // NO BASTA CON QUE LA CONSULTA ESTÉ: hay que USAR el resultado. Se probó
-  // borrando solo esta línea y la comprobación de arriba seguía pasando,
-  // porque el `select` seguía ahí. Es el mismo tropiezo que ya hubo con
-  // sbQuitarAlimento y con el guardado del alimento sin señal.
-  check('y CORTA si no lo es',
-    /if \(!suyo\) return json\([\s\S]{0,80}403\)/.test(a),
-    'la consulta sola no protege nada si nadie mira lo que devuelve');
-  check('el super admin pasa igual', /rol !== 'super_admin'/.test(a));
-  // Otra vez lo mismo: mirar solo que esté el MENSAJE «Esto es para
-  // entrenadores» no sirve, porque el texto sigue ahí aunque la condición
-  // que lleva a él se ponga en `false`. Se comprueba la CONDICIÓN.
+  // NO BASTA CON QUE LA LLAMADA ESTÉ: hay que USAR lo que devuelve. Se probó
+  // borrando solo esta línea y la comprobación de arriba seguía pasando.
+  // Es el mismo tropiezo que ya hubo con sbQuitarAlimento y con el guardado
+  // del alimento sin señal.
+  check('y CORTA si no puede',
+    /if \(noPuede\) return json\(\{ error: noPuede \}, 403\)/.test(a),
+    'la llamada sola no protege nada si nadie mira lo que devuelve');
+
+  // Y la regla, donde vive ahora.
+  // Desde su comentario de cabecera, que es donde se explica por que no se
+  // puede usar puede_ver aqui dentro.
+  const regla = FN.slice(FN.indexOf('// ¿PUEDE ESTA PERSONA ACTUAR EN NOMBRE DE OTRA?'),
+                         FN.indexOf('function json(cuerpo'));
+  check('el super admin pasa igual', /rol === 'super_admin'/.test(regla));
+  // Mirar solo que esté el MENSAJE «Esto es para entrenadores» no sirve,
+  // porque el texto sigue ahí aunque la condición que lleva a él se ponga en
+  // `false`. Se comprueba la CONDICIÓN.
   check('y un cliente normal no',
-    /if \(rol !== 'coach' && rol !== 'org_admin'\)/.test(a),
+    /if \(rol !== 'coach' && rol !== 'org_admin'\)/.test(regla),
     'el mensaje puede estar ahí y no alcanzarse nunca');
-  check('con su motivo', /Esto es para entrenadores/.test(a));
+  check('con su motivo', /Esto es para entrenadores/.test(regla));
   // `puede_ver` no sirve aquí: la función corre con clave de servicio y
   // dentro `auth.uid()` vale null, así que devolvería falso siempre.
-  check('y se explica por qué no se usa puede_ver', /auth\.uid\(\)`? vale null/.test(a));
+  check('y se explica por qué no se usa puede_ver', /auth\.uid\(\)`? vale null/.test(regla));
 
   const p = FN.slice(FN.indexOf('const SISTEMA_CLIENTE'), FN.indexOf('Deno.serve('));
   // La tentación del modelo aquí es rellenar huecos con lo que suele pasar,

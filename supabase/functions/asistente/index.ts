@@ -66,6 +66,39 @@ const TOPES = { apagada: 0, normal: 3, plus: 15 } as const;
 
 const MODELO = 'claude-opus-5';
 
+// ¿PUEDE ESTA PERSONA ACTUAR EN NOMBRE DE OTRA?
+//
+// Devuelve null si puede, y si no el motivo, para poder decírselo.
+//
+// Se rehace aquí la misma regla que `puede_ver` en la base, y a mano,
+// porque esta función corre con la clave de servicio: `auth.uid()` vale null
+// ahí dentro, así que llamar a `puede_ver` devolvería siempre falso.
+//
+// Y vive en una sola función porque hay DOS acciones que reciben un id ajeno
+// por el cuerpo de la petición. La comprobación estaba escrita dentro de una
+// de ellas, así que la otra -`plan`- se quedó sin ella.
+async function mandaSobre(
+  admin: ReturnType<typeof createClient>,
+  userId: string,
+  cliente: string,
+): Promise<string | null> {
+  if (!cliente || cliente === userId) return null;
+
+  const { data: yo } = await admin
+    .from('profiles').select('role').eq('id', userId).single();
+  const rol = (yo && yo.role) || 'cliente';
+
+  if (rol === 'super_admin') return null;
+  if (rol !== 'coach' && rol !== 'org_admin') return 'Esto es para entrenadores.';
+
+  const { data: suyo } = await admin
+    .from('coach_clientes')
+    .select('cliente_id')
+    .eq('coach_id', userId).eq('cliente_id', cliente)
+    .maybeSingle();
+  return suyo ? null : 'Esa persona no es cliente tuyo.';
+}
+
 function json(cuerpo: unknown, status = 200) {
   return new Response(JSON.stringify(cuerpo), {
     status,
@@ -1016,9 +1049,20 @@ Deno.serve(async (req) => {
     // El `|| userId` es para la transición: si la app todavía no manda a
     // quién, se mira al que pide. Se prefiere eso a rechazar la petición y
     // dejar sin planes a quien no haya actualizado la app.
-    const sobre = (accion === 'plan' || accion === 'cliente')
-      ? (String(cuerpo.cliente || '') || userId)
-      : userId;
+    const pedido = (accion === 'plan' || accion === 'cliente')
+      ? String(cuerpo.cliente || '').trim()
+      : '';
+
+    // SI DICE ACTUAR SOBRE OTRA PERSONA, SE COMPRUEBA AQUÍ.
+    //
+    // `cliente` lo comprobaba dentro de su acción; `plan` no comprobaba
+    // nada. Así que quien tuviera su llave apagada la esquivaba mandando el
+    // id de cualquiera que la tuviera encendida, y el interruptor -que está
+    // justo para eso, para que no gaste- dejaba de valer.
+    const motivo = await mandaSobre(admin, userId, pedido);
+    if (motivo) return json({ error: motivo }, 403);
+
+    const sobre = pedido || userId;
 
     const { data: llaves } = await admin
       .from('ia_permisos').select('*').eq('user_id', sobre).maybeSingle();
@@ -1986,24 +2030,11 @@ Deno.serve(async (req) => {
       // mandar lo que quiera. Sin esta comprobación, un cliente cualquiera
       // pediría un "análisis" de otra persona con solo su id.
       //
-      // Se rehace aquí la misma regla que `puede_ver`, y a mano, porque la
-      // función corre con la clave de servicio: `auth.uid()` vale null ahí
-      // dentro, así que llamar a `puede_ver` devolvería siempre falso.
-      const { data: yo } = await admin
-        .from('profiles').select('role').eq('id', userId).single();
-      const rol = yo?.role || 'cliente';
-
-      if (rol !== 'super_admin') {
-        if (rol !== 'coach' && rol !== 'org_admin') {
-          return json({ error: 'Esto es para entrenadores.' }, 403);
-        }
-        const { data: suyo } = await admin
-          .from('coach_clientes')
-          .select('cliente_id')
-          .eq('coach_id', userId).eq('cliente_id', cliente)
-          .maybeSingle();
-        if (!suyo) return json({ error: 'Esa persona no es cliente tuyo.' }, 403);
-      }
+      // Arriba ya se comprobó, al mirar las llaves. Se repite aquí a
+      // propósito: esta acción no puede depender de que exista una llave
+      // para `cliente` para estar protegida.
+      const noPuede = await mandaSobre(admin, userId, cliente);
+      if (noPuede) return json({ error: noPuede }, 403);
 
       // Los números van como JSON tal cual y no redactados en una frase: el
       // modelo lee mejor la estructura, y así lo que se le manda es
