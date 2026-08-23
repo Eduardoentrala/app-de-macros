@@ -51,9 +51,13 @@ console.log('\n— Al elegir un día se ve lo de ESE día —');
     'sin esto se pinta la lista de un día con el rótulo de otro');
   // La base admite 'Snack', que el Diario no lista.
   check('una comida que no se lista no revienta', /if\(!COMIDAS\[f\.meal\]\) return;/.test(trozo));
-  // La corrección de siempre: quantity=1 quería decir "una porción".
+  // Las cantidades ya guardadas que hoy querrían decir otra cosa. Esto
+  // comprobaba la regla LETRA POR LETRA, así que al llevarla a su propia
+  // función —vivía copiada aquí y en el arranque— se puso roja sin que nada
+  // se hubiera roto. Lo que importa es que este camino la aplique, no cómo
+  // esté escrita; lo que hace se comprueba ejecutándola en onza-no-son-cien.
   check('respeta la compatibilidad de las cantidades viejas',
-    /if\(cantidad === 1 && baseDeUnidad\(unidad\) === 100\) cantidad = 100;/.test(trozo));
+    /cantidad = cantidadDeLaFila\(unidad, cantidad\);/.test(trozo));
 
   // ESTO NO SE PUEDE CALLAR: una lista vacía significa "no comiste nada", y
   // si en realidad es "no pude leerlo", se vuelve a apuntar lo que ya estaba

@@ -2371,7 +2371,27 @@
   // antes no se guardaban: cuánto se comió (cant) y los macros de UNA
   // porción base (porBase). Los P/C/G de la tarjeta son siempre lo
   // consumido; la base es lo que permite recalcularlos.
-  function baseDeUnidad(u){ return (u === 'Gramos' || u === 'Onzas') ? 100 : 1; }
+  // La onza NO va con los gramos. La pantalla pide «Macros por onza» y con
+  // base 100 se guardaban como los de cien: el alimento se apuntaba con
+  // cantidad 100 llevando los macros de UNA, y al corregir la cantidad a dos
+  // onzas los macros salían divididos por cincuenta.
+  function baseDeUnidad(u){ return u === 'Gramos' ? 100 : 1; }
+
+  // Las cantidades ya guardadas que hoy querrían decir otra cosa. Vive aquí
+  // una sola vez porque el diario se lee por dos caminos —el del arranque y
+  // el de cambiar de día— y una regla escrita dos veces acaba corregida en un
+  // sitio y no en el otro.
+  function cantidadDeLaFila(unidad, cantidad){
+    // Antes de que existiera la edición todo se guardaba con quantity=1
+    // queriendo decir «una porción», no «1 gramo». Sin esto,
+    // prepararAlimento() deduce que si 1 g da 20 g de proteína, 100 g dan
+    // 2000: los macros salían multiplicados por cien.
+    if(cantidad === 1 && baseDeUnidad(unidad) === 100) return 100;
+    // Y las onzas se dieron de alta con la base de los gramos, así que «una
+    // onza» quedó apuntada como 100. Se leen por lo que de verdad se comió.
+    if(unidad === 'Onzas' && cantidad === 100) return 1;
+    return cantidad;
+  }
 
   function prepararAlimento(a){
     a.base = baseDeUnidad(a.u);
@@ -2491,9 +2511,7 @@
           if(!COMIDAS[f.meal]) return;   // la base admite 'Snack', que no se lista
           var unidad = f.unit || 'Gramos';
           var cantidad = Number(f.quantity) || null;
-          // La misma corrección de siempre: `quantity=1` de antes de que
-          // existiera la edición quería decir "una porción", no "1 gramo".
-          if(cantidad === 1 && baseDeUnidad(unidad) === 100) cantidad = 100;
+          cantidad = cantidadDeLaFila(unidad, cantidad);
           COMIDAS[f.meal].push(prepararAlimento({
             id: f.id, n: f.food_name, u: unidad, cant: cantidad,
             P: Number(f.protein_g) || 0,
@@ -2612,7 +2630,10 @@
   var confirmarCantidad = null;
 
   function textoBase(a){
-    return a.base === 100 ? '100 ' + abreviarUnidad(a.u) : 'una ' + abreviarUnidad(a.u);
+    // Con su artículo y en singular. Salía de abreviarUnidad(), que devuelve
+    // la unidad tal cual en minúsculas, y la hoja decía «por una onzas» y
+    // «por una servicio».
+    return UNIDAD_UNA[a.u] || UNIDAD_UNA.Gramos;
   }
 
   function abrirCantidad(a, opciones){
@@ -2770,7 +2791,7 @@
         user_id: sesion.user.id,
         name: a.n,
         unit: a.u || 'Gramos',
-        base_qty: a.base || 100,
+        base_qty: a.base || baseDeUnidad(a.u || 'Gramos'),
         // Los macros de UNA porción base, no los de hoy. prepararAlimento
         // ya los tiene calculados en porBase justamente para esto.
         protein_g: Math.round((a.porBase ? a.porBase.P : a.P) * 10) / 10,
@@ -3232,6 +3253,8 @@
   var unidadActual = 'Gramos';
   var UNIDAD_ABREV = {Gramos:'(g)', Pieza:'(pza)', Servicio:'(serv)', Taza:'(taza)', Cucharada:'(cda)', Onzas:'(oz)'};
   var UNIDAD_BASE  = {Gramos:'100g', Pieza:'pieza', Servicio:'servicio', Taza:'taza', Cucharada:'cucharada', Onzas:'onza'};
+  // Lo mismo, con artículo, para la hoja de la cantidad: «por una onza».
+  var UNIDAD_UNA   = {Gramos:'100 g', Pieza:'una pieza', Servicio:'un servicio', Taza:'una taza', Cucharada:'una cucharada', Onzas:'una onza'};
 
   // Sacado del manejador para poder dejar la unidad puesta desde fuera, al
   // abrir la pantalla para editar un alimento que ya la tiene.
@@ -8465,7 +8488,7 @@
     // el alimento repetido en la despensa.
     var fila = {
       id: idNuevo(),
-      user_id: sesion.user.id, name: a.n, unit: a.u || 'Gramos', base_qty: 100,
+      user_id: sesion.user.id, name: a.n, unit: a.u || 'Gramos', base_qty: a.base || baseDeUnidad(a.u || 'Gramos'),
       protein_g: a.P, carbs_g: a.C, fat_g: a.G
     };
     var op = {
@@ -8587,12 +8610,8 @@
         var unidad = f.unit || 'Gramos';
         var cantidad = Number(f.quantity) || null;
 
-        // COMPATIBILIDAD. Antes de que existiera la edición, todo se
-        // guardaba con quantity=1 queriendo decir "una porción", no
-        // "1 gramo". Sin esta corrección, prepararAlimento() deduce que
-        // si 1 g da 20 g de proteína, 100 g dan 2000: los macros salían
-        // multiplicados por cien.
-        if(cantidad === 1 && baseDeUnidad(unidad) === 100) cantidad = 100;
+        // Está explicada en cantidadDeLaFila(), al lado de la base.
+        cantidad = cantidadDeLaFila(unidad, cantidad);
 
         // prepararAlimento() deduce la porción base a partir de la
         // cantidad y los macros consumidos, para poder volver a editarla.
