@@ -2471,10 +2471,12 @@
   }
 
   // ---- El selector de día ----
-  // Se limita a los últimos 14 días: más atrás ya no es "se me olvidó
-  // apuntar", es reescribir la historia, y eso descuadra semanas que la app
-  // ya dio por cerradas y sobre las que quizá ya ajustó calorías.
-  var DIAS_ATRAS_APUNTE = 14;
+  // Solo la semana que va corriendo, de su lunes a hoy. Más atrás ya no es
+  // "se me olvidó apuntar", es reescribir la historia: son semanas que la app
+  // ya dio por cerradas y sobre las que quizá ya ajustó calorías. El límite
+  // está en pintarSelectorDia() y lo comprueba el manejador del cambio; aquí
+  // vivía además un DIAS_ATRAS_APUNTE de 14 días que ya no usaba nadie y que
+  // decía una regla distinta de la que se aplica.
 
   function pintarSelectorDia(){
     var inp = document.getElementById('mealFecha');
@@ -2548,6 +2550,19 @@
       // por detrás de UTC convierte la fecha en el día anterior.
       var d = new Date(this.value + 'T12:00:00');
       d.setHours(0,0,0,0);
+
+      // El selector trae `min` y `max`, pero eso solo manda en el calendario
+      // que abre el teléfono: en el ordenador la fecha se teclea y `change`
+      // salta igual con lo que se haya escrito. Por ahí se colaba apuntar en
+      // un día futuro -comida que no se ha comido contando ya en la semana- y
+      // en una semana ya cerrada, que es lo que el selector dice justamente
+      // que no se puede hacer.
+      if(isoDe(d) > isoDe(HOY) || isoDe(d) < isoDe(anclaSemana)){
+        pintarSelectorDia();              // devuelve el input a lo que había
+        toast('toastComida', 'Solo puedes apuntar en esta semana, hasta hoy.');
+        return;
+      }
+
       DIA_APUNTE = isoDe(d) === isoDe(HOY) ? null : d;
       pintarSelectorDia();
       cargarComidasDelDia(diaDeApunte());
