@@ -100,8 +100,11 @@ console.log('\n— No se puede quedar servida una versión vieja —');
   // ese mecanismo.
   check('el auto-actualizador sigue intacto',
     /fetch\('version\.txt', \{ cache: 'no-store' \}\)/.test(HTML));
+  // Sin la linea exacta: se puso roja al anadirle `+ location.hash` detras,
+  // que hacia falta para no comerse el enlace de recuperar la contrasena.
+  // Aqui lo que importa es que el service worker no haya tocado esto.
   check('y sigue recargando con la versión nueva',
-    /location\.replace\(location\.pathname \+ '\?v=' \+ nuevo\)/.test(HTML));
+    /location\.replace\(location\.pathname \+ '\?v=' \+ nuevo/.test(HTML));
 }
 
 console.log('\n— Y la caché no crece sin fin —');

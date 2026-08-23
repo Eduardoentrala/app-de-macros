@@ -4788,6 +4788,52 @@
       email: correo, password: pass
     })});
   }
+  // ---- Recuperar la cuenta desde el correo ----
+  //
+  //  A DÓNDE VUELVE EL ENLACE. Se manda `redirect_to` con la dirección de
+  //  esta misma app. Supabase solo obedece si esa dirección está en su lista
+  //  de permitidas (Authentication → URL Configuration); si no está, el
+  //  enlace lleva al Site URL del proyecto, que de fábrica es localhost, y la
+  //  persona acaba en una página que no existe con su enlace ya gastado.
+  //
+  //  Se calcula de `location` en vez de escribirla aquí: así vale igual
+  //  desde el móvil, desde el ordenador y abriendo el archivo en local, y no
+  //  hay una dirección escrita a mano que se quede vieja el día que cambie.
+  function dondeVuelve(){
+    return location.origin + location.pathname;
+  }
+
+  function sbRecuperar(correo){
+    return sbFetch('/auth/v1/recover?redirect_to=' + encodeURIComponent(dondeVuelve()), {
+      method: 'POST', body: JSON.stringify({ email: correo })
+    });
+  }
+
+  // El cambio de contraseña NO puede ir por sbFetch: ahí la cabecera
+  // `Authorization` se pone al final con la sesión guardada, y aquí hace
+  // falta la del enlace del correo, que a propósito todavía no se ha
+  // guardado en ningún sitio.
+  function sbCambiarClave(token, nueva){
+    return fetch(SB_URL + '/auth/v1/user', {
+      method: 'PUT',
+      headers: { 'apikey': SB_KEY, 'Content-Type': 'application/json',
+                 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ password: nueva })
+    }).then(function(r){
+      return r.text().then(function(t){
+        var d = null;
+        try{ d = t ? JSON.parse(t) : null; }catch(e){ d = t; }
+        if(!r.ok){
+          var fallo = new Error((d && (d.msg || d.message || d.error_description || d.error))
+                                || ('Error ' + r.status));
+          fallo.status = r.status;
+          throw fallo;
+        }
+        return d;                       // el usuario, con su correo
+      });
+    });
+  }
+
   function sbSalir(){
     if(!sesion) return Promise.resolve();
     // CALLA A PROPOSITO: la sesion local ya se borro. Que el servidor no se
@@ -5190,6 +5236,23 @@
     if(m.indexOf('email not confirmed')>=0)return 'Falta confirmar tu correo. Revisa tu bandeja de entrada.';
     if(m.indexOf('password') >= 0 && m.indexOf('least') >= 0)
                                            return 'La contraseña necesita al menos 6 caracteres.';
+
+    // ---- Recuperar la contraseña ----
+    // VAN ANTES DEL 429 GENÉRICO de más abajo. Ese dice «llegaste a tu tope
+    // de consultas por hoy», que es del asistente: leerlo después de pedir un
+    // enlace por correo no tiene ningún sentido y encima suena a que la
+    // cuenta se quedó sin nada.
+    if(m.indexOf('otp_expired') >= 0 ||
+       (m.indexOf('email link') >= 0 && m.indexOf('expired') >= 0) ||
+       m.indexOf('access_denied') >= 0)
+      return 'Ese enlace ya no vale: caducó o ya se usó. Pide otro con «Olvidé mi contraseña».';
+    if(m.indexOf('email_send_rate') >= 0 || m.indexOf('email rate limit') >= 0 ||
+       m.indexOf('only request this after') >= 0)
+      return 'Acabas de pedir uno. Espera un minuto y vuelve a intentarlo.';
+    if(m.indexOf('should be different') >= 0)
+      return 'Esa es la que ya tenías. Elige una distinta.';
+    if(m.indexOf('same_password') >= 0)
+      return 'Esa es la que ya tenías. Elige una distinta.';
     if(m.indexOf('failed to fetch') >= 0 || m.indexOf('networkerror') >= 0)
                                            return 'Sin conexión. Revisa tu internet e inténtalo otra vez.';
 
@@ -5402,6 +5465,124 @@
   btnEntrar.addEventListener('click', entrar);
   logPass.addEventListener('keydown', function(e){ if(e.key === 'Enter') entrar(); });
 
+  // ---- "Olvidé mi contraseña" ----
+  //
+  //  SE CONTESTA LO MISMO EXISTA O NO LA CUENTA, que es lo que hace el
+  //  servidor: si aquí se dijera «ese correo no está registrado», cualquiera
+  //  podría averiguar quién tiene cuenta probando correos.
+  var btnOlvide = document.getElementById('logOlvide');
+  btnOlvide.addEventListener('click', function(){
+    var correo = logCorreo.value.trim();
+    if(!correoValido(correo)){
+      // El correo hace falta y es lo único que hace falta. Se pide arriba en
+      // vez de abrir otra pantalla a pedir lo mismo.
+      avisarLogin('Escribe arriba tu correo y vuelve a tocar aquí.');
+      logCorreo.focus();
+      return;
+    }
+    ocupado(btnOlvide, true, 'Mandando…');
+    sbRecuperar(correo)
+      .then(function(){
+        avisarLogin('');
+        logAviso.textContent = 'Si esa cuenta existe, te llegó un correo con un ' +
+                               'enlace para poner otra contraseña. Revisa también el spam.';
+      })
+      ['catch'](function(e){ avisarLogin(traducirError(e.message)); })
+      .then(function(){ ocupado(btnOlvide, false); });
+  });
+
+  // ---- La vuelta del enlace del correo ----
+  //
+  //  Supabase manda de vuelta a la app con la sesión detrás de la almohadilla:
+  //  #access_token=...&refresh_token=...&type=recovery
+  //
+  //  Esa parte de la dirección NO viaja al servidor —se queda en el
+  //  navegador—, así que leerla aquí es la única forma de enterarse.
+  function loQueTraeElEnlace(){
+    var h = String(location.hash || '').replace(/^#/, '');
+    if(!h) return null;
+    var p = {};
+    h.split('&').forEach(function(par){
+      var i = par.indexOf('=');
+      if(i <= 0) return;
+      try{
+        p[decodeURIComponent(par.slice(0, i))] =
+          decodeURIComponent(par.slice(i + 1).replace(/\+/g, ' '));
+      }catch(e){}                       // una almohadilla cualquiera no puede tumbar el arranque
+    });
+    if(!p.access_token && !p.error && !p.error_description) return null;
+    return p;
+  }
+
+  // Se limpia en cuanto se ha leído: ese token es una sesión, y dejarlo en la
+  // barra de direcciones lo deja también en el historial y en lo que se
+  // comparta de esa pantalla.
+  function limpiarElEnlace(){
+    try{
+      history.replaceState(null, '', location.pathname + location.search);
+    }catch(e){ location.hash = ''; }
+  }
+
+  var claveToken = null;               // la sesión del enlace, sin guardar todavía
+  var clavePass  = document.getElementById('clavePass');
+  var clavePass2 = document.getElementById('clavePass2');
+  var claveAviso = document.getElementById('claveAviso');
+  var btnClave   = document.getElementById('claveGuardar');
+
+  function avisarClave(msg){
+    claveAviso.textContent = msg || ' ';
+    claveAviso.classList.toggle('error', !!msg);
+  }
+  clavePass.addEventListener('input', function(){ avisarClave(''); });
+  clavePass2.addEventListener('input', function(){ avisarClave(''); });
+
+  document.getElementById('claveCancelar').addEventListener('click', function(){
+    claveToken = null;
+    clavePass.value = ''; clavePass2.value = '';
+    goto('login', false);
+  });
+
+  btnClave.addEventListener('click', function(){
+    var nueva = clavePass.value, otra = clavePass2.value;
+    if(nueva.length < 6){ avisarClave('La contraseña necesita al menos 6 caracteres.'); return; }
+    // Dos veces, porque aquí no hay forma de darse cuenta del error: si se
+    // teclea mal, se guarda mal y la persona se queda fuera otra vez, y ya
+    // gastó su enlace.
+    if(nueva !== otra){ avisarClave('Las dos no son iguales. Revísalas.'); return; }
+    if(!claveToken){ avisarClave('Este enlace ya no vale. Pide otro desde «Olvidé mi contraseña».'); return; }
+
+    ocupado(btnClave, true, 'Guardando…');
+    var elToken = claveToken;
+    sbCambiarClave(elToken, nueva)
+      .then(function(usuario){
+        // YA ESTÁ CAMBIADA. A partir de aquí nada puede hacer que no lo esté,
+        // y todo lo que venga después se cuenta desde ahí.
+        claveToken = null;
+        var correo = (usuario && usuario.email) || '';
+        clavePass.value = ''; clavePass2.value = '';
+
+        // Se entra con la contraseña NUEVA en vez de aprovechar la sesión del
+        // enlace. Es una petición más, pero deja una sesión completa y
+        // normal; la del enlace puede venir sin con qué renovarse, y entonces
+        // la app funcionaría una hora y luego echaría a la persona.
+        return sbEntrar(correo, nueva)
+          .then(function(sn){
+            guardarSesion(sn);
+            goto('diario', false);
+            return cargarDatos();
+          })
+          ['catch'](function(){
+            // La contraseña SÍ se cambió. Decir «no se pudo» aquí sería
+            // mentir y dejar a la persona probando la vieja.
+            logCorreo.value = correo;
+            goto('login', false);
+            avisarLogin('Tu contraseña ya está cambiada. Entra con ella.');
+          });
+      })
+      ['catch'](function(e){ avisarClave(traducirError(e.message)); })
+      .then(function(){ ocupado(btnClave, false); });
+  });
+
   // ---- Cerrar sesión ----
   document.getElementById('cerrarSesion').addEventListener('click', function(){
     sbSalir().then(function(){
@@ -5417,10 +5598,27 @@
     });
   });
 
-  // Al abrir: solo se entra directo si hay una sesión de verdad. Los datos
-  // del formulario se recuperan igual, para no volver a pedirlos.
+  // AL ABRIR, LO PRIMERO ES MIRAR SI SE VIENE DEL CORREO.
+  //
+  //  Y gana a todo lo demás, incluida una sesión guardada. Quien pulsa el
+  //  enlace desde el teléfono donde ya tenía la sesión abierta viene a
+  //  cambiar su contraseña; mandarlo al Diario sería ignorarlo, y su enlace
+  //  -que es de un solo uso- se habría gastado para nada.
   restaurarCuenta();
-  if(sesion && sesion.access_token){
+
+  var delCorreo = loQueTraeElEnlace();
+  if(delCorreo) limpiarElEnlace();
+
+  if(delCorreo && (delCorreo.error || delCorreo.error_description)){
+    // El caso corriente: el enlace caducó o ya se usó. Sin esto no pasaba
+    // NADA -la app arrancaba normal- y la persona se quedaba mirando la
+    // pantalla de entrar sin saber por qué su enlace no hizo nada.
+    goto('login', false);
+    avisarLogin(traducirError(delCorreo.error_description || delCorreo.error));
+  } else if(delCorreo && delCorreo.type === 'recovery' && delCorreo.access_token){
+    claveToken = delCorreo.access_token;
+    goto('clave', false);
+  } else if(sesion && sesion.access_token){
     goto('diario', false);
     // La cola PRIMERO y la carga después, encadenadas.
     //

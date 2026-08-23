@@ -265,7 +265,11 @@
    de aceptarlo, o la casilla es un trámite. */
 .acepto b{font-weight:700;text-decoration:underline;text-underline-offset:2px;}
 
-.enlace-legal{
+/* El mismo aspecto para dos cosas distintas: el aviso legal y «olvidé mi
+   contraseña». Con dos nombres a propósito —el segundo no es nada legal, y
+   dentro de un año nadie entendería por qué la contraseña usa esa clase—
+   pero una sola regla, para que no se separen. */
+.enlace-legal,.enlace-suave{
   display:block;width:100%;margin-top:10px;padding:10px;
   background:none;border:none;cursor:pointer;
   font:600 12px/1 sans-serif;color:var(--ink-faint);

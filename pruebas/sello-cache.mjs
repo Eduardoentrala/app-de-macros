@@ -56,8 +56,15 @@ console.log('\n— El index tampoco se queda viejo —');
 
   check('la app lo consulta al abrirse', /fetch\('version\.txt', \{ cache: 'no-store' \}\)/.test(HTML));
   check('sin caché, o preguntaría a la copia vieja', /cache: 'no-store'/.test(HTML));
+  // Sin el `$` del final ni la línea exacta: esto se puso rojo al añadirle
+  // detrás `+ location.hash`, que hacía falta para que una versión recién
+  // publicada no se comiera el enlace de recuperar la contraseña. Nada se
+  // había roto. Lo que importa es que recargue con el sello nuevo.
   check('y si no coincide, se recarga con la versión nueva',
-    /location\.replace\(location\.pathname \+ '\?v=' \+ nuevo\)/.test(HTML));
+    /location\.replace\(location\.pathname \+ '\?v=' \+ nuevo/.test(HTML));
+  check('llevándose la almohadilla, donde viene el enlace del correo',
+    /'\?v=' \+ nuevo \+ location\.hash\)/.test(HTML),
+    'sin esto, pulsar el enlace de recuperar justo tras un despliegue lo gasta para nada');
   // Sin freno, un despliegue a medias dejaría la app recargándose en bucle,
   // y una app que parpadea es peor que una desactualizada.
   check('con freno para no recargar en bucle',

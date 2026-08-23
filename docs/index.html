@@ -80,7 +80,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '2b7cfa6db4';
+    var SELLO = '7b70f9e1b9';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -344,12 +344,41 @@
             <div class="field-label">Contraseña</div>
             <input class="big-input reg-input" id="logPass" type="password"
                    autocomplete="current-password" maxlength="72" placeholder="Tu contraseña">
+            <button class="enlace-suave" id="logOlvide" type="button">Olvidé mi contraseña</button>
             <p class="calc-note" id="logAviso">&nbsp;</p>
           </div>
         </div>
         <div class="bottom-bar">
           <button class="btn-primary" id="logEntrar">Entrar</button>
           <button class="btn-ghost-text" id="logCrear">No tengo cuenta</button>
+        </div>
+      </div>
+
+      <!-- CONTRASEÑA NUEVA
+           Aquí se llega SOLO desde el enlace del correo de recuperación, que
+           vuelve a la app con la sesión en la parte de la dirección que va
+           tras la almohadilla. No hay forma de abrirla a mano ni tiene que
+           haberla: sin ese enlace no hay nada que cambiar. -->
+      <div class="app-view" data-view="clave">
+        <div class="scroll">
+          <div class="reg-head">
+            <h2>Elige una contraseña nueva</h2>
+            <p id="claveQuien">Este enlace es de un solo uso.</p>
+          </div>
+          <div class="card">
+            <div class="field-label" style="margin-top:0;">Contraseña nueva</div>
+            <input class="big-input reg-input" id="clavePass" type="password"
+                   autocomplete="new-password" maxlength="72" placeholder="Mínimo 6 caracteres">
+
+            <div class="field-label">Repítela</div>
+            <input class="big-input reg-input" id="clavePass2" type="password"
+                   autocomplete="new-password" maxlength="72" placeholder="La misma otra vez">
+            <p class="calc-note" id="claveAviso">&nbsp;</p>
+          </div>
+        </div>
+        <div class="bottom-bar">
+          <button class="btn-primary" id="claveGuardar">Guardar y entrar</button>
+          <button class="btn-ghost-text" id="claveCancelar">Mejor no, volver a entrar</button>
         </div>
       </div>
 
@@ -1873,7 +1902,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '2b7cfa6db4';
+    var SELLO = '7b70f9e1b9';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que
@@ -1928,7 +1957,12 @@
             var nuevo = (t || '').trim();
             if(!nuevo || nuevo === SELLO) return;
             sessionStorage.setItem('macros.recargado', SELLO);
-            location.replace(location.pathname + '?v=' + nuevo);
+            // CON EL HASH DETRAS. Ahi viene la sesion del enlace de
+            // recuperacion del correo, y sin esto una version recien
+            // publicada se lo comia: la persona pulsaba su enlace, la app se
+            // recargaba para actualizarse y llegaba a la pantalla de entrar
+            // sin nada, con el enlace ya gastado.
+            location.replace(location.pathname + '?v=' + nuevo + location.hash);
           })['catch'](function(){});   // sin red se sigue con lo que hay
       }
     }catch(e){}
