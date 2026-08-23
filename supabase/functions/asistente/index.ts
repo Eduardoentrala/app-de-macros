@@ -1566,15 +1566,21 @@ Deno.serve(async (req) => {
       //  camino de progresar —las mismas pesas, más repeticiones—.
       const porEjercicio = (e && Array.isArray(e.ejercicios) && e.ejercicios.length)
         ? `\nEJERCICIO POR EJERCICIO (peso máximo de la semana):\n` +
-          (e.ejercicios as unknown as Record<string, number | string>[]).map((x) => {
+          (e.ejercicios as unknown as Record<string, unknown>[]).map((x) => {
             // Sin `peso_antes` no hay con qué comparar: es un estreno, y
             // decir «subió» de un ejercicio que se acaba de añadir a la
             // rutina es inventarse un progreso que no hubo.
             const nuevo = x.nuevo === true || !Number(x.peso_antes);
+            // RECORTADO, como todo lo que escribe la persona y acaba en
+            // el prompt —la nota va a 300, la memoria a 1200, el nombre de
+            // un plan a 60—. El nombre de un ejercicio lo teclea ella y no
+            // tiene tope en la pantalla: ocho nombres de cinco mil letras
+            // son tokens pagados por nada.
+            const nom = String(x.nombre ?? 'ejercicio').trim().slice(0, 40) || 'ejercicio';
             const subio = !nuevo && Number(x.peso) > Number(x.peso_antes);
             const bajo  = !nuevo && Number(x.peso) < Number(x.peso_antes) && Number(x.peso) > 0;
             const atorado = Number(x.semanas_sin_subir) >= 3;
-            return `- ${x.nombre}: ${x.peso} kg` +
+            return `- ${nom}: ${Number(x.peso)} kg` +
               (nuevo ? ' · NUEVO, primera vez que lo hace' : '') +
               (!nuevo ? ` (antes ${x.peso_antes})` : '') +
               (subio ? ' ↑ SUBIÓ' : bajo ? ' ↓ bajó' : '') +

@@ -10563,8 +10563,22 @@
             if(!ej || !ej.nombre) return;
             var fila = porEj[ej.nombre] || (porEj[ej.nombre] =
               [{p:0,v:0},{p:0,v:0},{p:0,v:0},{p:0,v:0}]);
+            // El volumen tal cual se guardó, para que cuadre con el
+            // `total_volume` que usa el resto de la app.
             fila[w].v += Number(ej.volumen) || 0;
-            (ej.series || []).forEach(function(x){
+
+            // EL PESO, SOLO DE LAS SERIES HECHAS. Las filas se rellenan
+            // solas con lo de la sesión anterior, y se puede teclear un
+            // peso «para la próxima» sin llegar a levantarlo. Contándolo,
+            // una intención se convierte en un récord y la IA le dice
+            // «subiste a 50 kg» a quien no lo movió — que es justo el tipo
+            // de mentira comprobable que hace que una app deje de valer.
+            //
+            // Y si no hay NINGUNA marcada —mucha gente no usa las
+            // palomitas— se cuentan todas: mejor eso que dejar el
+            // ejercicio en cero y que desaparezca de la lista.
+            var hechas = (ej.series || []).filter(function(x){ return x.hecho; });
+            (hechas.length ? hechas : (ej.series || [])).forEach(function(x){
               var pe = Number(x.peso) || 0;
               if(pe > fila[w].p) fila[w].p = pe;
             });

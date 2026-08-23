@@ -221,6 +221,37 @@ console.log('\nY entrenar cada quince días tampoco es estrenar');
 }
 
 // ------------------------------------------------------------------
+console.log('\nUn peso tecleado y no levantado no es un récord');
+{
+  // Las filas se rellenan solas con lo de la sesión anterior, y se puede
+  // teclear un peso «para la próxima» sin llegar a hacerlo. Contándolo, la
+  // IA le dice «subiste a 50 kg» a quien no lo movió.
+  const r = calcular([
+    { session_date: dia(14), exercises: [{ nombre: 'Sentadilla', volumen: 800,
+      series: [{ reps: 10, peso: 40, hecho: true }] }] },
+    { session_date: dia(21), exercises: [{ nombre: 'Sentadilla', volumen: 900,
+      series: [
+        { reps: 10, peso: 42, hecho: true },   // esta sí la hizo
+        { reps: 10, peso: 50, hecho: false },  // esta la dejó escrita
+      ] }] },
+  ], ANCLA, iso);
+  const s = r.find((x) => x.nombre === 'Sentadilla');
+  ok(!!s && s.peso === 42,
+     `cuenta los 42 que hizo, no los 50 que escribió (dice ${s && s.peso})`);
+
+  // Pero mucha gente no usa las palomitas. Si no hay NINGUNA marcada, se
+  // cuentan todas: mejor eso que dejar el ejercicio en cero y que
+  // desaparezca de la lista.
+  const sinPalomitas = calcular([
+    { session_date: dia(21), exercises: [{ nombre: 'Remo', volumen: 600,
+      series: [{ reps: 10, peso: 30 }, { reps: 10, peso: 35 }] }] },
+  ], ANCLA, iso);
+  const remo = sinPalomitas.find((x) => x.nombre === 'Remo');
+  ok(!!remo && remo.peso === 35,
+     'sin ninguna palomita se cuentan todas: no se castiga a quien no las usa');
+}
+
+// ------------------------------------------------------------------
 console.log('\nY llega de verdad a la IA');
 {
   ok(/select=session_date,total_volume,exercises/.test(APP),
@@ -251,6 +282,14 @@ console.log('\nY llega de verdad a la IA');
      'se le dice al modelo cuál es nuevo');
   ok(/No lo cuentes como progreso ni como retroceso/.test(FUN),
      'y qué hacer con eso');
+
+  // El nombre del ejercicio lo teclea la persona y no tiene tope en la
+  // pantalla. Todo lo demás que escribe y acaba en el prompt va recortado
+  // —la nota a 300, la memoria a 1200, el nombre de un plan a 60—; esto se
+  // había quedado sin recortar. Ocho nombres de cinco mil letras son
+  // tokens pagados por nada, y el nombre lo controla quien usa la app.
+  ok(/String\(x\.nombre \?\? 'ejercicio'\)\.trim\(\)\.slice\(0, 40\)/.test(FUN),
+     'el nombre del ejercicio va recortado, como todo lo que escribe la persona');
 }
 
 console.log('\n' + pasan + ' bien, ' + fallan + ' mal');
