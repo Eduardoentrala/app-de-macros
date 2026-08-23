@@ -80,7 +80,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '7b70f9e1b9';
+    var SELLO = 'ab6ccd5a8e';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -1902,7 +1902,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '7b70f9e1b9';
+    var SELLO = 'ab6ccd5a8e';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que
@@ -1956,12 +1956,19 @@
           .then(function(t){
             var nuevo = (t || '').trim();
             if(!nuevo || nuevo === SELLO) return;
+            // NI UNA RECARGA ENCIMA DE UN ENLACE DEL CORREO.
+            //
+            // app.js lo pone al arrancar, si vino uno. Va ANTES de apuntar
+            // nada en sessionStorage: la actualizacion no se cancela, solo se
+            // aplaza a la proxima apertura.
+            if(window.enlaceDeCorreoEnMarcha) return;
+
             sessionStorage.setItem('macros.recargado', SELLO);
-            // CON EL HASH DETRAS. Ahi viene la sesion del enlace de
-            // recuperacion del correo, y sin esto una version recien
-            // publicada se lo comia: la persona pulsaba su enlace, la app se
-            // recargaba para actualizarse y llegaba a la pantalla de entrar
-            // sin nada, con el enlace ya gastado.
+            // Y CON EL HASH DETRAS, que es la otra mitad. Cual de los dos
+            // corre primero depende de la latencia: si gana esto, la
+            // almohadilla sigue en la direccion y hay que llevarsela; si gana
+            // app.js, ya la limpio y avisa con la marca de arriba. Las dos
+            // cosas hacen falta, cada una para un orden.
             location.replace(location.pathname + '?v=' + nuevo + location.hash);
           })['catch'](function(){});   // sin red se sigue con lo que hay
       }

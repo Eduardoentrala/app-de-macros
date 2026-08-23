@@ -4834,6 +4834,31 @@
     });
   }
 
+  // De quién es este token. Hace falta para guardar la sesión: la app usa
+  // `sesion.user.id` por todas partes y la almohadilla del correo no trae el
+  // usuario, solo el token.
+  //
+  // Va por `fetch` a pelo y no por sbFetch por lo mismo que sbCambiarClave:
+  // ahí la cabecera Authorization se pone al final con la sesión guardada, y
+  // aquí hace falta la del enlace, que todavía no lo está.
+  function sbQuienEs(token){
+    return fetch(SB_URL + '/auth/v1/user', {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + token }
+    }).then(function(r){
+      return r.text().then(function(t){
+        var d = null;
+        try{ d = t ? JSON.parse(t) : null; }catch(e){ d = t; }
+        if(!r.ok || !d || !d.id){
+          var fallo = new Error((d && (d.msg || d.message || d.error_description || d.error))
+                                || ('Error ' + r.status));
+          fallo.status = r.status;
+          throw fallo;
+        }
+        return d;
+      });
+    });
+  }
+
   function sbSalir(){
     if(!sesion) return Promise.resolve();
     // CALLA A PROPOSITO: la sesion local ya se borro. Que el servidor no se
@@ -5442,6 +5467,13 @@
     logAviso.textContent = msg || ' ';
     logAviso.classList.toggle('error', !!msg);
   }
+  // Lo mismo, pero sin pintarlo de rojo: hay cosas que decir ahí que no son
+  // un fallo. Se escribía llamando a avisarLogin('') y pisando el texto
+  // justo después, que funciona y no se entiende.
+  function decirLogin(msg){
+    logAviso.textContent = msg;
+    logAviso.classList.remove('error');
+  }
   logCorreo.addEventListener('input', function(){ avisarLogin(''); });
   logPass.addEventListener('input', function(){ avisarLogin(''); });
 
@@ -5483,13 +5515,59 @@
     ocupado(btnOlvide, true, 'Mandando…');
     sbRecuperar(correo)
       .then(function(){
-        avisarLogin('');
-        logAviso.textContent = 'Si esa cuenta existe, te llegó un correo con un ' +
-                               'enlace para poner otra contraseña. Revisa también el spam.';
+        decirLogin('Si esa cuenta existe, te llegó un correo con un enlace para ' +
+                   'poner otra contraseña. Revisa también el spam.');
       })
       ['catch'](function(e){ avisarLogin(traducirError(e.message)); })
       .then(function(){ ocupado(btnOlvide, false); });
   });
+
+  // ---- Entrar con un enlace que trae sesión ----
+  //
+  //  Supabase manda la vuelta igual para varias cosas y se distinguen por
+  //  `type`: `recovery` es la de aquí, pero también hay `signup` -confirmar
+  //  la cuenta-, `invite`, `magiclink` y `email_change`. Todas traen una
+  //  sesión buena en la almohadilla.
+  //
+  //  Leyendo solo `recovery`, las demás caían al último `else`... DESPUÉS de
+  //  que la dirección se hubiera limpiado. O sea que el token se destruía y
+  //  la persona acababa en la pantalla de registro como si no hubiera pulsado
+  //  nada, sin poder ni recargar para reintentar. Tirar el token es peor que
+  //  no leerlo.
+  //
+  //  Hoy el proyecto no manda ninguno —confirmar el correo está apagado— pero
+  //  eso es una casilla del panel, y el día que se encienda esto ya funciona.
+  var TIPOS_DE_ENLACE = ['signup', 'invite', 'magiclink', 'email_change'];
+
+  function entrarConElEnlace(p){
+    sbQuienEs(p.access_token)
+      .then(function(u){
+        guardarSesion({
+          access_token: p.access_token,
+          // Puede no venir. Si falta, dentro de una hora la sesión se acaba y
+          // se pide entrar, que es lo honesto: no hay con qué renovarla.
+          refresh_token: p.refresh_token || null,
+          user: u
+        });
+        goto('diario', false);
+        return cargarDatos();
+      })
+      ['catch'](function(e){
+        goto('login', false);
+        // AQUÍ SIEMPRE SE VIENE DE UN ENLACE, así que se puede decir con esas
+        // palabras. El traductor general no puede: el mismo error del
+        // servidor —«invalid JWT: unable to parse or verify signature»— en
+        // otra pantalla es una sesión caducada, y hablar ahí de «enlaces»
+        // confundiría. Sin esto salía ese texto tal cual, en inglés y
+        // hablando de JWT, a quien solo pulsó un enlace de su correo.
+        //
+        // Menos si es la red: decirle «pide otro enlace» a quien no tiene
+        // cobertura le gasta el que ya tiene para nada.
+        avisarLogin(sinConexion(e)
+          ? traducirError(e.message)
+          : 'Ese enlace ya no vale: caducó o ya se usó. Pide uno nuevo.');
+      });
+  }
 
   // ---- La vuelta del enlace del correo ----
   //
@@ -5542,6 +5620,10 @@
     goto('login', false);
   });
 
+  clavePass2.addEventListener('keydown', function(e){
+    if(e.key === 'Enter') btnClave.click();
+  });
+
   btnClave.addEventListener('click', function(){
     var nueva = clavePass.value, otra = clavePass2.value;
     if(nueva.length < 6){ avisarClave('La contraseña necesita al menos 6 caracteres.'); return; }
@@ -5565,6 +5647,14 @@
         // enlace. Es una petición más, pero deja una sesión completa y
         // normal; la del enlace puede venir sin con qué renovarse, y entonces
         // la app funcionaría una hora y luego echaría a la persona.
+        // Sin correo no hay con qué entrar. Llamar igual da un error que
+        // suena a que la contraseña no se guardó, cuando sí se guardó.
+        if(!correo){
+          goto('login', false);
+          avisarLogin('Tu contraseña ya está cambiada. Entra con ella.');
+          return;
+        }
+
         return sbEntrar(correo, nueva)
           .then(function(sn){
             guardarSesion(sn);
@@ -5607,7 +5697,27 @@
   restaurarCuenta();
 
   var delCorreo = loQueTraeElEnlace();
-  if(delCorreo) limpiarElEnlace();
+  if(delCorreo){
+    // EL COMPROBADOR DE VERSIÓN DEL INDEX NO PUEDE RECARGAR ENCIMA DE ESTO.
+    //
+    // Los dos corren en esta misma carga de la página y no se conocen, y cuál
+    // va primero NO ESTÁ DECIDIDO: `app.js` sale de la caché del service
+    // worker —instantáneo— y `version.txt` va siempre a la red. En un
+    // servidor local gana el comprobador; en un teléfono con datos, este
+    // arranque. O sea que el resultado dependía de la latencia, que es la
+    // peor clase de fallo: funciona en las pruebas y falla en el teléfono.
+    //
+    // Si gana el comprobador, la almohadilla sigue en la dirección y la
+    // recarga se la lleva con ella —eso se arregla en el index—. Si gana este
+    // arranque, la almohadilla ya está limpia y llevársela no sirve de nada:
+    // la recarga caería encima de la persona mientras teclea su contraseña
+    // nueva, se la borraría, y la dejaría en la pantalla de entrar con el
+    // enlace —de un solo uso— ya gastado.
+    //
+    // Por eso hacen falta las dos mitades. Esta es la de este lado.
+    try{ window.enlaceDeCorreoEnMarcha = true; }catch(e){}
+    limpiarElEnlace();
+  }
 
   if(delCorreo && (delCorreo.error || delCorreo.error_description)){
     // El caso corriente: el enlace caducó o ya se usó. Sin esto no pasaba
@@ -5618,6 +5728,9 @@
   } else if(delCorreo && delCorreo.type === 'recovery' && delCorreo.access_token){
     claveToken = delCorreo.access_token;
     goto('clave', false);
+  } else if(delCorreo && delCorreo.access_token &&
+            TIPOS_DE_ENLACE.indexOf(String(delCorreo.type || '')) >= 0){
+    entrarConElEnlace(delCorreo);
   } else if(sesion && sesion.access_token){
     goto('diario', false);
     // La cola PRIMERO y la carga después, encadenadas.

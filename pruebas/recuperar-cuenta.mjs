@@ -123,7 +123,12 @@ console.log('\nAl volver, la contraseña nueva gana a todo');
   const arranque = APP.slice(APP.indexOf('  // AL ABRIR, LO PRIMERO ES MIRAR SI SE VIENE DEL CORREO.'),
                              APP.indexOf('  // ================= FOTOS DE PROGRESO'));
   ok(/var delCorreo = loQueTraeElEnlace\(\);/.test(arranque), 'se mira al arrancar');
-  ok(/if\(delCorreo\) limpiarElEnlace\(\);/.test(arranque),
+  // Dentro del `if(delCorreo)`, sea de una línea o de un bloque: al añadir
+  // ahí la marca que frena la recarga, esto se puso rojo pidiendo la forma
+  // exacta que tenía antes.
+  const rama = arranque.slice(arranque.indexOf('if(delCorreo)'),
+                              arranque.indexOf('\n  }', arranque.indexOf('if(delCorreo)')));
+  ok(/limpiarElEnlace\(\);/.test(rama),
      'y la dirección se limpia en cuanto se ha leído',
      'ese token es una sesión: dejarlo ahí lo deja en el historial');
 
@@ -169,6 +174,98 @@ console.log('\nY la recarga por versión nueva no se come el enlace');
   ok(/location\.replace\(location\.pathname \+ '\?v=' \+ nuevo \+ location\.hash\)/.test(HTML),
      'la recarga se lleva la almohadilla con ella',
      'un despliegue reciente se comía el enlace y lo gastaba para nada');
+}
+
+// ------------------------------------------------------------------
+console.log('\nLos OTROS enlaces del correo no se pueden tirar a la basura');
+{
+  // Supabase manda la vuelta igual para varias cosas, y se distinguen por
+  // `type`: `recovery` es esta, pero también hay `signup` (confirmar la
+  // cuenta), `invite`, `magiclink` y `email_change`. Todas traen una sesión
+  // buena en la almohadilla.
+  //
+  // Al leer solo `recovery`, las demás caían al último `else`... después de
+  // que la dirección se hubiera limpiado. O sea que el token se destruía y la
+  // persona acababa en la pantalla de registro como si no hubiera pulsado
+  // nada, sin poder ni recargar para reintentar. Tirar el token es PEOR que
+  // no leerlo.
+  //
+  // Hoy el proyecto no manda ninguno —confirmar el correo está apagado— pero
+  // eso es una casilla, y el día que se encienda esto tiene que funcionar.
+  const arranque = APP.slice(APP.indexOf('  // AL ABRIR, LO PRIMERO ES MIRAR SI SE VIENE DEL CORREO.'),
+                             APP.indexOf('  // ================= FOTOS DE PROGRESO'));
+
+  ok(/entrarConElEnlace\(delCorreo\)/.test(arranque),
+     'un enlace que trae sesión y no es de recuperar también se atiende',
+     'se limpia la dirección y se tira el token: la persona acaba en el ' +
+     'registro sin saber por qué, y sin poder reintentar');
+
+  // La lista vive en su constante, arriba, no dentro del arranque.
+  const lista = (APP.match(/var TIPOS_DE_ENLACE = \[[^\]]*\]/) || [''])[0];
+  for (const t of ['signup', 'invite', 'magiclink', 'email_change']) {
+    ok(lista.indexOf("'" + t + "'") > 0, `se reconoce «${t}»`, 'la lista es: ' + lista);
+  }
+  ok(/TIPOS_DE_ENLACE\.indexOf\(String\(delCorreo\.type \|\| ''\)\) >= 0/.test(arranque),
+     'y se aceptan tipos conocidos, no cualquier cosa que traiga un token');
+
+  // Y entrar con él necesita saber de quién es la sesión.
+  const e = hasta('  function entrarConElEnlace(p){', '\n  }');
+  ok(/sbQuienEs\(p\.access_token\)/.test(e), 'se pregunta al servidor quién es');
+  ok(/guardarSesion\(/.test(e), 'y se guarda la sesión con su usuario dentro');
+  ok(/goto\('login', false\)/.test(e) && /avisarLogin/.test(e),
+     'y si el token no vale, se dice en vez de dejar la pantalla en blanco');
+  // Y se dice EN ESPAÑOL. Sin esto salía tal cual «invalid JWT: unable to
+  // parse or verify signature, token is malformed» a quien solo pulsó un
+  // enlace de su correo. Se comprobó en el navegador: ese era el texto.
+  ok(/Ese enlace ya no vale/.test(e),
+     'con palabras de persona, no el error del servidor');
+  ok(/sinConexion\(e\)/.test(e),
+     'menos si es la red, que entonces el enlace sigue valiendo',
+     'decirle «pide otro enlace» a quien no tiene cobertura le gasta el que ya tiene');
+}
+
+// ------------------------------------------------------------------
+console.log('\nUn aviso que no es un fallo no se pinta de rojo');
+{
+  // «Si esa cuenta existe, te llegó un correo» es una confirmación, no un
+  // error. Se escribía llamando a avisarLogin('') y pisando el texto justo
+  // después, que funciona por casualidad y no se entiende leyéndolo.
+  const fuente = hasta('  function avisarLogin(msg){', '\n  }') + '\n' +
+                 hasta('  function decirLogin(msg){', '\n  }');
+  const caja = (el) => new Function('logAviso',
+    fuente + '; return { avisar: avisarLogin, decir: decirLogin };')(el);
+
+  const el = { textContent: '', clases: new Set(),
+               classList: { toggle(c, si) { si ? el.clases.add(c) : el.clases.delete(c); },
+                            remove(c) { el.clases.delete(c); },
+                            add(c) { el.clases.add(c); } } };
+  const api = caja(el);
+
+  api.avisar('Correo o contraseña incorrectos.');
+  ok(el.clases.has('error'), 'un fallo sí va en rojo');
+
+  api.decir('Si esa cuenta existe, te llegó un correo.');
+  ok(el.textContent === 'Si esa cuenta existe, te llegó un correo.', 'se ve el mensaje');
+  ok(!el.clases.has('error'), 'y una confirmación NO va en rojo',
+     'un mensaje de «ya está» pintado de error hace pensar que algo salió mal');
+
+  api.avisar('');
+  ok(!el.clases.has('error') && el.textContent.trim() === '', 'y limpiar deja el hueco vacío');
+}
+
+// ------------------------------------------------------------------
+console.log('\nY dos cabos del guardado');
+{
+  const g = hasta("  btnClave.addEventListener('click', function(){", '\n  });');
+  // Sin correo no se puede entrar, y llamar igual da un error que suena a
+  // que la contraseña no se guardó, cuando sí se guardó.
+  ok(/if\(!correo\)/.test(g),
+     'sin correo no se intenta entrar: se manda a entrar a mano',
+     'sbEntrar("") falla y el mensaje haría pensar que no se cambió nada');
+
+  // La pantalla de entrar responde al Enter; esta también debe.
+  ok(/clavePass2\.addEventListener\('keydown'/.test(APP),
+     'el Enter guarda, igual que en la pantalla de entrar');
 }
 
 console.log('\n' + pasan + ' bien, ' + fallan + ' mal');
