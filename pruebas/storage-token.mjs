@@ -69,14 +69,36 @@ console.log('\n— 403 de permisos de verdad —');
   check('y el 403 llega a quien llamo', r.status === 403);
 }
 
-console.log('\n— Si el refresco falla —');
+console.log('\n— Si el refresco falla porque la sesion ya no vale —');
 {
   const m = montar([{ status: 401, body: 'jwt expired' }]);
-  m.ctx.sbRefrescar = () => Promise.reject(new Error('no'));
+  // La marca `caducada` es la que pone sbRefrescar cuando el SERVIDOR dice
+  // que ese refresh_token ya no sirve.
+  m.ctx.sbRefrescar = () => {
+    const e = new Error('Sesion caducada'); e.caducada = true;
+    return Promise.reject(e);
+  };
   let err = null;
   await m.ctx.sbStorage('/storage/v1/object/x', {}).catch(e => { err = e; });
   check('avisa de sesion caducada', m.cad() === 1);
   check('y no se traga el error', err !== null && /caducada/i.test(err.message));
+}
+
+console.log('\n— Pero si el refresco falla por la red, la sesion sigue —');
+{
+  // Esto comprobaba lo contrario: daba por caducada cualquier caida del
+  // refresco. Con eso, subir una foto sin cobertura pasada la hora que dura
+  // el token te borraba la sesion y te pedia la contrasena otra vez.
+  const m = montar([{ status: 401, body: 'jwt expired' }]);
+  m.ctx.sbRefrescar = () => Promise.reject(new TypeError('Failed to fetch'));
+  let err = null;
+  await m.ctx.sbStorage('/storage/v1/object/x', {}).catch(e => { err = e; });
+  check('NO se marca la sesion como caducada', m.cad() === 0,
+    'te echa de tu cuenta por subir una foto sin cobertura');
+  check('pero el fallo llega a quien llamo', err !== null,
+    'callarlo dejaria la foto sin subir y sin decirlo');
+  check('y es el de la red, no uno inventado', err && /fetch/i.test(err.message),
+    'llego: ' + (err && err.message));
 }
 
 console.log('\n— Todo bien a la primera —');

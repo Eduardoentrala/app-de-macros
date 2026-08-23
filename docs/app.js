@@ -4567,17 +4567,64 @@
   // 401 y hay que canjear el refresh_token por uno nuevo. Sin esto la app
   // funciona bien la primera hora y después deja de cargar datos sin
   // explicar por qué, que es la peor forma de fallar.
+  // Caducada lo dice el SERVIDOR, y solo él.
+  //
+  // Antes se daba por caducada ante cualquier fallo del canje. Sin red el
+  // fetch rechaza y ahí se acababa: la app borraba la sesión y pedía la
+  // contraseña otra vez. O sea que abrir la app con datos flojos, pasada la
+  // hora que dura el token, te echaba de tu propia cuenta. Un 503 de
+  // Supabase, igual.
+  //
+  // Un 4xx en la ruta de auth sí es el servidor diciendo que ese
+  // refresh_token ya no vale. Lo demás es "ahora no", y la sesión sigue
+  // siendo buena.
+  function noVale(){
+    var e = new Error('Sesión caducada');
+    e.caducada = true;
+    return e;
+  }
+
+  // UN solo canje aunque lo pidan siete a la vez.
+  //
+  // Al arrancar se piden siete cosas juntas. Con el token vencido las siete
+  // reciben 401 y las siete pedían su propio canje. Supabase ROTA el
+  // refresh_token: el primero que llega lo gasta y a los otros seis les
+  // contesta que el suyo ya no vale... y cada uno de esos seis daba la
+  // sesión por caducada. El canje salía BIEN y aun así te echaba.
+  var canjeEnMarcha = null;
+
   function sbRefrescar(){
     var rt = sesion && sesion.refresh_token;
-    if(!rt) return Promise.reject(new Error('Sesión caducada'));
-    return fetch(SB_URL + '/auth/v1/token?grant_type=refresh_token', {
+    if(!rt) return Promise.reject(noVale());
+    if(canjeEnMarcha) return canjeEnMarcha;
+
+    canjeEnMarcha = fetch(SB_URL + '/auth/v1/token?grant_type=refresh_token', {
       method:'POST',
       headers:{ 'apikey': SB_KEY, 'Content-Type':'application/json' },
       body: JSON.stringify({ refresh_token: rt })
     }).then(function(r){
-      if(!r.ok) throw new Error('Sesión caducada');
+      if(!r.ok){
+        // 408 y 429 no dicen que el token esté mal: dicen que se espere. El
+        // 429 llega justo cuando la app arranca y pide varias cosas de
+        // golpe, que es el peor momento para echar a nadie. Es la misma
+        // distinción que hace esperaMejorMomento() con la cola, pero para
+        // otra pregunta: aquella decide si algo se reintenta, esta si la
+        // sesión sigue viva.
+        var loDiceElServidor = r.status >= 400 && r.status < 500 &&
+                               r.status !== 408 && r.status !== 429;
+        if(loDiceElServidor) throw noVale();
+        throw new Error('Error ' + r.status);
+      }
       return r.json();
-    }).then(function(s){ guardarSesion(s); return s; });
+    }).then(function(s){
+      guardarSesion(s);
+      canjeEnMarcha = null;
+      return s;
+    })['catch'](function(e){
+      canjeEnMarcha = null;
+      throw e;
+    });
+    return canjeEnMarcha;
   }
 
   function sesionCaducada(){
@@ -4615,7 +4662,13 @@
              ruta.indexOf('/auth/v1/') !== 0){
             return sbRefrescar()
               .then(function(){ return sbFetch(ruta, op, true); })
-              ['catch'](function(){ sesionCaducada(); throw new Error('Sesión caducada'); });
+              ['catch'](function(e){
+                // Solo si el servidor dijo que la sesión ya no vale. Si es
+                // que no llegamos a preguntárselo -sin red, servidor caído-
+                // la sesión sigue en el teléfono y se reintenta luego.
+                if(e && e.caducada){ sesionCaducada(); throw new Error('Sesión caducada'); }
+                throw e;
+              });
           }
 
           if(!r.ok){
@@ -4658,7 +4711,10 @@
           if(!vencido) return r;
           return sbRefrescar()
             .then(function(){ return sbStorage(ruta, op, true); })
-            ['catch'](function(){ sesionCaducada(); throw new Error('Sesión caducada'); });
+            ['catch'](function(e){
+              if(e && e.caducada){ sesionCaducada(); throw new Error('Sesión caducada'); }
+              throw e;
+            });
         });
       });
   }
