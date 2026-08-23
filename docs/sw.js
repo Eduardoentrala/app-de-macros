@@ -36,6 +36,31 @@
 
 const CACHE = 'macros-esqueleto';
 
+// Cuánto se espera a la red antes de abrir con lo guardado.
+//
+// El caso de "sin señal" ya estaba resuelto: el navegador sabe que no hay red
+// y el fetch falla al instante, así que el .catch() saca lo guardado y la app
+// abre. El que faltaba es el de EN MEDIO -datos móviles flojos-, donde la red
+// ni contesta ni falla: se queda esperando. Ahí no hay .catch() que valga
+// porque todavía no ha fallado nada, y la app se quedaba en blanco los treinta
+// y pico segundos que el navegador tarde en rendirse. Para quien la abre, eso
+// es "no abre".
+//
+// Dos segundos y medio: si la red contesta, manda ella. Si tarda más, se abre
+// con lo guardado, que es la misma app, y la petición que iba en camino sigue
+// y deja el index nuevo en la caché para la próxima vez. Y si el sello cambió,
+// el propio index se recarga solo en cuanto llegue version.txt.
+const ESPERA_RED = 2500;
+
+// Lo guardado para una navegación. `ignoreSearch` porque al publicar una
+// versión nueva el index se recarga con `?v=nuevo` en la dirección: esa
+// dirección exacta no está guardada, y sin esto el respaldo caía en el
+// './index.html' del día que se instaló la app, que puede ser de hace meses.
+function indexGuardado(req) {
+  return caches.match(req, { ignoreSearch: true })
+    .then((c) => c || caches.match('./index.html'));
+}
+
 // Lo mínimo para que la pantalla exista. El JavaScript y las hojas NO se
 // listan aquí: sus direcciones llevan el sello, que este archivo no conoce.
 // Se guardan solas la primera vez que se piden.
@@ -96,15 +121,33 @@ self.addEventListener('fetch', (e) => {
   // El index: red primero. Así, en cuanto hay señal, llega el sello nuevo y
   // el propio index se encarga de recargar con la versión nueva.
   if (req.mode === 'navigate' || url.pathname.endsWith('/') || url.pathname.endsWith('index.html')) {
-    e.respondWith(
+    e.respondWith(new Promise((responder) => {
+      // Aquí hay una carrera a propósito, y no hace falta guardarla: a una
+      // promesa la resuelve la primera llamada y las demás no hacen nada. Si
+      // la red llega después de que se abriera con lo guardado, lo suyo se
+      // queda en la caché para la próxima y ya.
+      const contestar = (r) => { if (r) responder(r); };
+
+      // El reloj no cancela la petición: la deja seguir. Si la red acaba
+      // llegando, lo que traiga se guarda igual y la próxima apertura ya es
+      // la buena.
+      const reloj = setTimeout(() => { indexGuardado(req).then(contestar); }, ESPERA_RED);
+
       fetch(req)
         .then((r) => {
+          clearTimeout(reloj);
           const copia = r.clone();
           caches.open(CACHE).then((c) => c.put(req, copia)).catch(() => {});
-          return r;
+          contestar(r);
         })
-        .catch(() => caches.match(req).then((c) => c || caches.match('./index.html')))
-    );
+        .catch(() => {
+          clearTimeout(reloj);
+          // Si tampoco hay nada guardado -primera visita sin señal- se
+          // contesta el error de red, que es lo que habría pasado de todas
+          // formas. Callar aquí dejaría la promesa sin resolver para siempre.
+          indexGuardado(req).then((c) => contestar(c || Response.error()));
+        });
+    }));
     return;
   }
 

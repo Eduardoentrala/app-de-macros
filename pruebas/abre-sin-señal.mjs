@@ -77,11 +77,19 @@ console.log('\n— No se puede quedar servida una versión vieja —');
 {
   // El index es el unico con direccion fija. Va a la red PRIMERO, para que
   // en cuanto haya señal llegue el sello nuevo.
-  check('el index va a la red primero',
-    /req\.mode === 'navigate'[\s\S]{0,400}fetch\(req\)/.test(SW),
+  //
+  // Esto estaba escrito contra la forma exacta que tenia la rama -una ventana
+  // de 400 caracteres y un `.catch(() => caches.match(req)` literal- y se
+  // puso rojo al meterle el tiempo de espera, que es lo que faltaba para que
+  // la app abra tambien cuando la red se cuelga en vez de fallar. La ventana
+  // ahora es la rama entera, y lo que HACE se ejecuta en sw-espera.
+  const iNav = SW.indexOf("req.mode === 'navigate'");
+  const rama = SW.slice(iNav, SW.indexOf('\n    return;', iNav));
+  check('el index va a la red primero', /fetch\(req\)/.test(rama),
     'de la cache primero, el sello nuevo no llegaria nunca');
-  check('y solo cae en la caché si no hay señal',
-    /\.catch\(\(\) => caches\.match\(req\)/.test(SW));
+  check('y la cache es solo el respaldo',
+    /indexGuardado\(req\)/.test(rama) && rama.indexOf('fetch(req)') < rama.lastIndexOf('indexGuardado(req)'),
+    'lo guardado se pide para respaldar la red, no en su lugar');
 
   // Lo demas puede ir de la cache sin riesgo PORQUE la direccion lleva el
   // sello: cada version es una direccion distinta.
