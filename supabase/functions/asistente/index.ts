@@ -2070,7 +2070,30 @@ Deno.serve(async (req) => {
     console.error('asistente:', e);
     const estado = (e && typeof e === 'object' && 'status' in e)
       ? Number((e as { status: number }).status) : 0;
-    const saturado = estado === 529 || estado === 429 || (estado >= 500 && estado < 600);
+
+    // LA LLAMADA QUE NO LLEGÓ A SALIR.
+    //
+    // Un fallo de conexión no trae código -no hubo respuesta que lo trajera-,
+    // así que `estado` vale 0. Sin esto no contaba como avería ajena y la
+    // persona perdía una de sus tres consultas del día por una red que se
+    // cayó entre dos servidores que no son suyos.
+    //
+    // Se mira el NOMBRE de la clase del SDK y no el texto del mensaje, por lo
+    // mismo que `sinConexion()` en la app: los mensajes cambian entre
+    // versiones y entre idiomas.
+    //
+    // Y no vale devolverla ante cualquier fallo, que sería lo cómodo: si el
+    // error salta DESPUÉS de que Anthropic contestara -al leer su respuesta,
+    // por ejemplo- esa llamada ya está pagada, y devolver la consulta regala
+    // otra. El error de conexión es el único que garantiza que no hubo
+    // llamada que pagar.
+    const nombre = (e && typeof e === 'object' && 'name' in e)
+      ? String((e as { name: string }).name) : '';
+    const noSalio = nombre === 'APIConnectionError' ||
+                    nombre === 'APIConnectionTimeoutError';
+
+    const saturado = noSalio ||
+      estado === 529 || estado === 429 || (estado >= 500 && estado < 600);
 
     // NO SE LE COBRA UNA AVERÍA AJENA.
     //
