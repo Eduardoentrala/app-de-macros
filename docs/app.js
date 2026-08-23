@@ -4335,6 +4335,20 @@
   // también lo rechaza la base (0020), porque la pantalla no es la única
   // puerta —la app habla por PostgREST y se puede llamar directo—.
   var CONDICIONES_EXCLUYENTES = [['diabetes_1', 'diabetes_2']];
+
+  // Cuándo dio permiso para tratar esto. Si ya lo dio, no se le vuelve a
+  // pedir; lo rellena el perfil al cargar.
+  //
+  // SE DECLARA AQUÍ, con lo que la usa, y no en la sección del aviso legal
+  // que está seis mil líneas más abajo. `var` iza la declaración pero NO la
+  // asignación: con ella allí, el `= null` corre al arrancar DESPUÉS de todo
+  // esto, así que cualquiera que le pusiera valor durante el arranque se lo
+  // encontraría borrado sin dejar rastro. Hoy no pasa —quien lo escribe llega
+  // por una respuesta del servidor, más tarde— y por eso no se ve.
+  //
+  // Es exactamente la trampa que ya se cobró EVENTOS: está contada donde se
+  // declara, unas líneas más arriba de aquí.
+  var CONSENTIMIENTO_SALUD = null;
   var cajaCond = document.getElementById('regCondiciones');
 
   function condicionesElegidas(){
@@ -10374,8 +10388,6 @@
   // de saber qué leyó esa persona. Al tocar legal.md hay que subirla aquí.
   var VERSION_LEGAL = '1';
   var legalCargado = false;
-  // Si ya lo dio, no se le vuelve a pedir. Se rellena al cargar el perfil.
-  var CONSENTIMIENTO_SALUD = null;
 
   // Un markdown mínimo, solo lo que legal.md usa. Una librería entera para
   // esto serían 40 KB en cada teléfono para pintar cuatro encabezados.
