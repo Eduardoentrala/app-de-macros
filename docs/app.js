@@ -1645,6 +1645,15 @@
   function diaDeApunte(){ return DIA_APUNTE || HOY; }
   function apuntandoEnHoy(){ return isoDe(diaDeApunte()) === isoDe(HOY); }
 
+  // De qué día es la lista que hay ahora mismo en COMIDAS. Null quiere decir
+  // hoy, igual que arriba.
+  //
+  // Casi siempre coincide con diaDeApunte(), pero NO siempre: al deshacer un
+  // guardado que falló se resta del día en que se sumó, que puede que ya no
+  // sea el que se está mirando. Son dos preguntas distintas y hacía falta
+  // poder hacer la segunda.
+  var DIA_LISTA = null;
+
   // Eventos apartados, por fecha: { 'AAAA-MM-DD': {titulo, calorias, ...} }
   //
   // Se declara AQUÍ y no junto a las funciones que lo llenan, que están mil
@@ -2496,6 +2505,7 @@
   // tres o cuatro filas y se consultan cuando hacen falta.
   function cargarComidasDelDia(fecha){
     COMIDAS.Desayuno = []; COMIDAS.Comida = []; COMIDAS.Cena = [];
+    DIA_LISTA = isoDe(fecha);            // de quién es la lista, para sumarAlRegistro
     pintarComida();                      // vacío mientras llega
     if(!sesion || !sesion.user) return Promise.resolve();
 
@@ -3935,9 +3945,17 @@
     // Antes se miraba la suma, así que apuntar solo agua rompía la racha en
     // silencio y el día no contaba para compensar.
     //
-    // Solo vale para HOY: COMIDAS es la lista de hoy, y usarla para juzgar
-    // un día pasado borraría lo que se acaba de apuntar en él.
-    if(apuntandoEnHoy()){
+    // Pero COMIDAS es la lista del día que se está MIRANDO y el registro que
+    // se toca es el del día en que se está APUNTANDO. Desde que se puede
+    // apuntar en un día pasado esos dos se separan, y preguntar
+    // `apuntandoEnHoy()` daba dos averías opuestas: vaciar un día pasado le
+    // dejaba el registro a cero -un día fantasma que mantiene viva la racha y
+    // le regala a hoy las calorías de una jornada- y, al revés, deshacer algo
+    // de hoy mientras se miraba un día pasado borraba el registro de HOY
+    // entero, con todo lo demás que llevara apuntado.
+    //
+    // La pregunta buena es si la lista que tenemos delante es la de ESTE día.
+    if((DIA_LISTA || isoDe(HOY)) === k){
       var hayAlgoApuntado = Object.keys(COMIDAS).some(function(m){
         return COMIDAS[m].length > 0;
       });
