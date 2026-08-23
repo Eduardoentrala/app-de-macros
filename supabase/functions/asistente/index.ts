@@ -1475,7 +1475,22 @@ Deno.serve(async (req) => {
       // El corte está en 4 de 7 y no en 7 de 7: exigir la semana perfecta
       // dejaría a casi todo el mundo sin ajuste nunca. Con cuatro días hay
       // una media que significa algo; con menos, no.
-      const hayMaterial = diasApuntados >= 4 && pesos.length >= 2;
+      // Y HACE FALTA UN PESO RECIENTE. Antes bastaban dos pesos en cuatro
+      // semanas: quien apuntó la comida pero no se pesa desde hace tres
+      // pasaba el filtro, y las calorías se movían sobre una báscula vieja.
+      // Ajustar es decidir hacia dónde empujar, y para eso hay que saber
+      // hacia dónde se movió el peso EN LOS DÍAS QUE SE ESTÁN JUZGANDO.
+      //
+      // Diez días y no siete: a quien se pesa una vez por semana y un lunes
+      // se le pasa no se le puede dejar sin cierre por un día.
+      //
+      // El `?? 0` es para la transición: si la app todavía no manda el dato
+      // —se despliegan por separado— el cierre se comporta como antes en vez
+      // de dejar a todo el mundo sin ajuste.
+      const diasSinPesarse = Number(d.dias_sin_pesarse ?? 0);
+      const pesoReciente = diasSinPesarse <= 10;
+
+      const hayMaterial = diasApuntados >= 4 && pesos.length >= 2 && pesoReciente;
 
       // ---- ¿Ya se las movió una persona esta semana? ----
       //
@@ -1656,7 +1671,16 @@ Deno.serve(async (req) => {
         historial +
         cinturas +
         (cuerpo.nota ? `- Dice: "${String(cuerpo.nota).slice(0, 300)}"\n` : '') +
-        `- ¿Hay material para ajustar?: ${hayMaterial ? 'sí' : 'NO'}\n` +
+        `- ¿Hay material para ajustar?: ${hayMaterial ? 'sí' : 'NO'}` +
+        // POR QUÉ no lo hay. No es lo mismo no haber apuntado la comida que
+        // no haberse pesado: el primero es «no sé qué comiste» y el segundo
+        // «no sé qué pasó con tu peso», y lo que toca decirle es distinto.
+        // Sin esto el modelo se inventaba el motivo.
+        (!hayMaterial && !pesoReciente && diasApuntados >= 4
+          ? ` (apuntó bien la comida, pero lleva ${diasSinPesarse} días sin ` +
+            `pesarse: sin eso no se sabe hacia dónde se movió. Pídeselo con ` +
+            `calma, sin regañar, y no le toques las calorías)`
+          : '') + `\n` +
         // Se le DICE además de forzarlo abajo. Forzándolo solo, el mensaje
         // diría «te subo a 2000» y las calorías se quedarían donde estaban:
         // la persona leería una cosa y vería otra.

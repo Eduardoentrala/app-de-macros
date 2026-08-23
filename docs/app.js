@@ -10323,8 +10323,19 @@
       var r = REGISTRO[isoDe(d)];
       if(r){ dias++; suma += calDe(r); }
     }
+    // CUÁNTO HACE QUE NO SE PESA. Sin esto, el cierre daba por bueno
+    // ajustar calorías con dos pesos de hace tres semanas: se apuntó la
+    // comida, sí, pero no hay forma de saber hacia dónde se movió el peso
+    // en los días que se están juzgando. Mover la comida de alguien a
+    // ciegas es peor que no moverla.
+    var ultimoPeso = Object.keys(PESOS).sort().pop();
+    var diasSinPesarse = ultimoPeso
+      ? Math.round((HOY - new Date(ultimoPeso + 'T12:00:00')) / 86400000)
+      : null;
+
     return {
       dias_apuntados: dias,
+      dias_sin_pesarse: diasSinPesarse,
       meta_cal: calDe(meta),
       media_cal: dias ? Math.round(suma / dias) : 0,
       // Si la meta cambió a mitad de esta semana, `meta_cal` solo vale para
