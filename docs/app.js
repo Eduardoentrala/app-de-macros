@@ -6076,14 +6076,16 @@
   // poder probar la comparación. Fuera: quien se registra no debe encontrarse
   // el cuerpo de nadie en su galería.
   //
-  // PENDIENTE: las fotos todavía no se suben a Supabase. Viven solo en esta
-  // variable, como base64 en memoria, y se pierden al recargar. Falta subirlas
-  // al bucket privado 'progress-photos' y guardar su ficha en progress_photos.
+  // Debajo decía que las fotos no se subían y vivían solo en memoria. Ya no:
+  // van al bucket privado 'progress-photos' y su ficha a progress_photos.
+  // Un comentario que se quedó viejo miente igual que un número inventado, y
+  // este decía que se perdía algo que sí se guarda.
   pintarFotos();
   llenarSelectores();
 
   // ================= ROLES =================
-  // OJO: este selector es solo para que veas cómo cambia la interfaz.
+  // El rol lo pone el perfil que llega de la base (`ROL = p.role`), no se
+  // elige aquí; esto es solo el valor con el que se arranca mientras llega.
   // La seguridad de verdad vive en Postgres (supabase/migrations/0002_roles_y_rls.sql):
   // las políticas RLS filtran las filas antes de que salgan de la base de datos.
   var ROL = 'cliente';
@@ -6091,15 +6093,28 @@
 
   // Los llena cargarPanelCoach() desde la vista mis_clientes
   var CLIENTES_DEL_COACH = [];
-  var COACHES = [];
 
+  // Aguanta un nombre que no está.
+  //
+  // La lista de "a quién inscribo" se pinta con iniciales(u.nombre) y en la
+  // línea de al lado ya se contemplaba que viniera vacío. Y viene:
+  // plan_buscar devuelve full_name sin coalesce y encuentra a la gente
+  // TAMBIÉN por su correo, así que alguien que no puso su nombre sale en la
+  // búsqueda. Con `nombre.split` eso era un TypeError dentro del .map, y no
+  // se pintaba nada: la búsqueda entera en blanco por una sola persona.
   function iniciales(nombre){
-    return nombre.split(' ').map(function(p){ return p[0]; }).slice(0,2).join('').toUpperCase();
+    return String(nombre == null ? '' : nombre)
+      .split(' ')
+      .filter(function(p){ return p; })      // los espacios de más no cuentan
+      .map(function(p){ return p[0]; })
+      .slice(0, 2).join('').toUpperCase();
   }
   function tarjetaCliente(c){
+    // El nombre va escapado como en todas las demás listas: lo escribe otra
+    // persona y esta tarjeta la mira su entrenador.
     return '<div class="cliente-card"><div class="cliente-ava">'+iniciales(c.n)+'</div>'+
-      '<div class="info"><b>'+c.n+'</b><span>'+c.obj+' · '+c.sem+' en el plan</span></div>'+
-      '<span style="font:600 11px/1 sans-serif;color:var(--ink-faint);">'+c.act+'</span></div>';
+      '<div class="info"><b>'+escapar(c.n)+'</b><span>'+escapar(c.obj)+' · '+escapar(c.sem)+' en el plan</span></div>'+
+      '<span style="font:600 11px/1 sans-serif;color:var(--ink-faint);">'+escapar(c.act)+'</span></div>';
   }
 
   function pintarPanel(){
@@ -6115,21 +6130,12 @@
         'Puedes ver su progreso y armarles la rutina; su diario de comida y su peso son de solo lectura.</p>';
       return;
     }
-    if(ROL === 'super_admin'){
-      tit.textContent = 'Administración';
-      cont.innerHTML =
-        '<div class="panel-seccion">Entrenadores <small>'+COACHES.length+'</small></div>' +
-        COACHES.map(function(c){
-          return '<div class="cliente-card"><div class="cliente-ava">'+iniciales(c.n)+'</div>'+
-            '<div class="info"><b>'+c.n+'</b><span>'+c.clientes+' clientes asignados</span></div>'+
-            '<span style="font:600 11px/1 sans-serif;color:var(--ink-faint);">Coach</span></div>';
-        }).join('') +
-        '<div class="panel-seccion">Clientes <small>109 en total</small></div>' +
-        CLIENTES_DEL_COACH.map(tarjetaCliente).join('') +
-        '<p class="cmp-aviso">Como super admin ves toda la plataforma y eres el único que puede ' +
-        'asignar clientes a un coach o cambiar el rol de alguien.</p>';
-      return;
-    }
+    // Aquí había una rama para el super admin con «Clientes 109 en total»
+    // escrito a pelo y una lista de entrenadores que no llenaba nadie. Era
+    // del mockup, y además no se veía nunca: el botón del Perfil manda al
+    // super admin a la vista `admin`, que es el panel de verdad y saca sus
+    // números de admin_estadisticas(). Un número inventado en pantalla es
+    // peor que no tener pantalla.
     tit.textContent = 'Panel';
     cont.innerHTML = '<p class="cmp-aviso">Tu cuenta es de cliente: solo tú ves tu información.</p>';
   }
