@@ -112,7 +112,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '011e01665b';
+    var SELLO = 'f8da9010ee';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -1364,16 +1364,6 @@
              Es generica a proposito -titulo, texto y el nombre del boton
              que confirma- para que la siguiente pregunta no traiga otra
              hoja mas. -->
-        <div class="sheet-backdrop" id="preguntaSheet">
-          <div class="sheet">
-            <h4 id="preguntaTitulo">Confirmar</h4>
-            <p class="hint" id="preguntaTexto">&nbsp;</p>
-            <div class="pregunta-botones">
-              <button id="preguntaNo">Cancelar</button>
-              <button class="btn-primary" id="preguntaSi">S&iacute;</button>
-            </div>
-          </div>
-        </div>
 
         <div class="sheet-backdrop" id="nameSheet">
           <div class="sheet">
@@ -1715,87 +1705,6 @@
 
         <!-- El chequeo de la semana. Tres preguntas y no diez: un
              cuestionario largo se contesta en diagonal y deja de medir. -->
-        <div class="sheet-backdrop" id="chequeoSheet">
-          <div class="sheet">
-            <h4>¿Cómo te fue la semana?</h4>
-            <p class="hint">Tres cosas rápidas. Sin esto, cambiarte las calorías sería adivinar.</p>
-
-            <div class="chq-bloque">
-              <div class="chq-tit">Hambre
-                <button class="chq-ayuda" data-ayuda="hambre"
-                  aria-label="Más información sobre el hambre">i</button></div>
-              <div class="chq-info" id="infoHambre" hidden>
-                <button class="chq-info-x" aria-label="Cerrar esta explicación">×</button>
-                Piensa en la <b>semana entera</b>, no en cómo estás ahora mismo.<br>
-                <b>Normal</b> es el hambre de siempre antes de comer. <b>Bastante</b> o
-                <b>Mucha</b> es la que te distrae: la que te hace pensar en comida
-                entre comidas.<br>
-                Si está alta dos o tres semanas seguidas, es señal de que las calorías
-                están bajas de más y hay que subirlas.
-              </div>
-              <div class="chq-esc" data-chq="hambre">
-                <button data-v="1">Nada</button><button data-v="2">Poca</button>
-                <button class="on" data-v="3">Normal</button>
-                <button data-v="4">Bastante</button><button data-v="5">Mucha</button>
-              </div>
-            </div>
-            <div class="chq-bloque">
-              <div class="chq-tit">Energía
-                <button class="chq-ayuda" data-ayuda="energia"
-                  aria-label="Más información sobre la energía">i</button></div>
-              <div class="chq-info" id="infoEnergia" hidden>
-                <button class="chq-info-x" aria-label="Cerrar esta explicación">×</button>
-                Cómo te sentiste para entrenar y para el día normal.<br>
-                <b>Normal</b> es tu energía de siempre. <b>Baja</b> es levantarte cansado,
-                arrastrarte en el gimnasio o quedarte sin fuerza a media tarde.<br>
-                Sirve para saber si el plan te está costando de más. Mira la semana,
-                no un mal día.
-              </div>
-              <div class="chq-esc" data-chq="energia">
-                <button data-v="1">Muy baja</button><button data-v="2">Baja</button>
-                <button class="on" data-v="3">Normal</button>
-                <button data-v="4">Buena</button><button data-v="5">Muy buena</button>
-              </div>
-            </div>
-            <!-- Aquí estaba "Antojo". Se quitó porque medía casi lo mismo que
-                 "Hambre" -la gente contestaba las dos igual- y ocupaba una de
-                 las tres preguntas, que son todo el presupuesto: un
-                 cuestionario largo se contesta en diagonal.
-
-                 En su hueco va el sueño, que es lo que faltaba de verdad.
-                 Hambre alta con energía baja puede ser un déficit excesivo o
-                 pueden ser cinco horas de sueño, y son problemas distintos
-                 con soluciones opuestas. Sin esta pregunta se acababa
-                 moviendo las calorías por un problema de descanso. -->
-            <div class="chq-bloque">
-              <div class="chq-tit">Sueño
-                <button class="chq-ayuda" data-ayuda="sueno"
-                  aria-label="Más información sobre el sueño">i</button></div>
-              <div class="chq-info" id="infoSueno" hidden>
-                <button class="chq-info-x" aria-label="Cerrar esta explicación">×</button>
-                Cuánto y qué tal dormiste, en promedio.<br>
-                Está aquí porque <b>dormir mal produce lo mismo que comer poco</b>:
-                hambre alta y energía baja. Son problemas distintos y se arreglan al
-                revés.<br>
-                Si lo que falla es el sueño, moverte las calorías no lo arregla — y
-                saberlo evita que te las cambie sin motivo.
-              </div>
-              <div class="chq-esc" data-chq="sueno">
-                <button data-v="1">Muy mal</button><button data-v="2">Mal</button>
-                <button class="on" data-v="3">Normal</button>
-                <button data-v="4">Bien</button><button data-v="5">Muy bien</button>
-              </div>
-            </div>
-
-            <textarea class="notas-input" id="chqNota" rows="2" maxlength="300"
-              placeholder="Algo más que quieras contarme (opcional)"></textarea>
-
-            <div class="chq-respuesta" id="chqRespuesta" hidden></div>
-
-            <button class="btn-primary" id="chqEnviar">Revisar mi semana</button>
-            <button class="btn-ghost-text" id="chqCerrar">Ahora no</button>
-          </div>
-        </div>
 
         <!-- Borrar la cuenta. Pedir que escriban ELIMINAR no es burocracia:
              es lo único que separa un impulso de una decisión, y esto no
@@ -1882,6 +1791,113 @@
            Dentro de una de ellas, desde las otras tres no se vería.
            El fondo se posiciona contra .phone-screen, así que se ve igual
            que cuando estaba dentro. -->
+      <!-- ESTAS DOS VIVEN AQUI FUERA, por lo mismo que la de la cantidad:
+           el fondo es `position:absolute; inset:0` y se posiciona contra su
+           ancestro colocado. Dentro de una vista, ese ancestro es la vista, y
+           las vistas que no estan activas son `display:none`. Resultado: la
+           hoja se abria de verdad -con su clase `open` y todo- midiendo 0x0.
+           Ni error, ni aviso: solo la animacion del toque y nada despues.
+
+           `chequeoSheet` la abre el banner del Diario y vivia en Perfil.
+
+           `preguntaSheet` es la de «¿seguro?» y vivia en Rutina, pero se usa
+           tambien al crear un alimento y al apuntar comida. Y ahi era peor
+           que invisible: `preguntar()` devuelve una promesa que solo se
+           resuelve al pulsar, asi que sin hoja no habia pulsacion, la promesa
+           se quedaba colgada y el alimento NO SE APUNTABA. -->
+      <div class="sheet-backdrop" id="chequeoSheet">
+        <div class="sheet">
+          <h4>¿Cómo te fue la semana?</h4>
+          <p class="hint">Tres cosas rápidas. Sin esto, cambiarte las calorías sería adivinar.</p>
+
+          <div class="chq-bloque">
+            <div class="chq-tit">Hambre
+              <button class="chq-ayuda" data-ayuda="hambre"
+                aria-label="Más información sobre el hambre">i</button></div>
+            <div class="chq-info" id="infoHambre" hidden>
+              <button class="chq-info-x" aria-label="Cerrar esta explicación">×</button>
+              Piensa en la <b>semana entera</b>, no en cómo estás ahora mismo.<br>
+              <b>Normal</b> es el hambre de siempre antes de comer. <b>Bastante</b> o
+              <b>Mucha</b> es la que te distrae: la que te hace pensar en comida
+              entre comidas.<br>
+              Si está alta dos o tres semanas seguidas, es señal de que las calorías
+              están bajas de más y hay que subirlas.
+            </div>
+            <div class="chq-esc" data-chq="hambre">
+              <button data-v="1">Nada</button><button data-v="2">Poca</button>
+              <button class="on" data-v="3">Normal</button>
+              <button data-v="4">Bastante</button><button data-v="5">Mucha</button>
+            </div>
+          </div>
+          <div class="chq-bloque">
+            <div class="chq-tit">Energía
+              <button class="chq-ayuda" data-ayuda="energia"
+                aria-label="Más información sobre la energía">i</button></div>
+            <div class="chq-info" id="infoEnergia" hidden>
+              <button class="chq-info-x" aria-label="Cerrar esta explicación">×</button>
+              Cómo te sentiste para entrenar y para el día normal.<br>
+              <b>Normal</b> es tu energía de siempre. <b>Baja</b> es levantarte cansado,
+              arrastrarte en el gimnasio o quedarte sin fuerza a media tarde.<br>
+              Sirve para saber si el plan te está costando de más. Mira la semana,
+              no un mal día.
+            </div>
+            <div class="chq-esc" data-chq="energia">
+              <button data-v="1">Muy baja</button><button data-v="2">Baja</button>
+              <button class="on" data-v="3">Normal</button>
+              <button data-v="4">Buena</button><button data-v="5">Muy buena</button>
+            </div>
+          </div>
+          <!-- Aquí estaba "Antojo". Se quitó porque medía casi lo mismo que
+               "Hambre" -la gente contestaba las dos igual- y ocupaba una de
+               las tres preguntas, que son todo el presupuesto: un
+               cuestionario largo se contesta en diagonal.
+
+               En su hueco va el sueño, que es lo que faltaba de verdad.
+               Hambre alta con energía baja puede ser un déficit excesivo o
+               pueden ser cinco horas de sueño, y son problemas distintos
+               con soluciones opuestas. Sin esta pregunta se acababa
+               moviendo las calorías por un problema de descanso. -->
+          <div class="chq-bloque">
+            <div class="chq-tit">Sueño
+              <button class="chq-ayuda" data-ayuda="sueno"
+                aria-label="Más información sobre el sueño">i</button></div>
+            <div class="chq-info" id="infoSueno" hidden>
+              <button class="chq-info-x" aria-label="Cerrar esta explicación">×</button>
+              Cuánto y qué tal dormiste, en promedio.<br>
+              Está aquí porque <b>dormir mal produce lo mismo que comer poco</b>:
+              hambre alta y energía baja. Son problemas distintos y se arreglan al
+              revés.<br>
+              Si lo que falla es el sueño, moverte las calorías no lo arregla — y
+              saberlo evita que te las cambie sin motivo.
+            </div>
+            <div class="chq-esc" data-chq="sueno">
+              <button data-v="1">Muy mal</button><button data-v="2">Mal</button>
+              <button class="on" data-v="3">Normal</button>
+              <button data-v="4">Bien</button><button data-v="5">Muy bien</button>
+            </div>
+          </div>
+
+          <textarea class="notas-input" id="chqNota" rows="2" maxlength="300"
+            placeholder="Algo más que quieras contarme (opcional)"></textarea>
+
+          <div class="chq-respuesta" id="chqRespuesta" hidden></div>
+
+          <button class="btn-primary" id="chqEnviar">Revisar mi semana</button>
+          <button class="btn-ghost-text" id="chqCerrar">Ahora no</button>
+        </div>
+      </div>
+
+      <div class="sheet-backdrop" id="preguntaSheet">
+        <div class="sheet">
+          <h4 id="preguntaTitulo">Confirmar</h4>
+          <p class="hint" id="preguntaTexto">&nbsp;</p>
+          <div class="pregunta-botones">
+            <button id="preguntaNo">Cancelar</button>
+            <button class="btn-primary" id="preguntaSi">S&iacute;</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Borrar el historial de peso. Vive aquí fuera por lo mismo que la
            hoja de cantidad: se abre desde Peso, que es una vista aparte. -->
       <div class="sheet-backdrop" id="pesoReinicioSheet">
@@ -1942,7 +1958,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '011e01665b';
+    var SELLO = 'f8da9010ee';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que
