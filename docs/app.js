@@ -6879,41 +6879,75 @@
   // "150 g de arroz" o "2 huevos" o "1 servicio de batido". La conversión
   // la hace la app con el peso de una unidad, así que en cuanto la unidad
   // no es gramos ese peso deja de ser opcional.
-  // A qué se refieren los macros de esta ficha. En gramos siempre a 100 g:
-  // «los macros de un gramo» no es como lo escribe nadie.
+  // ---- La unidad del catálogo, en píldoras ----
+  //
+  //  Las mismas seis que la pantalla de «Agregar alimento», y por lo mismo:
+  //  de una barrita conoces los macros de la barrita y de un aceite los de una
+  //  cucharada. Traducirlo todo a «por 100 g» de cabeza es lo que hacía falta
+  //  antes, y para contar por piezas encima había que saber lo que pesa una.
+  var catUnidadActual = 'Gramos';
+  var catPills = document.getElementById('catUnidadPills');
+
+  function ponerUnidadCat(u){
+    if(!UNIDAD_ABREV[u]) u = 'Gramos';
+    catUnidadActual = u;
+    Array.from(catPills.querySelectorAll('button')).forEach(function(x){
+      x.classList.toggle('active', x.textContent === u);
+    });
+    // Y la cantidad, al número que tenga sentido para esa unidad.
+    document.getElementById('catCantidad').value = baseDeUnidad(u);
+    pintarUnidadCatalogo();
+  }
+  catPills.addEventListener('click', function(e){
+    var b = e.target.closest('button');
+    if(b) ponerUnidadCat(b.textContent);
+  });
+
+  // Cuánto vale una ficha: la cantidad que se teclea arriba, saneada.
+  function catCantidad(){
+    var n = Number(document.getElementById('catCantidad').value);
+    return n > 0 ? n : baseDeUnidad(catUnidadActual);
+  }
+
+  // A qué se refieren los macros GUARDADOS de esta ficha.
+  //
+  // En gramos siempre a 100 g -«los macros de un gramo» no es como lo escribe
+  // nadie-. En cualquier otra unidad, a UNA de ellas: es lo único que se puede
+  // guardar sin saber el peso, y es justo lo que se quería poder hacer.
   function macrosPorDelCatalogo(){
-    var u = document.getElementById('catUnidad').value;
-    var sel = document.getElementById('catMacrosPor');
-    if(u === 'Gramos' || !sel) return '100g';
-    return sel.value === 'unidad' ? 'unidad' : '100g';
+    return catUnidadActual === 'Gramos' ? '100g' : 'unidad';
+  }
+
+  // Cómo se lee «100 g» o «2 piezas» en esta pantalla.
+  function catCuanto(){
+    var n = catCantidad();
+    return un(n) + ' ' + textoUnidad(n, catUnidadActual);
   }
 
   function pintarUnidadCatalogo(){
-    var u = document.getElementById('catUnidad').value;
+    var u = catUnidadActual;
     var enGramos = u === 'Gramos';
-    var nombreUnidad = u === 'Pieza' ? 'una pieza' : 'un servicio';
-    var porUnidad = macrosPorDelCatalogo() === 'unidad';
+    var cuanto = catCuanto();
 
-    // La pregunta solo tiene sentido si no se cuenta en gramos.
-    document.getElementById('catMacrosPorCaja').hidden = enGramos;
+    document.getElementById('catCantUnidad').textContent = UNIDAD_ABREV[u];
+    document.getElementById('catMacrosQue').textContent =
+      'Macros para ' + cuanto + '. Las calorías se calculan solas.';
+    document.getElementById('catCalQue').textContent = 'Calorías para ' + cuanto;
 
-    // Y EL PESO SOLO HACE FALTA PARA CONVERTIR. Si los macros ya son los de
-    // una unidad no hay nada que convertir, así que se deja de pedir: antes
-    // se exigía siempre y quien no lo sabía se inventaba un número.
-    document.getElementById('catPesoUnidad').hidden = enGramos || porUnidad;
-    document.getElementById('catPesoUnidadLabel').textContent =
-      u === 'Pieza' ? 'Pesa una (g)' : 'Pesa uno (g)';
-
-    document.getElementById('catCalQue').textContent =
-      porUnidad ? 'Calorías de ' + nombreUnidad : 'Calorías por 100 g';
+    // EL PESO YA NO SE PIDE PARA PODER GUARDAR. Los macros que se teclean
+    // arriba ya son los de esa cantidad, así que no hay nada que convertir.
+    // Se deja como dato opcional porque, cuando se sabe, deja al asistente
+    // pasar de gramos a piezas al leer una foto.
+    document.getElementById('catPesoUnidad').hidden = enGramos;
+    // Solo se lee cuando NO son gramos —ahí está oculto—, pero se calcula
+    // igual: en gramos saldría «¿cuánto pesa 100 g?», que no es una pregunta.
+    document.getElementById('catPesoUnidadLabel').textContent = enGramos
+      ? 'Peso de una unidad (g)'
+      : 'Y si lo sabes, ¿cuánto pesa ' + UNIDAD_UNA[u] + '? (g)';
 
     document.getElementById('catUnidadNota').textContent = enGramos
       ? 'Se apunta en gramos.'
-      : porUnidad
-        ? 'Se apunta por ' + (u === 'Pieza' ? 'piezas' : 'servicios') +
-          ', con los macros de arriba tal cual. No hace falta saber lo que pesa.'
-        : 'Se apunta por ' + (u === 'Pieza' ? 'piezas' : 'servicios') +
-          '. Di cuánto pesa ' + nombreUnidad + ' para poder calcular sus macros.';
+      : 'Se apunta por ' + textoUnidad(2, u) + '. No hace falta saber lo que pesa.';
     pintarPreviaCatalogo();
   }
 
@@ -6925,22 +6959,23 @@
   function pintarPreviaCatalogo(){
     var caja = document.getElementById('catPreview');
     if(!caja) return;
-    var u = document.getElementById('catUnidad').value;
+    var u = catUnidadActual;
     var g = Number(document.getElementById('catPiezaG').value) || 0;
-    var porUnidad = macrosPorDelCatalogo() === 'unidad';
 
-    if(u === 'Gramos' || (!porUnidad && g <= 0)){ caja.hidden = true; return; }
+    // En gramos no hace falta: lo tecleado ya se lee como lo que es.
+    if(u === 'Gramos'){ caja.hidden = true; return; }
 
     var P = Number(document.getElementById('catP').value) || 0;
     var C = Number(document.getElementById('catC').value) || 0;
     var G = Number(document.getElementById('catG').value) || 0;
-    // Por unidad no hay nada que convertir: lo tecleado ES lo de una.
-    var f = porUnidad ? 1 : g / 100;
+    // Lo tecleado es para `catCantidad()` unidades; quien lo apunte lo verá
+    // por UNA, que es como se lo va a ofrecer la app.
+    var f = 1 / catCantidad();
 
     caja.hidden = false;
     document.getElementById('catPreviewQue').textContent =
-      (u === 'Pieza' ? 'Una pieza' : 'Un servicio') +
-      (porUnidad ? '' : ' (' + g + ' g)');
+      UNIDAD_UNA[u].charAt(0).toUpperCase() + UNIDAD_UNA[u].slice(1) +
+      (g > 0 ? ' (' + g + ' g)' : '');
     document.getElementById('catPreviewCal').textContent =
       mil(Math.round((P*4 + C*4 + G*9) * f)) + ' cal';
     document.getElementById('catPreviewDet').textContent =
@@ -6948,8 +6983,10 @@
       ' g · G ' + Math.round(G*f*10)/10 + ' g';
   }
 
-  document.getElementById('catUnidad').addEventListener('change', pintarUnidadCatalogo);
-  document.getElementById('catMacrosPor').addEventListener('change', pintarUnidadCatalogo);
+  // La cantidad rehace las etiquetas: «Macros para 45 g» tiene que seguir a
+  // lo que se acaba de escribir, o se teclean unos macros creyendo que son
+  // de otra cosa.
+  document.getElementById('catCantidad').addEventListener('input', pintarUnidadCatalogo);
   // La previa se rehace con cualquier número que la cambie, no solo al
   // elegir unidad: se teclea el peso y se ve al momento si cuadra.
   Array.from(['catPiezaG','catP','catC','catG']).forEach(function(id){
@@ -6977,14 +7014,25 @@
     document.getElementById('catNombre').value    = a ? a.nombre : '';
     document.getElementById('catCategoria').value = a ? a.categoria : 'otros';
     document.getElementById('catEstado').value    = a ? a.estado : 'unico';
+    document.getElementById('catPorcion').value  = (a && a.porcion) || '';
+    document.getElementById('catPorcionG').value = (a && a.porcion_g) || '';
+    document.getElementById('catPiezaG').value  = (a && a.pieza_g) || '';
+
+    // La unidad PRIMERO: al ponerla se repinta la pantalla y se ajusta la
+    // cantidad, así que los macros van después o se rellenarían y acto
+    // seguido se leerían con una cantidad que ya no es la suya.
+    ponerUnidadCat((a && a.unidad) || 'Gramos');
+
+    // Y la cantidad a la que se refieren los macros GUARDADOS, que es lo que
+    // la base sabe: 100 g, o una unidad. Reeditar una barrita que se dio de
+    // alta «para 45 g» la enseña por 100 g, que es como está guardada; el
+    // dato de los 45 no se guarda en ningún sitio.
+    document.getElementById('catCantidad').value =
+      ((a && a.unidad) || 'Gramos') === 'Gramos' ? 100 : 1;
+
     document.getElementById('catP').value = a ? a.proteina : '';
     document.getElementById('catC').value = a ? a.carbos : '';
     document.getElementById('catG').value = a ? a.grasas : '';
-    document.getElementById('catPorcion').value  = (a && a.porcion) || '';
-    document.getElementById('catPorcionG').value = (a && a.porcion_g) || '';
-    document.getElementById('catUnidad').value = (a && a.unidad) || 'Gramos';
-    document.getElementById('catPiezaG').value  = (a && a.pieza_g) || '';
-    document.getElementById('catMacrosPor').value = (a && a.macros_por) || '100g';
     pintarUnidadCatalogo();
     document.getElementById('catOcultar').hidden = nuevo;
     document.getElementById('catOcultar').textContent =
@@ -7001,34 +7049,39 @@
     var nombre = document.getElementById('catNombre').value.trim();
     if(!nombre){ toast('toastAdmin', 'Ponle nombre'); return; }
 
-    var unidad = document.getElementById('catUnidad').value;
+    var unidad = catUnidadActual;
     var piezaG = Number(document.getElementById('catPiezaG').value) || 0;
-    // Se avisa aquí y no se deja que lo rechace la base: el mensaje de un
-    // check de Postgres no le dice a nadie qué campo le falta. La base lo
-    // impide igualmente -es su trabajo-, pero esto es lo que se lee.
+    // AQUÍ HABÍA UN AVISO DE «FALTA CUÁNTO PESA UNA PIEZA», y ya no hace
+    // falta: los macros que se teclean son los de la cantidad que se teclea,
+    // así que siempre hay algo que guardar. El peso pasó a ser un extra.
+    //
+    // Se borra en vez de dejarlo apagado con un `if(false)`: un bloque que no
+    // se ejecuta se lee como si se ejecutara, y el siguiente que pase por
+    // aquí creerá que ese aviso puede saltar.
     var macrosPor = macrosPorDelCatalogo();
-    if(unidad !== 'Gramos' && macrosPor !== 'unidad' && piezaG <= 0){
-      // Además del aviso, se marca y se enfoca el campo. Un mensaje solo
-      // dice QUÉ falta; esto dice DÓNDE, que es lo que hacía falta cuando
-      // el aviso ni se veía -salía por debajo de la hoja- y parecía que el
-      // botón Guardar estuviera roto.
-      var campo = document.getElementById('catPiezaG');
-      campo.classList.add('falta');
-      campo.focus();
-      try{ campo.scrollIntoView({ block: 'center' }); }catch(e){}
-      toast('toastAdmin', 'Falta cuánto pesa ' +
-        (unidad === 'Pieza' ? 'una pieza' : 'un servicio') + ' en gramos');
-      return;
-    }
     document.getElementById('catPiezaG').classList.remove('falta');
+
+    // ---- DE LO QUE SE TECLEA A LO QUE GUARDA LA BASE ----
+    //
+    // Arriba se escribe «los macros de ESTA cantidad», que es como viene un
+    // envase. La base guarda dos formas y solo dos:
+    //
+    //   Gramos  -> por 100 g          (se reescala: 45 g de barrita x 100/45)
+    //   lo demás -> los de UNA unidad (se divide entre cuántas se dijeron)
+    //
+    // La cuenta se hace AQUÍ y no se le pide a quien rellena el formulario,
+    // que es justo lo que había que dejar de hacer.
+    var cant = catCantidad();
+    var factor = unidad === 'Gramos' ? 100 / cant : 1 / cant;
+    var red = function(v){ return Math.round(v * factor * 10) / 10; };
 
     var cuerpo = {
       nombre: nombre,
       categoria: document.getElementById('catCategoria').value,
       estado: document.getElementById('catEstado').value,
-      proteina: Number(document.getElementById('catP').value) || 0,
-      carbos:   Number(document.getElementById('catC').value) || 0,
-      grasas:   Number(document.getElementById('catG').value) || 0,
+      proteina: red(Number(document.getElementById('catP').value) || 0),
+      carbos:   red(Number(document.getElementById('catC').value) || 0),
+      grasas:   red(Number(document.getElementById('catG').value) || 0),
       porcion:   document.getElementById('catPorcion').value.trim() || null,
       porcion_g: Number(document.getElementById('catPorcionG').value) || null,
       unidad:    unidad,

@@ -95,42 +95,15 @@ console.log('\nY el asistente igual, que lee las mismas filas');
 }
 
 // ------------------------------------------------------------------
-console.log('\nEl panel deja de exigir el peso, pero solo cuando sobra');
-{
-  const g = hasta("  document.getElementById('catGuardar').addEventListener('click', function(){",
-                  "\n  });");
-  ok(/macrosPor !== 'unidad' && piezaG <= 0/.test(g),
-     'con los macros por unidad no se pide el peso',
-     'seguía obligando: es lo que se pidió quitar');
-  ok(/unidad !== 'Gramos' &&/.test(g),
-     'pero con los macros por 100 g sigue haciendo falta',
-     'sin ese peso no hay forma de convertir y saldría «1 pieza = 0 calorías»');
-  ok(/macros_por: macrosPor/.test(g), 'y se guarda lo que se eligió');
-}
-
-// ------------------------------------------------------------------
-console.log('\nLa pantalla dice de qué son los números');
-{
-  ok(/id="catMacrosPor"/.test(HTML), 'hay dónde elegirlo');
-  const p = hasta('  function pintarUnidadCatalogo(){', '\n  }');
-  ok(/catMacrosPorCaja/.test(p) && /hidden = enGramos/.test(p),
-     'la pregunta solo sale si no se cuenta en gramos');
-  ok(/hidden = enGramos \|\| porUnidad/.test(p),
-     'y el peso se esconde cuando ya no hace falta');
-  ok(/catCalQue/.test(p),
-     'y las calorías dicen si son de 100 g o de una unidad',
-     'la etiqueta decía «Calorías por 100 g» fijo: en una ficha por unidad, mentía');
-
-  // La previa es lo que hace que un dato absurdo cante antes de guardarse.
-  // Si dividiera entre 100 unos macros que ya son de una pieza, enseñaría la
-  // centésima parte y todo parecería correcto.
-  const prev = hasta('  function pintarPreviaCatalogo(){', '\n  }');
-  ok(/var f = porUnidad \? 1 : g \/ 100;/.test(prev),
-     'y la previa no convierte lo que ya viene por unidad',
-     'enseñaría 0.75 cal donde hay 75, y nadie sospecharía del formulario');
-  ok(/u === 'Gramos' \|\| \(!porUnidad && g <= 0\)/.test(prev),
-     'y se enseña sin peso, que es justo cuando no hace falta');
-}
+// AQUÍ HABÍA DOS SECCIONES sobre el desplegable «Los macros de arriba son de»
+// y sobre cuándo se pedía el peso. Ese formulario se rehízo: ahora se eligen
+// unidad y cantidad, y las etiquetas dicen «Macros para 1 pieza». Lo que hace
+// esa pantalla —y sobre todo la cuenta que convierte lo tecleado en lo que se
+// guarda— se ejecuta con números en catalogo-en-su-unidad.
+//
+// Lo que sigue AQUÍ es lo que no cambió: que los TRES sitios que leen esas
+// filas respeten `macros_por`, y que editar un alimento no le cambie la
+// unidad a la espalda.
 
 // ------------------------------------------------------------------
 console.log('\nY editar un alimento ya no le cambia la unidad a la espalda');
@@ -142,10 +115,20 @@ console.log('\nY editar un alimento ya no le cambia la unidad a la espalda');
        'guardar el huevo deja de contarse por huevos');
   }
   const abrir = hasta('  function abrirCatalogo(a){', '\n  }');
-  ok(/catMacrosPor'\)\.value = \(a && a\.macros_por\) \|\| '100g'/.test(abrir),
-     'y al abrirlo se rellena con lo que tiene guardado');
-  ok(/catUnidad'\)\.value = \(a && a\.unidad\) \|\| 'Gramos'/.test(abrir),
-     'igual que la unidad');
+  // La unidad ya no es un desplegable: son píldoras, y ponerla ajusta además
+  // la cantidad, así que se hace con la misma función que usa el dedo.
+  ok(/ponerUnidadCat\(\(a && a\.unidad\) \|\| 'Gramos'\)/.test(abrir),
+     'al abrirlo se recupera la unidad que tenía guardada',
+     'sin esto vuelve a Gramos y al guardar el huevo deja de contarse por huevos');
+  ok(/catPiezaG'\)\.value  = \(a && a\.pieza_g\) \|\| ''/.test(abrir),
+     'y el peso, si lo tenía');
+  // `macros_por` ya no se elige a mano: sale de la unidad. Lo que hay que
+  // comprobar es que la ficha se reabra con la cantidad a la que se refieren
+  // los macros GUARDADOS —100 g, o una unidad—, no con la que se tecleó en su
+  // día, que no se guarda en ningún sitio.
+  ok(/catCantidad'\)\.value =\s*\(\(a && a\.unidad\) \|\| 'Gramos'\) === 'Gramos' \? 100 : 1/.test(abrir),
+     'y con la cantidad a la que se refiere lo guardado',
+     'reabrirla con otra cantidad haría que los macros se leyeran mal');
 }
 
 console.log('\n' + pasan + ' bien, ' + fallan + ' mal');

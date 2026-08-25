@@ -112,7 +112,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = 'bcf002da42';
+    var SELLO = 'b5b60b1c94';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -792,47 +792,37 @@
               </div>
             </div>
 
-            <p class="calc-note">Los macros van <b>por 100 g</b>. Las calorías se calculan solas.</p>
+            <!-- EN QUÉ SE CUENTA, y luego los macros DE ESA CANTIDAD.
+                 Así se escribe lo que uno tiene delante: de una barrita
+                 conoces los macros de la barrita, y de un aceite los de una
+                 cucharada. Antes había que traducirlo todo a «por 100 g» de
+                 cabeza, y para contar por piezas hacía falta además saber lo
+                 que pesa una —un dato que casi nunca se tiene—. La conversión
+                 la hace la app al guardar, que para eso está. -->
+            <div class="field-label" style="margin-top:0;">Unidad de medida</div>
+            <div class="unit-pills" id="catUnidadPills">
+              <button type="button" class="active">Gramos</button><button type="button">Pieza</button><button type="button">Servicio</button>
+              <button type="button">Taza</button><button type="button">Cucharada</button><button type="button">Onzas</button>
+            </div>
+
+            <div class="field-label">Cantidad <span id="catCantUnidad">(g)</span></div>
+            <input class="big-input" id="catCantidad" type="number" step="any" min="0" inputmode="decimal" value="100">
+
+            <p class="calc-note" id="catMacrosQue">Macros para 100 g. Las calorías se calculan solas.</p>
             <div class="cat-macros">
               <div><div class="field-label">Proteína</div><input class="big-input" id="catP" type="number" step="0.1" inputmode="decimal"></div>
               <div><div class="field-label">Carbos</div><input class="big-input" id="catC" type="number" step="0.1" inputmode="decimal"></div>
               <div><div class="field-label">Grasas</div><input class="big-input" id="catG" type="number" step="0.1" inputmode="decimal"></div>
             </div>
-            <div class="calc-box"><div class="calc-line"><span id="catCalQue">Calorías por 100 g</span><b id="catCal">0</b></div></div>
+            <div class="calc-box"><div class="calc-line"><span id="catCalQue">Calorías para 100 g</span><b id="catCal">0</b></div></div>
 
-            <!-- Cómo se le pide la cantidad a la persona al apuntarlo. -->
-            <div class="cat-fila2">
-              <div>
-                <div class="field-label">Se registra en</div>
-                <select class="big-input" id="catUnidad">
-                  <option value="Gramos">Gramos</option>
-                  <option value="Pieza">Piezas</option>
-                  <option value="Servicio">Servicios</option>
-                </select>
-              </div>
-              <div id="catPesoUnidad" hidden>
-                <!-- «obligatorio» en la etiqueta y no solo al fallar: el
-                     hueco vacío con un ejemplo en gris se lee como si ya
-                     estuviera lleno. Pasó: se guardaba, la app avisaba de
-                     que faltaba, y parecía que el botón no servía. -->
-                <div class="field-label" id="catPesoUnidadLabel">Pesa una (g)</div>
-                <input class="big-input" id="catPiezaG" type="number" step="1" min="1" inputmode="numeric" placeholder="obligatorio">
-              </div>
-            </div>
-
-            <!-- A QUÉ SE REFIEREN LOS MACROS DE ARRIBA.
-                 Antes se daba por hecho que a 100 g, y entonces contar por
-                 piezas obligaba a saber cuánto pesa una. Casi nunca se sabe:
-                 de un huevo o de una barrita conoces lo que dice la caja
-                 -los macros de UNA- y no su peso. Quien lo daba de alta
-                 acababa inventándose un peso para poder guardar, y un peso
-                 inventado se propaga a todas las cantidades. -->
-            <div id="catMacrosPorCaja" hidden>
-              <div class="field-label">Los macros de arriba son de</div>
-              <select class="big-input" id="catMacrosPor">
-                <option value="100g">100 gramos</option>
-                <option value="unidad">una unidad</option>
-              </select>
+            <!-- El peso de una unidad ya NO se pide para poder guardar: los
+                 macros que se teclean arriba ya son los de esa unidad. Se deja
+                 como dato opcional porque, cuando se sabe, permite al
+                 asistente pasar de gramos a piezas al leer una foto. -->
+            <div id="catPesoUnidad" hidden>
+              <div class="field-label" id="catPesoUnidadLabel">Y si lo sabes, ¿cuánto pesa una? (g)</div>
+              <input class="big-input" id="catPiezaG" type="number" step="1" min="1" inputmode="numeric" placeholder="opcional">
             </div>
             <p class="hint" id="catUnidadNota">Se apunta en gramos.</p>
 
@@ -1952,7 +1942,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = 'bcf002da42';
+    var SELLO = 'b5b60b1c94';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que

@@ -51,11 +51,18 @@ console.log('\n— El campo que falta se señala, no solo se menciona —');
   // comprobaciones se pusieron rojas sin que nada se hubiera roto.
   const i = APP.indexOf("getElementById('catGuardar')");
   const fn = APP.slice(i, APP.indexOf('\n  });', i));
-  check('sigue habiendo aviso', /toast\('toastAdmin', 'Falta cuánto pesa/.test(fn));
-  // Un mensaje dice QUÉ falta; marcar el campo dice DÓNDE.
-  check('se marca el campo', /campo\.classList\.add\('falta'\)/.test(fn));
-  check('y se le lleva el foco', /campo\.focus\(\)/.test(fn));
-  check('se sube a la vista', /campo\.scrollIntoView/.test(fn));
+  // ESTAS COMPROBABAN UN AVISO QUE YA NO EXISTE, y no porque se haya roto:
+  // se quitó a propósito. El formulario pide ahora «Macros para 1 pieza», o
+  // sea los macros de la cantidad que se teclea, así que no hay nada que
+  // convertir y el peso de una unidad pasó a ser un extra.
+  //
+  // Exigirlo obligaba a saber un dato que casi nunca se tiene —de un huevo
+  // conoces sus macros, no lo que pesa— y quien no lo sabía se lo inventaba.
+  // Un peso inventado se propaga a TODAS las cantidades: es peor que no
+  // pedirlo.
+  check('ya no se exige el peso para guardar',
+    !/toast\('toastAdmin', 'Falta cuánto pesa/.test(fn),
+    'era justo el dato que no se quería tener que saber');
   // Y la marca se quita al arreglarlo: dejarla puesta hace pensar que sigue mal.
   check('la marca se quita al guardar bien',
     /document\.getElementById\('catPiezaG'\)\.classList\.remove\('falta'\)/.test(APP));
@@ -66,9 +73,11 @@ console.log('\n— El campo que falta se señala, no solo se menciona —');
 console.log('\n— El hueco vacío ya no parece lleno —');
 {
   // Tenía placeholder="50" en gris. Se lee como un valor puesto, se guarda,
-  // y la app dice que falta algo que parecía estar.
+  // y la app dice que falta algo que parecía estar. Se puso «obligatorio», y
+  // desde que dejó de serlo, «opcional»: en las dos el texto DICE lo que pasa
+  // en vez de parecer un número ya escrito.
   check('el ejemplo no parece un valor',
-    /id="catPiezaG"[^>]*placeholder="obligatorio"/.test(HTML),
+    /id="catPiezaG"[^>]*placeholder="opcional"/.test(HTML),
     'un número en gris se lee como si el campo ya estuviera lleno');
 }
 
@@ -95,20 +104,20 @@ console.log('\n— Se ve lo que va a ver quien lo apunte —');
   // Solo cuando significa algo: en gramos no hay nada que previsualizar, y
   // sin peso no se puede calcular.
   check('en gramos no sale',
-    /if\(u === 'Gramos' \|\| \(!porUnidad && g <= 0\)\)\{ caja\.hidden = true; return; \}/.test(fn));
+    /if\(u === 'Gramos'\)\{ caja\.hidden = true; return; \}/.test(fn),
+    'ahí lo tecleado ya se lee como lo que es');
 
-  // Los macros se teclean por 100 g: la previa los pasa a la pieza.
-  //
-  // Desde la 0052 hay fichas cuyos macros YA son los de una unidad. Ahí no
-  // se divide entre nada: dividir enseñaría la centésima parte y el
-  // formulario parecería correcto, que es lo que esta previa existe para
-  // evitar.
-  check('escala los macros a la pieza', /var f = porUnidad \? 1 : g \/ 100;/.test(fn));
+  // Lo tecleado es para la cantidad que se dijo arriba —«Macros para 2
+  // piezas»— y quien lo apunte lo verá por UNA, que es como se lo va a
+  // ofrecer la app. Sin dividir, dar de alta dos piezas de golpe enseñaría
+  // el doble y el formulario parecería correcto: justo lo que esta previa
+  // existe para evitar.
+  check('lo lleva a UNA unidad', /var f = 1 \/ catCantidad\(\);/.test(fn));
   check('enseña las calorías', /\(P\*4 \+ C\*4 \+ G\*9\) \* f/.test(fn));
   check('y los tres macros', /'P ' \+ Math\.round\(P\*f\*10\)\/10/.test(fn));
-  check('diciendo cuánto pesa, cuando ese peso significa algo',
-    /porUnidad \? '' : ' \(' \+ g \+ ' g\)'/.test(fn),
-    'en una ficha por unidad no hay peso que enseñar: ponerlo sería inventarlo');
+  check('diciendo cuánto pesa, cuando ese peso se sabe',
+    /g > 0 \? ' \(' \+ g \+ ' g\)' : ''/.test(fn),
+    'ese peso es opcional: enseñar un cero sería inventarlo');
 
   // Se rehace al teclear, no solo al elegir la unidad: es lo que permite
   // ver al momento si el dato tiene sentido.

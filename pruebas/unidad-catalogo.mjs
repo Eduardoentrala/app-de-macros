@@ -27,18 +27,27 @@ const check = (n, cond, extra = '') => {
   else { mal++; console.log(`  FALLA ${n}${extra ? '\n        ' + extra : ''}`); }
 };
 
-console.log('\n— El panel deja elegir las tres —');
+console.log('\n— El panel deja elegir las seis —');
 {
-  const i = HTML.indexOf('id="catUnidad"');
-  const trozo = i > 0 ? HTML.slice(i, i + 400) : '';
+  // Eran tres en un desplegable. Ahora son PILDORAS y son seis, las mismas
+  // que la pantalla de «Agregar alimento»: de un aceite conoces los macros de
+  // una cucharada, y traducirlos a gramos de cabeza no lo hace nadie.
+  const i = HTML.indexOf('id="catUnidadPills"');
+  const trozo = i > 0 ? HTML.slice(i, i + 500) : '';
   check('hay selector de unidad', i > 0);
-  for (const u of ['Gramos', 'Pieza', 'Servicio'])
-    check(`se puede elegir ${u}`, new RegExp(`value="${u}"`).test(trozo), trozo.slice(0, 200));
+  for (const u of ['Gramos', 'Pieza', 'Servicio', 'Taza', 'Cucharada', 'Onzas'])
+    check(`se puede elegir ${u}`, trozo.includes('>' + u + '<'), trozo.slice(0, 220));
   check('hay campo para el peso de una unidad', /id="catPiezaG"/.test(HTML));
   // Empieza oculto: por defecto es gramos y ahí ese campo no pinta nada.
   check('el peso empieza oculto', /id="catPesoUnidad" hidden/.test(HTML));
   // Teclado numérico: es un peso en gramos, siempre entero.
   check('pide teclado numérico', /id="catPiezaG"[^>]*inputmode="numeric"/.test(HTML));
+  // Y YA NO ES OBLIGATORIO. Los macros que se teclean son los de la cantidad
+  // que se teclea, así que no hay nada que convertir y ese peso pasó a ser un
+  // extra que sirve al asistente cuando se sabe.
+  check('y ya no se pide como obligatorio',
+    /id="catPiezaG"[^>]*placeholder="opcional"/.test(HTML),
+    'era justo el dato que no se quería tener que saber');
 }
 
 console.log('\n— Y no se confunde con la porción de USDA —');
@@ -54,23 +63,27 @@ console.log('\n— Y no se confunde con la porción de USDA —');
 
 console.log('\n— Se guarda lo que se eligió —');
 {
-  const i = APP.indexOf("var unidad = document.getElementById('catUnidad')");
-  const trozo = i > 0 ? APP.slice(i, i + 2600) : '';
+  const i = APP.indexOf('    var unidad = catUnidadActual;');
+  const trozo = i > 0 ? APP.slice(i, APP.indexOf('\n  });', i)) : '';
   check('el guardado lee la unidad', i > 0);
   check('la manda a la base', /unidad:\s*unidad/.test(trozo));
   check('manda también el peso de la unidad', /pieza_g:/.test(trozo));
-  // Contar por piezas sin saber cuánto pesa una es imposible: los macros
-  // están por 100 g y sin ese peso no hay con qué convertir.
-  // Sigue haciendo falta CUANDO HAY QUE CONVERTIR. Desde la 0052 una ficha
-  // puede traer los macros de UNA unidad; ahí no hay nada que convertir, y
-  // pedir el peso era obligar a inventarse un dato que casi nunca se sabe.
-  check('no deja guardar piezas sin peso, si los macros van por 100 g',
-    /if\(unidad !== 'Gramos' && macrosPor !== 'unidad' && piezaG <= 0\)/.test(trozo),
-    trozo.slice(0, 300));
-  // El texto cambio de "Di cuanto pesa" a "Falta cuanto pesa": lo que
-  // importa no es la redaccion sino que se diga QUE falta, en palabras.
-  check('y lo dice con palabras, no con un error de Postgres',
-    /toast\('toastAdmin', '(Falta|Di) cuánto pesa/.test(trozo));
+  check('y a qué se refieren los macros', /macros_por: macrosPor/.test(trozo));
+
+  // AQUI HABIA UN AVISO DE «FALTA CUANTO PESA UNA PIEZA» y ya no existe, a
+  // proposito. Los macros que se teclean son los de la cantidad que se teclea
+  // -«Macros para 1 pieza»-, asi que no hay nada que convertir y ese peso paso
+  // a ser un extra. Exigirlo era obligar a saber un dato que casi nunca se
+  // tiene, y quien no lo sabia se lo inventaba: un peso inventado se propaga a
+  // todas las cantidades.
+  check('ya no se exige el peso para poder guardar',
+    !/toast\('toastAdmin', '(Falta|Di) cuánto pesa/.test(trozo),
+    'era justo lo que se pidio quitar');
+  // Lo que SI tiene que seguir: convertir bien lo tecleado. Se ejecuta con
+  // numeros en catalogo-en-su-unidad.
+  check('y la conversion se hace al guardar',
+    /var factor = unidad === 'Gramos' \? 100 \/ cant : 1 \/ cant;/.test(trozo));
+
   // En gramos se limpia: un peso por pieza colgando de un alimento que va
   // en gramos no significa nada y confunde al siguiente que lo abra.
   // En gramos, y también cuando no se puso ninguno: un cero colgando ahí no
@@ -82,8 +95,17 @@ console.log('\n— Se guarda lo que se eligió —');
 console.log('\n— Al reabrirlo, sale como se dejó —');
 {
   const i = APP.indexOf('function abrirCatalogo(');
-  const trozo = APP.slice(i, i + 1800);
-  check('recupera la unidad guardada', /catUnidad'\)\.value = \(a && a\.unidad\) \|\| 'Gramos'/.test(trozo));
+  const trozo = APP.slice(i, APP.indexOf('\n  }', i));
+  // La unidad ya no es un desplegable con `.value`: son píldoras, y se ponen
+  // llamando a la misma función que usa el dedo.
+  check('recupera la unidad guardada',
+    /ponerUnidadCat\(\(a && a\.unidad\) \|\| 'Gramos'\)/.test(trozo));
+  // Y va ANTES de rellenar los macros: al poner la unidad se ajusta la
+  // cantidad, así que hacerlo después dejaría unos macros leyéndose con una
+  // cantidad que ya no es la suya.
+  check('y antes de rellenar los macros',
+    trozo.indexOf('ponerUnidadCat(') < trozo.indexOf("catP').value"),
+    'al revés, los macros quedarían para otra cantidad');
   check('recupera el peso guardado', /catPiezaG'\)\.value  = \(a && a\.pieza_g\) \|\| ''/.test(trozo));
   check('y repinta el formulario', /pintarUnidadCatalogo\(\);/.test(trozo));
 }
