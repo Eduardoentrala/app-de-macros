@@ -3249,6 +3249,20 @@
         // acabara siendo una taza.
         var pz = Number(x.pieza_g) || 0;
         var uni = x.unidad || 'Gramos';
+
+        // LOS MACROS DE LA FILA SON LOS DE UNA UNIDAD.
+        //
+        // No hay nada que convertir: se cogen tal cual. Existe para poder dar
+        // de alta algo por piezas SIN saber cuánto pesa una, que es lo normal
+        // -de un huevo o de una barrita sabes lo que dice la caja, no lo que
+        // pesa-. Antes había que inventarse un peso para poder guardarlo, y
+        // un peso inventado se propaga a todas las cantidades.
+        if(uni !== 'Gramos' && x.macros_por === 'unidad'){
+          return { fuente:'catalogo', n:x.nombre, estado:x.estado,
+                   u:uni, cant:1, P:P, C:C, G:G };
+        }
+
+        // Y lo de siempre: por 100 g, convertidos con el peso de una unidad.
         if(uni !== 'Gramos' && pz > 0){
           var por = function(v){ return Math.round(v * pz / 100 * 10) / 10; };
           return { fuente:'catalogo', n:x.nombre, estado:x.estado,
@@ -6778,8 +6792,16 @@
     // Aquí sí se lee la tabla directa y no buscar_catalogo(): el super
     // admin necesita ver los campos que la función no devuelve (fdc_id,
     // el nombre de USDA, si está activo) y su política se lo permite.
+    // UNIDAD, PIEZA_G Y MACROS_POR TAMBIÉN, que faltaban.
+    //
+    // Sin ellas, abrir un alimento para editarlo dejaba el desplegable en
+    // «Gramos» -porque `a.unidad` venía sin definir- y el peso en blanco. Y
+    // al guardar se escribía eso: entrar a corregirle una tilde al nombre de
+    // un huevo lo convertía en gramos y le borraba el peso, sin un aviso.
+    // Justo la regresión silenciosa que la 0033 se cuidó de evitar.
     var q = '/rest/v1/alimentos_catalogo?select=id,nombre,categoria,estado,kcal,' +
-            'proteina,carbos,grasas,porcion,porcion_g,fdc_id,nombre_usda,activo' +
+            'proteina,carbos,grasas,porcion,porcion_g,fdc_id,nombre_usda,activo,' +
+            'unidad,pieza_g,macros_por' +
             '&order=nombre.asc&limit=400';
     if(catFiltro.trim().length >= 2){
       q += '&nombre=ilike.*' + encodeURIComponent(catFiltro.trim()) + '*';
@@ -6857,17 +6879,41 @@
   // "150 g de arroz" o "2 huevos" o "1 servicio de batido". La conversión
   // la hace la app con el peso de una unidad, así que en cuanto la unidad
   // no es gramos ese peso deja de ser opcional.
+  // A qué se refieren los macros de esta ficha. En gramos siempre a 100 g:
+  // «los macros de un gramo» no es como lo escribe nadie.
+  function macrosPorDelCatalogo(){
+    var u = document.getElementById('catUnidad').value;
+    var sel = document.getElementById('catMacrosPor');
+    if(u === 'Gramos' || !sel) return '100g';
+    return sel.value === 'unidad' ? 'unidad' : '100g';
+  }
+
   function pintarUnidadCatalogo(){
     var u = document.getElementById('catUnidad').value;
     var enGramos = u === 'Gramos';
     var nombreUnidad = u === 'Pieza' ? 'una pieza' : 'un servicio';
-    document.getElementById('catPesoUnidad').hidden = enGramos;
+    var porUnidad = macrosPorDelCatalogo() === 'unidad';
+
+    // La pregunta solo tiene sentido si no se cuenta en gramos.
+    document.getElementById('catMacrosPorCaja').hidden = enGramos;
+
+    // Y EL PESO SOLO HACE FALTA PARA CONVERTIR. Si los macros ya son los de
+    // una unidad no hay nada que convertir, así que se deja de pedir: antes
+    // se exigía siempre y quien no lo sabía se inventaba un número.
+    document.getElementById('catPesoUnidad').hidden = enGramos || porUnidad;
     document.getElementById('catPesoUnidadLabel').textContent =
       u === 'Pieza' ? 'Pesa una (g)' : 'Pesa uno (g)';
+
+    document.getElementById('catCalQue').textContent =
+      porUnidad ? 'Calorías de ' + nombreUnidad : 'Calorías por 100 g';
+
     document.getElementById('catUnidadNota').textContent = enGramos
       ? 'Se apunta en gramos.'
-      : 'Se apunta por ' + (u === 'Pieza' ? 'piezas' : 'servicios') +
-        '. Di cuánto pesa ' + nombreUnidad + ' para poder calcular sus macros.';
+      : porUnidad
+        ? 'Se apunta por ' + (u === 'Pieza' ? 'piezas' : 'servicios') +
+          ', con los macros de arriba tal cual. No hace falta saber lo que pesa.'
+        : 'Se apunta por ' + (u === 'Pieza' ? 'piezas' : 'servicios') +
+          '. Di cuánto pesa ' + nombreUnidad + ' para poder calcular sus macros.';
     pintarPreviaCatalogo();
   }
 
@@ -6881,17 +6927,20 @@
     if(!caja) return;
     var u = document.getElementById('catUnidad').value;
     var g = Number(document.getElementById('catPiezaG').value) || 0;
+    var porUnidad = macrosPorDelCatalogo() === 'unidad';
 
-    if(u === 'Gramos' || g <= 0){ caja.hidden = true; return; }
+    if(u === 'Gramos' || (!porUnidad && g <= 0)){ caja.hidden = true; return; }
 
     var P = Number(document.getElementById('catP').value) || 0;
     var C = Number(document.getElementById('catC').value) || 0;
     var G = Number(document.getElementById('catG').value) || 0;
-    var f = g / 100;
+    // Por unidad no hay nada que convertir: lo tecleado ES lo de una.
+    var f = porUnidad ? 1 : g / 100;
 
     caja.hidden = false;
     document.getElementById('catPreviewQue').textContent =
-      (u === 'Pieza' ? 'Una pieza' : 'Un servicio') + ' (' + g + ' g)';
+      (u === 'Pieza' ? 'Una pieza' : 'Un servicio') +
+      (porUnidad ? '' : ' (' + g + ' g)');
     document.getElementById('catPreviewCal').textContent =
       mil(Math.round((P*4 + C*4 + G*9) * f)) + ' cal';
     document.getElementById('catPreviewDet').textContent =
@@ -6900,6 +6949,7 @@
   }
 
   document.getElementById('catUnidad').addEventListener('change', pintarUnidadCatalogo);
+  document.getElementById('catMacrosPor').addEventListener('change', pintarUnidadCatalogo);
   // La previa se rehace con cualquier número que la cambie, no solo al
   // elegir unidad: se teclea el peso y se ve al momento si cuadra.
   Array.from(['catPiezaG','catP','catC','catG']).forEach(function(id){
@@ -6934,6 +6984,7 @@
     document.getElementById('catPorcionG').value = (a && a.porcion_g) || '';
     document.getElementById('catUnidad').value = (a && a.unidad) || 'Gramos';
     document.getElementById('catPiezaG').value  = (a && a.pieza_g) || '';
+    document.getElementById('catMacrosPor').value = (a && a.macros_por) || '100g';
     pintarUnidadCatalogo();
     document.getElementById('catOcultar').hidden = nuevo;
     document.getElementById('catOcultar').textContent =
@@ -6955,7 +7006,8 @@
     // Se avisa aquí y no se deja que lo rechace la base: el mensaje de un
     // check de Postgres no le dice a nadie qué campo le falta. La base lo
     // impide igualmente -es su trabajo-, pero esto es lo que se lee.
-    if(unidad !== 'Gramos' && piezaG <= 0){
+    var macrosPor = macrosPorDelCatalogo();
+    if(unidad !== 'Gramos' && macrosPor !== 'unidad' && piezaG <= 0){
       // Además del aviso, se marca y se enfoca el campo. Un mensaje solo
       // dice QUÉ falta; esto dice DÓNDE, que es lo que hacía falta cuando
       // el aviso ni se veía -salía por debajo de la hoja- y parecía que el
@@ -6980,10 +7032,11 @@
       porcion:   document.getElementById('catPorcion').value.trim() || null,
       porcion_g: Number(document.getElementById('catPorcionG').value) || null,
       unidad:    unidad,
+      macros_por: macrosPor,
       // En gramos se limpia a null en vez de dejar el número escrito: si
       // alguien pone 50, cambia a gramos y guarda, un peso por pieza
       // colgando ahí no significa nada y confunde al siguiente que lo abra.
-      pieza_g:   unidad === 'Gramos' ? null : piezaG
+      pieza_g:   unidad === 'Gramos' || piezaG <= 0 ? null : piezaG
     };
     // Las calorías no se piden: se calculan. Pedirlas invita a que un día
     // no cuadren con los macros de su propia fila.

@@ -46,8 +46,11 @@ console.log('\n— El aviso se ve por encima de las hojas —');
 
 console.log('\n— El campo que falta se señala, no solo se menciona —');
 {
+  // Hasta el final del manejador, NO 1400 caracteres: la ventana fija se
+  // desbordo en cuanto el guardado creció unas líneas, y estas
+  // comprobaciones se pusieron rojas sin que nada se hubiera roto.
   const i = APP.indexOf("getElementById('catGuardar')");
-  const fn = APP.slice(i, i + 1400);
+  const fn = APP.slice(i, APP.indexOf('\n  });', i));
   check('sigue habiendo aviso', /toast\('toastAdmin', 'Falta cuánto pesa/.test(fn));
   // Un mensaje dice QUÉ falta; marcar el campo dice DÓNDE.
   check('se marca el campo', /campo\.classList\.add\('falta'\)/.test(fn));
@@ -85,19 +88,27 @@ console.log('\n— Un solo campo de gramos a la vista —');
 console.log('\n— Se ve lo que va a ver quien lo apunte —');
 {
   const i = APP.indexOf('function pintarPreviaCatalogo(');
-  const fn = APP.slice(i, i + 1400);
+  const fn = APP.slice(i, APP.indexOf('\n  }', i));
   check('existe la previa', i > 0);
   check('hay sitio para ella', /id="catPreview"/.test(HTML) && /id="catPreview" hidden/.test(HTML));
 
   // Solo cuando significa algo: en gramos no hay nada que previsualizar, y
   // sin peso no se puede calcular.
-  check('en gramos no sale', /if\(u === 'Gramos' \|\| g <= 0\)\{ caja\.hidden = true; return; \}/.test(fn));
+  check('en gramos no sale',
+    /if\(u === 'Gramos' \|\| \(!porUnidad && g <= 0\)\)\{ caja\.hidden = true; return; \}/.test(fn));
 
   // Los macros se teclean por 100 g: la previa los pasa a la pieza.
-  check('escala los macros a la pieza', /var f = g \/ 100;/.test(fn));
+  //
+  // Desde la 0052 hay fichas cuyos macros YA son los de una unidad. Ahí no
+  // se divide entre nada: dividir enseñaría la centésima parte y el
+  // formulario parecería correcto, que es lo que esta previa existe para
+  // evitar.
+  check('escala los macros a la pieza', /var f = porUnidad \? 1 : g \/ 100;/.test(fn));
   check('enseña las calorías', /\(P\*4 \+ C\*4 \+ G\*9\) \* f/.test(fn));
   check('y los tres macros', /'P ' \+ Math\.round\(P\*f\*10\)\/10/.test(fn));
-  check('diciendo cuánto pesa', /\+ ' \(' \+ g \+ ' g\)'/.test(fn));
+  check('diciendo cuánto pesa, cuando ese peso significa algo',
+    /porUnidad \? '' : ' \(' \+ g \+ ' g\)'/.test(fn),
+    'en una ficha por unidad no hay peso que enseñar: ponerlo sería inventarlo');
 
   // Se rehace al teclear, no solo al elegir la unidad: es lo que permite
   // ver al momento si el dato tiene sentido.

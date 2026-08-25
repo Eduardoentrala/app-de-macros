@@ -61,16 +61,22 @@ console.log('\n— Se guarda lo que se eligió —');
   check('manda también el peso de la unidad', /pieza_g:/.test(trozo));
   // Contar por piezas sin saber cuánto pesa una es imposible: los macros
   // están por 100 g y sin ese peso no hay con qué convertir.
-  check('no deja guardar piezas sin peso',
-    /if\(unidad !== 'Gramos' && piezaG <= 0\)/.test(trozo), trozo.slice(0, 300));
+  // Sigue haciendo falta CUANDO HAY QUE CONVERTIR. Desde la 0052 una ficha
+  // puede traer los macros de UNA unidad; ahí no hay nada que convertir, y
+  // pedir el peso era obligar a inventarse un dato que casi nunca se sabe.
+  check('no deja guardar piezas sin peso, si los macros van por 100 g',
+    /if\(unidad !== 'Gramos' && macrosPor !== 'unidad' && piezaG <= 0\)/.test(trozo),
+    trozo.slice(0, 300));
   // El texto cambio de "Di cuanto pesa" a "Falta cuanto pesa": lo que
   // importa no es la redaccion sino que se diga QUE falta, en palabras.
   check('y lo dice con palabras, no con un error de Postgres',
     /toast\('toastAdmin', '(Falta|Di) cuánto pesa/.test(trozo));
   // En gramos se limpia: un peso por pieza colgando de un alimento que va
   // en gramos no significa nada y confunde al siguiente que lo abra.
+  // En gramos, y también cuando no se puso ninguno: un cero colgando ahí no
+  // significa nada y confunde al siguiente que lo abra.
   check('en gramos el peso se limpia a null',
-    /unidad === 'Gramos' \? null : piezaG/.test(trozo));
+    /unidad === 'Gramos' \|\| piezaG <= 0 \? null : piezaG/.test(trozo));
 }
 
 console.log('\n— Al reabrirlo, sale como se dejó —');
@@ -84,8 +90,11 @@ console.log('\n— Al reabrirlo, sale como se dejó —');
 
 console.log('\n— El buscador lo ofrece en su unidad —');
 {
+  // Hasta el final del .map, no 500 caracteres: al añadir delante la rama de
+  // «los macros ya son los de una unidad», lo de siempre se salió de la
+  // ventana y estas comprobaciones dieron rojo culpando al código.
   const i = APP.indexOf('var pz = Number(x.pieza_g) || 0;');
-  const trozo = APP.slice(i, i + 500);
+  const trozo = APP.slice(i, APP.indexOf('\n      });', i));
   check('la unidad la dice la fila, no se adivina',
     /var uni = x\.unidad \|\| 'Gramos';/.test(trozo));
   check('solo convierte si no son gramos y hay peso',

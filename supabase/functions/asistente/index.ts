@@ -2206,18 +2206,36 @@ async function afinarConCatalogo(
         (!quiereCocido && !quiereCrudo && f.estado === 'unico'))
       ?? filas[0];
 
-    // Los macros del catálogo son por 100 g. Se llevan a la cantidad que
-    // dijo el modelo, traduciendo su unidad a gramos. Para piezas y tazas
-    // se usa el peso de la porción que trae el propio catálogo; si no lo
-    // tiene, no hay forma honesta de convertir y se deja la estimación.
+    // Los macros del catálogo son por 100 g SALVO que la fila diga otra cosa
+    // -`macros_por`-. En el caso normal se llevan a la cantidad que dijo el
+    // modelo traduciendo su unidad a gramos; para piezas y tazas se usa el
+    // peso de la porción que trae el propio catálogo, y si no lo tiene no hay
+    // forma honesta de convertir y se deja la estimación.
     const cant = Number(a.cantidad) || 1;
-    const porG = Number(mejor.porcion_g) || 0;
-    const gramos = a.unidad === 'Gramos' ? cant
-                 : a.unidad === 'Onzas'  ? cant * 28.35
-                 : porG ? cant * porG
-                 : 0;
-    if (!gramos) continue;
-    const k = gramos / 100;
+
+    // CUANDO LA FILA TRAE LOS MACROS DE UNA UNIDAD, no hay que convertir
+    // nada: se multiplican por cuántas dijo el modelo.
+    //
+    // Existe para poder dar de alta algo por piezas sin saber cuánto pesa
+    // una, que es lo normal: de un huevo o de una barrita sabes lo que dice
+    // la caja, no lo que pesa. Si esto no estuviera aquí, esas filas caerían
+    // en la cuenta de abajo -que divide entre 100- y saldrían con la
+    // centésima parte de sus macros, calladamente.
+    const porUnidad = String(mejor.macros_por ?? '100g') === 'unidad' &&
+                      String(mejor.unidad ?? 'Gramos') !== 'Gramos';
+
+    let k: number;
+    if (porUnidad) {
+      k = cant;
+    } else {
+      const porG = Number(mejor.porcion_g) || 0;
+      const gramos = a.unidad === 'Gramos' ? cant
+                   : a.unidad === 'Onzas'  ? cant * 28.35
+                   : porG ? cant * porG
+                   : 0;
+      if (!gramos) continue;
+      k = gramos / 100;
+    }
 
     a.proteina = Math.round(Number(mejor.proteina) * k * 10) / 10;
     a.carbos   = Math.round(Number(mejor.carbos)   * k * 10) / 10;
