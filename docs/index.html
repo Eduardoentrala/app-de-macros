@@ -112,7 +112,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = 'a1bf1647ca';
+    var SELLO = '12913cbf6b';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -710,7 +710,12 @@
           <div class="card">
             <div class="field-label" style="margin-top:0;">Cantidad <span id="unitLabel">(g)</span></div>
             <input class="field-value big" id="nfQty" type="number" inputmode="decimal" value="100"
+                   min="0" step="any"
                    style="border:none;width:100%;font-family:inherit;color:var(--ink);background:var(--app-bg);">
+            <!-- Lo que va a entrar en el diario. Los macros se escriben por
+                 100 g y se apunta otra cantidad: sin esto hay que multiplicar
+                 de cabeza para saber que se esta apuntando. -->
+            <p class="calc-note" id="nfTotal">&nbsp;</p>
           </div>
 
           <div class="card">
@@ -1934,7 +1939,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = 'a1bf1647ca';
+    var SELLO = '12913cbf6b';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que

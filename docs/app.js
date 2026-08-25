@@ -2495,7 +2495,7 @@
   // En la comida interesa primero cuánto y cuántas calorías; los macros van
   // detrás y compactos, o la línea se parte en dos en un teléfono.
   function lineaComida(a){
-    return un(a.cant) + ' ' + (a.u === 'Gramos' ? 'g' : a.u.toLowerCase()) +
+    return un(a.cant) + ' ' + textoUnidad(a.cant, a.u) +
            ' · ' + Math.round(calAlim(a)) + ' kcal' +
            ' · P' + un(a.P) + ' C' + un(a.C) + ' G' + un(a.G);
   }
@@ -3351,6 +3351,20 @@
   // Lo mismo, con artículo, para la hoja de la cantidad: «por una onza».
   var UNIDAD_UNA   = {Gramos:'100 g', Pieza:'una pieza', Servicio:'un servicio', Taza:'una taza', Cucharada:'una cucharada', Onzas:'una onza'};
 
+  // «2 piezas», no «2 pieza».
+  //
+  // Se escribía `a.u.toLowerCase()`, que devuelve el nombre de la unidad tal
+  // cual: en singular siempre, y en el caso de las onzas siempre en plural.
+  // Los gramos van con su abreviatura y no se pluralizan.
+  //
+  // El plural sale de UNIDAD_BASE, que ya tiene el singular bueno, y todas
+  // estas palabras lo hacen igual: pieza→piezas, taza→tazas, onza→onzas.
+  function textoUnidad(cant, u){
+    var s = UNIDAD_BASE[u];
+    if(!s || u === 'Gramos') return 'g';
+    return Math.abs(Number(cant)) === 1 ? s : s + 's';
+  }
+
   // Sacado del manejador para poder dejar la unidad puesta desde fuera, al
   // abrir la pantalla para editar un alimento que ya la tiene.
   function ponerUnidad(u){
@@ -3361,6 +3375,16 @@
     });
     document.getElementById('unitLabel').textContent = UNIDAD_ABREV[u];
     document.getElementById('baseLabel').textContent = UNIDAD_BASE[u];
+
+    // Y LA CANTIDAD, al número que tenga sentido para esa unidad.
+    //
+    // El `value="100"` está escrito en el HTML y no lo cambiaba nadie, así
+    // que al elegir «Pieza» la caja seguía diciendo 100 con la etiqueta
+    // (pza) —como si fueras a apuntar cien huevos— y luego se apuntaba uno.
+    // La pantalla decía una cosa y la app hacía otra.
+    var q = document.getElementById('nfQty');
+    if(q) q.value = baseDeUnidad(u);
+    if(typeof pintarTotalNuevo === 'function') pintarTotalNuevo();
   }
 
   unitPills.addEventListener('click', function(e){
@@ -3372,8 +3396,52 @@
   function calcNuevo(){
     var P = Number(nfP.value)||0, C = Number(nfC.value)||0, G = Number(nfG.value)||0;
     document.getElementById('nfCal').textContent = mil(P*4 + C*4 + G*9);
+    pintarTotalNuevo();
   }
+
+  // LO QUE SE TECLEA, CONVERTIDO EN ALIMENTO.
+  //
+  // Son dos cosas distintas y hasta ahora la segunda no se leía:
+  //
+  //   · los macros van POR PORCIÓN BASE —la etiqueta dice «Macros por 100g»—
+  //   · la cantidad es lo que se va a apuntar AHORA
+  //
+  // `nfQty` no aparecía ni una vez en este archivo. Se escribía 150 y se
+  // apuntaban 100: la caja estaba ahí de adorno.
+  //
+  // Sale como función suya, y no dentro del manejador del botón, para poder
+  // ejecutarla en una prueba con números y sin pantalla.
+  function alimentoDelFormulario(nombre, P, C, G, unidad, cantidad){
+    var a = { n: nombre, u: unidad, porBase: { P:P, C:C, G:G }, P:P, C:C, G:G };
+    a.base = baseDeUnidad(unidad);
+    var cant = Number(cantidad);
+    // Vacío, cero o un disparate: una porción, que es lo que ya hacía antes.
+    if(!(cant > 0)) cant = a.base;
+    aplicarCantidad(a, cant);
+    return a;
+  }
+
+  // Lo que se va a apuntar, debajo de la cantidad. Los macros se escriben
+  // por 100 g y se apunta otra cosa: sin esto hay que multiplicar de cabeza
+  // para saber qué va a entrar en el diario, y nadie lo hace.
+  function pintarTotalNuevo(){
+    var caja = document.getElementById('nfTotal');
+    if(!caja) return;
+    var q = document.getElementById('nfQty');
+    var a = alimentoDelFormulario('x',
+      Number(nfP.value)||0, Number(nfC.value)||0, Number(nfG.value)||0,
+      unidadActual, q ? q.value : '');
+    var cal = Math.round(calAlim(a));
+    if(!cal){ caja.textContent = ' '; return; }
+    caja.textContent = 'Se apunta ' + un(a.cant) + ' ' + textoUnidad(a.cant, a.u) +
+      ' · ' + mil(cal) + ' cal · P' + un(a.P) + ' C' + un(a.C) + ' G' + un(a.G);
+  }
+
   [nfP, nfC, nfG].forEach(function(el){ el.addEventListener('input', calcNuevo); });
+  (function(){
+    var q = document.getElementById('nfQty');
+    if(q) q.addEventListener('input', pintarTotalNuevo);
+  })();
 
   // Se vuelve a "crear" siempre que se entra por el botón Crear: si no, la
   // pantalla se quedaría en modo editar desde la vez anterior.
@@ -3383,7 +3451,7 @@
     document.getElementById('nfSave').textContent = 'Guardar alimento';
     document.getElementById('nfName').value = '';
     nfP.value = ''; nfC.value = ''; nfG.value = '';
-    ponerUnidad('Gramos');
+    ponerUnidad('Gramos');            // deja también la cantidad en 100
     calcNuevo();
   }
   document.getElementById('pillCrear').addEventListener('click', limpiarFormularioAlimento);
@@ -3502,12 +3570,16 @@
         if(cambiar) actualizarGuardado(yaLoTiene, P, C, G);
         // Apuntar la comida de hoy con lo que se acaba de escribir, se haya
         // actualizado la ficha o no: es lo que la persona vino a hacer.
-        apuntarYLimpiar({ n:nombre, P:P, C:C, G:G, u:unidadActual, id:yaLoTiene.id });
+        var conCantidad = alimentoDelFormulario(nombre, P, C, G, unidadActual,
+                                                document.getElementById('nfQty').value);
+        conCantidad.id = yaLoTiene.id;
+        apuntarYLimpiar(conCantidad);
       });
       return;
     }
 
-    var a = {n:nombre, P:P, C:C, G:G, u:unidadActual};
+    var a = alimentoDelFormulario(nombre, P, C, G, unidadActual,
+                                  document.getElementById('nfQty').value);
     MIS_ALIMENTOS.unshift(a);
     pintarListas();
     apuntarYLimpiar(a);
@@ -9029,8 +9101,16 @@
     // el alimento repetido en la despensa.
     var fila = {
       id: idNuevo(),
-      user_id: sesion.user.id, name: a.n, unit: a.u || 'Gramos', base_qty: a.base || baseDeUnidad(a.u || 'Gramos'),
-      protein_g: a.P, carbs_g: a.C, fat_g: a.G
+      user_id: sesion.user.id, name: a.n, unit: a.u || 'Gramos',
+      base_qty: a.base || baseDeUnidad(a.u || 'Gramos'),
+      // LOS DE LA PORCIÓN BASE, no los de lo que se apuntó hoy. Mientras la
+      // cantidad era siempre la base los dos números coincidían y esto no se
+      // notaba; en cuanto alguien apunta 150 g, la ficha se guardaba con un
+      // 50 % de más etiquetado como «por 100 g», y así cada vez que la
+      // reutilizara. La otra ruta que guarda un alimento ya lo hacía bien.
+      protein_g: a.porBase ? a.porBase.P : a.P,
+      carbs_g:   a.porBase ? a.porBase.C : a.C,
+      fat_g:     a.porBase ? a.porBase.G : a.G
     };
     var op = {
       method:'POST', headers:{ 'Prefer':'return=representation' },
