@@ -232,6 +232,11 @@
 .ia-msg .burbuja{
   padding:13px 15px;border-radius:16px;font:500 14.5px/1.5 sans-serif;
   white-space:pre-wrap;
+  /* Una palabra sin espacios más ancha que la burbuja se salía por el lado,
+     encima del fondo y fuera de él. No hace falta rebuscar para encontrarla:
+     un correo o una dirección de web pegada en el chat no llevan espacios.
+     Se midió aquí: la burbuja da 359 px y un correo largo pedía 451. */
+  overflow-wrap:break-word;
 }
 .ia-msg.de-el .burbuja{background:var(--card-bg);color:var(--ink);box-shadow:var(--shadow);}
 .ia-msg.de-mi{margin-left:auto;}

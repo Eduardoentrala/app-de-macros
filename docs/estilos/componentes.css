@@ -273,6 +273,9 @@ table.week-table tr.today td{font-weight:800;}
   margin:12px 0 0;padding:13px 15px;border-radius:13px;
   background:var(--pill-bg);color:var(--ink);
   font:600 13px/1.5 sans-serif;
+  /* Lo escribe el modelo: puede venir con un numero largo o una palabra
+     pegada, y sin esto se sale del recuadro de color. */
+  overflow-wrap:break-word;
 }
 .chq-respuesta.ajusto{background:var(--green-soft);color:var(--green);}
 
@@ -333,6 +336,7 @@ table.week-table tr.today td{font-weight:800;}
 .analisis-txt{
   margin:10px 0 0;font:500 14px/1.6 sans-serif;color:var(--ink);
   white-space:pre-wrap;
+  overflow-wrap:break-word;
 }
 
 /* Un campo que falta. Rojo Y grosor: el color solo no lo distingue quien
