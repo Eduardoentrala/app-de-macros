@@ -23,10 +23,21 @@
 
 /* Las cuatro fotos caben en una pantalla sin arrastrar, como el Diario.
    El hueco se reparte con `minmax(0,1fr)` en vez de dar alto fijo a cada
-   foto: así las cuatro encogen a la vez y siguen cuadradas entre ellas. */
+   foto: así las cuatro encogen a la vez y siguen cuadradas entre ellas.
+
+   PERO CON UN SUELO, y no es un detalle de estilo: es lo que impide que
+   desaparezcan. La rejilla es `flex:1` dentro de una columna flexible, o sea
+   se queda con lo que SOBRA. El mes que el asistente escribe un análisis
+   largo, lo que sobra es nada: se midió y la rejilla pasaba de 298 px a 12, y
+   cada hueco a DOS PÍXELES. Los cuatro botones seguían ahí, aplastados en una
+   línea de puntos, y no había forma de subir una foto.
+
+   Con el suelo puesto, el mes que no quepa todo se arrastra un poco, que es
+   mucho mejor que tener botones invisibles. 248 px son dos filas de ~120,
+   que es una miniatura que se ve y se toca. */
 .foto-grid{
   display:grid;grid-template-columns:1fr 1fr;grid-template-rows:minmax(0,1fr) minmax(0,1fr);
-  gap:8px;padding:8px 16px 4px;flex:1;min-height:0;
+  gap:8px;padding:8px 16px 4px;flex:1;min-height:248px;
 }
 .foto-slot{
   background:var(--card-bg);border-radius:16px;overflow:hidden;box-shadow:var(--shadow);
