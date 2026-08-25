@@ -458,6 +458,30 @@ QUÉ MIRAS, EN ESTE ORDEN
    Lo mismo con lo que come: una semana de pocos días apuntados dentro de
    un mes bueno es un tropiezo, no un patrón. Cuatro seguidas sí lo son, y
    se dicen sin regañar.
+
+   Y MIRA LOS MACROS, no solo el total. Te paso lo que comió de media en
+   proteína, carbos y grasas, con su meta al lado. Apuntar los siete días
+   no es lo mismo que haber cumplido:
+
+   - Se quedó CORTO DE PROTEÍNA de forma repetida y está perdiendo peso →
+     dilo, y ponlo por delante de cualquier ajuste de calorías. Lo que se
+     pierde así no es solo grasa. Bajarle todavía más las calorías cuando
+     el problema es la proteína empeora exactamente lo que se quería
+     arreglar.
+   - Comió BASTANTE POR DEBAJO de su meta de calorías toda la semana y aun
+     así el peso no se movió → antes de tocar nada, sospecha de lo que se
+     apuntó, no del metabolismo. Dilo con tacto: apuntar bien es difícil y
+     nadie lo hace por vago.
+   - Comió por debajo de la meta y el peso SÍ bajó → está funcionando, y
+     lo que bajó no es mérito de la meta sino de lo que de verdad comió.
+     Tenlo en cuenta antes de decir «te dejo igual»: lo que se está
+     comiendo de verdad son esas calorías, no las de la meta.
+   - Cumplió los tres de cerca → díselo. Es la parte difícil y casi nadie
+     se la reconoce.
+
+   Un desvío de un día no es nada. Lo que se comenta es la MEDIA de la
+   semana, y solo si se separa de la meta lo bastante como para significar
+   algo.
 4. El entreno, si te lo paso. Un peso plano NO significa lo mismo según lo
    que pase en el gimnasio, y confundirlo es el error más caro que puedes
    cometer aquí:
@@ -1727,8 +1751,25 @@ Deno.serve(async (req) => {
       const contexto =
         `\n\nLA SEMANA QUE SE CIERRA:\n` +
         `- Días que apuntó: ${diasApuntados} de 7\n` +
-        `- Meta diaria actual: ${Math.round(Number(d.meta_cal) || 0)} cal\n` +
-        `- Promedio de lo que comió: ${Math.round(Number(d.media_cal) || 0)} cal\n` +
+        `- Meta diaria actual: ${Math.round(Number(d.meta_cal) || 0)} cal · ` +
+          `P${Math.round(Number(d.meta_p) || 0)} ` +
+          `C${Math.round(Number(d.meta_c) || 0)} ` +
+          `G${Math.round(Number(d.meta_g) || 0)}\n` +
+        // LOS MACROS Y NO SOLO LAS CALORÍAS. Antes aquí iba un número suelto
+        // de calorías, y con eso «2451 al día» describía igual una semana con
+        // la proteína cumplida que otra con cuarenta gramos diarios de menos.
+        // Para lo que se decide en este cierre no son la misma semana:
+        // adelgazar corto de proteína es adelgazar perdiendo músculo, y el
+        // peso baja igual en los dos casos.
+        //
+        // El `|| 0` no es adorno: la app y esta función se despliegan por
+        // separado, así que durante un rato llegan cuerpos viejos sin estos
+        // campos. Sin él saldría «NaN g de proteína» y el modelo razonaría
+        // sobre eso tan tranquilo.
+        `- Promedio de lo que comió: ${Math.round(Number(d.media_cal) || 0)} cal · ` +
+          `P${Math.round(Number(d.media_p) || 0)} ` +
+          `C${Math.round(Number(d.media_c) || 0)} ` +
+          `G${Math.round(Number(d.media_g) || 0)}\n` +
         cambioMeta +
         gastoReal +
         `- Pesos (últimas 4 semanas): ${listaPesos}` +

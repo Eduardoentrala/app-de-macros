@@ -11080,10 +11080,18 @@
       hasta = new Date(HOY); hasta.setDate(hasta.getDate() + 1);
     }
 
-    var dias = 0, suma = 0;
+    // Los tres macros además de las calorías. Con «2451 al día» a secas, una
+    // semana con la proteína cumplida y otra con cuarenta gramos diarios de
+    // menos son el MISMO dato, y para lo que se decide aquí no lo son:
+    // adelgazar quedándose corto de proteína es adelgazar perdiendo también
+    // músculo, y la báscula baja igual en los dos casos.
+    var dias = 0, suma = 0, sP = 0, sC = 0, sG = 0;
     for(var d = new Date(desde); d < hasta; d.setDate(d.getDate() + 1)){
       var r = REGISTRO[isoDe(d)];
-      if(r){ dias++; suma += calDe(r); }
+      if(r){
+        dias++; suma += calDe(r);
+        sP += Number(r.P) || 0; sC += Number(r.C) || 0; sG += Number(r.G) || 0;
+      }
     }
     // CUÁNTO HACE QUE NO SE PESA. Sin esto, el cierre daba por bueno
     // ajustar calorías con dos pesos de hace tres semanas: se apuntó la
@@ -11099,7 +11107,14 @@
       dias_apuntados: dias,
       dias_sin_pesarse: diasSinPesarse,
       meta_cal: calDe(meta),
+      meta_p: meta.P, meta_c: meta.C, meta_g: meta.G,
+      // Entre los días APUNTADOS, no entre siete: es la misma cuenta que ya
+      // hacía `media_cal`. Dividir entre siete a quien apuntó cuatro días le
+      // inventaría un déficit que no existió.
       media_cal: dias ? Math.round(suma / dias) : 0,
+      media_p: dias ? Math.round(sP / dias) : 0,
+      media_c: dias ? Math.round(sC / dias) : 0,
+      media_g: dias ? Math.round(sG / dias) : 0,
       // Si la meta cambió a mitad de esta semana, `meta_cal` solo vale para
       // los últimos días y la media mezcla dos objetivos. Sin decirlo, la IA
       // lee un exceso que no existió.
