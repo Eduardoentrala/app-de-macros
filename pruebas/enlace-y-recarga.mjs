@@ -34,8 +34,14 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
-const APP = readFileSync(join(RAIZ, 'docs', 'app.js'), 'utf8');
-const HTML = readFileSync(join(RAIZ, 'docs', 'index.html'), 'utf8');
+// Con los finales de línea normalizados: en Windows el fichero de trabajo
+// tiene CRLF y los recortes que hace esta prueba buscan patrones con `\n`
+// dentro. Con `\r\n` no casan, el recorte sale descuadrado y lo que se
+// intenta ejecutar revienta con un «Illegal return statement» que no tiene
+// nada que ver con lo que se está probando. Se midió: con LF verde, con
+// CRLF rota.
+const APP = readFileSync(join(RAIZ, 'docs', 'app.js'), 'utf8').replace(/\r\n/g, '\n');
+const HTML = readFileSync(join(RAIZ, 'docs', 'index.html'), 'utf8').replace(/\r\n/g, '\n');
 
 let pasan = 0, fallan = 0;
 const ok = (c, q, extra = '') => {

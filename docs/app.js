@@ -3183,7 +3183,7 @@
           return '<div class="food-card" data-sug="' + lista.indexOf(a) + '">' +
             '<div class="fc-main"><div class="fc-name">' + escapar(a.n) +
               (a.estado && a.estado !== 'unico'
-                ? ' <span class="cat-estado">' + a.estado + '</span>' : '') + '</div>' +
+                ? ' <span class="cat-estado">' + escapar(a.estado) + '</span>' : '') + '</div>' +
             '<div class="fc-sub">' + lineaMacros(a) +
               (a.personas ? ' · lo usan ' + a.personas : '') + '</div></div>' +
             '<span style="color:var(--ink-faint);font-size:19px;">+</span></div>';
@@ -6113,7 +6113,7 @@
       var f = set[p.k];
       return '<div class="foto-slot'+(f?' llena':'')+'" data-pose="'+p.k+'">'+
         '<div class="foto-lienzo">'+
-          (f ? '<img src="'+f.src+'" alt="'+p.t+'">'
+          (f ? '<img src="'+escapar(f.src)+'" alt="'+escapar(p.t)+'">'
              : '<div class="foto-vacia"><b>＋</b></div>')+
           // Dentro del recuadro, no debajo: es lo que dice qué foto va en
           // ese hueco, y ahí es donde se mira antes de subirla.
@@ -6590,12 +6590,27 @@
   // TAMBIÉN por su correo, así que alguien que no puso su nombre sale en la
   // búsqueda. Con `nombre.split` eso era un TypeError dentro del .map, y no
   // se pintaba nada: la búsqueda entera en blanco por una sola persona.
+  // Unas iniciales son letras. Que devuelva letras.
+  //
+  // Dos caracteres parecen inofensivos, y por eso los cuatro sitios que
+  // pintan esta bolita se olvidaban de escaparla —incluso los que escapan el
+  // nombre de al lado, con su comentario y todo—. Pero coge la primera letra
+  // de cada palabra: de «<b Juan» saca «<J», y ese `<` abre una etiqueta
+  // igual que cualquier otro.
+  //
+  // Se limpia AQUÍ y no en cada sitio que la llama: son cuatro, y el próximo
+  // que la use no se va a acordar. Y se limpia en vez de escapar para que lo
+  // que devuelve se pueda seguir usando tal cual, sin que nadie tenga que
+  // saber si ya viene escapado o no.
   function iniciales(nombre){
     return String(nombre == null ? '' : nombre)
       .split(' ')
       .filter(function(p){ return p; })      // los espacios de más no cuentan
       .map(function(p){ return p[0]; })
-      .slice(0, 2).join('').toUpperCase();
+      .slice(0, 2).join('').toUpperCase()
+      // Solo lo que significa algo en HTML. Dejar pasar acentos y eñes: un
+      // filtro a lo bruto de A-Z borraría media agenda.
+      .replace(/[<>&"']/g, '');
   }
   function tarjetaCliente(c){
     // El nombre va escapado como en todas las demás listas: lo escribe otra
@@ -6731,7 +6746,7 @@
       return !t || u.n.toLowerCase().indexOf(t) >= 0 || u.c.toLowerCase().indexOf(t) >= 0;
     });
     return '<div class="adm-busca">'+
-      '<div class="searchbox"><span>🔍</span><input id="admBuscar" placeholder="Buscar por nombre o correo…" value="'+admFiltro+'"></div>'+
+      '<div class="searchbox"><span>🔍</span><input id="admBuscar" placeholder="Buscar por nombre o correo…" value="'+escapar(admFiltro)+'"></div>'+
       '<button class="btn-primary" id="admInvitar" style="width:100%;margin-top:10px;">+ Agregar a alguien por correo</button>'+
       '<button class="btn-rename" id="admCrear" style="width:100%;margin-top:7px;">Crear entrenador con contraseña</button>'+
     '</div>'+
@@ -6741,10 +6756,10 @@
         '<div class="cliente-ava">'+iniciales(u.n)+'</div>'+
         // NOMBRE_ROL y no un if de dos ramas: ahora hay cuatro roles, y con
         // el if tu propia cuenta de super admin salía etiquetada "Cliente".
-        '<div class="txt"><b>'+u.n+' <span class="rol-badge '+u.r+'" style="margin:0;">'+
-          (NOMBRE_ROL[u.r] || u.r)+'</span></b>'+
-          '<span>'+u.c+' · '+u.extra+
-            (u.estado !== 'activo' ? ' · <b class="usr-susp">'+u.estado.toUpperCase()+'</b>' : '')+
+        '<div class="txt"><b>'+escapar(u.n)+' <span class="rol-badge '+escapar(u.r)+'" style="margin:0;">'+
+          escapar(NOMBRE_ROL[u.r] || u.r)+'</span></b>'+
+          '<span>'+escapar(u.c)+' · '+escapar(u.extra)+
+            (u.estado !== 'activo' ? ' · <b class="usr-susp">'+escapar(u.estado.toUpperCase())+'</b>' : '')+
           '</span></div>'+
         '<div class="usr-acc">'+
           // La IA se apaga sola, sin tocar la cuenta: sigue apuntando a
@@ -6769,7 +6784,7 @@
     return Object.keys(grupos).map(function(g){
       return '<div class="panel-seccion">'+g+'</div>'+ grupos[g].map(function(f){
         return '<div class="flag-row'+(f.k==='modo_mantenimiento'&&f.on?' peligro':'')+'">'+
-          '<div class="txt"><b>'+f.t+'</b><span>'+f.d+'</span></div>'+
+          '<div class="txt"><b>'+escapar(f.t)+'</b><span>'+escapar(f.d)+'</span></div>'+
           '<button class="switch'+(f.on?' on':'')+'" data-flag="'+f.k+'" role="switch" aria-checked="'+f.on+'"><i></i></button>'+
         '</div>';
       }).join('');
@@ -6840,7 +6855,7 @@
       return '<div class="cat-row' + (a.activo ? '' : ' apagado') + '" data-cat="' + i + '">' +
         '<div class="info">' +
           '<b>' + escapar(a.nombre) +
-            (a.estado !== 'unico' ? ' <span class="cat-estado">' + a.estado + '</span>' : '') +
+            (a.estado !== 'unico' ? ' <span class="cat-estado">' + escapar(a.estado) + '</span>' : '') +
             (a.activo ? '' : ' <span class="cat-estado">oculto</span>') + '</b>' +
           '<span>' + a.categoria + ' · ' + cal + ' cal · P' + a.proteina +
             ' C' + a.carbos + ' G' + a.grasas + ' · por 100 g</span>' +
@@ -8009,10 +8024,10 @@
     document.getElementById('kiLlaves').innerHTML = LLAVES_IA.map(function(f){
       var on = l[f.k] !== false;
       return '<div class="flag-row">' +
-        '<div class="txt"><b>' + f.t + '</b><span>' + f.d + '</span></div>' +
+        '<div class="txt"><b>' + escapar(f.t) + '</b><span>' + escapar(f.d) + '</span></div>' +
         '<button class="switch' + (on ? ' on' : '') + '" data-llave="' + f.k + '" ' +
           'role="switch" aria-checked="' + on + '" ' +
-          'aria-label="' + f.t + '"><i></i></button>' +
+          'aria-label="' + escapar(f.t) + '"><i></i></button>' +
       '</div>';
     }).join('');
   }
@@ -10536,7 +10551,10 @@
       var cuando = f === isoDe(HOY) ? 'hoy'
                  : DIAS[d.getDay()];
       return '<div class="evento-chip">' +
-               '<div class="txt"><b>' + e.titulo + '</b>' +
+               // Escapado: este título no lo teclea nadie en un formulario,
+               // lo DEVUELVE EL MODELO a partir de lo que se dijo en el chat.
+               // Es texto de fuera puesto como HTML.
+               '<div class="txt"><b>' + escapar(e.titulo) + '</b>' +
                '<span>' + cuando + ' · ' + mil(e.calorias) + ' cal apartadas</span></div>' +
                '<button data-quitar="' + f + '" aria-label="Quitar">✕</button>' +
              '</div>';

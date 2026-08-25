@@ -21,7 +21,13 @@ import { fileURLToPath } from 'node:url';
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const MIG = join(AQUI, '..', 'migrations');
-const APP = readFileSync(join(AQUI, '..', '..', 'docs', 'app.js'), 'utf8');
+// Los finales de línea se normalizan al leer. En Windows el fichero de
+// trabajo tiene CRLF, y los recortes de aquí abajo buscan cosas como
+// `'\n  }\n'`: con `\r\n  }\r\n` ese patrón no existe, `indexOf` devuelve -1
+// y la prueba se declaraba rota —«no encuentro repartir()»— por el sistema
+// operativo, no por el código. Se midió: con LF verde, con CRLF roja.
+const APP = readFileSync(join(AQUI, '..', '..', 'docs', 'app.js'), 'utf8')
+  .replace(/\r\n/g, '\n');
 
 // ---- El `repartir` de verdad, sacado de app.js ----
 const desde = APP.indexOf('  function repartir(base, cal){');

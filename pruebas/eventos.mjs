@@ -176,9 +176,17 @@ console.log('\n— La tira del Diario —');
   const lunes = new Date('2026-08-03T12:00:00');
   const isoDe = (d) => d.toISOString().slice(0, 10);
 
+  // `escapar` va de verdad, sacado de app.js: el título de un evento lo
+  // devuelve el modelo a partir del chat, así que se pinta escapado. Un
+  // doble que devolviera el texto tal cual haría pasar esta prueba mientras
+  // el título entra crudo, que es justo lo que había que impedir.
+  const iEsc = APP.indexOf('  function escapar(t){');
+  const escapar = new Function(
+    'return ' + APP.slice(iEsc, APP.indexOf('\n  }', iEsc) + 4).trim())();
+
   const ctx2 = vm.createContext({
     document: { getElementById: (id) => (id === 'eventosTira' ? caja : null) },
-    EVENTOS: {}, HOY: hoy, anclaSemana: lunes, isoDe, Date,
+    EVENTOS: {}, HOY: hoy, anclaSemana: lunes, isoDe, Date, escapar,
     DIAS: ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'],
     mil: (n) => String(n)
   });
