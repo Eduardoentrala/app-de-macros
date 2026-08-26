@@ -286,10 +286,18 @@ console.log('\nY la pantalla está enganchada donde tiene que estar');
      'y al abrirla se cargan los datos',
      'sin esto la pantalla sale vacía la primera vez');
 
-  // El botón vive en Peso, no en otra vista.
+  // El botón vive en Progreso —la vista `ejercicio`, a la que se llega con
+  // el botón «Progreso» del Diario—. Estuvo un rato en Peso; se movió porque
+  // Peso es donde se APUNTA el peso de hoy y Progreso es donde ya se mira
+  // cómo va la cosa con el tiempo.
   const i = HTML.indexOf('data-push="missemanas"');
   const vista = [...HTML.slice(0, i).matchAll(/data-view="([^"]+)"/g)].pop()[1];
-  ok(vista === 'peso', 'el botón está en Peso', 'está en ' + vista);
+  ok(vista === 'ejercicio', 'el botón está en Progreso', 'está en ' + vista);
+  // Y se llega a Progreso desde el Diario: si ese botón desapareciera, el
+  // historial quedaría sin camino y no habría nada que lo dijera.
+  ok(/data-push="ejercicio"[^>]*>[\s\S]{0,120}?Progreso/.test(HTML),
+     'y a Progreso se llega desde el Diario',
+     'sin ese botón, «Mis semanas» queda enterrado en una vista inalcanzable');
 
   // Y NO hay hoja nueva: el detalle se despliega dentro de la tarjeta. Una
   // hoja dentro de una vista se abre midiendo 0×0, y ya pasó dos veces.

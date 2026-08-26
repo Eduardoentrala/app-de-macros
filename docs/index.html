@@ -112,7 +112,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '6f2dad19cc';
+    var SELLO = '00f5d4e66c';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -1450,6 +1450,16 @@
             <tbody id="ejFilas"></tbody>
           </table>
 
+          <!-- El historial de semanas. Cuelga de Progreso y no de Peso: esta
+               pantalla ya va de cómo va la cosa con el tiempo, mientras que
+               Peso es donde se APUNTA el peso de hoy. Y lo de aquí arriba es
+               la semana en curso, así que el paso natural es «¿y las de
+               antes?». Una sexta pestaña abajo estrecharía las cinco. -->
+          <button class="fila-ir" data-push="missemanas">
+            <span class="fi-txt">Mis semanas</span>
+            <span class="fi-sub" id="misSemanasSub">peso, comida y gym de cada semana</span>
+            <span class="fi-chev">›</span>
+          </button>
         </div>
         <div class="toast" id="toastEjercicio">Listo</div>
 
@@ -1515,15 +1525,6 @@
             <div class="lista-tit">MEDIDAS DE CINTURA</div>
             <div id="cinturaFilas"></div>
           </div>
-
-          <!-- El historial de semanas. Cuelga de Peso porque es donde ya
-               está el progreso y es donde se viene a mirar cómo va la cosa;
-               una sexta pestaña abajo estrecharía las cinco que hay. -->
-          <button class="fila-ir" data-push="missemanas">
-            <span class="fi-txt">Mis semanas</span>
-            <span class="fi-sub" id="misSemanasSub">tu resumen de cada semana</span>
-            <span class="fi-chev">›</span>
-          </button>
         </div>
         <div class="toast" id="toastPeso">Peso guardado</div>
       </div>
@@ -1985,7 +1986,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '6f2dad19cc';
+    var SELLO = '00f5d4e66c';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que
