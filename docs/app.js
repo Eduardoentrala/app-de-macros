@@ -6012,7 +6012,23 @@
   // La CLAVE de guardado sigue siendo la semana ISO del año ('2026-W31'):
   // es estable, no depende de quién la mire, y es el formato que valida la
   // base de datos. Lo que cambia es solo la ETIQUETA que se enseña.
-  function claveSemana(d){ var l = lunesDe(d); return l.getFullYear() + '-W' + String(numSemana(l)).padStart(2,'0'); }
+  //
+  // EL AÑO SALE DEL JUEVES, no del lunes. Es la definición del estándar, y
+  // `numSemana` ya cuenta así —se va al jueves antes de nada—; el año se
+  // cogía del lunes, y en la semana que cruza el 1 de enero esos dos no son
+  // el mismo año. El lunes 29 de diciembre de 2025 salía como «2025-W01»
+  // cuando es «2026-W01».
+  //
+  // Y «2025-W01» no es un hueco libre: es la semana del 30 de diciembre de
+  // 2024. Dos semanas con la misma clave, con un año entre ellas. Como las
+  // fotos llevan `unique (user_id, week_key, pose)` y antes de guardar una se
+  // borra la que hubiera con esa clave y esa pose, subir la foto de frente el
+  // 31 de diciembre BORRABA la de primeros del año anterior. Sin aviso.
+  function claveSemana(d){
+    var l = lunesDe(d);
+    var j = new Date(l); j.setDate(j.getDate() + 3);
+    return j.getFullYear() + '-W' + String(numSemana(l)).padStart(2,'0');
+  }
 
   // Lunes de una semana ISO, a partir de su clave. La semana 1 es la que
   // contiene el 4 de enero, por definición del estándar.

@@ -1970,8 +1970,27 @@ Deno.serve(async (req) => {
       // semanas atrás: comparar dos series de semanas seguidas no enseña
       // nada y gasta lo mismo.
       const semanaNueva = completas[0][0];
-      const nSem = (k: string) => Number(k.slice(0, 4)) * 52 + Number(k.slice(6));
-      const vieja = completas.slice(1).find((c) => nSem(semanaNueva) - nSem(c[0]) >= 3);
+      // CUÁNTAS SEMANAS HAY ENTRE DOS CLAVES. Se pasa cada una a su lunes y
+      // se restan las fechas.
+      //
+      // Antes era `año * 52 + semana`, y eso no es una recta: hay años de 53
+      // semanas. «2025-W53» y «2026-W01» daban el mismo número —dos semanas
+      // distintas indistinguibles— y de 2025-W50 a 2026-W02, que son cinco
+      // semanas, salían cuatro. O sea que cada enero esta puerta se abría o
+      // se cerraba antes de tiempo, y quien esperaba sus tres semanas se
+      // encontraba un «demasiado pronto» sin entender por qué.
+      const lunesDeClave = (k: string) => {
+        const y = Number(k.slice(0, 4));
+        const w = Number(k.slice(6));
+        // La semana 1 es la que contiene el 4 de enero, por definición.
+        const ene4 = new Date(Date.UTC(y, 0, 4));
+        const lunes = new Date(ene4);
+        lunes.setUTCDate(ene4.getUTCDate() - ((ene4.getUTCDay() + 6) % 7) + (w - 1) * 7);
+        return lunes.getTime();
+      };
+      const semanasEntre = (a: string, b: string) =>
+        Math.round((lunesDeClave(a) - lunesDeClave(b)) / 604800000);
+      const vieja = completas.slice(1).find((c) => semanasEntre(semanaNueva, c[0]) >= 3);
       if (!vieja) return json({ estado: 'demasiado_pronto', ultima: semanaNueva });
       const semanaVieja = vieja[0];
       // Y la primera de todas, si no es ya una de las dos: contra el punto
