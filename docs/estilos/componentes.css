@@ -391,3 +391,51 @@ table.week-table tr.today td{font-weight:800;}
   margin:0;width:100%;background:var(--azul);color:#fff;
 }
 .card-azul .goal-guardar .btn-primary:active{opacity:.75;}
+
+
+/* ---- Que el dedo alcance ----
+
+   Un dedo no es un puntero. Apple pide 44x44 como minimo tocable y estos
+   botones se quedaban muy por debajo: «Editar foto» media 63x13, «Renombrar»
+   y «Borrar dia» 17 de alto, y «Regresar» —que es el boton que mas se usa en
+   la app, sale en dieciocho pantallas— 80x26. Se fallaba al tocarlos, y
+   fallar al tocar «Regresar» parece que la app se quedo colgada.
+
+   NO SE AGRANDA EL BOTON. Se agranda solo su zona sensible, con un
+   pseudo-elemento centrado encima. La maqueta no se mueve ni un pixel: el
+   `::after` esta fuera del flujo, asi que nada de al lado se entera.
+
+   `min-width/min-height` con `width/height:100%` deja lo que ya era grande
+   como estaba y solo levanta lo que se quedaba corto. Un boton ancho y bajo
+   —«Borrar ultima sesion», 335x21— solo crece a lo alto.
+
+   LOS SOLAPES SE MIDIERON, uno a uno y en las 27 pantallas: una zona que se
+   monte encima de la del vecino se come su toque, y eso seria cambiar un
+   fallo por otro peor. Se midieron con la zona puesta y salieron cinco, que
+   es justo por lo que hay dos reglas aqui abajo y no una. */
+.back-btn, .prof-edit, .btn-mini,
+#renameDayBtn, #deleteDayBtn, #pesoReiniciar, #iaCerrar{
+  position:relative;
+}
+.back-btn::after, .prof-edit::after, .btn-mini::after,
+#renameDayBtn::after, #deleteDayBtn::after, #pesoReiniciar::after,
+#iaCerrar::after{
+  content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:100%;height:100%;min-width:44px;min-height:44px;
+}
+
+/* Y los enlaces de texto, SOLO HACIA ABAJO.
+
+   «No tengo cuenta», «Ya tengo cuenta», «Mejor no, volver a entrar» y
+   «Borrar ultima sesion» van siempre pegados debajo de un boton principal.
+   Creciendo hacia los dos lados se comian su borde inferior: tocar abajo del
+   todo en «Guardar sesion» habria disparado «Borrar ultima sesion». Se midio
+   y pasaba en las cuatro. Cambiar un fallo de puntería por un borrado que no
+   se pidio es peor que dejarlo como estaba.
+
+   Anclado arriba, crece hacia el hueco que si tiene. */
+.btn-ghost-text{position:relative;}
+.btn-ghost-text::after{
+  content:'';position:absolute;top:0;left:0;
+  width:100%;height:100%;min-height:44px;
+}
