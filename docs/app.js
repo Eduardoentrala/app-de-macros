@@ -3648,25 +3648,56 @@
     if(!filas || !SESIONES) return;
     var ini = new Date(anclaSemana);
 
+    // LOS DÍAS QUE DIJO QUE ENTRENA, no siete. Nadie entrena siete días:
+    // midiendo contra 7, quien dijo cuatro y fue los cuatro veía el anillo a
+    // poco más de la mitad y un «4 de 7». Su semana era perfecta y la
+    // pantalla se la pintaba a medias. `reg.dias` ya está cargado —es lo que
+    // fija el factor de actividad de sus calorías—; aquí no se miraba.
+    //
+    // El respaldo es 7 y no 4: si el perfil todavía no ha llegado, es mejor
+    // enseñar la semana entera que inventarle una meta que no dijo.
+    var meta = Math.round(Number(reg && reg.dias));
+    if(!(meta >= 1 && meta <= 7)) meta = 7;
+
     var diasFuerza = 0, html = '';
+    var hoyIso = iso(HOY);
     for(var i = 0; i < 7; i++){
       var d = new Date(ini); d.setDate(d.getDate() + i);
       var k = iso(d);
-      var esFuturo = d > HOY;
-      var esHoy = k === iso(HOY);
+      var esHoy = k === hoyIso;
+      // Por la fecha en texto y no comparando objetos Date: `d > HOY` daba
+      // verdadero para el día de HOY, porque `d` es mediodía y `HOY` puede
+      // llevar cualquier hora. Comparando el día se acaba la ambigüedad.
+      var esFuturo = k > hoyIso;
       var hizo = !!SESIONES[k];
       if(hizo) diasFuerza++;
 
+      // Un día que no ha llegado NO es un día fallado. Antes las dos cosas
+      // se pintaban con el mismo «—»: el martes, con la semana recién
+      // empezada, cinco filas se leían como cinco días saltados.
+      var marca = hizo     ? '<span class="pill-si">SÍ</span>'
+                : esFuturo ? '<span class="pill-futuro">·</span>'
+                           : '<span class="pill-dash">—</span>';
+
       html += '<tr'+(esHoy ? ' class="today"' : '')+'>'+
-        '<td>Día ' + (i+1) + (esHoy ? ' · hoy' : '') + '</td>'+
+        // El nombre del día y no «Día 1»: la semana de cada quien empieza en
+        // un día distinto, así que «Día 1» no dice nada y para encontrar el
+        // sábado había que mirar la fecha y contar.
+        '<td>' + escapar(DIAS[d.getDay()]) + (esHoy ? ' · hoy' : '') + '</td>'+
         '<td>' + d.getDate() + '/' + (d.getMonth()+1) + '</td>'+
-        '<td>' + (hizo ? '<span class="pill-si">SI</span>' : '<span class="pill-dash">—</span>') + '</td>'+
+        '<td>' + marca + '</td>'+
         '</tr>';
     }
     filas.innerHTML = html;
 
     document.getElementById('ejDias').textContent = diasFuerza;
-    document.getElementById('ejRing').setAttribute('stroke-dashoffset', String(182 - 182 * (diasFuerza/7)));
+    document.getElementById('ejMeta').textContent = meta;
+    // Acotado a 1: entrenar más días de los previstos no puede mandar el
+    // trazo a negativo, que lo dibuja al revés. El número de arriba sí
+    // enseña los de más — eso cuenta.
+    var parte = Math.min(1, diasFuerza / meta);
+    document.getElementById('ejRing').setAttribute('stroke-dashoffset',
+      String(Math.round(182 - 182 * parte)));
 
     var fin = new Date(ini); fin.setDate(fin.getDate() + 6);
     document.getElementById('ejWeekRange').textContent = 'Del ' + fmtFecha(ini) + ' al ' + fmtFecha(fin);

@@ -112,7 +112,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '00f5d4e66c';
+    var SELLO = '8f03d5f6f1';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -1434,7 +1434,10 @@
               <div>
                 <div class="ring-label" style="margin-bottom:2px;">ESTA SEMANA</div>
                 <div class="week-num" id="ejDias">0</div>
-                <div class="week-sub">días de fuerza de 7</div>
+                <!-- El «de N» lo pone el JS con los días que dijo que
+                     entrena. Escrito a mano decía «de 7» aunque el número
+                     de arriba ya contara bien, y nadie entrena siete. -->
+                <div class="week-sub">días de fuerza de <span id="ejMeta">7</span></div>
               </div>
               <div class="mini-ring">
                 <svg width="70" height="70" viewBox="0 0 70 70">
@@ -1986,7 +1989,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '00f5d4e66c';
+    var SELLO = '8f03d5f6f1';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que

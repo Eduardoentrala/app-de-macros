@@ -76,7 +76,20 @@ table.week-table td{padding:11px 12px;font:600 13px/1 sans-serif;border-bottom:1
 table.week-table tr:last-child td{border-bottom:none;}
 table.week-table tr.today td{font-weight:800;}
 .pill-si{background:var(--green-soft);color:var(--green);font:800 11px/1 sans-serif;padding:4px 9px;border-radius:8px;}
+/* El día que pasó sin entrenar. */
 .pill-dash{color:var(--ink-faint);}
+/* Y el que TODAVÍA NO HA LLEGADO, que no es lo mismo. Un punto y no una
+   raya: la raya dice «aquí no hubo nada» y el punto dice «aún no». Con los
+   dos iguales, el martes la tabla enseñaba cinco días fallados que nadie
+   había fallado.
+
+   MEDIA FUERZA DE LA RAYA, con opacidad y no con un color propio. Se midió:
+   pintado de `--line` daba 1.24:1 contra la tarjeta —en claro Y en oscuro—,
+   o sea invisible, y un marcador que no se ve no distingue nada; parece un
+   hueco vacío o un fallo de pintado. Con `opacity` la relación con la raya
+   es siempre la misma —la mitad— sin tener que elegir a mano un gris para
+   cada tema. */
+.pill-futuro{color:var(--ink-faint);opacity:.5;font:800 13px/1 sans-serif;}
 
 .segmented{display:flex;background:var(--pill-bg);margin:14px 16px;border-radius:14px;padding:4px;gap:4px;}
 .segmented button{flex:1;border:none;background:none;padding:9px 0;border-radius:11px;font:700 13px/1 sans-serif;color:var(--ink-soft);cursor:pointer;}
