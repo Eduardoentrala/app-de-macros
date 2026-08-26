@@ -145,11 +145,25 @@ console.log('\n— Lo que no puede decir —');
 
 console.log('\n— Ni gasta el tope diario ni escribe desde el navegador —');
 {
+  // Se saca la condicion que decide quien paga y se EJECUTA. Antes esto
+  // buscaba la linea escrita tal cual, y se puso roja el dia que la condicion
+  // creció por un motivo bueno —cobrar el rehacer, ver rehacer-sin-freno—
+  // aunque lo que aqui importa siguiera siendo verdad. Una prueba que fija la
+  // forma del codigo estorba en cuanto el codigo cambia; una que ejecuta lo
+  // que decide, no.
+  const marca = FN.indexOf("await admin.rpc('gastar_consulta_ia'");
+  const abre = FN.lastIndexOf('if (', marca);
+  const paga = new Function('accion', 'cuerpo',
+    'return (' + FN.slice(FN.indexOf('(', abre) + 1, FN.indexOf(') {', abre)) + ');');
+
   check('el analisis no gasta consultas del dia',
-    /if \(accion !== 'fotos'\) \{/.test(FN),
+    paga('fotos', {}) === false,
     'analizar sus fotos no puede dejarle sin poder apuntar la cena');
+  check('pero el resto si lo gasta',
+    paga('chat', {}) === true && paga('semana', {}) === true,
+    'si nada paga, el tope diario no frena nada');
   check('el cuerpo se lee antes del tope',
-    FN.indexOf('const accion = String(cuerpo.accion') < FN.indexOf("if (accion !== 'fotos')"));
+    FN.indexOf('const accion = String(cuerpo.accion') < marca);
   // El analisis lo escribe la funcion con su clave de servicio. Si el
   // navegador pudiera escribirlo, un token robado serviria para inventarle
   // a alguien un analisis de sus fotos.

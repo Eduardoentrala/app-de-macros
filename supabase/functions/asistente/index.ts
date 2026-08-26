@@ -1146,9 +1146,16 @@ Deno.serve(async (req) => {
   // no la persona, y no tiene sentido que analizar sus fotos la deje sin
   // poder apuntar la cena. Su freno es otro: una vez al mes, y solo si hay
   // dos series completas separadas por semanas.
+  //
+  // SALVO SI PIDEN REHACERLA. Ahí las dos razones para no cobrarla dejan de
+  // ser ciertas a la vez: ni va sola ni es una al mes. Y `rehacer` se salta
+  // la caché del mes, que era su único freno, así que sin esta línea no
+  // queda NADA que lo pare: ocho imágenes al modelo por vuelta, en bucle.
+  // Es la misma puerta que ya se cerró con el mes —que se calcula aquí y no
+  // se acepta del cliente, por esto mismo— abierta por el otro lado.
   const TOPE_DIARIO = TOPES[nivel as keyof typeof TOPES] ?? TOPES.normal;
   let quedan: number | null = null;
-  if (accion !== 'fotos') {
+  if (accion !== 'fotos' || cuerpo.rehacer === true) {
     const { data: q, error: errTope } = await admin.rpc('gastar_consulta_ia', {
       usuario: userId,
       tope: TOPE_DIARIO,
