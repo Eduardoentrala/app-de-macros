@@ -232,5 +232,94 @@ console.log('\nY las columnas nuevas aguantan lo que se les va a meter');
         'parece un dato real');
 }
 
+// ------------------------------------------------------------------
+//  Y LO QUE LA APP MANDA DE VERDAD, METIDO EN POSTGRES DE VERDAD.
+//
+//  Las dos mitades de esto viven en sitios distintos —los `check` aquí y el
+//  acotado en `fotoDeLaSemana()`— y nada obliga a que coincidan. Comprobar
+//  cada lado por su cuenta deja el hueco justo en medio: que un rango se
+//  cambie aquí y no allí. Así que se coge la salida de la función de la app,
+//  con datos hostiles, y se INSERTA. Si Postgres la acepta, coinciden.
+//
+//  Importa porque la foto viaja en la misma fila que la nota y la decisión:
+//  un valor de más y se pierde el chequeo entero.
+console.log('\nLo que la app manda cabe en la tabla, con datos hostiles');
+{
+  const { readFileSync: leer } = await import('node:fs');
+  const APP = leer(join(AQUI, '..', '..', 'docs', 'app.js'), 'utf8').replace(/\r\n/g, '\n');
+  const cuerpoDe = (cab) => {
+    const i = APP.indexOf(cab);
+    let n = 0, j = APP.indexOf('{', i);
+    for (; j < APP.length; j++) {
+      if (APP[j] === '{') n++;
+      else if (APP[j] === '}') { n--; if (!n) return APP.slice(i, j + 1); }
+    }
+  };
+  const isoDe = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
+                       '-' + String(d.getDate()).padStart(2, '0');
+  const hacerFoto = new Function('anclaSemana', 'isoDe', 'CINTURAS', 'Date',
+    cuerpoDe('function fotoDeLaSemana(d, sem, ent){') + '; return fotoDeLaSemana;')(
+      new Date('2026-08-25T12:00:00'), isoDe, [{ fecha: '2026-08-20', cm: 9 }], Date);
+
+  // Todo disparatado a la vez: un peso de 900, 28 sesiones, macros absurdos.
+  const foto = hacerFoto(
+    { dias_apuntados: 99, media_cal: 99000, media_p: 99999, media_c: -1,
+      media_g: 99999, meta_p: 9999, meta_c: -3, meta_g: 99999 },
+    [{ peso_medio: 900 }, { peso_medio: -2 }],
+    { sesiones: 999, volumen: 50000, volumen_antes: 40000 });
+
+  const EVA = '55555555-5555-5555-5555-555555555555';
+  await db.exec(`insert into auth.users (id, email)
+                 values ('${EVA}', 'eva@ejemplo.com') on conflict do nothing;`);
+
+  const cols = Object.keys(foto);
+  const vals = cols.map((k) => (foto[k] == null ? 'null' : String(foto[k])));
+  let entro = true, porque = '';
+  try {
+    await db.exec(
+      `insert into public.chequeos_semanales
+         (user_id, semana, nota, ajusto, ${cols.join(',')})
+       values ('${EVA}', current_date, 'mi nota de la semana', false, ${vals.join(',')});`);
+  } catch (e) { entro = false; porque = e.message; }
+
+  check('la fila entra con todo fuera de rango', entro,
+        porque + '\n        con datos así se pierde el chequeo ENTERO: la nota, ' +
+        'el motivo y la decisión, no solo el número raro');
+
+  // Y lo que de verdad importaba sigue guardado.
+  if (entro) {
+    const f = (await db.query(
+      `select nota, peso_medio, sesiones from public.chequeos_semanales
+        where user_id = '${EVA}'`)).rows[0];
+    check('y la nota se guardó', f.nota === 'mi nota de la semana');
+    check('con los números raros fuera', f.peso_medio === null && f.sesiones === null,
+          'peso_medio=' + f.peso_medio + ' sesiones=' + f.sesiones);
+  }
+
+  // Y una semana normal entra ENTERA, no recortada de más.
+  const buena = hacerFoto(
+    { dias_apuntados: 7, media_cal: 2380, media_p: 120, media_c: 200, media_g: 70,
+      meta_p: 170, meta_c: 240, meta_g: 75 },
+    [{ peso_medio: 84.7 }, { peso_medio: 84.3 }],
+    { sesiones: 4, volumen: 21500, volumen_antes: 20100 });
+  const c2 = Object.keys(buena);
+  const v2 = c2.map((k) => (buena[k] == null ? 'null' : String(buena[k])));
+  let entro2 = true, porque2 = '';
+  try {
+    await db.exec(`insert into public.chequeos_semanales
+                     (user_id, semana, ${c2.join(',')})
+                   values ('${EVA}', current_date - 7, ${v2.join(',')});`);
+  } catch (e) { entro2 = false; porque2 = e.message; }
+  check('y una semana normal entra entera', entro2, porque2);
+  if (entro2) {
+    const f = (await db.query(
+      `select peso_medio, media_p, sesiones from public.chequeos_semanales
+        where user_id = '${EVA}' and semana = current_date - 7`)).rows[0];
+    check('sin recortarle nada',
+          Number(f.peso_medio) === 84.3 && f.media_p === 120 && f.sesiones === 4,
+          JSON.stringify(f) + ': el acotado no puede comerse los datos buenos');
+  }
+}
+
 console.log(`\n${ok} bien, ${bad} mal`);
 process.exit(bad ? 1 : 0);

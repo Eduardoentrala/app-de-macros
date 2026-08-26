@@ -11357,11 +11357,27 @@
       .then(function(filas){
         var corte = isoDe(iniCerrada);
         var finCerrada = isoDe(anclaSemana);      // exclusivo: ya es la nueva
+        // LAS VECES SE CUENTAN POR DÍAS, EL VOLUMEN POR FILAS.
+        //
+        //  `workout_sessions` no tiene nada que impida dos filas el mismo
+        //  día, y «Guardar sesión» hace un POST plano cada vez que se pulsa.
+        //  Contando filas, quien guarda dos veces un martes —o le da dos
+        //  veces al botón sin querer— le decía a la IA que entrenó el doble.
+        //
+        //  Y descuadraba dos cosas que dicen lo mismo: el anillo de Progreso
+        //  cuenta DÍAS con sesión, así que la pantalla ponía «1 día» y el
+        //  cierre leía «entrenó 2 veces». Ahora las dos cuentan lo mismo, y
+        //  de paso «veces» no puede pasar de 7.
+        //
+        //  El volumen sí suma TODAS las filas: si entrenó dos veces ese día,
+        //  las dos cuentan como trabajo hecho.
         var estaSemana = [], anterior = [];
+        var diasEsta = {}, diasAntes = {};
         (filas || []).forEach(function(f){
           if(f.session_date >= finCerrada) return;   // de la semana en curso
-          (f.session_date >= corte ? estaSemana : anterior)
-            .push(Number(f.total_volume) || 0);
+          var esDeEsta = f.session_date >= corte;
+          (esDeEsta ? estaSemana : anterior).push(Number(f.total_volume) || 0);
+          (esDeEsta ? diasEsta : diasAntes)[f.session_date] = true;
         });
         var suma = function(a){ return a.reduce(function(x, y){ return x + y; }, 0); };
 
@@ -11374,7 +11390,9 @@
           var v = (filas || []).filter(function(f){ return f.session_date >= a && f.session_date < b; });
           porSemana.push({
             semana: a,
-            sesiones: v.length,
+            // Por días, igual que arriba: dos filas del mismo día son un
+            // día de entreno, no dos.
+            sesiones: Object.keys(v.reduce(function(o, f){ o[f.session_date] = 1; return o; }, {})).length,
             volumen: Math.round(v.reduce(function(x, f){ return x + (Number(f.total_volume) || 0); }, 0))
           });
         }
@@ -11490,8 +11508,8 @@
         });
 
         return {
-          sesiones: estaSemana.length,
-          sesiones_antes: anterior.length,
+          sesiones: Object.keys(diasEsta).length,
+          sesiones_antes: Object.keys(diasAntes).length,
           // CUÁNTOS DIJO QUE IBA A ENTRENAR. Sin esto, «entrenó 4 veces» no
           // se puede juzgar: cuatro es la semana perfecta de quien planea
           // cuatro y es dejarse dos de quien planea seis. La regla del
@@ -11896,7 +11914,30 @@
   //
   //  Lo que no se sepa va a null y NO a cero: cero dice «comió cero gramos
   //  de proteína» y null dice «no se sabe». En la pantalla, un guion.
+  //  LO QUE NO QUEPA SE DEJA FUERA, y esto no es remilgo. La foto viaja en
+  //  la MISMA FILA que la nota y la decisión, y la base tiene límites en
+  //  esas columnas: un solo número fuera de rango hace que Postgres rechace
+  //  el INSERT entero y no se guarde nada. Ni la nota, ni el motivo, ni
+  //  `ajusto`. Y entonces el lunes siguiente el chequeo vuelve a salir como
+  //  si no lo hubiera contestado, gasta otra consulta de IA y puede
+  //  ajustarle las calorías dos veces por el mismo periodo.
+  //
+  //  No es hipotético: el campo del peso no tiene `min` ni `max`, así que un
+  //  dedo torpe mete un 5 o un 850; y las sesiones se cuentan por filas de
+  //  `workout_sessions` y no por días, así que quien guarde cuatro entrenos
+  //  al día manda 28 y el tope son 21.
+  //
+  //  Una casilla con un guion es infinitamente mejor que perder la semana.
   function fotoDeLaSemana(d, sem, ent){
+    var enRango = function(v, min, max){
+      // El `== null` primero, otra vez. `Number(null)` es 0, y 0 cabe en
+      // casi todos estos rangos: sin esta línea, un hueco se convertía en un
+      // cero y se deshacía justo lo que `oCero` acababa de proteger. Una
+      // prueba que ya existía lo cazó al minuto.
+      if(v == null) return null;
+      var n = Number(v);
+      return isFinite(n) && n >= min && n <= max ? n : null;
+    };
     var oCero = function(v){ var n = Number(v); return isFinite(n) && n > 0 ? Math.round(n) : null; };
     // El peso MEDIO de cada semana, no el del día que se pesó: es lo que
     // quita el ruido del agua y la sal. Las dos últimas de `sem` son la que
@@ -11912,23 +11953,28 @@
       return m.fecha >= desde && m.fecha < hasta;
     });
 
+    // Cada rango es EL MISMO que el `check` de la 0054. Si allí se cambia
+    // uno, hay que cambiarlo aquí; la prueba lee los rangos del propio SQL y
+    // avisa si se separan.
     return {
-      dias_apuntados: d && d.dias_apuntados != null ? d.dias_apuntados : null,
-      media_cal: oCero(d && d.media_cal),
-      media_p:   oCero(d && d.media_p),
-      media_c:   oCero(d && d.media_c),
-      media_g:   oCero(d && d.media_g),
-      meta_p:    oCero(d && d.meta_p),
-      meta_c:    oCero(d && d.meta_c),
-      meta_g:    oCero(d && d.meta_g),
-      peso_medio:       cerrada  && cerrada.peso_medio  != null ? cerrada.peso_medio  : null,
-      peso_medio_antes: anterior && anterior.peso_medio != null ? anterior.peso_medio : null,
+      dias_apuntados: enRango(d && d.dias_apuntados, 0, 7),
+      media_cal: enRango(oCero(d && d.media_cal), 0, 20000),
+      media_p:   enRango(oCero(d && d.media_p),    0, 1000),
+      media_c:   enRango(oCero(d && d.media_c),    0, 2000),
+      media_g:   enRango(oCero(d && d.media_g),    0, 1000),
+      meta_p:    enRango(oCero(d && d.meta_p),     0, 600),
+      meta_c:    enRango(oCero(d && d.meta_c),     0, 900),
+      meta_g:    enRango(oCero(d && d.meta_g),     0, 400),
+      peso_medio:       enRango(cerrada  && cerrada.peso_medio,  20, 400),
+      peso_medio_antes: enRango(anterior && anterior.peso_medio, 20, 400),
       volumen:       ent ? oCero(ent.volumen)       : null,
       volumen_antes: ent ? oCero(ent.volumen_antes) : null,
       // Las sesiones sí pueden ser cero de verdad —«no fue»— y eso es un
-      // dato, no un hueco. Por eso no pasa por `oCero`.
-      sesiones: ent && ent.sesiones != null ? Number(ent.sesiones) : null,
-      cintura: suya.length ? Number(suya[suya.length - 1].cm) : null
+      // dato, no un hueco. Por eso no pasa por `oCero`, solo por el rango:
+      // se cuentan por filas guardadas y no por días, así que cuatro
+      // entrenos al día durante una semana son 28 y el tope son 21.
+      sesiones: ent && ent.sesiones != null ? enRango(ent.sesiones, 0, 21) : null,
+      cintura: suya.length ? enRango(suya[suya.length - 1].cm, 40, 200) : null
     };
   }
 

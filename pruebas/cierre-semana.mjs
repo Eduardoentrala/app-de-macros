@@ -260,8 +260,19 @@ console.log('\n— Lee la semana que CIERRA, no la que empieza —');
 
   // El entreno tiene que cubrir el MISMO periodo o se comparan cosas
   // distintas: "entrenó más" mirando unos días y "comió menos" mirando otros.
+  // La función entera, contando llaves. Era una ventana de 1800 caracteres
+  // —la cuarta hoy que se rompe sola— y basta con que la función crezca unas
+  // líneas para que la comprobación se ponga roja sin que falte nada.
   const j = APP.indexOf('function datosDeEntreno(');
-  const ent = APP.slice(j, j + 1800);
+  const ent = (() => {
+    if (j < 0) return '';
+    let n = 0, k = APP.indexOf('{', j);
+    for (; k < APP.length; k++) {
+      if (APP[k] === '{') n++;
+      else if (APP[k] === '}') { n--; if (!n) return APP.slice(j, k + 1); }
+    }
+    return APP.slice(j);
+  })();
   check('el entreno se alinea con la misma semana',
     /iniCerrada\.setDate\(iniCerrada\.getDate\(\) - 7\)/.test(ent));
   check('y descarta la semana en curso',

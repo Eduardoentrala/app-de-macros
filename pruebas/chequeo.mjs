@@ -362,7 +362,13 @@ console.log('\n— El entreno entra en el ajuste semanal —');
   // semana y no cuadra nunca para quien no empieza en lunes.
   check('de cuatro semanas, alineadas a su semana',
     /iniTendencia\.setDate\(iniTendencia\.getDate\(\) - 28\)/.test(APP));
-  check('separadas por semana', /f\.session_date >= corte \? estaSemana : anterior/.test(APP));
+  // Que la fecha de corte reparta entre las dos semanas, sin clavar la forma
+  // de escribirlo: el reparto pasó a una variable intermedia cuando hubo que
+  // contar además los DÍAS distintos, y esta comprobación se puso roja sin
+  // que el reparto hubiera cambiado en nada. Lo que hace de verdad se
+  // ejecuta en entrenos-del-mismo-dia.
+  check('separadas por semana',
+    /session_date >= corte/.test(APP) && /estaSemana : anterior/.test(APP));
   // Llega dentro del Promise.all que trae entreno, historial y cinturas a
   // la vez. Antes era `entreno: entreno`, cuando era la única consulta.
   check('y se mandan al asistente', /entreno: extra\[0\]/.test(APP));
