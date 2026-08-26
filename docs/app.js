@@ -74,6 +74,7 @@
     if(id === 'admin' && typeof cargarPanelAdmin === 'function') cargarPanelAdmin();
     if(id === 'panel' && typeof cargarPanelCoach === 'function') cargarPanelCoach();
     if(id === 'plan'  && typeof cargarPlan       === 'function') cargarPlan();
+    if(id === 'missemanas' && typeof cargarMisSemanas === 'function') cargarMisSemanas();
   }
   function back(){
     if(stack.length > 1){ stack.pop(); }
@@ -4269,9 +4270,23 @@
 
   // Mueve lo que salió de la fórmula y devuelve además los por qués: un
   // número que cambia sin decir de dónde viene no se lo cree nadie.
-  function ajustarPorSalud(base, conds){
+  // `opciones.soloTopes`: la cifra que entra YA ES UNA META VIGENTE, no una
+  // recién salida de la fórmula. Se usa desde el cierre semanal, donde la
+  // decide la IA.
+  //
+  // La diferencia está en el extra del embarazo y la lactancia. Al calcular
+  // la meta por primera vez, ese extra se SUMA. Pero una vez sumado ya vive
+  // dentro de la meta, así que volver a sumarlo cada lunes la haría crecer
+  // sola: 2540 se convierte en 4580 en seis semanas. Se comprobó.
+  //
+  // En este modo el extra hace de SUELO y no de suma: nunca por debajo del
+  // gasto más lo suyo. Los topes —el del riñón, los del carbohidrato y la
+  // grasa— se aplican igual en los dos modos, porque esos sí son límites y
+  // no aportes.
+  function ajustarPorSalud(base, conds, opciones){
     var cal = base.cal, P = base.P, C = base.C, G = base.G;
     var notas = [], avisos = [];
+    var soloTopes = !!(opciones && opciones.soloTopes);
     if(!conds || !conds.length) return {cal:cal, P:P, C:C, G:G, notas:notas, avisos:avisos};
 
     var extra = 0, sinDeficit = false;
@@ -4290,8 +4305,17 @@
     });
 
     // 1. Calorías: primero se borra el déficit si no toca, luego el extra.
-    if(sinDeficit && cal < base.gasto) cal = Math.round(base.gasto);
-    cal += extra;
+    if(soloTopes){
+      // La meta que entra ya lleva el extra dentro. Aquí solo se le pone
+      // suelo, y el suelo es el gasto MÁS lo que pida el embarazo o la
+      // lactancia: es exactamente donde deja la cuenta de abajo la primera
+      // vez. Se usa un máximo y no un «si baja, súbelo» para que subir siga
+      // permitido: esto es un suelo, no una cifra fija.
+      if(sinDeficit) cal = Math.max(cal, Math.round(base.gasto) + extra);
+    } else {
+      if(sinDeficit && cal < base.gasto) cal = Math.round(base.gasto);
+      cal += extra;
+    }
 
     // 2. Proteína: el tope renal manda sobre los 2 g/kg de siempre.
     if(topeProt !== null && base.peso > 0) P = Math.min(P, Math.round(base.peso * topeProt));
@@ -11468,16 +11492,26 @@
 
     // Las tres a la vez: son tres consultas independientes y esperarlas en
     // fila haria que la persona mirase "Revisando..." el triple de tiempo.
+    // Lo que se le manda a la IA se guarda ADEMÁS en el historial, y se
+    // apunta aquí, una sola vez. Recalcularlo al guardar daría números
+    // distintos a los que la IA acaba de juzgar —el reloj corre entre una
+    // cosa y otra, y a medianoche cambia hasta el día— y el historial
+    // contaría una semana que nadie miró.
+    var laFoto = null;
+
     Promise.all([datosDeEntreno(), chequeosDeAntes(), cinturasRecientes()])
     .then(function(extra){
+      var d = datosDeLaSemana(true);
+      var sem = resumenDeSemanas(4);
+      laFoto = fotoDeLaSemana(d, sem, extra[0]);
       return iaLlamar({
         accion: 'semana',
         // La semana que se CIERRA, no la que acaba de empezar: cuando esto
         // salta, la nueva no tiene ni un día apuntado todavía.
-        datos: datosDeLaSemana(true),
+        datos: d,
         // Y las cuatro anteriores, para que una mala semana suelta no se
         // confunda con una tendencia.
-        semanas: resumenDeSemanas(4),
+        semanas: sem,
         // Su gasto REAL, restado de lo que comió y de lo que pesó, cuando
         // hay semanas suficientes para que signifique algo. Es lo único de
         // todo esto que no depende de lo que dijo al registrarse.
@@ -11501,7 +11535,7 @@
       caja.textContent = r.mensaje || '';
 
       if(r.ajusto && r.cal_nueva) aplicarCaloriasNuevas(r.cal_nueva);
-      guardarChequeo(r);
+      guardarChequeo(r, laFoto);
 
       // El mismo botón pasa a cerrar. Antes se quedaba en "Listo" apagado y
       // había que salir por "Ahora no", que ahí ya no significa nada: la
@@ -11527,9 +11561,30 @@
     var antes = calDe(m);
     if(!antes) return;
     var f = nuevas / antes;
-    goalP.value = Math.round(m.P * f);
-    goalC.value = Math.round(m.C * f);
-    goalG.value = Math.round(m.G * f);
+    var P = Math.round(m.P * f), C = Math.round(m.C * f), G = Math.round(m.G * f);
+
+    // LO QUE LA SALUD DECLARADA NO DEJA TOCAR.
+    //
+    // El modelo no sabe —ni puede saber— que quien está al otro lado está
+    // embarazada o tiene el riñón tocado: la función del asistente no recibe
+    // las condiciones de nadie, y su propio prompt dice que no son cosa
+    // suya. Así que la protección que se puso al darse de alta hay que
+    // volver a ponerla aquí, o dura hasta el primer lunes.
+    //
+    // Sin condiciones marcadas esto es transparente: `ajustarPorSalud`
+    // devuelve lo que entró sin tocar una coma.
+    var conds = condicionesElegidas();
+    if(conds.length){
+      var b = gastoEstimado();
+      var salud = ajustarPorSalud(
+        { cal: nuevas, P: P, C: C, G: G, gasto: b.gasto, peso: b.peso },
+        conds, { soloTopes: true });
+      P = salud.P; C = salud.C; G = salud.G;
+    }
+
+    goalP.value = P;
+    goalC.value = C;
+    goalG.value = G;
     metasVigentes = leerMetas();       // ya lo confirmó: no vuelve a preguntar
     actualizarMetas();
 
@@ -11589,10 +11644,253 @@
     }));
   }
 
-  function guardarChequeo(r){
+  // ================== MIS SEMANAS ==================
+  //
+  //  El historial que deja el cierre de cada lunes. Cuatro números por
+  //  semana —peso, comida, proteína, gym— y el resto al desplegar.
+  //
+  //  EL COLOR SIGNIFICA ALGO Y POR ESO SE USA POCO. Verde es «esto fue
+  //  hacia donde querías». Rojo se reserva para lo único que de verdad
+  //  cuesta caro y no se ve en la báscula: quedarse corto de proteína. Un
+  //  peso que sube no es rojo si tu objetivo es subir, y un volumen que
+  //  baja tampoco: las descargas existen y son parte del plan. Todo lo
+  //  demás va en gris. Una pantalla donde todo está coloreado no dice nada.
+
+  var SEMANAS = [];
+  var abiertaSemana = -1;
+
+  function cargarMisSemanas(){
+    var caja = document.getElementById('semanasLista');
+    if(!caja) return Promise.resolve();
+    if(!sesion || !sesion.user){ caja.innerHTML = ''; return Promise.resolve(); }
+    if(!SEMANAS.length) caja.innerHTML = '<p class="cmp-aviso">Cargando…</p>';
+
+    // Sesenta y no cincuenta y dos: la base guarda doce meses, y pedir un
+    // poco de más evita quedarse corto el día que la limpieza vaya un pelo
+    // por detrás.
+    return sbFetch('/rest/v1/chequeos_semanales' +
+        '?select=semana,dias_apuntados,media_cal,cal_antes,cal_despues,' +
+        'media_p,media_c,media_g,meta_p,meta_c,meta_g,' +
+        'peso_medio,peso_medio_antes,volumen,volumen_antes,sesiones,cintura,' +
+        'ajusto,motivo,nota' +
+        '&user_id=eq.' + sesion.user.id +
+        '&order=semana.desc&limit=60')
+      .then(function(filas){
+        SEMANAS = filas || [];
+        pintarMisSemanas();
+      })
+      ['catch'](function(){
+        // Se dice. Una lista vacía por un fallo de red se lee como «no
+        // tengo semanas», y eso es mentira.
+        if(!SEMANAS.length)
+          caja.innerHTML = '<p class="cmp-aviso">No pude cargar tus semanas. ' +
+                           'Vuelve a entrar en un momento.</p>';
+      });
+  }
+
+  // Un porcentaje de cumplimiento, o null si falta alguno de los dos.
+  //
+  //  EL `== null` VA PRIMERO Y NO SOBRA. `Number(null)` es 0, y 0 es un
+  //  número perfectamente finito: sin esta línea, una semana vieja sin
+  //  `media_cal` pero con su meta guardada salía como «0 %» en vez de como
+  //  un guion. Un cero ahí se lee como «no comió nada esa semana», que es
+  //  una afirmación, no un hueco. Se vio al pintarlo.
+  function porcentaje(hecho, meta){
+    if(hecho == null || meta == null || hecho === '') return null;
+    var h = Number(hecho), m = Number(meta);
+    if(!isFinite(h) || !isFinite(m) || m <= 0) return null;
+    return Math.round(h / m * 100);
+  }
+
+  function celda(clase, valor, extra, rotulo){
+    return '<div class="sem-celda ' + clase + '">' +
+             '<div class="v">' + escapar(valor) +
+               (extra ? '<span class="e">' + escapar(extra) + '</span>' : '') + '</div>' +
+             '<div class="k">' + escapar(rotulo) + '</div>' +
+           '</div>';
+  }
+
+  // El peso, coloreado según A DÓNDE QUERÍA IR esa persona. Bajar medio kilo
+  // es verde para quien adelgaza y lo contrario para quien intenta ganar;
+  // pintarlo siempre igual sería decirle a la mitad de la gente que lo está
+  // haciendo mal.
+  function celdaPeso(f){
+    if(f.peso_medio == null || f.peso_medio_antes == null)
+      return celda('vacia', '—', '', 'peso');
+    var d = Math.round((Number(f.peso_medio) - Number(f.peso_medio_antes)) * 10) / 10;
+    // Medio kilo de agua y sal entra y sale en un día. Por debajo de 150 g
+    // entre dos medias semanales no hay nada que leer.
+    var quieto = Math.abs(d) < 0.15;
+    var obj = (typeof reg === 'object' && reg && reg.objetivo) || 'bajar';
+    var clase = 'suave';
+    if(obj === 'mantener'){
+      if(quieto) clase = 'bien';
+    }else if(!quieto && ((obj === 'bajar' && d < 0) || (obj === 'subir' && d > 0))){
+      clase = 'bien';
+    }
+    var txt = quieto ? '0.0 kg'
+            : (d > 0 ? '+' : '−') + Math.abs(d).toFixed(1) + ' kg';
+    return celda(clase, txt, quieto ? '=' : (d > 0 ? '↑' : '↓'), 'peso');
+  }
+
+  function celdaComida(f){
+    var p = porcentaje(f.media_cal, f.cal_antes);
+    if(p == null) return celda('vacia', '—', '', 'comida');
+    // Verde solo cuando cuadró de verdad. Fuera de ahí, gris: comer por
+    // debajo no es una falta, es un dato, y pintarlo de rojo cada semana
+    // convierte esta pantalla en una regañina.
+    return celda(p >= 90 && p <= 110 ? 'bien' : 'suave', p + ' %', '', 'comida');
+  }
+
+  function celdaProteina(f){
+    var p = porcentaje(f.media_p, f.meta_p);
+    if(p == null) return celda('vacia', '—', '', 'proteína');
+    // El único rojo de la pantalla. Perder peso corto de proteína es perder
+    // músculo, y es justo lo que la báscula no enseña.
+    var clase = p >= 90 ? 'bien' : (p < 80 ? 'mal' : 'suave');
+    return celda(clase, p + ' %', p < 80 ? '↓' : '', 'proteína');
+  }
+
+  function celdaGym(f){
+    if(f.sesiones === 0) return celda('suave', 'no fue', '', 'gym');
+    if(f.volumen == null || f.volumen_antes == null || !Number(f.volumen_antes))
+      return f.sesiones != null
+        ? celda('suave', f.sesiones + (f.sesiones === 1 ? ' día' : ' días'), '', 'gym')
+        : celda('vacia', '—', '', 'gym');
+    var d = Math.round((f.volumen - f.volumen_antes) / f.volumen_antes * 100);
+    // Solo el alza se celebra. Bajar el volumen una semana puede ser una
+    // descarga, y marcarlo en rojo enseñaría a saltársela.
+    if(d >= 3)  return celda('bien',  'subió', '↑', 'gym');
+    if(d <= -3) return celda('suave', 'bajó',  '↓', 'gym');
+    return celda('suave', 'igual', '=', 'gym');
+  }
+
+  function detalleSemana(f){
+    var linea = function(k, v){
+      return v == null ? ''
+        : '<div class="l"><span>' + k + '</span><b>' + escapar(v) + '</b></div>';
+    };
+    var pct = function(hecho, meta, unidad){
+      var p = porcentaje(hecho, meta);
+      return p == null ? null
+        : Math.round(hecho) + ' de ' + Math.round(meta) + ' ' + unidad + '  ·  ' + p + ' %';
+    };
+    return '<div class="sem-mas">' +
+      linea('Calorías',      pct(f.media_cal, f.cal_antes, 'cal')) +
+      linea('Proteína',      pct(f.media_p,   f.meta_p,    'g')) +
+      linea('Carbohidratos', pct(f.media_c,   f.meta_c,    'g')) +
+      linea('Grasas',        pct(f.media_g,   f.meta_g,    'g')) +
+      linea('Peso medio',    f.peso_medio == null ? null : Number(f.peso_medio).toFixed(1) + ' kg') +
+      linea('Cintura',       f.cintura    == null ? null : Number(f.cintura).toFixed(1) + ' cm') +
+      linea('Entrenos',      f.sesiones   == null ? null : f.sesiones +
+              (f.volumen == null ? '' : '  ·  ' + mil(f.volumen) + ' kg de volumen')) +
+      linea('Calorías nuevas',
+            f.ajusto && f.cal_despues ? mil(f.cal_despues) + ' cal' : null) +
+      (f.nota   ? '<div class="nota"><b>Lo que dijiste</b>'    + escapar(f.nota)   + '</div>' : '') +
+      (f.motivo ? '<div class="nota"><b>Lo que te contestó</b>' + escapar(f.motivo) + '</div>' : '') +
+    '</div>';
+  }
+
+  function pintarMisSemanas(){
+    var caja = document.getElementById('semanasLista');
+    if(!caja) return;
+    if(!SEMANAS.length){
+      caja.innerHTML = '<p class="cmp-aviso">Todavía no tienes semanas guardadas. ' +
+        'Cada lunes, al contestar «¿Cómo te fue la semana?», se guarda aquí un ' +
+        'resumen. Se conservan doce meses.</p>';
+      return;
+    }
+    caja.innerHTML = SEMANAS.map(function(f, i){
+      var d = new Date(f.semana + 'T12:00:00');
+      var dias = f.dias_apuntados;
+      return '<div class="sem-card" data-sem="' + i + '">' +
+        '<div class="sem-cab"><b>Semana del ' + escapar(fmtFecha(d)) + '</b>' +
+          '<span>' + (dias == null ? '' : dias + ' de 7 días') + '</span></div>' +
+        '<div class="sem-rejilla">' +
+          celdaPeso(f) + celdaComida(f) + celdaProteina(f) + celdaGym(f) +
+        '</div>' +
+        (i === abiertaSemana ? detalleSemana(f) : '') +
+      '</div>';
+    }).join('');
+  }
+
+  // Tocar una tarjeta la despliega, y cierra la que hubiera abierta: dos
+  // detalles abiertos obligan a desplazarse para comparar, que es justo lo
+  // que esta pantalla viene a evitar.
+  (function(){
+    var caja = document.getElementById('semanasLista');
+    if(!caja) return;
+    caja.addEventListener('click', function(e){
+      var c = e.target.closest('[data-sem]');
+      if(!c) return;
+      var i = Number(c.dataset.sem);
+      abiertaSemana = (abiertaSemana === i) ? -1 : i;
+      pintarMisSemanas();
+    });
+  })();
+
+  // LA FOTO DE LA SEMANA QUE SE CIERRA.
+  //
+  //  Todo esto se calcula ya para decidir si se mueven las calorías, y hasta
+  //  ahora se tiraba en cuanto se tomaba la decisión. Guardarlo es lo que
+  //  permite mirar atrás, y mirar atrás es donde se ve el patrón que ninguna
+  //  semana suelta enseña: que las semanas en que falta proteína son las
+  //  mismas en que el peso no se mueve.
+  //
+  //  `d` son los datos de la semana cerrada, `sem` el resumen de las últimas
+  //  y `ent` lo del gimnasio. Se le pasan en vez de volver a calcularlos:
+  //  recalcular aquí daría números distintos a los que la IA acaba de ver
+  //  —el reloj corre entre una cosa y otra— y el historial contaría una
+  //  semana que nadie juzgó.
+  //
+  //  Lo que no se sepa va a null y NO a cero: cero dice «comió cero gramos
+  //  de proteína» y null dice «no se sabe». En la pantalla, un guion.
+  function fotoDeLaSemana(d, sem, ent){
+    var oCero = function(v){ var n = Number(v); return isFinite(n) && n > 0 ? Math.round(n) : null; };
+    // El peso MEDIO de cada semana, no el del día que se pesó: es lo que
+    // quita el ruido del agua y la sal. Las dos últimas de `sem` son la que
+    // se cierra y la de antes, que es justo la resta que interesa.
+    var cerrada  = sem && sem.length ? sem[sem.length - 1] : null;
+    var anterior = sem && sem.length > 1 ? sem[sem.length - 2] : null;
+    // La cintura de esta semana, si se midió: la última medida que caiga
+    // dentro de los siete días que se cierran. Una de hace un mes puesta en
+    // esta fila diría que se midió cuando no lo hizo.
+    var iniCerrada = new Date(anclaSemana); iniCerrada.setDate(iniCerrada.getDate() - 7);
+    var desde = isoDe(iniCerrada), hasta = isoDe(anclaSemana);
+    var suya = (CINTURAS || []).filter(function(m){
+      return m.fecha >= desde && m.fecha < hasta;
+    });
+
+    return {
+      dias_apuntados: d && d.dias_apuntados != null ? d.dias_apuntados : null,
+      media_cal: oCero(d && d.media_cal),
+      media_p:   oCero(d && d.media_p),
+      media_c:   oCero(d && d.media_c),
+      media_g:   oCero(d && d.media_g),
+      meta_p:    oCero(d && d.meta_p),
+      meta_c:    oCero(d && d.meta_c),
+      meta_g:    oCero(d && d.meta_g),
+      peso_medio:       cerrada  && cerrada.peso_medio  != null ? cerrada.peso_medio  : null,
+      peso_medio_antes: anterior && anterior.peso_medio != null ? anterior.peso_medio : null,
+      volumen:       ent ? oCero(ent.volumen)       : null,
+      volumen_antes: ent ? oCero(ent.volumen_antes) : null,
+      // Las sesiones sí pueden ser cero de verdad —«no fue»— y eso es un
+      // dato, no un hueco. Por eso no pasa por `oCero`.
+      sesiones: ent && ent.sesiones != null ? Number(ent.sesiones) : null,
+      cintura: suya.length ? Number(suya[suya.length - 1].cm) : null
+    };
+  }
+
+  function guardarChequeo(r, foto){
     if(!sesion || !sesion.user) return;
     var q = respuestasChequeo();
-    var cuerpo = JSON.stringify({
+    // La foto va CON el resto, en la misma fila y la misma escritura: si se
+    // guardara aparte, un fallo a medias dejaría semanas con la nota y sin
+    // los números, o al revés, y no habría forma de saber cuál es cuál.
+    //
+    // `|| {}` para que un cierre sin foto —una versión vieja, o un fallo al
+    // calcularla— siga guardando lo de siempre en vez de no guardar nada.
+    var cuerpo = JSON.stringify(Object.assign({
       user_id: sesion.user.id,
       semana: isoDe(anclaSemana),
       hambre: q.hambre || null, energia: q.energia || null, sueno: q.sueno || null,
@@ -11601,7 +11899,7 @@
       motivo: (r.motivo || '').slice(0, 500) || null,
       cal_antes: Math.round(datosDeLaSemana().meta_cal) || null,
       cal_despues: r.ajusto && r.cal_nueva ? Math.round(r.cal_nueva) : null
-    });
+    }, foto || {}));
     var enviar = function(){
       return sbFetch('/rest/v1/chequeos_semanales?on_conflict=user_id,semana', {
         method: 'POST',

@@ -859,3 +859,93 @@
 .cal-hist .txt span{
   display:block;font:500 11.5px/1.35 sans-serif;color:var(--ink-faint);margin-top:3px;
 }
+
+/* ---- MIS SEMANAS -----------------------------------------------------
+   Una tarjeta por semana. Los cuatro recuadros van pegados y separados
+   por un pelo de línea, no por huecos: así se leen como UNA cosa —esta
+   semana— y no como cuatro tarjetitas sueltas. Es lo que hace Salud, y
+   es lo que evita que cuatro números parezcan cuatro temas.
+
+   Las esquinas se redondean solo por fuera; por dentro los recuadros son
+   cuadrados y el `overflow:hidden` de la tarjeta los recorta. Redondear
+   cada uno dejaría cuatro mordiscos blancos en el centro. */
+.fila-ir{
+  display:grid;grid-template-columns:1fr auto;align-items:center;
+  width:calc(100% - 32px);margin:14px 16px 4px;
+  background:var(--card-bg);border:1px solid var(--borde-tarjeta);
+  border-radius:16px;padding:13px 16px;text-align:left;
+  font:inherit;color:inherit;cursor:pointer;box-shadow:var(--shadow);
+}
+.fila-ir .fi-txt{font:650 15.5px/1.2 sans-serif;color:var(--ink);}
+.fila-ir .fi-sub{
+  grid-column:1;font:500 12.5px/1.3 sans-serif;color:var(--ink-faint);margin-top:3px;
+}
+/* El chevrón ocupa las dos filas para quedar centrado con las dos líneas. */
+.fila-ir .fi-chev{grid-column:2;grid-row:1 / span 2;color:var(--ink-faint);font-size:19px;}
+.fila-ir:active{background:var(--pill-bg);}
+
+.sem-card{
+  background:var(--card-bg);border:1px solid var(--borde-tarjeta);
+  border-radius:18px;margin:0 16px 12px;overflow:hidden;box-shadow:var(--shadow);
+}
+.sem-cab{
+  display:flex;align-items:baseline;justify-content:space-between;gap:10px;
+  padding:13px 16px 11px;
+}
+.sem-cab b{font:700 15.5px/1.2 sans-serif;color:var(--ink);}
+/* Cuántos días apuntó. Va arriba y en pequeño porque es lo que le da o le
+   quita valor a los cuatro números de abajo: tres de siete no se leen
+   igual que siete de siete. */
+.sem-cab span{font:600 12px/1.2 sans-serif;color:var(--ink-faint);flex:none;}
+
+.sem-rejilla{
+  display:grid;grid-template-columns:1fr 1fr;
+  /* El pelo entre recuadros es el fondo que se ve por los huecos. Un borde
+     por recuadro daría líneas dobles donde se tocan. */
+  gap:1px;background:var(--line);border-top:1px solid var(--line);
+}
+.sem-celda{background:var(--card-bg);padding:13px 16px 14px;min-width:0;}
+.sem-celda .v{
+  font:700 21px/1.15 sans-serif;color:var(--ink);
+  font-variant-numeric:tabular-nums;
+  /* Los números no se parten aunque el recuadro se estreche. */
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+/* La flecha va detrás del número y en gris: dice la dirección, que el
+   número ya trae. En una casilla coloreada se tiñe con él. */
+.sem-celda .e{font:700 15px/1.15 sans-serif;margin-left:5px;color:var(--ink-soft);}
+/* El rótulo va en `--ink-soft` y no en `--ink-faint`. Se midió: el faint
+   sobre la tarjeta blanca da 2.4:1, y a 11.5 px eso no se lee. El soft da
+   5.7:1 y sigue quedando claramente por detrás del número. */
+.sem-celda .k{font:600 11.5px/1.2 sans-serif;color:var(--ink-soft);margin-top:5px;}
+/* El número va SIEMPRE a tinta plena. El color es la excepción, no el
+   estado por defecto: verde cuando fue hacia donde querías, rojo solo para
+   la proteína corta. Una versión anterior pintaba de gris claro todo lo que
+   no era ni una cosa ni la otra —«78 %», «no fue»— y esos son justo los
+   números que hay que poder leer: 2.4:1 de contraste para el dato principal
+   de la casilla. */
+.sem-celda.bien .v,.sem-celda.bien .e{color:var(--green);}
+.sem-celda.mal  .v,.sem-celda.mal  .e{color:var(--red);}
+/* `.suave` no lleva estilo A PROPÓSITO: marca «esto no se destaca», y no
+   destacar es justamente el aspecto por defecto. Se deja la clase porque
+   dice en el HTML por qué esa casilla no está coloreada. */
+/* El hueco: un guion del tamaño del número, para que la rejilla no baile
+   entre una semana con datos y otra sin ellos. */
+.sem-celda.vacia .v{color:var(--ink-faint);font-weight:600;}
+
+/* El detalle, desplegado dentro de la propia tarjeta. */
+.sem-mas{border-top:1px solid var(--line);padding:12px 16px 14px;}
+.sem-mas .l{
+  display:flex;justify-content:space-between;gap:12px;
+  font:600 13px/1.5 sans-serif;color:var(--ink-soft);
+}
+.sem-mas .l b{color:var(--ink);font-variant-numeric:tabular-nums;font-weight:700;}
+.sem-mas .nota{
+  margin-top:10px;padding-top:10px;border-top:1px solid var(--line);
+  font:500 13.5px/1.55 sans-serif;color:var(--ink-soft);
+  /* Lo escribe una persona y lo escribe una IA: las dos cosas pueden traer
+     una palabra larga sin espacios. */
+  overflow-wrap:anywhere;
+}
+.sem-mas .nota b{display:block;color:var(--ink);font:700 12px/1.4 sans-serif;
+  margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em;}

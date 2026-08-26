@@ -112,7 +112,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '685966f31f';
+    var SELLO = '6f2dad19cc';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -1515,8 +1515,35 @@
             <div class="lista-tit">MEDIDAS DE CINTURA</div>
             <div id="cinturaFilas"></div>
           </div>
+
+          <!-- El historial de semanas. Cuelga de Peso porque es donde ya
+               está el progreso y es donde se viene a mirar cómo va la cosa;
+               una sexta pestaña abajo estrecharía las cinco que hay. -->
+          <button class="fila-ir" data-push="missemanas">
+            <span class="fi-txt">Mis semanas</span>
+            <span class="fi-sub" id="misSemanasSub">tu resumen de cada semana</span>
+            <span class="fi-chev">›</span>
+          </button>
         </div>
         <div class="toast" id="toastPeso">Peso guardado</div>
+      </div>
+
+      <!-- MIS SEMANAS
+           Una tarjeta por semana con cuatro recuadros: peso, comida,
+           proteína y gym. El detalle se despliega DENTRO de la tarjeta y no
+           en una hoja, a propósito: las hojas se estiran contra su ancestro
+           colocado, y una que viva dentro de una vista se abre midiendo 0×0
+           desde cualquier otra pantalla. Ya pasó dos veces. -->
+      <div class="app-view" data-view="missemanas">
+        <div class="back-header stacked">
+          <div class="back-header-inner">
+            <button class="back-btn" data-back>‹ Regresar</button>
+            <span class="back-title">Mis semanas</span>
+          </div>
+        </div>
+        <div class="scroll">
+          <div id="semanasLista"></div>
+        </div>
       </div>
 
       <!-- PERFIL -->
@@ -1958,7 +1985,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '685966f31f';
+    var SELLO = '6f2dad19cc';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que

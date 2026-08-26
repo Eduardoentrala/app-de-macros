@@ -62,8 +62,25 @@ console.log('\n— Lo que decide calorías nunca calla —');
 {
   // Estas dos son las que costaban de verdad: la pantalla enseñaba unos
   // números y la base guardaba otros.
-  const i = APP.indexOf('function aplicarCaloriasNuevas(');
-  const ap = APP.slice(i, i + 1600);
+  // La función entera, contando llaves. ANTES ERA UNA VENTANA DE 1600
+  // CARACTERES y se rompió sola: la función creció a 1942 y el `.catch` que
+  // esta comprobación busca quedó en el 1777, fuera del recorte. La prueba
+  // se puso roja sin que el aviso hubiera desaparecido de ningún sitio.
+  //
+  // Un número de caracteres no es una frontera: la de verdad es la llave que
+  // cierra.
+  const cuerpoDe = (cabecera) => {
+    const i = APP.indexOf(cabecera);
+    if (i < 0) throw new Error('no encuentro: ' + cabecera);
+    let n = 0, j = APP.indexOf('{', i);
+    for (; j < APP.length; j++) {
+      if (APP[j] === '{') n++;
+      else if (APP[j] === '}') { n--; if (!n) return APP.slice(i, j + 1); }
+    }
+    throw new Error('llaves sin cerrar en ' + cabecera);
+  };
+
+  const ap = cuerpoDe('function aplicarCaloriasNuevas(');
   check('las calorías de la IA avisan si no se guardan',
     /Tus calorías nuevas no se guardaron/.test(ap),
     'sin esto, el domingo siguiente el entrenador decide sobre una meta que nunca existió');

@@ -183,13 +183,41 @@ console.log('\n— La IA sabe qué hacer con lo nuevo —');
 console.log('\n— Y solo DESPUÉS se deciden las calorías —');
 {
   const i = APP.indexOf("document.getElementById('chqEnviar').addEventListener");
-  const trozo = APP.slice(i, i + 3200);
+  // EL MANEJADOR ENTERO, contando llaves. Antes era una ventana de 3200
+  // caracteres y se rompio sola en cuanto el cierre creyo tres lineas: media
+  // docena de comprobaciones se pusieron rojas sin que nada hubiera dejado
+  // de funcionar. Un numero de caracteres no es una frontera; la llave que
+  // cierra si.
+  const trozo = (() => {
+    if (i < 0) return '';
+    let n = 0, j = APP.indexOf('{', i);
+    for (; j < APP.length; j++) {
+      if (APP[j] === '{') n++;
+      else if (APP[j] === '}') { n--; if (!n) return APP.slice(i, j + 1); }
+    }
+    return APP.slice(i);
+  })();
   check('la revisión sale del botón, no del arranque', i > 0);
   check('manda las respuestas', /chequeo: respuestasChequeo\(\)/.test(trozo));
   check('manda el peso', /pesos: pesosRecientes/.test(trozo));
   // Con `true`: la que cierra, no la que acaba de empezar.
-  check('manda la semana que cierra', /datos: datosDeLaSemana\(true\)/.test(trozo));
-  check('y las cuatro anteriores de contexto', /semanas: resumenDeSemanas\(4\)/.test(trozo));
+  //
+  // Se comprueba QUE SE PIDE ASÍ y QUE ESO ES LO QUE VIAJA, en dos pasos,
+  // en vez de exigir que las dos cosas estén escritas en la misma línea.
+  // Ahora el resultado se guarda en una variable porque el historial de
+  // semanas necesita los mismos números —recalcularlos daría otros, el
+  // reloj corre— y la comprobación literal se rompió sin que nada dejara
+  // de funcionar.
+  const pedidoCierre = /(\w+)\s*=\s*datosDeLaSemana\(true\)/.exec(trozo);
+  check('manda la semana que cierra',
+    /datos: datosDeLaSemana\(true\)/.test(trozo) ||
+    (pedidoCierre && new RegExp('datos: ' + pedidoCierre[1] + '\\b').test(trozo)),
+    'sin el `true` se manda la semana en curso, que al abrirse está vacía');
+  const pedidoSem = /(\w+)\s*=\s*resumenDeSemanas\(4\)/.exec(trozo);
+  check('y las cuatro anteriores de contexto',
+    /semanas: resumenDeSemanas\(4\)/.test(trozo) ||
+    (pedidoSem && new RegExp('semanas: ' + pedidoSem[1] + '\\b').test(trozo)),
+    'una semana suelta no distingue un tropiezo de una tendencia');
   // Sin el entreno, un peso plano siempre parece estancamiento.
   check('y manda el entreno', /entreno: extra\[0\]/.test(trozo));
   check('aplica las calorías si ajusta', /if\(r\.ajusto && r\.cal_nueva\) aplicarCaloriasNuevas\(r\.cal_nueva\)/.test(trozo));
@@ -215,7 +243,7 @@ console.log('\n— Lee la semana que CIERRA, no la que empieza —');
   check('la función sabe mirar atrás', /function datosDeLaSemana\(anterior\)/.test(APP));
   check('retrocede una semana entera', /desde\.setDate\(desde\.getDate\(\) - 7\);/.test(trozo));
   check('y se corta al empezar la nueva', /hasta = new Date\(anclaSemana\);/.test(trozo));
-  check('la revisión pide la que cierra', /datos: datosDeLaSemana\(true\)/.test(APP),
+  check('la revisión pide la que cierra', /datosDeLaSemana\(true\)/.test(APP),
     'sin el true vuelve a contar la semana en curso, que está vacía');
 
   // El entreno tiene que cubrir el MISMO periodo o se comparan cosas
@@ -245,7 +273,7 @@ console.log('\n— Y con cuatro semanas de contexto —');
   // el ruido del día a día.
   check('y con el peso MEDIO, no el último', /peso_medio: medio/.test(res) &&
     /pesos\.reduce\(function\(a,b\)\{ return a\+b; \}, 0\) \/ pesos\.length/.test(res));
-  check('se mandan cuatro', /semanas: resumenDeSemanas\(4\)/.test(APP));
+  check('se mandan cuatro', /resumenDeSemanas\(4\)/.test(APP));
 
   // Los pesos, con fecha. Ocho números sueltos no dicen si son de ocho días
   // o de tres meses, y eso cambia lo que significan.
@@ -296,8 +324,15 @@ console.log('\n— Y con cuatro semanas de contexto —');
 
 console.log('\n— El botón de «Entiendo» —');
 {
-  const i = APP.indexOf("guardarChequeo(r);");
-  const trozo = APP.slice(i, i + 600);
+  // Se busca la LLAMADA, sin clavar sus argumentos: `guardarChequeo(r)` pasó
+  // a llevar además la foto de la semana para el historial, y este ancla
+  // dejó de encontrarse. `indexOf` devolvió -1, el recorte salió vacío y las
+  // cuatro comprobaciones de aquí abajo se pusieron rojas sin que el botón
+  // hubiera cambiado en nada.
+  const i = APP.search(/guardarChequeo\(r[,)]/);
+  const trozo = i < 0 ? '' : APP.slice(i, i + 600);
+  check('se guarda el chequeo', i >= 0,
+    'sin esto, el lunes siguiente vuelve a salir como si no lo hubiera contestado');
   check('el botón pasa a decir Entiendo', /btn\.textContent = 'Entiendo';/.test(trozo));
   check('y queda pulsable', /btn\.disabled = false;[\s\S]{0,80}'Entiendo'/.test(trozo));
   check('se marca que ahora cierra', /btn\.dataset\.modo = 'cerrar';/.test(trozo));
