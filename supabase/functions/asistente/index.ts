@@ -493,6 +493,13 @@ QUÉ MIRAS, EN ESTE ORDEN
    - Peso plano y entrenó poco o nada → no le faltan calorías, le falta
      estímulo. Ajustar aquí no arregla nada.
 
+   «POCO» ES POCO PARA SU PLAN, NO PARA EL TUYO. Te digo cuántos días
+   planea entrenar. Si cumplió su plan, CUMPLIÓ —aunque sean tres días— y
+   eso se dice, no se matiza. Tres de tres es una semana entera; tres de
+   seis es media. Sin mirar el plan, «solo entrenó 3» se lee siempre como
+   poco, y a quien entrena tres días por elección se le estaría regañando
+   cada lunes por hacer justo lo que dijo que iba a hacer.
+
    Y si te paso EJERCICIO POR EJERCICIO, léelo antes de llamar a nada
    «estancamiento». El volumen total esconde lo que pasa dentro: subir un
    10% en piernas y bajar un 10% en espalda da una suma plana, y no es lo
@@ -1612,8 +1619,17 @@ Deno.serve(async (req) => {
       // Un peso plano no significa lo mismo si el volumen sube que si no se
       // movió. Sin esta línea, el modelo trata los dos casos igual y ajusta
       // calorías donde no hacía falta.
+      // CON SU PLAN AL LADO. «Entrenó 4 veces» no dice si fue bien o mal:
+      // cuatro es la semana perfecta de quien planea cuatro y es dejarse dos
+      // de quien planea seis. La regla de abajo —«peso plano y entrenó poco
+      // → le falta estímulo, no calorías»— no tenía con qué medir «poco», y
+      // sin referencia el modelo tiraba de la suya, que suele ser más.
+      //
+      // Si no llega el plan —una app vieja, o alguien que no lo dijo— no se
+      // inventa: se calla esa parte y se juzga como antes.
+      const plan = e && e.dias_previstos ? ` de ${e.dias_previstos} que planea` : '';
       const entreno = e
-        ? `\n- Entrenó ${e.sesiones} veces (${e.sesiones_antes} la semana anterior)\n` +
+        ? `\n- Entrenó ${e.sesiones} veces${plan} (${e.sesiones_antes} la semana anterior)\n` +
           `- Volumen: ${e.volumen} kg esta semana, ${e.volumen_antes} kg la anterior`
         : '';
 
@@ -1623,13 +1639,41 @@ Deno.serve(async (req) => {
       // juzgaba cada semana como si fuera la primera.
       const previas = Array.isArray(cuerpo.historial)
         ? (cuerpo.historial as Record<string, unknown>[]).slice(-4) : [];
+      // CON LO QUE DE VERDAD PASÓ CADA SEMANA, no solo la encuesta. Cada
+      // cierre deja guardado lo que comió de media, sus macros, su peso
+      // medio y el volumen; hasta ahora de todo eso solo se le enseñaba el
+      // hambre, la energía y el sueño.
+      //
+      // Es lo que convierte cuatro números sueltos en una tendencia, y es
+      // sobre todo lo que deja ver el patrón que se buscaba: que las
+      // semanas de poca proteína son las mismas en que el peso no se mueve.
+      //
+      // Los `??` no sobran: las semanas anteriores a que esto se guardara no
+      // traen ninguno de estos números, y un cero ahí diría «comió cero».
       const historial = previas.length
         ? `\nSEMANAS ANTERIORES (de la más vieja a la más reciente):\n` +
-          previas.map((p) =>
-            `- ${p.semana}: hambre ${p.hambre ?? '—'}, energía ${p.energia ?? '—'}, ` +
-            `sueño ${p.sueno ?? '—'}` +
-            (p.ajusto ? ` · se le ajustó a ${p.cal_despues} cal` : ' · no se tocó')
-          ).join('\n') + `\n`
+          previas.map((p) => {
+            const peso = p.peso_medio != null ? `${p.peso_medio} kg` : '—';
+            // «2380/2451 cal» y no «2380 cal/2451»: la unidad va al final,
+            // detrás de los dos números, que es como se lee una fracción.
+            const comio = p.media_cal != null
+              ? (p.cal_antes != null
+                  ? `${Math.round(Number(p.media_cal))}/${Math.round(Number(p.cal_antes))} cal`
+                  : `${Math.round(Number(p.media_cal))} cal`)
+              : '—';
+            const prote = p.media_p != null
+              ? (p.meta_p != null
+                  ? `${Math.round(Number(p.media_p))}/${Math.round(Number(p.meta_p))} g`
+                  : `${Math.round(Number(p.media_p))} g`)
+              : '—';
+            return `- ${p.semana}: peso ${peso} · comió ${comio} · prote ${prote}` +
+              (p.dias_apuntados != null ? ` · apuntó ${p.dias_apuntados}/7` : '') +
+              (p.sesiones != null ? ` · gym ${p.sesiones}` : '') +
+              (p.volumen != null ? ` (${p.volumen} kg)` : '') +
+              `\n  hambre ${p.hambre ?? '—'}, energía ${p.energia ?? '—'}, ` +
+              `sueño ${p.sueno ?? '—'}` +
+              (p.ajusto ? ` · se le ajustó a ${p.cal_despues} cal` : ' · no se tocó');
+          }).join('\n') + `\n`
         : '';
 
       // La báscula no distingue grasa de agua de músculo. La cintura sí, y

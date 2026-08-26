@@ -11492,6 +11492,17 @@
         return {
           sesiones: estaSemana.length,
           sesiones_antes: anterior.length,
+          // CUÁNTOS DIJO QUE IBA A ENTRENAR. Sin esto, «entrenó 4 veces» no
+          // se puede juzgar: cuatro es la semana perfecta de quien planea
+          // cuatro y es dejarse dos de quien planea seis. La regla del
+          // cierre —«peso plano y entrenó poco → le falta estímulo, no
+          // calorías»— no tenía con qué medir «poco».
+          //
+          // Es el mismo dato que el anillo de Progreso y el mismo que fija
+          // el factor de actividad de sus calorías. Ya estaba; no se
+          // mandaba. Va `null` y no un número inventado si no se sabe:
+          // el servidor prefiere no decir nada a decir una cifra falsa.
+          dias_previstos: (reg && reg.dias >= 1 && reg.dias <= 7) ? Number(reg.dias) : null,
           volumen: Math.round(suma(estaSemana)),
           volumen_antes: Math.round(suma(anterior)),
           por_semana: porSemana,
@@ -11649,8 +11660,17 @@
   // cambia lo que el entrenador es capaz de ver.
   function chequeosDeAntes(){
     if(!sesion || !sesion.user) return Promise.resolve([]);
+    // TODO LO QUE EL CIERRE DEJÓ GUARDADO, no solo la encuesta. Desde que
+    // cada cierre deja su foto hay veinte columnas por semana; aquí se
+    // pedían seis y el resto se guardaba para nadie.
+    //
+    // Y es lo único que queda a partir de los 60 días: el teléfono solo se
+    // descarga ese trozo de diario, así que `resumenDeSemanas()` no puede
+    // reconstruir nada más atrás. Esta tabla es la memoria larga.
     return sbFetch('/rest/v1/chequeos_semanales' +
-                   '?select=semana,hambre,energia,sueno,ajusto,cal_despues' +
+                   '?select=semana,hambre,energia,sueno,ajusto,cal_despues,' +
+                   'cal_antes,media_cal,media_p,meta_p,peso_medio,volumen,' +
+                   'dias_apuntados,sesiones' +
                    '&user_id=eq.' + sesion.user.id +
                    '&order=semana.desc&limit=5')
       // Cuatro semanas antes de esta. La de ahora se manda aparte y todavía

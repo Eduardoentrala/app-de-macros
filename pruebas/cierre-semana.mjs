@@ -83,8 +83,20 @@ console.log('\n— La IA ve las semanas de antes, no una suelta —');
 {
   // Esto es lo que más cambia lo que el entrenador puede ver, y no le pide
   // nada más a la persona: los datos ya se guardaban y no se mandaban.
+  // La función entera, contando llaves. Era una ventana de 900 caracteres y
+  // se rompió sola en cuanto el `select` creció para traerse el resto del
+  // historial: tres comprobaciones se pusieron rojas sin que nada dejara de
+  // funcionar. Ya ha pasado tres veces hoy con ventanas así.
   const i = APP.indexOf('function chequeosDeAntes(');
-  const trozo = i > 0 ? APP.slice(i, i + 900) : '';
+  const trozo = (() => {
+    if (i < 0) return '';
+    let n = 0, j = APP.indexOf('{', i);
+    for (; j < APP.length; j++) {
+      if (APP[j] === '{') n++;
+      else if (APP[j] === '}') { n--; if (!n) return APP.slice(i, j + 1); }
+    }
+    return APP.slice(i);
+  })();
   check('se traen los chequeos anteriores', i > 0);
   check('con el sueño incluido', /select=semana,hambre,energia,sueno/.test(trozo));
   check('filtra por usuario', /user_id=eq\.' \+ sesion\.user\.id/.test(trozo));
