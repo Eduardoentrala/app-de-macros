@@ -95,8 +95,20 @@ console.log('\n— Los otros sitios que ya lo hacían bien —');
 
 console.log('\n— Y una sesión de entreno que no se guarda —');
 {
+  // El manejador entero, contando llaves. Era una ventana de 5400
+  // caracteres —la quinta que se cae hoy por lo mismo— y basta con que el
+  // guardado crezca unas líneas para que todo el deshacer quede fuera del
+  // recorte y las comprobaciones se pongan rojas sin faltar nada.
   const i = APP.indexOf("getElementById('saveSessionBtn')");
-  const fn = APP.slice(i, i + 5400);
+  const fn = (() => {
+    if (i < 0) return '';
+    let n = 0, j = APP.indexOf('{', APP.indexOf('function(){', i));
+    for (; j < APP.length; j++) {
+      if (APP[j] === '{') n++;
+      else if (APP[j] === '}') { n--; if (!n) return APP.slice(i, j + 1); }
+    }
+    return APP.slice(i);
+  })();
   check('existe el guardado de sesión', i > 0);
 
   // Lo que ya se deshacía.

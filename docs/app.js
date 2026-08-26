@@ -3705,7 +3705,17 @@
   }
 
   // Guardar sesión = queda registrado el día de hoy como día de fuerza
+  // Mientras una sesión se está guardando, el botón no vuelve a disparar.
+  //
+  //  Preguntar «¿ya hay una de hoy?» tarda un viaje de ida y vuelta, y dos
+  //  toques seguidos no le dan tiempo: las dos consultas contestarían «no
+  //  hay» y se crearían dos filas igual. El candado tapa esa ventana; la
+  //  consulta tapa el caso de volver a guardar más tarde, o tras recargar.
+  var guardandoSesion = false;
+
   document.getElementById('saveSessionBtn').addEventListener('click', function(){
+    if(guardandoSesion) return;
+    guardandoSesion = true;
     SESIONES[iso(HOY)] = true;
 
     // La rutina es la PLANTILLA, que se sigue editando. Esto es el
@@ -3766,23 +3776,71 @@
     // que se acaba de guardar.
     recalcAll();
 
-    if(!sesion || !sesion.user){ toast('toastRutina', 'Sesión guardada'); return; }
-    if(!detalle.length){ toast('toastRutina', 'No hay series con peso que guardar'); return; }
+    if(!sesion || !sesion.user){ guardandoSesion = false; toast('toastRutina', 'Sesión guardada'); return; }
+    if(!detalle.length){ guardandoSesion = false; toast('toastRutina', 'No hay series con peso que guardar'); return; }
 
     var tab = activeTab();
-    sbFetch('/rest/v1/workout_sessions', {
-      method:'POST', headers:{ 'Prefer':'return=minimal' },
-      body: JSON.stringify({
-        user_id: sesion.user.id,
-        session_date: iso(HOY),
-        routine_day_id: (tab && tab.dataset.id) || null,
-        day_name: tab ? tab.textContent.trim() : null,
-        exercises: detalle,
-        total_volume: total
-      })
-    }).then(function(){
+    var diaId = (tab && tab.dataset.id) || null;
+    var fila = {
+      user_id: sesion.user.id,
+      session_date: iso(HOY),
+      routine_day_id: diaId,
+      day_name: tab ? tab.textContent.trim() : null,
+      exercises: detalle,
+      total_volume: total
+    };
+
+    // SI YA HAY UNA SESIÓN DE HOY PARA ESTE MISMO DÍA DE RUTINA, SE
+    // ACTUALIZA EN VEZ DE AÑADIR OTRA.
+    //
+    //  Los reps y los pesos NO se borran al guardar —solo se apagan las
+    //  palomitas—, así que un segundo toque leía exactamente lo mismo y
+    //  mandaba una fila idéntica. Las VECES ya se cuentan por días y no se
+    //  inflaban, pero el volumen suma todas las filas, así que el volumen
+    //  del día salía por dos. Y de ese número sale la regla más cara del
+    //  cierre: «peso plano y volumen SUBIENDO → está funcionando, no le
+    //  toques nada». Un volumen doblado le dice a la IA que progresaste
+    //  cuando no.
+    //
+    //  La clave es (fecha + día de rutina) y no la fecha sola: entrenar dos
+    //  veces de verdad en un día son dos días de rutina distintos —empuje
+    //  por la mañana, tirón por la tarde— y esos siguen siendo dos filas.
+    //  Guardar el MISMO día dos veces es el accidente.
+    //
+    //  `is.null` y no `eq.null` cuando no hay día: con `eq.null` PostgREST
+    //  no casa nada y siempre se crearía fila nueva.
+    var busca = '/rest/v1/workout_sessions?select=id' +
+                '&user_id=eq.' + sesion.user.id +
+                '&session_date=eq.' + iso(HOY) +
+                (diaId ? '&routine_day_id=eq.' + diaId : '&routine_day_id=is.null') +
+                '&limit=1';
+
+    //  Y si la consulta falla, se guarda igual. Preguntar es una mejora y no
+    //  puede convertirse en un motivo para perder la sesión: peor un volumen
+    //  duplicado que un entrenamiento que no queda registrado.
+    sbFetch(busca)
+      ['catch'](function(){ return null; })
+      .then(function(hay){
+        var id = hay && hay[0] && hay[0].id;
+        if(id){
+          // Con el `user_id` además del id. RLS ya lo impediría, pero la
+          // regla aquí es no apoyarse solo en ella: si algún día una
+          // política se afloja, esto sigue tocando únicamente lo suyo.
+          return sbFetch('/rest/v1/workout_sessions?id=eq.' + id +
+                         '&user_id=eq.' + sesion.user.id, {
+            method:'PATCH', headers:{ 'Prefer':'return=minimal' },
+            body: JSON.stringify(fila)
+          });
+        }
+        return sbFetch('/rest/v1/workout_sessions', {
+          method:'POST', headers:{ 'Prefer':'return=minimal' },
+          body: JSON.stringify(fila)
+        });
+      }).then(function(){
+      guardandoSesion = false;
       toast('toastRutina', 'Sesión guardada · ' + mil(total) + ' kg de volumen');
     })['catch'](function(e){
+      guardandoSesion = false;
       // Se deshace lo local: si no se guardó, la racha y las gráficas no
       // deben contarla.
       delete SESIONES[iso(HOY)];

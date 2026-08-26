@@ -51,11 +51,26 @@ console.log('\n— Toda lectura personal dice de quién —');
     // Ventana amplia hacia atrás: en la ficha del panel hay cuatro
     // consultas seguidas y la definición de `q` queda lejos de la última.
     const antes = APP.slice(Math.max(0, m.index - 900), m.index);
+    // Y si el cuerpo es una variable —`JSON.stringify(fila)`—, se sigue esa
+    // variable hasta donde se declara y se mira ALLÍ. Antes esto se
+    // resolvía mirando 900 caracteres hacia atrás, y bastó con que entre la
+    // declaración y el envío se metieran unas líneas de comentario para que
+    // la comprobación diera por «sin dueño» un POST que sí lo llevaba.
+    // Seguir el nombre no depende de la distancia.
+    const porVariable = (() => {
+      const v = (trozo.match(/JSON\.stringify\((\w+)\)/) || [])[1];
+      if (!v) return false;
+      const decl = APP.lastIndexOf('var ' + v + ' = {', m.index);
+      if (decl < 0) return false;
+      return /user_id: sesion/.test(APP.slice(decl, APP.indexOf('};', decl)));
+    })();
+
     const filtra =
       /user_id=eq\./.test(trozo) ||            // el caso normal
       // Un POST con su dueño. Se mira también hacia atrás porque el cuerpo
       // suele armarse en una variable unas líneas antes de mandarlo.
       /user_id: sesion/.test(trozo) || /user_id: sesion/.test(antes) ||
+      porVariable ||
       /[&?']id=eq\./.test(trozo) ||            // una fila concreta por id
       /routine_day_id=eq\.|routine_exercise_id=eq\./.test(trozo) ||
       (/\+ q\)/.test(trozo) && /var q = '&user_id=eq\./.test(antes));
