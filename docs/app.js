@@ -4619,6 +4619,41 @@
   // La de salud solo sale si declararon algo: pedirle consentimiento para
   // datos médicos a quien no dio ninguno es una casilla que no significa
   // nada, y las casillas que no significan nada se marcan sin leer.
+  // ¿Están los tres números que deciden todo, y dicen algo posible?
+  //
+  //  Edad, altura y peso son la fórmula entera. Tenían su `min` y su `max`
+  //  puestos en el HTML desde siempre, pero ninguno era obligatorio y nadie
+  //  los miraba: el botón de empezar solo se apagaba por la casilla de los
+  //  términos. Se podía terminar el alta con la edad y la altura en blanco.
+  //
+  //  Y ENTONCES LA CUENTA SIGUE SALIENDO, que es lo peor. `gastoEstimado()`
+  //  hace `Number(campo.value) || 0`, así que un hueco vale cero, y Mifflin
+  //  con altura 0 y edad 0 da un basal ridículo. Se midió: 80 kg con los
+  //  otros dos vacíos daba «gastas ~1,248 cal al día», cuando lo real ronda
+  //  las 2.200-2.800. Esa persona se lleva un déficit enorme que nadie quiso,
+  //  se le queda guardado, y el anillo le dice cada día que se pasó.
+  //
+  //  Y no lo caza nada más: 1.248 pasa el suelo de 1.200 que protege de los
+  //  déficits absurdos. El número parece correcto, y un número que parece
+  //  correcto no lo mira nadie.
+  //
+  //  Los límites se leen del propio campo y no se copian aquí: dos listas de
+  //  rangos se separan el día que se cambie uno.
+  function datosCompletos(){
+    return ['regEdad','regAltura','regPeso'].every(function(id){
+      var el = document.getElementById(id);
+      if(!el) return false;
+      var t = String(el.value).trim();
+      if(!t) return false;
+      var v = Number(t);
+      if(!isFinite(v)) return false;
+      var min = Number(el.min), max = Number(el.max);
+      if(isFinite(min) && v < min) return false;
+      if(isFinite(max) && v > max) return false;
+      return true;
+    });
+  }
+
   function revisarConsentimiento(){
     var hayCondiciones = condicionesElegidas().length > 0;
     var caja = document.getElementById('regAceptoSaludCaja');
@@ -4629,7 +4664,9 @@
 
     caja.hidden = !hayCondiciones;
     if(!hayCondiciones) salud.checked = false;
-    boton.disabled = !terminos.checked || (hayCondiciones && !salud.checked);
+    boton.disabled = !terminos.checked ||
+                     (hayCondiciones && !salud.checked) ||
+                     !datosCompletos();
   }
   ['regAceptoTerminos', 'regAceptoSalud'].forEach(function(id){
     var el = document.getElementById(id);
@@ -4784,9 +4821,15 @@
 
   grupoOpciones('regDias', 'dias');
   ['regEdad','regAltura','regPeso'].forEach(function(id){
-    document.getElementById(id).addEventListener('input', calcularMacros);
+    document.getElementById(id).addEventListener('input', function(){
+      calcularMacros();
+      // Y volver a mirar si ya se puede empezar: sin esto el botón se
+      // quedaría apagado para siempre, porque solo lo revisaban las casillas.
+      revisarConsentimiento();
+    });
   });
   calcularMacros();
+  revisarConsentimiento();
 
   function aplicarRegistro(){
     var m = calcularMacros();

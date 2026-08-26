@@ -64,9 +64,27 @@ console.log('\n— Sin aceptar no se entra —');
   check('y una APARTE para datos de salud', HTML.includes('id="regAceptoSalud"'));
   check('el boton nace bloqueado', /id="regEmpezar"[^>]*disabled/.test(HTML));
 
+  // La funcion entera, contando llaves. Antes eran 800 caracteres a ojo, y
+  // eso se queda corto en cuanto la funcion crece por un motivo bueno.
   const i = APP.indexOf('function revisarConsentimiento(');
-  const f = APP.slice(i, i + 800);
-  check('el boton depende de las dos', /!terminos\.checked \|\| \(hayCondiciones && !salud\.checked\)/.test(f));
+  const f = (() => {
+    let n = 0, j = APP.indexOf('{', i);
+    for (; j < APP.length; j++) {
+      if (APP[j] === '{') n++;
+      else if (APP[j] === '}') { n--; if (!n) return APP.slice(i, j + 1); }
+    }
+    return APP.slice(i);
+  })();
+  // Sin espacios, para no fijar como esta escrita: la condicion crecio a tres
+  // lineas al anadir `datosCompletos()` y esta comprobacion se puso roja
+  // aunque lo que mira siguiera siendo verdad.
+  const plano = f.replace(/\s+/g, '');
+  check('el boton depende de las dos',
+        plano.includes('!terminos.checked||(hayCondiciones&&!salud.checked)'));
+  // Y de que los datos esten: sin edad ni altura se llegaba al final del alta
+  // con calorias inventadas. Ver alta-sin-datos.
+  check('y de que los datos esten completos', plano.includes('!datosCompletos()'),
+        'sin esto se termina el alta con la altura en blanco y la cuenta sale igual');
   check('la de salud solo sale si declaro algo', /caja\.hidden = !hayCondiciones/.test(f));
   // Dejar marcada una casilla que ya no se ve seria consentir a ciegas.
   check('si quita las condiciones, se desmarca', /if\(!hayCondiciones\) salud\.checked = false/.test(f));
