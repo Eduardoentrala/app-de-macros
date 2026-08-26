@@ -203,8 +203,13 @@ console.log('\n— El análisis se guarda para no volver a pagarlo —');
 console.log('\n— Y el servidor no se fía del cuerpo —');
 {
   const FN = readFileSync(join(RAIZ, 'supabase', 'functions', 'asistente', 'index.ts'), 'utf8');
-  const a = FN.slice(FN.indexOf("if (accion === 'cliente')"),
-                     FN.indexOf("return json({ error: 'Acción desconocida.' }"));
+  // El final se busca A PARTIR del inicio, no desde el principio del archivo.
+  // «Acción desconocida» dejó de ser único —ahora también se contesta al
+  // principio, antes de cobrar el tope, ver peticion-mala-no-cuesta— y
+  // buscándolo desde cero salía el de arriba: el trozo quedaba vacío y las
+  // cuatro comprobaciones de abajo fallaban sin que nada estuviera mal.
+  const desde = FN.indexOf("if (accion === 'cliente')");
+  const a = FN.slice(desde, FN.indexOf("return json({ error: 'Acción desconocida.' }", desde));
   check('existe la acción en la función', a.length > 100);
   // La app ya saca los números con `plan_metricas`, que comprueba
   // `puede_ver`. Pero la función los recibe por el CUERPO de la petición, y

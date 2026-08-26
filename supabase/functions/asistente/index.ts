@@ -1054,6 +1054,19 @@ Deno.serve(async (req) => {
 
   const accion = String(cuerpo.accion || '');
 
+  // LAS QUE EXISTEN, y se comprueba AQUÍ.
+  //
+  //  Hay un «Acción desconocida» al final, después de las siete ramas. Pero
+  //  para llegar hasta allí ya se pasó por el tope diario, así que pedir algo
+  //  que no existe costaba una consulta y devolvía un 400. Es lo que pasaría
+  //  con una versión vieja de la app llamando a algo que se renombró: se
+  //  comería el día entero a base de errores, sin recibir una sola respuesta.
+  //
+  //  Misma regla que las llaves apagadas y que el JSON ilegible, que ya se
+  //  contestan antes de cobrar. Esta se quedó atrás.
+  const ACCIONES = ['apuntar', 'chat', 'aviso', 'semana', 'fotos', 'plan', 'cliente'];
+  if (!ACCIONES.includes(accion)) return json({ error: 'Acción desconocida.' }, 400);
+
   // --- ¿Le dejan ESTO en concreto? ---
   //
   //  `ia_habilitada` es la llave general: todo o nada. Esto es lo fino.
@@ -1153,6 +1166,25 @@ Deno.serve(async (req) => {
   // queda NADA que lo pare: ocho imágenes al modelo por vuelta, en bucle.
   // Es la misma puerta que ya se cerró con el mes —que se calcula aquí y no
   // se acepta del cliente, por esto mismo— abierta por el otro lado.
+  // LAS FOTOS SE REVISAN AQUÍ, antes de cobrar.
+  //
+  //  `leerImagenes` devuelve el motivo en vez de lanzar precisamente para
+  //  esto —lo dice su propio comentario: «para que cada acción conteste con
+  //  su propio 400 y el tope diario no se gaste en una petición mal
+  //  formada»— pero se llamaba DENTRO de cada acción, o sea después del
+  //  cobro. Así que mandar una foto demasiado grande, o de un tipo que no se
+  //  acepta, costaba una consulta y devolvía un error. Unos cuantos intentos
+  //  dejaban a alguien sin asistente hasta el día siguiente sin haber
+  //  recibido una sola respuesta.
+  //
+  //  Solo para las dos acciones que miran imágenes. Las otras las ignoran, y
+  //  rechazar por una foto que de todos modos no se iba a leer sería inventar
+  //  un error donde no lo había.
+  const fotosPedidas = (accion === 'apuntar' || accion === 'chat')
+    ? leerImagenes(cuerpo)
+    : [];
+  if (typeof fotosPedidas === 'string') return json({ error: fotosPedidas }, 400);
+
   const TOPE_DIARIO = TOPES[nivel as keyof typeof TOPES] ?? TOPES.normal;
   let quedan: number | null = null;
   if (accion !== 'fotos' || cuerpo.rehacer === true) {
@@ -1272,8 +1304,10 @@ Deno.serve(async (req) => {
 
     if (accion === 'apuntar') {
       const texto = String(cuerpo.texto || '').trim().slice(0, 500);
-      const fotos = leerImagenes(cuerpo);
-      if (typeof fotos === 'string') return json({ error: fotos }, 400);
+      // Ya se leyeron y se validaron antes del tope: si hubieran estado mal,
+      // aquí no se llega. Se reutiliza en vez de decodificar otra vez varios
+      // megas de base64.
+      const fotos = fotosPedidas as Array<{ datos: string; tipo: string }>;
 
       if (!texto && !fotos.length) {
         return json({ error: 'Escribe qué comiste o toma una foto.' }, 400);
@@ -1317,8 +1351,8 @@ Deno.serve(async (req) => {
 
     if (accion === 'chat') {
       const historial = Array.isArray(cuerpo.mensajes) ? cuerpo.mensajes : [];
-      const fotos = leerImagenes(cuerpo);
-      if (typeof fotos === 'string') return json({ error: fotos }, 400);
+      // Igual que en `apuntar`: leídas y validadas antes del tope.
+      const fotos = fotosPedidas as Array<{ datos: string; tipo: string }>;
       const imagen = fotos.length ? '1' : '';   // solo para decidir el esfuerzo
 
       if (!historial.length && !fotos.length) {
