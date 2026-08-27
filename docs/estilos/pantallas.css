@@ -898,40 +898,20 @@
    igual que siete de siete. */
 .sem-cab span{font:600 12px/1.2 sans-serif;color:var(--ink-faint);flex:none;}
 
-.sem-rejilla{
-  display:grid;grid-template-columns:1fr 1fr;
-  /* El pelo entre recuadros es el fondo que se ve por los huecos. Un borde
-     por recuadro daría líneas dobles donde se tocan. */
-  gap:1px;background:var(--line);border-top:1px solid var(--line);
+/* La fila sin los cuatro recuadros: ya solo lleva la fecha y los dias, asi
+   que se convierte en una fila de las de tocar-y-entrar. La flecha no es
+   adorno: sin los recuadros debajo, la tarjeta ya no se lee como algo que
+   se abre, y sin ella parece un rotulo muerto. */
+.sem-sola{display:flex;align-items:center;}
+.sem-sola .sem-cab{flex:1;min-width:0;padding:14px 4px 14px 16px;}
+.sem-sola .sem-cab b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.sem-ir{
+  font:400 20px/1 sans-serif;color:var(--ink-faint);
+  padding:0 14px 0 4px;font-style:normal;flex:none;
 }
-.sem-celda{background:var(--card-bg);padding:13px 16px 14px;min-width:0;}
-.sem-celda .v{
-  font:700 21px/1.15 sans-serif;color:var(--ink);
-  font-variant-numeric:tabular-nums;
-  /* Los números no se parten aunque el recuadro se estreche. */
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-}
-/* La flecha va detrás del número y en gris: dice la dirección, que el
-   número ya trae. En una casilla coloreada se tiñe con él. */
-.sem-celda .e{font:700 15px/1.15 sans-serif;margin-left:5px;color:var(--ink-soft);}
-/* El rótulo va en `--ink-soft` y no en `--ink-faint`. Se midió: el faint
-   sobre la tarjeta blanca da 2.4:1, y a 11.5 px eso no se lee. El soft da
-   5.7:1 y sigue quedando claramente por detrás del número. */
-.sem-celda .k{font:600 11.5px/1.2 sans-serif;color:var(--ink-soft);margin-top:5px;}
-/* El número va SIEMPRE a tinta plena. El color es la excepción, no el
-   estado por defecto: verde cuando fue hacia donde querías, rojo solo para
-   la proteína corta. Una versión anterior pintaba de gris claro todo lo que
-   no era ni una cosa ni la otra —«78 %», «no fue»— y esos son justo los
-   números que hay que poder leer: 2.4:1 de contraste para el dato principal
-   de la casilla. */
-.sem-celda.bien .v,.sem-celda.bien .e{color:var(--green);}
-.sem-celda.mal  .v,.sem-celda.mal  .e{color:var(--red);}
-/* `.suave` no lleva estilo A PROPÓSITO: marca «esto no se destaca», y no
-   destacar es justamente el aspecto por defecto. Se deja la clase porque
-   dice en el HTML por qué esa casilla no está coloreada. */
-/* El hueco: un guion del tamaño del número, para que la rejilla no baile
-   entre una semana con datos y otra sin ellos. */
-.sem-celda.vacia .v{color:var(--ink-faint);font-weight:600;}
+.sem-sola:active{background:var(--pill-bg);}
+
+
 
 
 /* ---- La tarjeta de la semana ----
@@ -986,6 +966,16 @@
    alinean y la columna baila al cambiar de semana. */
 .ts-fila b{color:var(--ink);font:700 14px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace;
   font-variant-numeric:tabular-nums;white-space:nowrap;}
+
+/* El cuerpo reusa la misma rejilla de dos columnas que Alimentos y
+   Ejercicio: son dos datos y dos columnas ya hay. En una fila suelta la
+   tarjeta se quedaba con tres anchos distintos y se veia descuadrada.
+   Su seccion ya lleva el margen de arriba, asi que la rejilla no repite. */
+.ts-cuerpo{margin-top:0;}
+/* Peso y cintura llevan la diferencia pegada —«84,3 kg ↓ 0,4 kg»— y eso es
+   mas largo que un «4 / 7 dias». Con el mismo cuerpo se salia de su columna
+   en pantallas de 320. */
+.ts-cuerpo .ts-fila b{font-size:13px;}
 
 .ts-prog{display:flex;flex-wrap:wrap;gap:6px 16px;
   font:500 14px/1.4 sans-serif;color:var(--ink-soft);}

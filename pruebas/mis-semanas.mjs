@@ -11,16 +11,25 @@
 //
 // LO QUE SE PRUEBA AQUÍ, ejecutando las funciones de verdad:
 //
-//   · Que la foto de la semana coja los números QUE LA IA ACABA DE JUZGAR
-//     y no unos recalculados después.
+//   · Que la foto que se guarda al cerrar la semana coja los números QUE LA
+//     IA ACABA DE JUZGAR y no unos recalculados después.
 //   · Que lo que no se sabe viaje como null y NO como cero. Un cero dice
-//     «comió cero gramos de proteína»; en la pantalla saldría 0 % y
-//     parecería un dato real.
-//   · Que el color signifique algo. Bajar medio kilo es verde para quien
-//     adelgaza y no para quien intenta ganar: pintarlo igual sería decirle
-//     a la mitad de la gente que lo hace mal.
-//   · Que una fila vieja —sin ninguno de los datos nuevos— se pinte con
-//     guiones en vez de reventar o inventar ceros.
+//     «comió cero gramos de proteína», que es una afirmación, no un hueco.
+//   · Que la LISTA diga de qué semana a qué semana, y que una fila vieja no
+//     la reviente ni le haga inventarse nada.
+//
+// LO QUE YA NO SE PRUEBA AQUÍ, y por qué. Había cuatro secciones sobre los
+// recuadros de peso, comida, proteína y gym —que el peso se coloreara según
+// el objetivo, que la proteína fuera el único rojo, que el gym distinguiera
+// «no fue» de «fue y no progresó»—. Esos recuadros se quitaron a petición:
+// leían SOLO lo guardado en la fila, y las semanas anteriores a la 0054 no
+// tienen nada guardado, así que la pantalla era una columna de guiones de
+// arriba abajo. Cuatro huecos no informan de nada y ocupaban el sitio de lo
+// único que la lista tiene que hacer, que es dejarte encontrar una semana.
+//
+// Lo que había dentro está ahora en su tarjeta, que además sabe
+// reconstruirlo de los apuntes cuando la fila está vacía. Se prueba en
+// tarjeta-de-la-semana.
 
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -51,37 +60,26 @@ function sacar(cabecera) {
 }
 
 const fuente = [
-  'function escapar(t){', 'function porcentaje(hecho, meta){', 'function celda(clase, valor, extra, rotulo){',
-  'function celdaPeso(f){', 'function celdaComida(f){', 'function celdaProteina(f){',
-  'function celdaGym(f){', 'function isoDe(d){', 'function semanaQueJuzga(f){',
+  'function escapar(t){', 'function isoDe(d){', 'function rangoDeSemana(iso){',
+  'function semanaQueJuzga(f){', 'function rangoCorto(iso){',
   'function pintarMisSemanas(){',
 ].map(sacar).join('\n');
 
-// `reg` y `mil` y `fmtFecha` vienen de fuera; se le pasan.
-const construir = (extra = '') => new Function('reg', 'mil', 'fmtFecha', 'SEMANAS', 'document',
-  fuente + '\n' + extra);
+const MESES_LARGO = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
+  'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 
-const mil = (n) => Math.round(n).toLocaleString('es-MX');
-const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-const fmtFecha = (d) => d.getDate() + ' ' + MESES[d.getMonth()];
-
-function pinta(filas, { objetivo = 'bajar' } = {}) {
+function pinta(filas) {
   let puesto = '';
   const doc = { getElementById: () => ({ set innerHTML(v) { puesto = v; } }) };
-  construir('pintarMisSemanas();')({ objetivo }, mil, fmtFecha, filas, doc);
+  new Function('MESES_LARGO', 'SEMANAS', 'document',
+    fuente + '\npintarMisSemanas();')(MESES_LARGO, filas, doc);
   return puesto;
 }
-// Una celda suelta, con su fila y el objetivo de esa persona.
-function celdaDe(fn, f, objetivo = 'bajar') {
-  const g = new Function('reg', 'mil', 'fmtFecha', 'f',
-    fuente + '\n return ' + fn + '(f);');
-  return g({ objetivo }, mil, fmtFecha, f);
-}
 
-// La clave es la del 25 PORQUE ASI SE GUARDA: el cierre salta cuando
-// arranca la semana nueva y juzga la que acaba de terminar, pero la fila se
-// guarda con la clave de la que EMPIEZA. O sea que esta fila habla del 18 al
-// 24. Ver semanaQueJuzga y tarjeta-de-la-semana.
+// La clave es la del 25 PORQUE ASÍ SE GUARDA: el cierre salta cuando arranca
+// la semana nueva y juzga la que acaba de terminar, pero la fila se guarda
+// con la clave de la que EMPIEZA. O sea que esta fila habla del 18 al 24.
+// Ver `semanaQueJuzga` y tarjeta-de-la-semana.
 const SEMANA_BUENA = {
   semana: '2026-08-25', dias_apuntados: 7, media_cal: 2380, cal_antes: 2451,
   media_p: 162, media_c: 235, media_g: 74, meta_p: 170, meta_c: 240, meta_g: 75,
@@ -123,7 +121,6 @@ console.log('\nY una cintura de hace un mes no se cuela en esta semana');
   const isoDe = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
                        '-' + String(d.getDate()).padStart(2, '0');
   const ancla = new Date('2026-08-25T12:00:00');
-  // Medida vieja, fuera de los siete días que se cierran.
   const f = foto(ancla, isoDe, [{ fecha: '2026-07-02', cm: 91 }], Date);
   const r = f({}, [], null);
   ok(r.cintura === null, 'sale como hueco',
@@ -142,133 +139,67 @@ console.log('\nLo que no se sabe es null, nunca cero');
   const r = f({ dias_apuntados: 0, media_cal: 0, media_p: 0, media_c: 0, media_g: 0 }, [], null);
   ok(r.media_p === null && r.media_cal === null,
      'un cero de «no apuntó» no se guarda como cero',
-     'guardar 0 dice «comió cero gramos»; en la pantalla sale 0 % y parece ' +
-     'un dato de verdad. Salió: ' + JSON.stringify(r));
+     'guardar 0 dice «comió cero gramos». Salió: ' + JSON.stringify(r));
   ok(r.volumen === null, 'y sin entreno el volumen falta');
   ok(r.dias_apuntados === 0, 'pero los días apuntados sí son cero de verdad',
      'ahí el cero SÍ es un dato: apuntó cero días');
 
-  // Las sesiones también: «fue cero veces» es un dato, no un hueco.
   const r2 = f({}, [], { sesiones: 0, volumen: 0, volumen_antes: 0 });
   ok(r2.sesiones === 0, 'y las sesiones a cero también son un dato',
      'salió ' + r2.sesiones + ': «no fue» es justo lo que hay que poder ver');
 }
 
 // ------------------------------------------------------------------
-console.log('\nEl peso se colorea según a dónde quería ir');
+console.log('\nLa lista dice de qué semana a qué semana');
 {
-  const bajo = { peso_medio: 84.3, peso_medio_antes: 84.7 };
-  ok(/sem-celda bien/.test(celdaDe('celdaPeso', bajo, 'bajar')),
-     'bajar medio kilo es verde para quien adelgaza');
-  ok(!/sem-celda bien/.test(celdaDe('celdaPeso', bajo, 'subir')),
-     'y NO lo es para quien intenta ganar',
-     'pintarlo igual para todos le diría a la mitad de la gente que lo hace mal');
-
-  const subio = { peso_medio: 85.2, peso_medio_antes: 84.7 };
-  ok(/sem-celda bien/.test(celdaDe('celdaPeso', subio, 'subir')),
-     'y subir es verde para quien quiere subir');
-
-  const quieto = { peso_medio: 84.75, peso_medio_antes: 84.7 };
-  ok(/sem-celda bien/.test(celdaDe('celdaPeso', quieto, 'mantener')),
-     'quedarse quieto es verde para quien mantiene');
-  ok(/0\.0 kg/.test(celdaDe('celdaPeso', quieto, 'bajar')),
-     'y 50 g se enseñan como quieto, que es lo que son',
-     'medio kilo de agua entra y sale en un día: por debajo de 150 g no hay ' +
-     'nada que leer');
-
-  ok(/—/.test(celdaDe('celdaPeso', { peso_medio: null, peso_medio_antes: null })),
-     'y sin datos sale un guion');
+  const html = pinta([SEMANA_BUENA]);
+  ok(/del 18 al 24 de agosto/.test(html),
+     'el rango entero, no solo el día en que empieza',
+     '«Semana del 18 ago» no dice hasta cuándo llega. Salió: ' +
+     (html.match(/Semana[^<]*/) || ['(nada)'])[0]);
+  ok(/7 de 7 días/.test(html), 'y cuántos días apuntó',
+     'es lo que da o quita valor a lo que hay dentro');
+  ok(/data-sem="0"/.test(html), 'y la fila es tocable, que es lo que abre la tarjeta',
+     'sin `data-sem` el toque no encuentra a qué semana se refiere');
+  ok(!/NaN|undefined/.test(html), 'sin NaN ni undefined');
 }
 
-console.log('\nLa proteína es el único rojo de la pantalla');
+console.log('\nY una semana que cruza de mes nombra los dos');
 {
-  ok(/sem-celda mal/.test(celdaDe('celdaProteina', { media_p: 120, meta_p: 170 })),
-     'quedarse en el 71 % sale en rojo');
-  ok(/sem-celda bien/.test(celdaDe('celdaProteina', { media_p: 162, meta_p: 170 })),
-     'y cumplirla, en verde');
-  // Y que NO se pinte de rojo comer poco: eso es un dato, no una falta.
-  ok(!/sem-celda mal/.test(celdaDe('celdaComida', { media_cal: 1900, cal_antes: 2451 })),
-     'comer por debajo NO sale en rojo',
-     'esta pantalla es para ver el patrón, no para regañar cada semana');
-  ok(!/sem-celda mal/.test(celdaDe('celdaGym', { sesiones: 3, volumen: 18000, volumen_antes: 20000 })),
-     'ni bajar el volumen',
-     'puede ser una descarga; marcarla en rojo enseñaría a saltársela');
+  // Con un solo mes se lee como si empezara y acabara en el mismo.
+  const cruza = Object.assign({}, SEMANA_BUENA, { semana: '2026-09-07' });
+  const html = pinta([cruza]);
+  ok(/del 31 de agosto al 6 de septiembre/.test(html),
+     '«del 31 de agosto al 6 de septiembre»',
+     'salió: ' + (html.match(/Semana[^<]*/) || ['(nada)'])[0]);
 }
 
-console.log('\nEl gym distingue no ir de ir y no progresar');
-{
-  ok(/no fue/.test(celdaDe('celdaGym', { sesiones: 0 })), 'no ir se dice');
-  ok(/subió/.test(celdaDe('celdaGym', { sesiones: 4, volumen: 21500, volumen_antes: 20100 })),
-     'subir el volumen se dice');
-  ok(/igual/.test(celdaDe('celdaGym', { sesiones: 4, volumen: 20100, volumen_antes: 20050 })),
-     'y quedarse igual también');
-  // Sin volumen anterior no se puede comparar: se enseñan los días.
-  ok(/2 días/.test(celdaDe('celdaGym', { sesiones: 2, volumen: 9000, volumen_antes: null })),
-     'sin con qué comparar, se enseñan los días',
-     'dividir entre un volumen que falta daría Infinity o NaN');
-  ok(/2 días/.test(celdaDe('celdaGym', { sesiones: 2, volumen: 9000, volumen_antes: 0 })),
-     'y con un cero detrás tampoco se divide',
-     'volumen_antes = 0 da Infinity: la primera semana de cualquiera');
-}
-
-// ------------------------------------------------------------------
-console.log('\nUna fila vieja se pinta con guiones y no revienta');
+console.log('\nUna fila vieja no revienta ni inventa nada');
 {
   const vieja = { semana: '2026-07-28', dias_apuntados: null, media_cal: null,
                   cal_antes: 2451, media_p: null, meta_p: null, peso_medio: null,
                   peso_medio_antes: null, volumen: null, sesiones: null, cintura: null };
   let html = '';
-  try { html = pinta([vieja]); } catch (e) { html = 'REVENTÓ: ' + e.message; }
-  ok(!/REVENTÓ/.test(html), 'se pinta', html.slice(0, 120));
-  // LOS CUATRO, no «al menos tres». Con «>= 3» esta comprobación pasaba
-  // mientras la casilla de comida enseñaba «0 %»: la fila vieja no trae
-  // `media_cal` pero sí `cal_antes`, y `Number(null)` es 0. Un cero ahí
-  // afirma que no comió nada esa semana. Se vio al pintarlo en el navegador,
-  // no aquí.
-  ok((html.match(/—/g) || []).length === 4, 'con guiones en los cuatro',
-     'salieron ' + (html.match(/—/g) || []).length + ' guiones: alguna casilla ' +
-     'está enseñando un número donde no hay dato. HTML: ' + html.slice(0, 400));
-  ok(!/>0 %</.test(html), 'y ningún cero por ciento inventado',
-     'un 0 % se lee como un dato real, no como un hueco');
+  try { html = pinta([vieja]); } catch (e) { html = 'REVENTO: ' + e.message; }
+  ok(!/REVENTO/.test(html), 'se pinta', html.slice(0, 160));
+  ok(/del 21 al 27 de julio/.test(html), 'con su rango, que no depende de lo guardado',
+     'salió: ' + (html.match(/Semana[^<]*/) || ['(nada)'])[0]);
+  ok(!/\d+ de 7 días/.test(html), 'y sin inventarse los días que no tiene',
+     'un «0 de 7 días» afirma que no apuntó nada; el hueco dice que no se sabe');
   ok(!/NaN|undefined|null/.test(html), 'y sin NaN ni undefined a la vista',
      html.slice(0, 300));
 }
 
-console.log('\nY una semana normal sale entera');
+console.log('\nLa lista es solo lista');
 {
-  const html = pinta([SEMANA_BUENA]);
-  ok(/Semana del 18 ago/.test(html), 'con la fecha de la semana de la que HABLA',
-     'la fila se guarda con la clave del 25 y habla del 18 al 24: enseñar el 25 ' +
-     'etiqueta todas las semanas una semana tarde. Salio: ' +
-     (html.match(/Semana del [^<]*/) || ['(nada)'])[0]);
-  ok(/7 de 7 días/.test(html), 'y cuántos días apuntó',
-     'es lo que da o quita valor a los otros cuatro números');
-  ok((html.match(/sem-celda/g) || []).length === 4, 'y sus cuatro recuadros',
-     'salieron ' + (html.match(/sem-celda/g) || []).length);
-  ok(!/NaN|undefined/.test(html), 'sin NaN ni undefined');
-}
-
-console.log('\nLa lista es solo lista: el detalle ya no se despliega dentro');
-{
-  // AQUÍ HABÍA TRES SECCIONES sobre el desplegable: que solo se abriera uno,
-  // que enseñara los tres macros, y que la nota y la respuesta del modelo
-  // fueran escapadas. Ese desplegable se sustituyó a petición por una
-  // tarjeta que se abre en hoja y que enseña lo mismo en el formato de la
-  // referencia. Lo que probaban aquellas secciones se prueba ahora en
-  // tarjeta-de-la-semana, ejecutando el pintado de la tarjeta —incluido el
-  // escapado de las dos cosas que vienen de fuera—.
-  //
-  // Lo que sigue siendo de ESTA pantalla es que la lista no vuelva a llevar
-  // el detalle dentro: si vuelve, hay dos sitios que dicen lo mismo y se
-  // separan.
-  const dos = [SEMANA_BUENA, Object.assign({}, SEMANA_BUENA, { semana: '2026-08-11' })];
+  // Si vuelve a llevar el detalle dentro, hay dos sitios que dicen lo mismo y
+  // se separan. Lo de dentro va en la tarjeta.
+  const dos = [SEMANA_BUENA, Object.assign({}, SEMANA_BUENA, { semana: '2026-08-18' })];
   const html = pinta(dos);
-  ok(!/sem-mas/.test(html), 'la lista no despliega ningún detalle');
+  ok(!/sem-mas|sem-celda/.test(html), 'no despliega ningún detalle ni recuadros');
   ok(!/Carbohidratos/.test(html), 'ni enseña los macros uno a uno',
      'eso es lo que va en la tarjeta; repetirlo aquí son dos verdades que se separan');
-  ok((html.match(/data-sem="/g) || []).length === 2,
-     'cada semana sigue siendo tocable, que es lo que abre la tarjeta',
-     'sin `data-sem` el toque no encuentra a qué semana se refiere');
+  ok((html.match(/data-sem="/g) || []).length === 2, 'y cada semana es tocable');
 }
 
 // ------------------------------------------------------------------
@@ -288,34 +219,31 @@ console.log('\nY la pantalla está enganchada donde tiene que estar');
   const i = HTML.indexOf('data-push="missemanas"');
   const vista = [...HTML.slice(0, i).matchAll(/data-view="([^"]+)"/g)].pop()[1];
   ok(vista === 'ejercicio', 'el botón está en Progreso', 'está en ' + vista);
-  // Y se llega a Progreso desde el Diario: si ese botón desapareciera, el
-  // historial quedaría sin camino y no habría nada que lo dijera.
   ok(/data-push="ejercicio"[^>]*>[\s\S]{0,120}?Progreso/.test(HTML),
      'y a Progreso se llega desde el Diario',
      'sin ese botón, «Mis semanas» queda enterrado en una vista inalcanzable');
 
-  // Y NO hay hoja nueva: el detalle se despliega dentro de la tarjeta. Una
-  // hoja dentro de una vista se abre midiendo 0×0, y ya pasó dos veces.
+  // Y LA HOJA DE LA TARJETA VA FUERA DE LA VISTA. Una hoja anidada en una
+  // vista se abre midiendo 0×0 desde cualquier otra pantalla, sin un solo
+  // error. Ya pasó dos veces.
   const dentro = HTML.slice(HTML.indexOf('data-view="missemanas"'),
                             HTML.indexOf('data-view=', HTML.indexOf('data-view="missemanas"') + 10));
-  ok(!/sheet-backdrop/.test(dentro), 'y no mete ninguna hoja dentro de la vista',
-     'una hoja anidada en una vista se abre con 0×0 desde cualquier otra ' +
-     'pantalla, sin un solo error');
+  ok(!/sheet-backdrop/.test(dentro), 'no hay ninguna hoja dentro de la vista');
+  ok(/id="semanaSheet"/.test(HTML), 'y la de la tarjeta existe, fuera de ella');
 }
 
 console.log('\nY el estilo existe');
 {
-  // `.sem-mas` ya no está: era el desplegable. Su estilo se quitó con él, que
-  // es lo que hay que hacer con el CSS de algo que se borra — si no, queda
-  // ahí para siempre y nadie se atreve a tocarlo.
-  for (const c of ['.sem-card', '.sem-rejilla', '.sem-celda', '.fila-ir'])
+  for (const c of ['.sem-card', '.sem-sola', '.sem-ir', '.fila-ir'])
     ok(CSS.includes(c + '{') || CSS.includes(c + ' '), 'hay estilo para ' + c);
+  // Se fueron con lo que estilaban. El CSS de algo que se borra se borra: si
+  // no, queda ahí para siempre y nadie se atreve a tocarlo.
   ok(!CSS.includes('.sem-mas'), 'y el del desplegable se fue con él');
-  ok(/\.sem-rejilla\{[^}]*grid-template-columns:1fr 1fr/.test(CSS.replace(/\s*\n\s*/g, '')),
-     'los recuadros van en dos columnas');
+  ok(!CSS.includes('.sem-celda') && !CSS.includes('.sem-rejilla'),
+     'y el de los recuadros, también');
   ok(/overflow-wrap:anywhere/.test(CSS),
-     'y la nota parte las palabras largas',
-     'la escribe una persona y la escribe una IA: las dos pueden traer un ' +
+     'y el texto largo parte las palabras',
+     'lo escribe una persona y lo escribe una IA: las dos pueden traer un ' +
      'enlace o una palabra sin espacios');
 }
 

@@ -54,6 +54,7 @@ const FUENTE = [
   sacar('function logroSusMacros(m){'),
   sacar('function armarSemana(f, crudos){'),
   sacar('function nombreDeQuienEs(){'),
+  sacar('function rangoCorto(iso){'),
   sacar('function rangoEnPalabras(iso){'),
   sacar('function filaMacro(rotulo, hecho, meta, unidad){'),
   sacar('function tarjetaDeSemana(f, m){'),
@@ -63,13 +64,16 @@ const MESES_LARGO = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'jul
   'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 
 const hacer = (extra = {}) => new Function(
-  'MESES_LARGO', 'reg', 'MI_PERFIL', 'document',
+  'MESES_LARGO', 'reg', 'MI_PERFIL', 'document', 'PESOS', 'CINTURAS', 'leerMetas',
   FUENTE + '; return { mediasDeApuntes, progresionDeFuerza, logroSusMacros, ' +
-           'armarSemana, tarjetaDeSemana, rangoEnPalabras, semanaQueJuzga };')(
+           'armarSemana, tarjetaDeSemana, rangoEnPalabras, rangoCorto, semanaQueJuzga };')(
   MESES_LARGO,
   extra.reg || { dias: 7 },
   extra.perfil !== undefined ? extra.perfil : { full_name: 'Eduardo Entrala', cardio_goal_min: 120 },
-  { getElementById: () => null });
+  { getElementById: () => null },
+  extra.PESOS || {},
+  extra.CINTURAS || [],
+  extra.leerMetas || (() => ({ P: 170, C: 230, G: 75 })));
 
 // ------------------------------------------------------------------
 console.log('\nLas medias se sacan de los apuntes, entre los días apuntados');
@@ -102,47 +106,109 @@ console.log('\nLas medias se sacan de los apuntes, entre los días apuntados');
 }
 
 // ------------------------------------------------------------------
-console.log('\nLa progresión compara cada ejercicio consigo mismo');
+console.log('\nProgresar es levantar más, no entrenar más veces');
 {
   const { progresionDeFuerza } = hacer();
+  // La forma REAL de lo que guarda la app: `detalle.push({nombre, volumen,
+  // series})`, y cada serie `{reps, peso, hecho}`.
   const ses = (fecha, ejs) => ({ session_date: fecha, exercises: ejs });
-  const ej = (nombre, volumen) => ({ nombre, volumen });
+  const ej = (nombre, series) => ({
+    nombre,
+    volumen: series.reduce((a, s) => a + s.reps * s.peso, 0),
+    series: series.map((s) => Object.assign({ hecho: true }, s)),
+  });
+  const ANTES = '2026-08-11', DESDE = '2026-08-18', HASTA = '2026-08-24';
+  const p = (ss) => progresionDeFuerza(ss, DESDE, HASTA, ANTES);
 
-  const p = progresionDeFuerza([
-    ses('2026-08-12', [ej('Press banca', 1000), ej('Sentadilla', 2000), ej('Remo', 500)]),
-    ses('2026-08-19', [ej('Press banca', 1200), ej('Sentadilla', 2000), ej('Remo', 300)]),
-  ], '2026-08-18', '2026-08-24', '2026-08-11');
-  ok(p.subieron === 1, 'el que subió, subió', JSON.stringify(p));
-  ok(p.iguales === 1, 'el que se quedó igual, igual', JSON.stringify(p));
-  ok(p.bajaron === 1, 'y el que bajó, bajó', JSON.stringify(p));
+  // ESTE ES EL CASO QUE LO ROMPÍA TODO, y salió de mirar una semana real.
+  //
+  // Comparando el volumen de la SEMANA, hacer el mismo ejercicio dos veces
+  // en vez de una duplica su número sin haber levantado un kilo más. En una
+  // semana de verdad, al pasar de 2 a 5 sesiones, salía «subieron 10, igual
+  // 0, bajaron 0»: eso no era progreso, era frecuencia disfrazada de
+  // progreso. Y la sección se titula «progresión de fuerza».
+  const masVeces = p([
+    ses('2026-08-12', [ej('Press banca', [{ reps: 10, peso: 60 }])]),
+    // La misma semana siguiente, pero entrenado TRES veces. Mismo mejor set.
+    ses('2026-08-19', [ej('Press banca', [{ reps: 10, peso: 60 }])]),
+    ses('2026-08-21', [ej('Press banca', [{ reps: 10, peso: 60 }])]),
+    ses('2026-08-23', [ej('Press banca', [{ reps: 10, peso: 60 }])]),
+  ]);
+  ok(masVeces.iguales === 1 && masVeces.subieron === 0,
+     'entrenar el triple de veces con el mismo peso NO es haber progresado',
+     'con el volumen de la semana esto daba «subió» sin levantar un kilo más: ' +
+     JSON.stringify(masVeces));
+
+  // Lo que sí es progresar.
+  ok(p([
+    ses('2026-08-12', [ej('Press banca', [{ reps: 10, peso: 60 }])]),
+    ses('2026-08-19', [ej('Press banca', [{ reps: 10, peso: 62.5 }])]),
+  ]).subieron === 1, 'más peso a las mismas repeticiones, sí');
+  ok(p([
+    ses('2026-08-12', [ej('Press banca', [{ reps: 8, peso: 60 }])]),
+    ses('2026-08-19', [ej('Press banca', [{ reps: 10, peso: 60 }])]),
+  ]).subieron === 1, 'y el mismo peso a más repeticiones, también');
+  ok(p([
+    ses('2026-08-12', [ej('Press banca', [{ reps: 10, peso: 60 }])]),
+    ses('2026-08-19', [ej('Press banca', [{ reps: 10, peso: 60 }])]),
+  ]).iguales === 1, 'lo mismo es lo mismo');
+  ok(p([
+    ses('2026-08-12', [ej('Press banca', [{ reps: 10, peso: 60 }])]),
+    ses('2026-08-19', [ej('Press banca', [{ reps: 10, peso: 55 }])]),
+  ]).bajaron === 1, 'y menos peso es bajar');
+
+  // El peso manda sobre las repeticiones: 62,5 × 6 es más fuerza que 60 × 12,
+  // aunque el volumen diga lo contrario.
+  ok(p([
+    ses('2026-08-12', [ej('Press banca', [{ reps: 12, peso: 60 }])]),
+    ses('2026-08-19', [ej('Press banca', [{ reps: 6, peso: 62.5 }])]),
+  ]).subieron === 1, 'más peso cuenta aunque bajen las repeticiones',
+     'es lo que distingue progresar de acumular volumen');
+
+  // Se coge la MEJOR serie de la semana, no la última ni la media.
+  ok(p([
+    ses('2026-08-12', [ej('Press banca', [{ reps: 10, peso: 60 }])]),
+    ses('2026-08-19', [ej('Press banca', [
+      { reps: 12, peso: 40 }, { reps: 6, peso: 65 }, { reps: 10, peso: 50 }])]),
+  ]).subieron === 1, 'y se coge la mejor serie, aunque después bajara el peso',
+     'las series de bajada no borran la de arriba');
+
+  // Una serie tecleada y sin palomita es una intención, no un levantamiento.
+  const sinHacer = p([
+    ses('2026-08-12', [ej('Press banca', [{ reps: 10, peso: 60 }])]),
+    ses('2026-08-19', [{ nombre: 'Press banca', series: [
+      { reps: 10, peso: 60, hecho: true }, { reps: 10, peso: 100, hecho: false }] }]),
+  ]);
+  ok(sinHacer.iguales === 1 && sinHacer.subieron === 0,
+     'una serie sin hacer no cuenta como levantada',
+     'si contara, teclear un peso sin levantarlo saldría como progreso: ' +
+     JSON.stringify(sinHacer));
 
   // Un ejercicio nuevo NO es una bajada.
-  const nuevo = progresionDeFuerza([
-    ses('2026-08-12', [ej('Press banca', 1000)]),
-    ses('2026-08-19', [ej('Press banca', 1000), ej('Peso muerto', 3000)]),
-  ], '2026-08-18', '2026-08-24', '2026-08-11');
-  ok(nuevo.subieron === 0 && nuevo.iguales === 1 && nuevo.bajaron === 0,
+  const nuevo = p([
+    ses('2026-08-12', [ej('Press banca', [{ reps: 10, peso: 60 }])]),
+    ses('2026-08-19', [ej('Press banca', [{ reps: 10, peso: 60 }]),
+                       ej('Peso muerto', [{ reps: 5, peso: 100 }])]),
+  ]);
+  ok(nuevo.bajaron === 0 && nuevo.iguales === 1,
      'un ejercicio que no estaba la semana pasada no cuenta como bajada',
      'contarlo convertiría cambiar de rutina en un suspenso: ' + JSON.stringify(nuevo));
 
-  // Un 1 % de diferencia es ruido de redondeo, no progreso.
-  const ruido = progresionDeFuerza([
-    ses('2026-08-12', [ej('Press banca', 1000)]),
-    ses('2026-08-19', [ej('Press banca', 1005)]),
-  ], '2026-08-18', '2026-08-24', '2026-08-11');
-  ok(ruido.iguales === 1 && ruido.subieron === 0, 'medio kilo de más no es «subió»',
-     JSON.stringify(ruido));
-
   // Y el JSON puede llegar como texto desde PostgREST.
   const texto = progresionDeFuerza([
-    { session_date: '2026-08-12', exercises: JSON.stringify([ej('Press banca', 1000)]) },
-    { session_date: '2026-08-19', exercises: JSON.stringify([ej('Press banca', 1500)]) },
-  ], '2026-08-18', '2026-08-24', '2026-08-11');
+    { session_date: '2026-08-12', exercises: JSON.stringify([ej('Press', [{ reps: 10, peso: 60, hecho: true }])]) },
+    { session_date: '2026-08-19', exercises: JSON.stringify([ej('Press', [{ reps: 10, peso: 70, hecho: true }])]) },
+  ], DESDE, HASTA, ANTES);
   ok(texto && texto.subieron === 1, 'y da igual que el detalle llegue como texto',
      'si la base lo devuelve serializado y no se parsea, la progresión sale siempre vacía');
 
-  ok(progresionDeFuerza([], '2026-08-18', '2026-08-24', '2026-08-11') === null,
-     'sin sesiones no se inventa una progresión');
+  ok(p([]) === null, 'sin sesiones no se inventa una progresión');
+  // Es SEMANA CONTRA SEMANA: lo de hace tres semanas no entra.
+  ok(p([
+    ses('2026-07-20', [ej('Press banca', [{ reps: 10, peso: 40 }])]),
+    ses('2026-08-19', [ej('Press banca', [{ reps: 10, peso: 60 }])]),
+  ]) === null, 'y se compara contra la semana anterior, no contra hace un mes',
+     'con una referencia vieja cualquiera «sube» siempre');
 }
 
 // ------------------------------------------------------------------
@@ -233,8 +299,8 @@ console.log('\nY la tarjeta dice lo que tiene que decir');
   };
   const crudos = { desde: '2026-08-18', hasta: '2026-08-24', desdeAntes: '2026-08-11',
     comidas: [], cardio: [], sesiones: [
-      { session_date: '2026-08-12', exercises: [{ nombre: 'Press', volumen: 100 }] },
-      { session_date: '2026-08-19', exercises: [{ nombre: 'Press', volumen: 200 }] },
+      { session_date: '2026-08-12', exercises: [{ nombre: 'Press', series: [{ reps: 10, peso: 60, hecho: true }] }] },
+      { session_date: '2026-08-19', exercises: [{ nombre: 'Press', series: [{ reps: 10, peso: 70, hecho: true }] }] },
     ] };
   const html = tarjetaDeSemana(f, armarSemana(f, crudos));
 
@@ -310,7 +376,7 @@ console.log('\nUna fila habla de la semana ANTERIOR a la que dice su columna');
      'y la búsqueda de los apuntes también',
      'sin esto se traen el cardio y las sesiones de la semana equivocada y ' +
      'se mezclan con unas medias que son de otra');
-  ok(/new Date\(semanaQueJuzga\(f\) \+ 'T12:00:00'\)/.test(APP),
+  ok(/rangoCorto\(semanaQueJuzga\(f\)\)/.test(APP),
      'y el título de cada fila de la lista');
   // Nadie debe volver a leer la columna cruda para hablar de la semana.
   ok(!/rangoEnPalabras\(f\.semana\)/.test(APP) && !/crudosDeSemana\(f\.semana\)/.test(APP),
@@ -329,12 +395,15 @@ console.log('\nY la progresión lee los campos que el guardado escribe');
   ok(i > 0, 'se encuentra dónde se guarda el detalle de cada ejercicio');
   const escribe = APP.slice(i, APP.indexOf('}', i) + 1);
   ok(/nombre:/.test(escribe), 'el guardado escribe «nombre»', escribe);
-  ok(/volumen:/.test(escribe), 'y «volumen»', escribe);
+  ok(/series:/.test(escribe), 'y «series»', escribe);
 
   const lee = sacar('function progresionDeFuerza(sesiones, desde, hasta, desdeAntes){');
   ok(/ej\.nombre/.test(lee), 'y la progresión lee «nombre»');
-  ok(/ej\.volumen/.test(lee), 'y «volumen»',
-     'si dejan de coincidir, la progresión sale vacía sin un solo error');
+  ok(/ej\.series/.test(lee), 'y la progresión lee «series»');
+  ok(/se\.peso/.test(lee) && /se\.reps/.test(lee) && /se\.hecho/.test(lee),
+     'y de cada serie el peso, las repeticiones y si se hizo',
+     'si dejan de coincidir con lo que escribe el guardado, la progresión ' +
+     'sale vacía sin un solo error');
 }
 
 // ------------------------------------------------------------------
@@ -349,6 +418,101 @@ console.log('\nY la semana en curso no se queda cacheada');
      'y solo se sirve de la caché lo que ya no puede cambiar');
   ok(/if\(!enCurso\) CACHE_SEMANA\[iso\] = d;/.test(f),
      'y solo se guarda en ella lo que ya no puede cambiar');
+}
+
+// ------------------------------------------------------------------
+console.log('\nEl cuerpo: cuánto bajó y cuánto mide');
+{
+  // Ni una consulta más: `PESOS` y `CINTURAS` ya vienen cargados de un año al
+  // arrancar la app —los usa la gráfica de Peso—, así que cualquier semana
+  // del último año se reconstruye con lo que ya está en memoria.
+  const PESOS = {
+    // La semana anterior (11 al 17) y la que se juzga (18 al 24).
+    '2026-08-12': 84.8, '2026-08-15': 84.6,
+    '2026-08-19': 84.4, '2026-08-22': 84.2,
+    // Y una de otro mes, que no debe colarse.
+    '2026-07-01': 90.0,
+  };
+  const CINTURAS = [
+    { fecha: '2026-07-20', cm: 90.0 },      // la de antes
+    // DOS en la misma semana, a propósito: si se cogiera la primera en vez de
+    // la última, con una sola medida no se notaría nunca. Lo cazó una
+    // mutación que cambiaba `dentro[dentro.length-1]` por `dentro[0]` y no
+    // hacía fallar nada.
+    { fecha: '2026-08-19', cm: 89.2 },
+    { fecha: '2026-08-20', cm: 88.5 },      // la buena: la última de la semana
+  ];
+  const { armarSemana, tarjetaDeSemana } = hacer({ PESOS, CINTURAS });
+  const crudos = { desde: '2026-08-18', hasta: '2026-08-24', desdeAntes: '2026-08-11',
+                   comidas: [], cardio: [], sesiones: [] };
+  const f = { semana: '2026-08-25' };
+  const m = armarSemana(f, crudos);
+
+  // EL PESO ES LA MEDIA DE LA SEMANA, no el del día que se pesó: medio kilo
+  // de agua y sal entra y sale en un día.
+  ok(m.peso === 84.3, 'el peso es la media de esa semana',
+     'salió ' + m.peso + '; (84,4 + 84,2) / 2 = 84,3');
+  ok(m.pesoAntes === 84.7, 'y la de la anterior, para poder restar',
+     'salió ' + m.pesoAntes);
+  ok(m.cintura === 88.5, 'la cintura es la última medida DENTRO de la semana',
+     'salió ' + m.cintura);
+  ok(m.cinturaAntes === 90, 'y se compara con la anterior, venga de cuando venga',
+     'se mide cada cuatro semanas: exigir una de la semana pasada dejaría ' +
+     'la comparación vacía casi siempre. Salió ' + m.cinturaAntes);
+
+  const html = tarjetaDeSemana(f, m);
+  ok(/84,3 kg/.test(html), 'sale el peso');
+  ok(/↓ 0,4 kg/.test(html), 'y cuánto bajó, con su flecha',
+     '«84,3 kg» a secas no dice nada sin saber de dónde viene. Salió: ' +
+     (html.match(/Peso<\/span><b>[^<]*/) || ['(nada)'])[0]);
+  ok(/88,5 cm/.test(html) && /↓ 1,5 cm/.test(html), 'y la cintura, igual');
+
+  // Los cuatro casos que faltaban.
+  const subio = armarSemana({ semana: '2026-08-25', peso_medio: 85, peso_medio_antes: 84 }, null);
+  ok(/↑ 1 kg/.test(tarjetaDeSemana({ semana: '2026-08-25' }, subio)), 'subir sale con flecha arriba');
+  const igual = armarSemana({ semana: '2026-08-25', peso_medio: 84, peso_medio_antes: 84 }, null);
+  ok(/84 kg  =/.test(tarjetaDeSemana({ semana: '2026-08-25' }, igual)),
+     'y quedarse igual se dice, no se deja en blanco');
+  const solo = armarSemana({ semana: '2026-08-25', peso_medio: 84 }, null);
+  ok(/84 kg</.test(tarjetaDeSemana({ semana: '2026-08-25' }, solo)),
+     'con un solo peso se enseña sin diferencia',
+     'inventar una resta contra nada sería peor que no decirla');
+  const nada = armarSemana({ semana: '2026-08-25' }, null);
+  ok(!/Cuerpo/.test(tarjetaDeSemana({ semana: '2026-08-25' }, nada)),
+     'y sin peso ni cintura el bloque no sale',
+     'una sección con dos guiones ocupa sitio y no dice nada');
+
+  // Lo guardado en la fila manda sobre lo calculado, como en todo lo demás.
+  const guardada = armarSemana(
+    { semana: '2026-08-25', peso_medio: 80, peso_medio_antes: 81, cintura: 70 }, crudos);
+  ok(guardada.peso === 80 && guardada.cintura === 70,
+     'y una semana que guardó los suyos conserva los suyos',
+     'es lo que la IA vio al decidir');
+}
+
+// ------------------------------------------------------------------
+console.log('\nY las metas que no se guardaron son las de hoy');
+{
+  // Sin esto la tarjeta enseñaba «152g / —» en los tres macros y el sello se
+  // quedaba en «no hay datos suficientes» aunque estuviera todo lo demás:
+  // `logroSusMacros` necesita los cuatro pares para poder decir nada. Se vio
+  // en el teléfono.
+  const { armarSemana, tarjetaDeSemana } = hacer();
+  const f = { semana: '2026-08-25', media_p: 152, media_c: 210, media_g: 76,
+              media_cal: 2134, cal_antes: 2451 };
+  const m = armarSemana(f, null);
+  ok(m.metaP === 170 && m.metaC === 230 && m.metaG === 75,
+     'se rellenan con las de hoy cuando la fila no las trae',
+     'salió ' + JSON.stringify([m.metaP, m.metaC, m.metaG]));
+  const html = tarjetaDeSemana(f, m);
+  ok(!/152g \/ —/.test(html), 'así que ya no sale «152g / —»');
+  ok(!/No hay datos suficientes/.test(html), 'ni el sello se queda mudo',
+     'con las metas en blanco no podía decir si logró o no');
+
+  // Y una fila que SÍ guardó las suyas conserva las suyas.
+  const propias = armarSemana({ semana: '2026-08-25', meta_p: 200 }, null);
+  ok(propias.metaP === 200, 'y las suyas mandan sobre las de hoy',
+     'son las que estaban en vigor esa semana');
 }
 
 // ------------------------------------------------------------------

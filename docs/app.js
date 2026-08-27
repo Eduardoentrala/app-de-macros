@@ -11888,82 +11888,6 @@
       });
   }
 
-  // Un porcentaje de cumplimiento, o null si falta alguno de los dos.
-  //
-  //  EL `== null` VA PRIMERO Y NO SOBRA. `Number(null)` es 0, y 0 es un
-  //  número perfectamente finito: sin esta línea, una semana vieja sin
-  //  `media_cal` pero con su meta guardada salía como «0 %» en vez de como
-  //  un guion. Un cero ahí se lee como «no comió nada esa semana», que es
-  //  una afirmación, no un hueco. Se vio al pintarlo.
-  function porcentaje(hecho, meta){
-    if(hecho == null || meta == null || hecho === '') return null;
-    var h = Number(hecho), m = Number(meta);
-    if(!isFinite(h) || !isFinite(m) || m <= 0) return null;
-    return Math.round(h / m * 100);
-  }
-
-  function celda(clase, valor, extra, rotulo){
-    return '<div class="sem-celda ' + clase + '">' +
-             '<div class="v">' + escapar(valor) +
-               (extra ? '<span class="e">' + escapar(extra) + '</span>' : '') + '</div>' +
-             '<div class="k">' + escapar(rotulo) + '</div>' +
-           '</div>';
-  }
-
-  // El peso, coloreado según A DÓNDE QUERÍA IR esa persona. Bajar medio kilo
-  // es verde para quien adelgaza y lo contrario para quien intenta ganar;
-  // pintarlo siempre igual sería decirle a la mitad de la gente que lo está
-  // haciendo mal.
-  function celdaPeso(f){
-    if(f.peso_medio == null || f.peso_medio_antes == null)
-      return celda('vacia', '—', '', 'peso');
-    var d = Math.round((Number(f.peso_medio) - Number(f.peso_medio_antes)) * 10) / 10;
-    // Medio kilo de agua y sal entra y sale en un día. Por debajo de 150 g
-    // entre dos medias semanales no hay nada que leer.
-    var quieto = Math.abs(d) < 0.15;
-    var obj = (typeof reg === 'object' && reg && reg.objetivo) || 'bajar';
-    var clase = 'suave';
-    if(obj === 'mantener'){
-      if(quieto) clase = 'bien';
-    }else if(!quieto && ((obj === 'bajar' && d < 0) || (obj === 'subir' && d > 0))){
-      clase = 'bien';
-    }
-    var txt = quieto ? '0.0 kg'
-            : (d > 0 ? '+' : '−') + Math.abs(d).toFixed(1) + ' kg';
-    return celda(clase, txt, quieto ? '=' : (d > 0 ? '↑' : '↓'), 'peso');
-  }
-
-  function celdaComida(f){
-    var p = porcentaje(f.media_cal, f.cal_antes);
-    if(p == null) return celda('vacia', '—', '', 'comida');
-    // Verde solo cuando cuadró de verdad. Fuera de ahí, gris: comer por
-    // debajo no es una falta, es un dato, y pintarlo de rojo cada semana
-    // convierte esta pantalla en una regañina.
-    return celda(p >= 90 && p <= 110 ? 'bien' : 'suave', p + ' %', '', 'comida');
-  }
-
-  function celdaProteina(f){
-    var p = porcentaje(f.media_p, f.meta_p);
-    if(p == null) return celda('vacia', '—', '', 'proteína');
-    // El único rojo de la pantalla. Perder peso corto de proteína es perder
-    // músculo, y es justo lo que la báscula no enseña.
-    var clase = p >= 90 ? 'bien' : (p < 80 ? 'mal' : 'suave');
-    return celda(clase, p + ' %', p < 80 ? '↓' : '', 'proteína');
-  }
-
-  function celdaGym(f){
-    if(f.sesiones === 0) return celda('suave', 'no fue', '', 'gym');
-    if(f.volumen == null || f.volumen_antes == null || !Number(f.volumen_antes))
-      return f.sesiones != null
-        ? celda('suave', f.sesiones + (f.sesiones === 1 ? ' día' : ' días'), '', 'gym')
-        : celda('vacia', '—', '', 'gym');
-    var d = Math.round((f.volumen - f.volumen_antes) / f.volumen_antes * 100);
-    // Solo el alza se celebra. Bajar el volumen una semana puede ser una
-    // descarga, y marcarlo en rojo enseñaría a saltársela.
-    if(d >= 3)  return celda('bien',  'subió', '↑', 'gym');
-    if(d <= -3) return celda('suave', 'bajó',  '↓', 'gym');
-    return celda('suave', 'igual', '=', 'gym');
-  }
 
 
 
@@ -12090,12 +12014,39 @@
   }
 
   // Cuántos ejercicios subieron, se quedaron igual o bajaron respecto a la
-  // semana anterior. Se compara el VOLUMEN de cada ejercicio —repeticiones
-  // por peso, sumado en toda la semana— y solo los que aparecen en las DOS:
-  // uno que no se hizo la semana pasada no «bajó», simplemente no estaba, y
-  // contarlo como bajada convertiría cambiar de rutina en un suspenso.
+  // SEMANA ANTERIOR. Semana contra semana, siempre.
+  //
+  // SE COMPARA LA MEJOR SERIE, NO EL VOLUMEN DE LA SEMANA.
+  //
+  //  Esto empezó comparando el volumen semanal de cada ejercicio y estaba
+  //  mal, aunque el número saliera redondo. El volumen de la semana sube solo
+  //  con entrenar más veces: hacer press de banca dos días en vez de uno
+  //  duplica su volumen semanal sin haber levantado ni un kilo más. Se vio en
+  //  una semana de verdad —de 2 a 5 sesiones— y salía «subieron 10, igual 0,
+  //  bajaron 0». Eso no era progreso, era frecuencia disfrazada de progreso,
+  //  y en algo que se titula «progresión de fuerza» eso es mentir.
+  //
+  //  Progresar en fuerza es levantar MÁS PESO, o el mismo peso a más
+  //  repeticiones. Así que de cada ejercicio se coge su mejor serie de esa
+  //  semana —más peso primero; a igual peso, más repeticiones— y se comparan
+  //  las dos mejores. Entrenar más días ya no mueve esto por sí solo.
+  //
+  //  SOLO LAS SERIES HECHAS. Una fila con el peso tecleado y sin palomita es
+  //  una intención, no un levantamiento.
+  //
+  //  Y SOLO LOS QUE ESTÁN EN LAS DOS SEMANAS: uno que no se hizo la semana
+  //  pasada no «bajó», simplemente no estaba, y contarlo como bajada
+  //  convertiría cambiar de rutina en un suspenso.
   function progresionDeFuerza(sesiones, desde, hasta, desdeAntes){
     if(!Array.isArray(sesiones) || !sesiones.length) return null;
+
+    // ¿Es `b` mejor serie que `a`? Más peso; a igual peso, más repeticiones.
+    var mejorDe = function(a, b){
+      if(!a) return b;
+      if(b.peso !== a.peso) return b.peso > a.peso ? b : a;
+      return b.reps > a.reps ? b : a;
+    };
+
     var ahora = {}, antes = {};
     sesiones.forEach(function(s){
       var f = String(s.session_date || '').slice(0, 10);
@@ -12107,24 +12058,28 @@
       if(!Array.isArray(lista)) return;
       lista.forEach(function(ej){
         var n = String((ej && (ej.nombre || ej.name)) || '').trim();
-        if(!n) return;
-        var v = Number(ej.volumen != null ? ej.volumen : ej.vol) || 0;
-        donde[n] = (donde[n] || 0) + v;
+        if(!n || !ej || !Array.isArray(ej.series)) return;
+        ej.series.forEach(function(se){
+          if(!se || se.hecho === false) return;
+          var reps = Number(se.reps) || 0;
+          if(!reps) return;              // una serie sin repeticiones no es nada
+          donde[n] = mejorDe(donde[n], { peso: Number(se.peso) || 0, reps: reps });
+        });
       });
     });
+
     var subieron = 0, iguales = 0, bajaron = 0;
     Object.keys(ahora).forEach(function(n){
-      if(antes[n] == null) return;                 // no estaba: no se juzga
-      // Un 2 % arriba o abajo es ruido de redondeo, no progreso.
-      var d = ahora[n] - antes[n];
-      var margen = Math.max(1, antes[n] * 0.02);
-      if(d > margen) subieron++;
-      else if(d < -margen) bajaron++;
+      var a = antes[n], b = ahora[n];
+      if(!a || !b) return;                         // no estaba: no se juzga
+      if(b.peso > a.peso || (b.peso === a.peso && b.reps > a.reps)) subieron++;
+      else if(b.peso < a.peso || (b.peso === a.peso && b.reps < a.reps)) bajaron++;
       else iguales++;
     });
     if(!subieron && !iguales && !bajaron) return null;
     return { subieron: subieron, iguales: iguales, bajaron: bajaron };
   }
+
 
   // ¿Logró sus macros?
   //
@@ -12153,7 +12108,11 @@
       P: f.media_p, C: f.media_c, G: f.media_g, cal: f.media_cal,
       metaP: f.meta_p, metaC: f.meta_c, metaG: f.meta_g, metaCal: f.cal_antes,
       dias: f.dias_apuntados, sesiones: f.sesiones,
-      cardio: null, metaCardio: null, metaDias: null, prog: null
+      cardio: null, metaCardio: null, metaDias: null, prog: null,
+      peso: f.peso_medio != null ? Number(f.peso_medio) : null,
+      pesoAntes: f.peso_medio_antes != null ? Number(f.peso_medio_antes) : null,
+      cintura: f.cintura != null ? Number(f.cintura) : null,
+      cinturaAntes: null
     };
     if(crudos){
       var med = mediasDeApuntes(crudos.comidas, crudos.desde, crudos.hasta);
@@ -12183,6 +12142,40 @@
         m.prog = progresionDeFuerza(crudos.sesiones, crudos.desde, crudos.hasta, crudos.desdeAntes);
       }
     }
+    // ---- El cuerpo: peso y cintura ----
+    //
+    //  No hace falta pedir nada al servidor. `PESOS` y `CINTURAS` ya vienen
+    //  cargados de UN AÑO al arrancar la app —los usa la gráfica de Peso—,
+    //  así que cualquier semana del último año se reconstruye sin una sola
+    //  consulta más.
+    //
+    //  EL PESO ES LA MEDIA DE LA SEMANA, no el del día que se pesó. Medio
+    //  kilo de agua y sal entra y sale en un día; una media contra otra media
+    //  es lo único que dice algo en siete días.
+    var mediaPesoDe = function(desde, hasta){
+      var v = [];
+      Object.keys(PESOS || {}).forEach(function(k){
+        if(k >= desde && k <= hasta && PESOS[k] != null) v.push(Number(PESOS[k]));
+      });
+      if(!v.length) return null;
+      return Math.round(v.reduce(function(a, b){ return a + b; }, 0) / v.length * 10) / 10;
+    };
+    if(crudos){
+      if(m.peso == null)      m.peso      = mediaPesoDe(crudos.desde, crudos.hasta);
+      if(m.pesoAntes == null) m.pesoAntes = mediaPesoDe(crudos.desdeAntes, crudos.desde);
+
+      //  LA CINTURA NO SE PROMEDIA: se mide cada cuatro semanas, así que la de
+      //  la semana es la última que caiga dentro, y la de comparación es la
+      //  anterior a esa semana, venga de cuando venga. Promediar dos medidas
+      //  separadas por un mes no significaría nada.
+      var dentro = (CINTURAS || []).filter(function(c){
+        return c.fecha >= crudos.desde && c.fecha <= crudos.hasta;
+      });
+      if(m.cintura == null && dentro.length) m.cintura = Number(dentro[dentro.length - 1].cm);
+      var previas = (CINTURAS || []).filter(function(c){ return c.fecha < crudos.desde; });
+      if(previas.length) m.cinturaAntes = Number(previas[previas.length - 1].cm);
+    }
+
     // Las metas de entreno son las de HOY. No se guardan por semana, así que
     // para una semana vieja son las de ahora y no las de entonces; se prefiere
     // eso a no enseñar nada, pero conviene saberlo antes de leer «4 / 7» de
@@ -12194,6 +12187,21 @@
     m.metaDias   = (reg && reg.dias != null) ? Number(reg.dias) : null;
     m.metaCardio = (MI_PERFIL && MI_PERFIL.cardio_goal_min != null)
                    ? Number(MI_PERFIL.cardio_goal_min) : null;
+    // LAS METAS DE MACROS QUE NO SE GUARDARON. Sin ellas la tarjeta enseñaba
+    // «152g / —» en los tres y el sello se quedaba en «no hay datos
+    // suficientes» aunque estuviera todo lo demás, porque `logroSusMacros`
+    // necesita los cuatro pares para poder decir nada. Las filas anteriores a
+    // la 0054 no las tienen; las calorías sí, porque `cal_antes` es más vieja.
+    //
+    // Son las de HOY, como las de entreno y por la misma razón. Solo se
+    // rellena lo que falta, así que una semana que guardó las suyas conserva
+    // las suyas.
+    var suyas = leerMetas();
+    if(suyas){
+      if(m.metaP == null) m.metaP = suyas.P;
+      if(m.metaC == null) m.metaC = suyas.C;
+      if(m.metaG == null) m.metaG = suyas.G;
+    }
     if(m.metaCal == null) m.metaCal = calDe({ P: m.metaP, C: m.metaC, G: m.metaG });
     return m;
   }
@@ -12208,6 +12216,22 @@
       n = el ? el.textContent.trim() : '';
     }
     return n || 'Tu semana';
+  }
+
+  // El mismo rango, corto, para la lista: «del 18 al 24 de agosto». Antes
+  // decía solo «Semana del 18 ago», que no dice hasta cuándo llega.
+  //
+  // Cuando la semana cambia de mes hay que nombrar los dos —«del 30 de agosto
+  // al 5 de septiembre»—; con uno solo se lee como si empezara y acabara en
+  // el mismo mes.
+  function rangoCorto(iso){
+    var r = rangoDeSemana(iso);
+    if(!r || isNaN(r.ini)) return '';
+    var mes = function(d){ return MESES_LARGO[d.getMonth()]; };
+    return r.ini.getMonth() === r.fin.getMonth()
+      ? 'del ' + r.ini.getDate() + ' al ' + r.fin.getDate() + ' de ' + mes(r.fin)
+      : 'del ' + r.ini.getDate() + ' de ' + mes(r.ini) +
+        ' al ' + r.fin.getDate() + ' de ' + mes(r.fin);
   }
 
   // El rango en palabras: «18 de agosto al 24 de agosto».
@@ -12230,6 +12254,39 @@
       : logro
         ? '<div class="ts-sello ts-verde">🟢 Logró sus macros</div>'
         : '<div class="ts-sello ts-rojo">🔴 No logró sus macros</div>';
+
+    // ---- Cuerpo ----
+    //
+    //  Va en las MISMAS dos columnas que Alimentos y Ejercicio, no en una
+    //  fila aparte: son dos datos y dos columnas ya hay. Con una fila suelta
+    //  la tarjeta se queda con tres anchos distintos y se ve descuadrada.
+    //
+    //  La diferencia además del número: «84,3 kg» no dice nada sin saber de
+    //  dónde viene. Con flecha, que es lo que se lee de un vistazo.
+    //
+    //  SIN COLOR, a propósito. Bajar es bueno para quien adelgaza y malo para
+    //  quien intenta ganar, así que un verde fijo le diría a la mitad de la
+    //  gente que lo está haciendo mal. Aquí se da el dato y ya.
+    var conSigno = function(d, unidad){
+      if(d == null) return '';
+      var v = Math.abs(Math.round(d * 10) / 10);
+      if(v < 0.05) return '  =';
+      return '  ' + (d < 0 ? '↓' : '↑') + ' ' + String(v).replace('.', ',') + ' ' + unidad;
+    };
+    var unaMedida = function(rotulo, valor, antes, unidad){
+      if(valor == null) return '<div class="ts-fila"><span>' + rotulo + '</span><b>—</b></div>';
+      var txt = String(Math.round(valor * 10) / 10).replace('.', ',') + ' ' + unidad;
+      return '<div class="ts-fila"><span>' + rotulo + '</span><b>' +
+             escapar(txt + (antes == null ? '' : conSigno(valor - antes, unidad))) +
+             '</b></div>';
+    };
+    var cuerpo = (m.peso != null || m.cintura != null)
+      ? '<div class="ts-seccion">Cuerpo</div>' +
+        '<div class="ts-columnas ts-cuerpo">' +
+          '<div class="ts-col">' + unaMedida('Peso', m.peso, m.pesoAntes, 'kg') + '</div>' +
+          '<div class="ts-col">' + unaMedida('Cintura', m.cintura, m.cinturaAntes, 'cm') + '</div>' +
+        '</div>'
+      : '';
 
     var prog = m.prog
       ? '<div class="ts-seccion">Progresión de fuerza</div>' +
@@ -12272,7 +12329,7 @@
             '<div class="ts-fila"><span>Apuntó</span><b>' + m.dias + ' / 7 días</b></div>') +
         '</div>' +
       '</div>' +
-      prog + tuyo + coach;
+      cuerpo + prog + tuyo + coach;
   }
 
   function abrirSemana(i){
@@ -12310,15 +12367,19 @@
         'resumen. Se conservan doce meses.</p>';
       return;
     }
+    // SOLO LA FECHA Y CUÁNTOS DÍAS. Los cuatro recuadros —peso, comida,
+    // proteína, gym— se quitaron a petición, y con razón: leían únicamente
+    // lo guardado en la fila, y las semanas anteriores a la 0054 no tienen
+    // nada guardado, así que la pantalla entera era una columna de guiones.
+    // Cuatro huecos no informan de nada y ocupan el sitio de lo que sí. La
+    // lista es para encontrar una semana; lo que hay dentro está en su
+    // tarjeta, que además sabe reconstruirlo de los apuntes.
     caja.innerHTML = SEMANAS.map(function(f, i){
-      var d = new Date(semanaQueJuzga(f) + 'T12:00:00');
       var dias = f.dias_apuntados;
-      return '<div class="sem-card" data-sem="' + i + '">' +
-        '<div class="sem-cab"><b>Semana del ' + escapar(fmtFecha(d)) + '</b>' +
+      return '<div class="sem-card sem-sola" data-sem="' + i + '">' +
+        '<div class="sem-cab"><b>Semana ' + escapar(rangoCorto(semanaQueJuzga(f))) + '</b>' +
           '<span>' + (dias == null ? '' : dias + ' de 7 días') + '</span></div>' +
-        '<div class="sem-rejilla">' +
-          celdaPeso(f) + celdaComida(f) + celdaProteina(f) + celdaGym(f) +
-        '</div>' +
+        '<i class="sem-ir">›</i>' +
       '</div>';
     }).join('');
   }
