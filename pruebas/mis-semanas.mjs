@@ -53,21 +53,22 @@ function sacar(cabecera) {
 const fuente = [
   'function escapar(t){', 'function porcentaje(hecho, meta){', 'function celda(clase, valor, extra, rotulo){',
   'function celdaPeso(f){', 'function celdaComida(f){', 'function celdaProteina(f){',
-  'function celdaGym(f){', 'function detalleSemana(f){', 'function pintarMisSemanas(){',
+  'function celdaGym(f){', 'function isoDe(d){', 'function semanaQueJuzga(f){',
+  'function pintarMisSemanas(){',
 ].map(sacar).join('\n');
 
 // `reg` y `mil` y `fmtFecha` vienen de fuera; se le pasan.
-const construir = (extra = '') => new Function('reg', 'mil', 'fmtFecha', 'SEMANAS', 'abiertaSemana', 'document',
+const construir = (extra = '') => new Function('reg', 'mil', 'fmtFecha', 'SEMANAS', 'document',
   fuente + '\n' + extra);
 
 const mil = (n) => Math.round(n).toLocaleString('es-MX');
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 const fmtFecha = (d) => d.getDate() + ' ' + MESES[d.getMonth()];
 
-function pinta(filas, { objetivo = 'bajar', abierta = -1 } = {}) {
+function pinta(filas, { objetivo = 'bajar' } = {}) {
   let puesto = '';
   const doc = { getElementById: () => ({ set innerHTML(v) { puesto = v; } }) };
-  construir('pintarMisSemanas();')({ objetivo }, mil, fmtFecha, filas, abierta, doc);
+  construir('pintarMisSemanas();')({ objetivo }, mil, fmtFecha, filas, doc);
   return puesto;
 }
 // Una celda suelta, con su fila y el objetivo de esa persona.
@@ -77,8 +78,12 @@ function celdaDe(fn, f, objetivo = 'bajar') {
   return g({ objetivo }, mil, fmtFecha, f);
 }
 
+// La clave es la del 25 PORQUE ASI SE GUARDA: el cierre salta cuando
+// arranca la semana nueva y juzga la que acaba de terminar, pero la fila se
+// guarda con la clave de la que EMPIEZA. O sea que esta fila habla del 18 al
+// 24. Ver semanaQueJuzga y tarjeta-de-la-semana.
 const SEMANA_BUENA = {
-  semana: '2026-08-18', dias_apuntados: 7, media_cal: 2380, cal_antes: 2451,
+  semana: '2026-08-25', dias_apuntados: 7, media_cal: 2380, cal_antes: 2451,
   media_p: 162, media_c: 235, media_g: 74, meta_p: 170, meta_c: 240, meta_g: 75,
   peso_medio: 84.3, peso_medio_antes: 84.7, volumen: 21500, volumen_antes: 20100,
   sesiones: 4, cintura: 88.5, ajusto: false, motivo: null, nota: null,
@@ -232,7 +237,10 @@ console.log('\nUna fila vieja se pinta con guiones y no revienta');
 console.log('\nY una semana normal sale entera');
 {
   const html = pinta([SEMANA_BUENA]);
-  ok(/Semana del 18 ago/.test(html), 'con su fecha');
+  ok(/Semana del 18 ago/.test(html), 'con la fecha de la semana de la que HABLA',
+     'la fila se guarda con la clave del 25 y habla del 18 al 24: enseñar el 25 ' +
+     'etiqueta todas las semanas una semana tarde. Salio: ' +
+     (html.match(/Semana del [^<]*/) || ['(nada)'])[0]);
   ok(/7 de 7 días/.test(html), 'y cuántos días apuntó',
      'es lo que da o quita valor a los otros cuatro números');
   ok((html.match(/sem-celda/g) || []).length === 4, 'y sus cuatro recuadros',
@@ -240,40 +248,27 @@ console.log('\nY una semana normal sale entera');
   ok(!/NaN|undefined/.test(html), 'sin NaN ni undefined');
 }
 
-console.log('\nEl detalle solo se pinta en la que está abierta');
+console.log('\nLa lista es solo lista: el detalle ya no se despliega dentro');
 {
+  // AQUÍ HABÍA TRES SECCIONES sobre el desplegable: que solo se abriera uno,
+  // que enseñara los tres macros, y que la nota y la respuesta del modelo
+  // fueran escapadas. Ese desplegable se sustituyó a petición por una
+  // tarjeta que se abre en hoja y que enseña lo mismo en el formato de la
+  // referencia. Lo que probaban aquellas secciones se prueba ahora en
+  // tarjeta-de-la-semana, ejecutando el pintado de la tarjeta —incluido el
+  // escapado de las dos cosas que vienen de fuera—.
+  //
+  // Lo que sigue siendo de ESTA pantalla es que la lista no vuelva a llevar
+  // el detalle dentro: si vuelve, hay dos sitios que dicen lo mismo y se
+  // separan.
   const dos = [SEMANA_BUENA, Object.assign({}, SEMANA_BUENA, { semana: '2026-08-11' })];
-  ok(!/sem-mas/.test(pinta(dos)), 'cerradas, ninguna lo enseña');
-  const abierta = pinta(dos, { abierta: 1 });
-  ok((abierta.match(/sem-mas/g) || []).length === 1, 'y abierta, solo una',
-     'dos detalles a la vez obligan a desplazarse para comparar');
-}
-
-console.log('\nEl detalle enseña los tres macros y lo que escribió cada uno');
-{
-  const con = Object.assign({}, SEMANA_BUENA, {
-    nota: 'Me sentí bien aunque bajo de ánimo.',
-    motivo: 'Vas bien, no te muevo nada.',
-  });
-  const html = pinta([con], { abierta: 0 });
-  ok(/Carbohidratos/.test(html) && /Grasas/.test(html),
-     'los carbos y las grasas, que no caben en el resumen');
-  ok(/162 de 170 g/.test(html), 'con lo comido y su meta, no solo el porcentaje');
-  ok(/Me sentí bien/.test(html), 'lo que escribió esa semana');
-  ok(/Vas bien/.test(html), 'y lo que le contestó');
-}
-
-console.log('\nY el texto de otra gente no entra crudo');
-{
-  // La nota la escribe la persona y el motivo lo devuelve el modelo. Los dos
-  // acaban dentro de un innerHTML.
-  const malo = Object.assign({}, SEMANA_BUENA, {
-    nota: '<img src=x onerror=alert(1)>', motivo: '<b>ojo</b>',
-  });
-  const html = pinta([malo], { abierta: 0 });
-  ok(!/<img src=x/.test(html), 'la nota va escapada');
-  ok(!/<b>ojo<\/b>/.test(html), 'y lo que devuelve el modelo también',
-     'es texto de fuera puesto como HTML');
+  const html = pinta(dos);
+  ok(!/sem-mas/.test(html), 'la lista no despliega ningún detalle');
+  ok(!/Carbohidratos/.test(html), 'ni enseña los macros uno a uno',
+     'eso es lo que va en la tarjeta; repetirlo aquí son dos verdades que se separan');
+  ok((html.match(/data-sem="/g) || []).length === 2,
+     'cada semana sigue siendo tocable, que es lo que abre la tarjeta',
+     'sin `data-sem` el toque no encuentra a qué semana se refiere');
 }
 
 // ------------------------------------------------------------------
@@ -310,8 +305,12 @@ console.log('\nY la pantalla está enganchada donde tiene que estar');
 
 console.log('\nY el estilo existe');
 {
-  for (const c of ['.sem-card', '.sem-rejilla', '.sem-celda', '.sem-mas', '.fila-ir'])
+  // `.sem-mas` ya no está: era el desplegable. Su estilo se quitó con él, que
+  // es lo que hay que hacer con el CSS de algo que se borra — si no, queda
+  // ahí para siempre y nadie se atreve a tocarlo.
+  for (const c of ['.sem-card', '.sem-rejilla', '.sem-celda', '.fila-ir'])
     ok(CSS.includes(c + '{') || CSS.includes(c + ' '), 'hay estilo para ' + c);
+  ok(!CSS.includes('.sem-mas'), 'y el del desplegable se fue con él');
   ok(/\.sem-rejilla\{[^}]*grid-template-columns:1fr 1fr/.test(CSS.replace(/\s*\n\s*/g, '')),
      'los recuadros van en dos columnas');
   ok(/overflow-wrap:anywhere/.test(CSS),

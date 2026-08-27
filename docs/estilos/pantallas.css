@@ -933,19 +933,73 @@
    entre una semana con datos y otra sin ellos. */
 .sem-celda.vacia .v{color:var(--ink-faint);font-weight:600;}
 
-/* El detalle, desplegado dentro de la propia tarjeta. */
-.sem-mas{border-top:1px solid var(--line);padding:12px 16px 14px;}
-.sem-mas .l{
-  display:flex;justify-content:space-between;gap:12px;
-  font:600 13px/1.5 sans-serif;color:var(--ink-soft);
-}
-.sem-mas .l b{color:var(--ink);font-variant-numeric:tabular-nums;font-weight:700;}
-.sem-mas .nota{
-  margin-top:10px;padding-top:10px;border-top:1px solid var(--line);
-  font:500 13.5px/1.55 sans-serif;color:var(--ink-soft);
-  /* Lo escribe una persona y lo escribe una IA: las dos cosas pueden traer
-     una palabra larga sin espacios. */
+
+/* ---- La tarjeta de la semana ----
+   Se abre al tocar una semana en «Mis semanas». Antes esto se desplegaba
+   dentro de la lista y se leia como un acordeon mas; en hoja se lee como lo
+   que es, la foto de una semana.
+
+   La rejilla es de dos columnas y NO se rompe en una sola en pantallas
+   estrechas: son cuatro filas y dos, puestas al lado se comparan de una
+   ojeada, y en columna hay que desplazarse para ver el ejercicio. Cabe: los
+   valores son cortos y llevan numeros de ancho fijo. */
+/* El tope va en POR CIENTO y no en `vh`. El fondo de las hojas es
+   `position:absolute; inset:0`, o sea que mide lo que la pantalla de la app;
+   `vh` mide la ventana del navegador, que es otra cosa en cuanto la app va
+   dentro de un marco. Con `vh` la tarjeta se pasaba de largo y lo de abajo
+   —la respuesta del coach— quedaba fuera sin forma de llegar a ello. */
+.sheet-alta{max-height:88%;overflow-y:auto;}
+.tarjeta-sem{
+  display:flex;flex-direction:column;gap:0;
+  /* Palabras largas del coach o de la persona, sin desbordar. */
   overflow-wrap:anywhere;
 }
-.sem-mas .nota b{display:block;color:var(--ink);font:700 12px/1.4 sans-serif;
-  margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em;}
+.ts-marca{
+  font:800 11px/1 sans-serif;letter-spacing:.22em;color:var(--ink-faint);
+  text-transform:uppercase;margin-bottom:8px;
+}
+.ts-nombre{font:800 25px/1.15 sans-serif;color:var(--ink);}
+.ts-rango{font:500 14px/1.4 sans-serif;color:var(--ink-faint);margin-top:2px;}
+
+/* El sello. Es lo primero que se busca al abrir, asi que va entero y con
+   color, no como una linea mas de la tabla. */
+.ts-sello{
+  align-self:flex-start;margin:16px 0 4px;padding:10px 16px;border-radius:12px;
+  font:800 16px/1.2 sans-serif;color:#fff;
+}
+.ts-rojo{background:var(--red, #e5484d);}
+.ts-verde{background:var(--green, #30a46c);}
+.ts-gris{background:var(--ink-faint);}
+
+.ts-columnas{display:grid;grid-template-columns:1fr 1fr;gap:8px 18px;margin-top:14px;}
+.ts-col{min-width:0;}
+.ts-seccion{
+  font:700 10.5px/1 sans-serif;letter-spacing:.09em;color:var(--ink-faint);
+  text-transform:uppercase;margin:14px 0 8px;
+}
+.ts-col .ts-seccion{margin-top:0;}
+.ts-fila{
+  display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+  padding:5px 0;font:500 14px/1.35 sans-serif;color:var(--ink-soft);
+}
+/* Ancho fijo en las cifras: sin esto, «150g / 170g» y «72g / 75g» no se
+   alinean y la columna baila al cambiar de semana. */
+.ts-fila b{color:var(--ink);font:700 14px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-variant-numeric:tabular-nums;white-space:nowrap;}
+
+.ts-prog{display:flex;flex-wrap:wrap;gap:6px 16px;
+  font:500 14px/1.4 sans-serif;color:var(--ink-soft);}
+.ts-prog b{color:var(--ink);font-weight:800;}
+
+.ts-tuyo,.ts-coach{
+  margin-top:16px;padding-top:14px;border-top:1px solid var(--line);
+  font:500 14px/1.55 sans-serif;color:var(--ink-soft);
+}
+.ts-tuyo b,.ts-coach b{
+  display:block;color:var(--ink);font:700 11px/1.4 sans-serif;
+  margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em;
+}
+/* Sin respuesta del coach queda solo la firma, y una firma sola no necesita
+   una raya encima separandola de nada. */
+.ts-firma{border-top:none;padding-top:0;margin-top:18px;}
+.ts-firma b{margin-bottom:0;color:var(--ink-faint);}

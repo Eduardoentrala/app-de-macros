@@ -9294,7 +9294,14 @@
   // de pintado de siempre. Lo único que cambia es de dónde salen los números.
   function sbPerfil(){
     return sbFetch('/rest/v1/profiles?select=*&id=eq.' + sesion.user.id)
-      .then(function(f){ return (f && f[0]) || null; });
+      .then(function(f){
+        // Se guarda tal cual además de devolverlo. La tarjeta de «Mis
+        // semanas» necesita `cardio_goal_min` y `dias_entreno`, y son cosas
+        // que solo viven en el perfil: sin esto habría que volver a pedir el
+        // perfil entero cada vez que se abre una semana.
+        MI_PERFIL = (f && f[0]) || null;
+        return MI_PERFIL;
+      });
   }
   // Los eventos que quedan por delante. Sin esto, una boda apuntada hoy
   // dejaba de repartir la semana en cuanto se cerraba la app: EVENTOS
@@ -9911,6 +9918,14 @@
   // TODO ENCENDIDO: si la consulta falla o la migración va por detrás del
   // despliegue, la app funciona como siempre en vez de apagarse sola.
   var MIS_LLAVES = null;
+  // El perfil recién traído, tal cual. Lo llena `sbPerfil()` y lo lee la
+  // tarjeta de «Mis semanas», que necesita las metas de entreno y de cardio.
+  //
+  // SE DECLARA AQUÍ ARRIBA, no junto a quien lo usa seis mil líneas más
+  // abajo: `var` iza la declaración pero no la asignación, así que un
+  // `var MI_PERFIL = null` allí correría DESPUÉS del arranque y borraría lo
+  // que `sbPerfil()` acabara de poner. Es la trampa que ya se cobró EVENTOS.
+  var MI_PERFIL = null;
 
   // De qué llave depende cada acción. Es el mismo reparto que hace la Edge
   // Function, y tiene que seguir siéndolo: aquí solo se adelanta la
@@ -11843,7 +11858,6 @@
   //  demás va en gris. Una pantalla donde todo está coloreado no dice nada.
 
   var SEMANAS = [];
-  var abiertaSemana = -1;
 
   function cargarMisSemanas(){
     var caja = document.getElementById('semanasLista');
@@ -11951,30 +11965,340 @@
     return celda('suave', 'igual', '=', 'gym');
   }
 
-  function detalleSemana(f){
-    var linea = function(k, v){
-      return v == null ? ''
-        : '<div class="l"><span>' + k + '</span><b>' + escapar(v) + '</b></div>';
+
+
+  // ------------------------------------------------------------------
+  //  LA TARJETA DE LA SEMANA
+  //
+  //  Se abre al tocar una semana. Enseña lo mismo de un vistazo: qué comió
+  //  contra lo que tocaba, qué entrenó contra lo que tocaba, cómo se movieron
+  //  sus ejercicios, y lo que le dijo su coach.
+  //
+  //  DE DÓNDE SALEN LOS NÚMEROS. De la fila guardada cuando están, y de los
+  //  apuntes cuando no. Las columnas de medias las añadió la 0054, así que
+  //  toda semana anterior a eso las tiene en null y la pantalla era una
+  //  rejilla de guiones —siete semanas seguidas sin un solo dato—. Los
+  //  apuntes de aquellas semanas siguen ahí; solo había que ir a buscarlos.
+  //
+  //  Y se calcula IGUAL que en el cierre: la media es entre los días
+  //  APUNTADOS y no entre siete. Dividir entre siete a quien apuntó cuatro
+  //  días le inventa un déficit que no existió, y además daría dos verdades
+  //  distintas para la misma semana según por dónde se mire.
+  // ------------------------------------------------------------------
+
+  // Lo que ya se calculó en su día manda; lo que falte se rellena.
+  var CACHE_SEMANA = {};
+
+  // DE QUÉ SEMANA HABLA UNA FILA DE CHEQUEO.
+  //
+  //  De la ANTERIOR a la que dice su columna `semana`, siempre, y esto hay
+  //  que saberlo o todo lo demás sale corrido una semana.
+  //
+  //  El cierre salta cuando arranca una semana nueva y juzga la que acaba de
+  //  terminar —`datosDeLaSemana(true)`, y su propio comentario lo dice: «la
+  //  semana que se CIERRA, no la que acaba de empezar: cuando esto salta, la
+  //  nueva no tiene ni un día apuntado todavía»—. Pero la fila se guarda con
+  //  `semana: isoDe(anclaSemana)`, que es la que EMPIEZA.
+  //
+  //  Se veía sin buscarlo: la tarjeta del asistente decía «Semana 18 de
+  //  agosto al 24 de agosto» y esa misma respuesta salía en la lista como
+  //  «Semana del 25 ago».
+  //
+  //  Se corrige AL LEER y no cambiando lo guardado. Cambiar la columna
+  //  obligaría a mover con un `update` todas las filas que ya existen —y a
+  //  cambiar a la vez la consulta que decide si el chequeo de esta semana ya
+  //  se contestó, porque busca por esa misma clave: si las dos no se mueven
+  //  juntas, a alguien se le vuelve a preguntar una semana que ya contestó,
+  //  gastando otra consulta de IA y pudiendo ajustarle las calorías dos veces
+  //  por el mismo periodo—. Derivarlo aquí arregla las viejas y las nuevas de
+  //  golpe y no toca ni un dato.
+  //
+  //  Vale también si se contesta tarde o si se salta una semana: el cierre
+  //  mira siempre los siete días anteriores al arranque de la semana en
+  //  curso, así que la resta es la misma en todos los casos.
+  function semanaQueJuzga(f){
+    var d = new Date(String(f && f.semana) + 'T12:00:00');
+    if(isNaN(d)) return null;
+    d.setDate(d.getDate() - 7);
+    return isoDe(d);
+  }
+
+  function rangoDeSemana(iso){
+    var a = new Date(iso + 'T12:00:00');
+    var b = new Date(a); b.setDate(b.getDate() + 6);
+    return { desde: isoDe(a), hasta: isoDe(b), ini: a, fin: b };
+  }
+
+  // Los apuntes, el cardio y las sesiones de esa semana —y de la anterior,
+  // que hace falta para saber si cada ejercicio subió o bajó—.
+  function crudosDeSemana(iso){
+    // LA SEMANA EN CURSO NO SE GUARDA EN LA CACHÉ. Las pasadas ya no cambian
+    // —lo que se comió el mes pasado es lo que se comió— pero la de esta
+    // semana cambia cada vez que se apunta algo. Con caché, abrir la semana
+    // actual, apuntar la comida y volver a abrirla enseñaba lo de antes, y
+    // eso se lee como que el apunte no se guardó.
+    var enCurso = iso >= isoDe(anclaSemana);
+    if(!enCurso && CACHE_SEMANA[iso]) return Promise.resolve(CACHE_SEMANA[iso]);
+    if(!sesion || !sesion.user) return Promise.resolve(null);
+    var r = rangoDeSemana(iso);
+    var antes = new Date(r.ini); antes.setDate(antes.getDate() - 7);
+    var uid = sesion.user.id;
+    var q = function(tabla, campos, campoFecha, desde){
+      return sbFetch('/rest/v1/' + tabla + '?select=' + campos +
+        '&user_id=eq.' + uid +
+        '&' + campoFecha + '=gte.' + desde +
+        '&' + campoFecha + '=lte.' + r.hasta)
+        ['catch'](function(){ return null; });   // sin red se enseña lo guardado
     };
-    var pct = function(hecho, meta, unidad){
-      var p = porcentaje(hecho, meta);
-      return p == null ? null
-        : Math.round(hecho) + ' de ' + Math.round(meta) + ' ' + unidad + '  ·  ' + p + ' %';
+    return Promise.all([
+      q('diary_entries', 'entry_date,protein_g,carbs_g,fat_g,calories', 'entry_date', r.desde),
+      q('cardio_logs', 'log_date,minutes', 'log_date', r.desde),
+      q('workout_sessions', 'session_date,exercises,total_volume', 'session_date', isoDe(antes))
+    ]).then(function(x){
+      var d = { comidas: x[0], cardio: x[1], sesiones: x[2], desde: r.desde, hasta: r.hasta,
+                desdeAntes: isoDe(antes) };
+      if(!enCurso) CACHE_SEMANA[iso] = d;
+      return d;
+    });
+  }
+
+  // Las medias de la semana a partir de los apuntes, con la misma regla que
+  // el cierre: se suma por día y se promedia entre los días que TIENEN algo.
+  function mediasDeApuntes(comidas, desde, hasta){
+    if(!Array.isArray(comidas) || !comidas.length) return null;
+    var porDia = {};
+    comidas.forEach(function(e){
+      var f = String(e.entry_date || '').slice(0, 10);
+      if(f < desde || f > hasta) return;
+      var d = porDia[f] || (porDia[f] = { P:0, C:0, G:0, cal:0 });
+      d.P += Number(e.protein_g) || 0;
+      d.C += Number(e.carbs_g)   || 0;
+      d.G += Number(e.fat_g)     || 0;
+      d.cal += Number(e.calories) || 0;
+    });
+    var dias = Object.keys(porDia);
+    if(!dias.length) return null;
+    var t = { P:0, C:0, G:0, cal:0 };
+    dias.forEach(function(k){ t.P += porDia[k].P; t.C += porDia[k].C; t.G += porDia[k].G; t.cal += porDia[k].cal; });
+    return {
+      dias: dias.length,
+      P: Math.round(t.P / dias.length),
+      C: Math.round(t.C / dias.length),
+      G: Math.round(t.G / dias.length),
+      cal: Math.round(t.cal / dias.length)
     };
-    return '<div class="sem-mas">' +
-      linea('Calorías',      pct(f.media_cal, f.cal_antes, 'cal')) +
-      linea('Proteína',      pct(f.media_p,   f.meta_p,    'g')) +
-      linea('Carbohidratos', pct(f.media_c,   f.meta_c,    'g')) +
-      linea('Grasas',        pct(f.media_g,   f.meta_g,    'g')) +
-      linea('Peso medio',    f.peso_medio == null ? null : Number(f.peso_medio).toFixed(1) + ' kg') +
-      linea('Cintura',       f.cintura    == null ? null : Number(f.cintura).toFixed(1) + ' cm') +
-      linea('Entrenos',      f.sesiones   == null ? null : f.sesiones +
-              (f.volumen == null ? '' : '  ·  ' + mil(f.volumen) + ' kg de volumen')) +
-      linea('Calorías nuevas',
-            f.ajusto && f.cal_despues ? mil(f.cal_despues) + ' cal' : null) +
-      (f.nota   ? '<div class="nota"><b>Lo que dijiste</b>'    + escapar(f.nota)   + '</div>' : '') +
-      (f.motivo ? '<div class="nota"><b>Lo que te contestó</b>' + escapar(f.motivo) + '</div>' : '') +
-    '</div>';
+  }
+
+  // Cuántos ejercicios subieron, se quedaron igual o bajaron respecto a la
+  // semana anterior. Se compara el VOLUMEN de cada ejercicio —repeticiones
+  // por peso, sumado en toda la semana— y solo los que aparecen en las DOS:
+  // uno que no se hizo la semana pasada no «bajó», simplemente no estaba, y
+  // contarlo como bajada convertiría cambiar de rutina en un suspenso.
+  function progresionDeFuerza(sesiones, desde, hasta, desdeAntes){
+    if(!Array.isArray(sesiones) || !sesiones.length) return null;
+    var ahora = {}, antes = {};
+    sesiones.forEach(function(s){
+      var f = String(s.session_date || '').slice(0, 10);
+      var donde = (f >= desde && f <= hasta) ? ahora
+                : (f >= desdeAntes && f < desde) ? antes : null;
+      if(!donde) return;
+      var lista = s.exercises;
+      if(typeof lista === 'string'){ try{ lista = JSON.parse(lista); }catch(e){ lista = null; } }
+      if(!Array.isArray(lista)) return;
+      lista.forEach(function(ej){
+        var n = String((ej && (ej.nombre || ej.name)) || '').trim();
+        if(!n) return;
+        var v = Number(ej.volumen != null ? ej.volumen : ej.vol) || 0;
+        donde[n] = (donde[n] || 0) + v;
+      });
+    });
+    var subieron = 0, iguales = 0, bajaron = 0;
+    Object.keys(ahora).forEach(function(n){
+      if(antes[n] == null) return;                 // no estaba: no se juzga
+      // Un 2 % arriba o abajo es ruido de redondeo, no progreso.
+      var d = ahora[n] - antes[n];
+      var margen = Math.max(1, antes[n] * 0.02);
+      if(d > margen) subieron++;
+      else if(d < -margen) bajaron++;
+      else iguales++;
+    });
+    if(!subieron && !iguales && !bajaron) return null;
+    return { subieron: subieron, iguales: iguales, bajaron: bajaron };
+  }
+
+  // ¿Logró sus macros?
+  //
+  //  Los cuatro dentro del 90-110 % de su meta. Los cuatro, no tres: la
+  //  gracia del reparto es que se cumpla entero, y dar por bueno «casi» en
+  //  proteína es justo lo que hace que no se note que falta.
+  //
+  //  El margen es simétrico a propósito. Pasarse de calorías cuenta igual que
+  //  quedarse corto, y en proteína quedarse corto es lo que más pesa, pero
+  //  premiar el exceso ahí llevaría a comer de más «por si acaso».
+  function logroSusMacros(m){
+    var dentro = function(hecho, meta){
+      if(hecho == null || meta == null || !(meta > 0)) return null;
+      var p = hecho / meta;
+      return p >= 0.9 && p <= 1.1;
+    };
+    var v = [dentro(m.P, m.metaP), dentro(m.C, m.metaC),
+             dentro(m.G, m.metaG), dentro(m.cal, m.metaCal)];
+    if(v.some(function(x){ return x === null; })) return null;   // faltan datos
+    return v.every(Boolean);
+  }
+
+  // Junta la fila guardada con lo que se calcule de los apuntes.
+  function armarSemana(f, crudos){
+    var m = {
+      P: f.media_p, C: f.media_c, G: f.media_g, cal: f.media_cal,
+      metaP: f.meta_p, metaC: f.meta_c, metaG: f.meta_g, metaCal: f.cal_antes,
+      dias: f.dias_apuntados, sesiones: f.sesiones,
+      cardio: null, metaCardio: null, metaDias: null, prog: null
+    };
+    if(crudos){
+      var med = mediasDeApuntes(crudos.comidas, crudos.desde, crudos.hasta);
+      if(med){
+        // Solo se rellena lo que falta: lo guardado es lo que la IA vio.
+        if(m.P == null) m.P = med.P;
+        if(m.C == null) m.C = med.C;
+        if(m.G == null) m.G = med.G;
+        if(m.cal == null) m.cal = med.cal;
+        if(m.dias == null) m.dias = med.dias;
+      }
+      if(Array.isArray(crudos.cardio)){
+        m.cardio = crudos.cardio.reduce(function(a, c){
+          var f2 = String(c.log_date || '').slice(0, 10);
+          return (f2 >= crudos.desde && f2 <= crudos.hasta) ? a + (Number(c.minutes) || 0) : a;
+        }, 0);
+      }
+      if(Array.isArray(crudos.sesiones)){
+        if(m.sesiones == null){
+          var d = {};
+          crudos.sesiones.forEach(function(s){
+            var f2 = String(s.session_date || '').slice(0, 10);
+            if(f2 >= crudos.desde && f2 <= crudos.hasta) d[f2] = 1;
+          });
+          m.sesiones = Object.keys(d).length;
+        }
+        m.prog = progresionDeFuerza(crudos.sesiones, crudos.desde, crudos.hasta, crudos.desdeAntes);
+      }
+    }
+    // Las metas de entreno son las de HOY. No se guardan por semana, así que
+    // para una semana vieja son las de ahora y no las de entonces; se prefiere
+    // eso a no enseñar nada, pero conviene saberlo antes de leer «4 / 7» de
+    // hace tres meses como un suspenso de entonces.
+    //
+    // `reg.dias` y no el perfil para los días: es el mismo número —el perfil
+    // lo vuelca ahí al cargar— y así sigue valiendo si alguien lo cambia en
+    // la pantalla sin haber recargado.
+    m.metaDias   = (reg && reg.dias != null) ? Number(reg.dias) : null;
+    m.metaCardio = (MI_PERFIL && MI_PERFIL.cardio_goal_min != null)
+                   ? Number(MI_PERFIL.cardio_goal_min) : null;
+    if(m.metaCal == null) m.metaCal = calDe({ P: m.metaP, C: m.metaC, G: m.metaG });
+    return m;
+  }
+
+  // De quién es esta semana. Del perfil cargado, y si no del nombre que ya
+  // se está enseñando en Perfil. Nunca vacío: la tarjeta lleva encabezado, y
+  // un encabezado en blanco se ve roto.
+  function nombreDeQuienEs(){
+    var n = (MI_PERFIL && MI_PERFIL.full_name) || '';
+    if(!n){
+      var el = document.getElementById('profNombre');
+      n = el ? el.textContent.trim() : '';
+    }
+    return n || 'Tu semana';
+  }
+
+  // El rango en palabras: «18 de agosto al 24 de agosto».
+  function rangoEnPalabras(iso){
+    var r = rangoDeSemana(iso);
+    var dia = function(d){ return d.getDate() + ' de ' + MESES_LARGO[d.getMonth()]; };
+    return dia(r.ini) + ' al ' + dia(r.fin);
+  }
+
+  function filaMacro(rotulo, hecho, meta, unidad){
+    var v = (hecho == null ? '—' : Math.round(hecho) + unidad) + ' / ' +
+            (meta  == null ? '—' : Math.round(meta)  + unidad);
+    return '<div class="ts-fila"><span>' + escapar(rotulo) + '</span><b>' + escapar(v) + '</b></div>';
+  }
+
+  function tarjetaDeSemana(f, m){
+    var logro = logroSusMacros(m);
+    var sello = logro === null
+      ? '<div class="ts-sello ts-gris">⚪ No hay datos suficientes</div>'
+      : logro
+        ? '<div class="ts-sello ts-verde">🟢 Logró sus macros</div>'
+        : '<div class="ts-sello ts-rojo">🔴 No logró sus macros</div>';
+
+    var prog = m.prog
+      ? '<div class="ts-seccion">Progresión de fuerza</div>' +
+        '<div class="ts-prog">' +
+          '<span>↑ Subieron <b>' + m.prog.subieron + '</b></span>' +
+          '<span>= Igual <b>' + m.prog.iguales + '</b></span>' +
+          '<span>↓ Bajaron <b>' + m.prog.bajaron + '</b></span>' +
+        '</div>'
+      : '';
+
+    // Lo que le dijo su coach. Ya estaba guardado y no se enseñaba aquí: es
+    // la parte que convierte una tabla de números en algo que se lee.
+    var coach = f.motivo
+      ? '<div class="ts-coach"><b>Tu coach de Macros 💪</b>' + escapar(f.motivo) + '</div>'
+      : '<div class="ts-coach ts-firma"><b>Tu coach de Macros 💪</b></div>';
+    var tuyo = f.nota
+      ? '<div class="ts-tuyo"><b>Lo que dijiste</b>' + escapar(f.nota) + '</div>' : '';
+
+    return '<div class="ts-marca">MACROS</div>' +
+      '<div class="ts-nombre">' + escapar(nombreDeQuienEs()) + '</div>' +
+      '<div class="ts-rango">Semana ' + escapar(rangoEnPalabras(semanaQueJuzga(f))) + '</div>' +
+      sello +
+      '<div class="ts-columnas">' +
+        '<div class="ts-col">' +
+          '<div class="ts-seccion">Alimentos</div>' +
+          filaMacro('Proteína', m.P, m.metaP, 'g') +
+          filaMacro('Carbos',   m.C, m.metaC, 'g') +
+          filaMacro('Grasas',   m.G, m.metaG, 'g') +
+          filaMacro('Calorías', m.cal, m.metaCal, '') +
+        '</div>' +
+        '<div class="ts-col">' +
+          '<div class="ts-seccion">Ejercicio</div>' +
+          '<div class="ts-fila"><span>Fuerza</span><b>' +
+            (m.sesiones == null ? '—' : m.sesiones) + ' / ' +
+            (m.metaDias == null ? '—' : m.metaDias) + ' días</b></div>' +
+          '<div class="ts-fila"><span>Cardio</span><b>' +
+            (m.cardio == null ? '—' : m.cardio) + ' / ' +
+            (m.metaCardio == null ? '—' : m.metaCardio) + ' min</b></div>' +
+          (m.dias == null ? '' :
+            '<div class="ts-fila"><span>Apuntó</span><b>' + m.dias + ' / 7 días</b></div>') +
+        '</div>' +
+      '</div>' +
+      prog + tuyo + coach;
+  }
+
+  function abrirSemana(i){
+    var f = SEMANAS[i];
+    if(!f) return;
+    var hoja = document.getElementById('semanaSheet');
+    var caja = document.getElementById('tarjetaSem');
+    if(!hoja || !caja) return;
+    // Se pinta YA con lo guardado y se completa cuando llegue lo demás: abrir
+    // en blanco a esperar la red se lee como que no hizo nada.
+    caja.innerHTML = tarjetaDeSemana(f, armarSemana(f, null));
+    hoja.classList.add('open');
+    crudosDeSemana(semanaQueJuzga(f)).then(function(crudos){
+      // Si mientras tanto se cerró o se abrió otra, no se pisa.
+      if(!hoja.classList.contains('open') || SEMANAS[i] !== f) return;
+      caja.innerHTML = tarjetaDeSemana(f, armarSemana(f, crudos));
+    })['catch'](function(){
+      // Se calla A PROPÓSITO, y es el único sitio de la tarjeta donde vale
+      // hacerlo: la hoja YA está pintada con lo que había guardado, que es lo
+      // que la IA vio y lo que de verdad importa. Esto solo iba a completar
+      // el cardio y la progresión. Un aviso rojo por no poder añadir un
+      // adorno haría parecer rota una pantalla que se está viendo entera.
+      //
+      // Lo que NO se hace aquí es dejar huecos donde había datos: si esto
+      // falla, en pantalla siguen los de la fila guardada.
+    });
   }
 
   function pintarMisSemanas(){
@@ -11987,7 +12311,7 @@
       return;
     }
     caja.innerHTML = SEMANAS.map(function(f, i){
-      var d = new Date(f.semana + 'T12:00:00');
+      var d = new Date(semanaQueJuzga(f) + 'T12:00:00');
       var dias = f.dias_apuntados;
       return '<div class="sem-card" data-sem="' + i + '">' +
         '<div class="sem-cab"><b>Semana del ' + escapar(fmtFecha(d)) + '</b>' +
@@ -11995,24 +12319,32 @@
         '<div class="sem-rejilla">' +
           celdaPeso(f) + celdaComida(f) + celdaProteina(f) + celdaGym(f) +
         '</div>' +
-        (i === abiertaSemana ? detalleSemana(f) : '') +
       '</div>';
     }).join('');
   }
 
-  // Tocar una tarjeta la despliega, y cierra la que hubiera abierta: dos
-  // detalles abiertos obligan a desplazarse para comparar, que es justo lo
-  // que esta pantalla viene a evitar.
+  // Tocar una semana abre su tarjeta.
+  //
+  //  ANTES SE DESPLEGABA HACIA ABAJO, dentro de la lista. El problema no era
+  //  feo sino práctico: la tarjeta lleva encabezado con el nombre y el rango,
+  //  dos columnas y la respuesta del coach, y metido entre las demás no se
+  //  lee como una semana sino como un acordeón más. Aparte, en la lista larga
+  //  el desplegado empujaba todo lo de abajo y había que buscar dónde se
+  //  había quedado uno.
   (function(){
     var caja = document.getElementById('semanasLista');
     if(!caja) return;
     caja.addEventListener('click', function(e){
       var c = e.target.closest('[data-sem]');
       if(!c) return;
-      var i = Number(c.dataset.sem);
-      abiertaSemana = (abiertaSemana === i) ? -1 : i;
-      pintarMisSemanas();
+      abrirSemana(Number(c.dataset.sem));
     });
+    var hoja = document.getElementById('semanaSheet');
+    var cerrar = function(){ if(hoja) hoja.classList.remove('open'); };
+    var btn = document.getElementById('semanaCerrar');
+    if(btn) btn.addEventListener('click', cerrar);
+    // Tocar el fondo también cierra, como las demás hojas.
+    if(hoja) hoja.addEventListener('click', function(e){ if(e.target === hoja) cerrar(); });
   })();
 
   // LA FOTO DE LA SEMANA QUE SE CIERRA.

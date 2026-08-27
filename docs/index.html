@@ -112,7 +112,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '6c34a348e5';
+    var SELLO = '797dc4b8c9';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -1967,6 +1967,19 @@
         </div>
       </div>
 
+      <!-- LA SEMANA, DE UNA OJEADA
+           Se abre al tocar una semana en «Mis semanas». Va AQUÍ FUERA, con
+           las otras hojas sueltas, y no dentro de la vista: el fondo es
+           `position:absolute; inset:0` y se estira contra su ancestro
+           colocado, así que dentro de una vista apagada se abriría midiendo
+           0x0. Ya pasó con dos. -->
+      <div class="sheet-backdrop" id="semanaSheet">
+        <div class="sheet sheet-alta">
+          <div class="tarjeta-sem" id="tarjetaSem"></div>
+          <button class="btn-ghost-text" id="semanaCerrar">Cerrar</button>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -1989,7 +2002,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '6c34a348e5';
+    var SELLO = '797dc4b8c9';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que
