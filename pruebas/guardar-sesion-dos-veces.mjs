@@ -35,26 +35,26 @@ const ok = (c, q, extra = '') => {
   else { fallan++; console.log('  FALLA  ' + q + (extra ? '\n         ' + extra : '')); }
 };
 
-// El manejador entero, contando llaves desde su `addEventListener`.
+// El guardado entero: el candado, el manejador que engancha el botón y la
+// función que hace el trabajo.
+//
+// EL TRABAJO SALIÓ DEL MANEJADOR. Antes estaba todo dentro del
+// `addEventListener` y bastaba con extraer eso. Ahora el manejador es un
+// envoltorio de tres líneas —try/catch, para que un tropiezo no deje el
+// candado cerrado para siempre; ver candado-de-la-sesion— y la lógica vive
+// en `guardarSesionAhora`. Se extraen los tres trozos porque los tres son
+// parte de lo mismo: sin el candado no se puede evaluar, y sin el envoltorio
+// no hay botón que pulsar.
 function manejador() {
-  const marca = "document.getElementById('saveSessionBtn').addEventListener('click', function(){";
-  const i = APP.indexOf(marca);
-  if (i < 0) throw new Error('no encuentro el botón de guardar sesión');
-  // Desde la declaración del candado, que vive justo encima y es parte de
-  // lo que se está probando: sin ella el manejador no puede ni evaluarse.
-  const decl = APP.lastIndexOf('var guardandoSesion', i);
+  const decl = APP.indexOf('  var guardandoSesion = false;');
   if (decl < 0) throw new Error('no encuentro el candado `guardandoSesion`');
-  let n = 0, j = APP.indexOf('{', APP.indexOf('function(){', i));
+  const cab = '  function guardarSesionAhora(){';
+  const i = APP.indexOf(cab, decl);
+  if (i < 0) throw new Error('no encuentro `guardarSesionAhora`');
+  let n = 0, j = APP.indexOf('{', i);
   for (; j < APP.length; j++) {
     if (APP[j] === '{') n++;
-    else if (APP[j] === '}') {
-      n--;
-      // Hasta el `);` que cierra la llamada a addEventListener, no solo
-      // hasta la llave: cortando en la llave, lo que se evalúa es una
-      // llamada sin cerrar y revienta con un error de sintaxis que no
-      // tiene nada que ver con lo que se está probando.
-      if (!n) return APP.slice(decl, APP.indexOf(');', j) + 2);
-    }
+    else if (APP[j] === '}') { n--; if (!n) return APP.slice(decl, j + 1); }
   }
   throw new Error('llaves sin cerrar');
 }

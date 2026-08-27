@@ -99,10 +99,14 @@ console.log('\n— Y una sesión de entreno que no se guarda —');
   // caracteres —la quinta que se cae hoy por lo mismo— y basta con que el
   // guardado crezca unas líneas para que todo el deshacer quede fuera del
   // recorte y las comprobaciones se pongan rojas sin faltar nada.
-  const i = APP.indexOf("getElementById('saveSessionBtn')");
+  // La lógica salió del `addEventListener` a `guardarSesionAhora`: el
+  // manejador es ahora un envoltorio de tres líneas que suelta el candado si
+  // algo revienta —ver candado-de-la-sesion—. Lo que se prueba aquí, el
+  // deshacer, vive en la función.
+  const i = APP.indexOf('  function guardarSesionAhora(){');
   const fn = (() => {
     if (i < 0) return '';
-    let n = 0, j = APP.indexOf('{', APP.indexOf('function(){', i));
+    let n = 0, j = APP.indexOf('{', i);
     for (; j < APP.length; j++) {
       if (APP[j] === '{') n++;
       else if (APP[j] === '}') { n--; if (!n) return APP.slice(i, j + 1); }

@@ -3713,7 +3713,29 @@
   //  consulta tapa el caso de volver a guardar más tarde, o tras recargar.
   var guardandoSesion = false;
 
+  // EL CANDADO SE SUELTA PASE LO QUE PASE.
+  //
+  //  Se ponía en la primera línea y después venían cincuenta líneas que leen
+  //  el DOM —nombres de ejercicio, filas de series, celdas— antes del primer
+  //  `return`. Si cualquiera de ellas lanzaba, el candado se quedaba cerrado
+  //  PARA SIEMPRE: a partir de ahí «Guardar sesión» no hacía absolutamente
+  //  nada, sin aviso, sin toast y sin error a la vista, hasta cerrar y volver
+  //  a abrir la app. Y lo que se ve entonces es lo peor que puede verse:
+  //  entrenaste, le diste a guardar, y tu semana dice cero días de fuerza.
+  //
+  //  El `finally` no sustituye a los `guardandoSesion = false` de la promesa:
+  //  aquellos sueltan el candado cuando TERMINA la escritura, que es de lo
+  //  que protege. Este suelta el candado si nunca se llegó a empezar.
   document.getElementById('saveSessionBtn').addEventListener('click', function(){
+    try { guardarSesionAhora(); }
+    catch(e){
+      guardandoSesion = false;
+      toast('toastRutina', 'No se pudo guardar: ' + traducirError(e && e.message));
+      throw e;              // que siga saliendo en la consola: es un fallo
+    }
+  });
+
+  function guardarSesionAhora(){
     if(guardandoSesion) return;
     guardandoSesion = true;
     SESIONES[iso(HOY)] = true;
@@ -3861,7 +3883,7 @@
       recalcAll();
       toast('toastRutina', 'No se pudo guardar: ' + traducirError(e.message));
     });
-  });
+  }
 
 
   // ---- Todas las fechas visibles salen de la fecha real del dispositivo ----
