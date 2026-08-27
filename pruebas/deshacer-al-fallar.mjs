@@ -31,8 +31,21 @@ const check = (n, cond, extra = '') => {
 
 console.log('\n— Peso y cintura vuelven juntos —');
 {
+  // El manejador entero, contando llaves. Era una ventana de 2400 caracteres
+  // y se quedó corta en cuanto el guardado creció —al dejar que se apunte
+  // solo la cintura, ver la-cintura-no-se-perdia—: todo el deshacer quedaba
+  // fuera del recorte y las cuatro comprobaciones se ponían rojas sin faltar
+  // nada. Es la misma trampa que ya se pagó unas líneas más abajo.
   const i = APP.indexOf("getElementById('saveWeightBtn')");
-  const fn = APP.slice(i, i + 2400);
+  const fn = (() => {
+    if (i < 0) return '';
+    let n = 0, j = APP.indexOf('{', APP.indexOf('function(){', i));
+    for (; j < APP.length; j++) {
+      if (APP[j] === '{') n++;
+      else if (APP[j] === '}') { n--; if (!n) return APP.slice(i, j + 1); }
+    }
+    return APP.slice(i);
+  })();
   check('existe el guardado de peso', i > 0);
 
   // Se guarda el estado ANTES de tocarlo, y de las dos cosas.

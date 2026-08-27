@@ -516,6 +516,58 @@ console.log('\nY las metas que no se guardaron son las de hoy');
 }
 
 // ------------------------------------------------------------------
+console.log('\nLos dos textos van plegados');
+{
+  // Abiertos son diez o doce líneas cada uno y empujan los números fuera de
+  // la pantalla, que es justo a lo que se entra. Se midió en un iPhone de
+  // 812: plegada la tarjeta mide 573 px y CABE ENTERA sin arrastrar;
+  // desplegada, 803. Plegar es lo que la hace legible de una ojeada.
+  const { armarSemana, tarjetaDeSemana } = hacer();
+  const f = { semana: '2026-08-25', motivo: 'Vas bien, no te muevo nada.',
+              nota: 'Me sentí con poca energía.' };
+  const html = tarjetaDeSemana(f, armarSemana(f, null));
+
+  ok((html.match(/<details/g) || []).length === 2, 'los dos son plegables',
+     'el del coach y el de lo que dijo esa persona');
+  ok(!/<details[^>]*\sopen/.test(html), 'y nacen cerrados',
+     'abiertos empujan las cifras fuera de la pantalla');
+  ok(/<summary>/.test(html), 'con su cabecera tocable');
+  ok(/Tu coach de Macros/.test(html) && /Lo que dijiste/.test(html),
+     'y se sigue viendo de qué es cada uno sin abrirlo',
+     'un plegable sin título no dice qué esconde');
+  ok(/Vas bien/.test(html) && /poca energía/.test(html),
+     'el texto está dentro, no se pierde');
+
+  // `<details>` y no un botón con JavaScript: la tarjeta se repinta entera
+  // cuando llegan los datos crudos, y un estado guardado a mano se perdería
+  // en ese repintado.
+  ok(!/onclick=/.test(html), 'sin JavaScript en línea',
+     'la CSP lo bloquearía, y además el repintado se llevaría el estado');
+
+  // Sin respuesta del coach queda solo la firma, y una firma no se pliega.
+  const sinCoach = { semana: '2026-08-25' };
+  const h2 = tarjetaDeSemana(sinCoach, armarSemana(sinCoach, null));
+  ok(!/<details/.test(h2), 'y sin textos no hay nada que plegar');
+  ok(/ts-firma/.test(h2), 'solo la firma');
+}
+
+// ------------------------------------------------------------------
+console.log('\nY el estilo del plegable existe');
+{
+  ok(/\.ts-plegable summary\{/.test(CSS), 'la cabecera tiene estilo');
+  ok(/min-height:44px/.test(CSS.replace(/\s/g, '')),
+     'y llega a 44 de alto, que es lo que alcanza un dedo',
+     'es una línea de texto de 16 px: sin esto se falla al tocarla');
+  ok(/\.ts-plegable summary::after\{/.test(CSS), 'y lleva su flecha');
+  ok(/\.ts-plegable\[open\] summary::after\{transform:rotate\(-90deg\)\}?/.test(CSS.replace(/;\}/g, '}')),
+     'que gira al abrirse',
+     'dice que hay algo debajo sin tener que leer nada');
+  ok(/-webkit-details-marker\{display:none/.test(CSS.replace(/\s/g, '')),
+     'y se quita el triángulo que pinta Safari por su cuenta',
+     'sin esto salen dos marcas, la suya y la nuestra');
+}
+
+// ------------------------------------------------------------------
 console.log('\nY la hoja está donde tiene que estar');
 {
   // La regla que ya se pagó dos veces: una hoja dentro de una vista se abre

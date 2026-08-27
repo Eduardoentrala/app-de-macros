@@ -4075,11 +4075,41 @@
   // Guardar peso: se registra en la fecha de hoy y la gráfica se actualiza
   document.getElementById('saveWeightBtn').addEventListener('click', function(){
     var v = Number(document.getElementById('pesoInput').value);
-    if(!v || v <= 0) return;
     var cin = Number(document.getElementById('cinturaInput').value) || null;
+    var kHoy = isoDe(HOY);
+
+    // APUNTAR SOLO LA CINTURA TIENE QUE VALER.
+    //
+    //  Esto era `if(!v || v <= 0) return;` en la segunda línea, y se llevaba
+    //  por delante la cintura sin decir una palabra. El caso es de todos los
+    //  días: el asistente pide la medida de cintura, se abre Peso, se teclea
+    //  el número en su campo, se pulsa Guardar... y no pasa NADA. Ni aviso ni
+    //  error. La medida se pierde, y como `tocaMedirCintura()` mira si hay
+    //  alguna guardada, sigue pidiéndola.
+    //
+    //  `weight_kg` es `not null` en la base, así que una fila de cintura
+    //  necesita un peso. Si ya hay uno de hoy se reutiliza: quien viene a
+    //  apuntar la cintura no viene a pesarse otra vez.
+    if(!(v > 0) && PESOS[kHoy] != null) v = Number(PESOS[kHoy]);
+
+    //  Y si no hay ninguno, se DICE. Un botón que no responde y no explica
+    //  por qué es indistinguible de uno roto —y aquí encima se pierde algo
+    //  que solo se mide una vez al mes—.
+    if(!(v > 0)){
+      toast('toastPeso', cin != null
+        ? 'Para guardar la cintura hace falta también tu peso de hoy.'
+        : 'Escribe tu peso.');
+      return;
+    }
     // Fuera de rango se ignora en vez de rechazar el peso: quien se
     // equivoca tecleando la cintura no deberia perder el peso de hoy.
-    if(cin != null && (cin < 40 || cin > 200)) cin = null;
+    //
+    // PERO SE DICE. Antes se descartaba en silencio y el toast de abajo
+    // felicitaba por el peso guardado sin mencionar la cintura, así que
+    // parecía que había entrado. Se mide una vez al mes: perderla callando
+    // es lo peor que puede hacerse con ella.
+    var cinturaFuera = cin != null && (cin < 40 || cin > 200);
+    if(cinturaFuera) cin = null;
     // Se guarda cómo estaba TODO lo que se va a tocar, no solo el peso. La
     // cintura se metía en memoria y no se retiraba nunca si el guardado
     // fallaba: quedaba una medida que no existe en la base, `tocaMedirCintura()`
@@ -4089,7 +4119,8 @@
     PESOS[k] = Math.round(v * 10) / 10;
     pintarPeso();
     toast('toastPeso', 'Peso guardado: ' + PESOS[k] + ' kg' +
-                       (cin != null ? ' · cintura ' + cin + ' cm' : ''));
+                       (cin != null ? ' · cintura ' + cin + ' cm' : '') +
+                       (cinturaFuera ? ' · la cintura no se guardó: tiene que estar entre 40 y 200 cm' : ''));
 
     if(cin != null){
       // En sitio para que el historial y el "¿toca?" cuadren al momento,
@@ -12319,13 +12350,31 @@
         '</div>'
       : '';
 
-    // Lo que le dijo su coach. Ya estaba guardado y no se enseñaba aquí: es
-    // la parte que convierte una tabla de números en algo que se lee.
+    // ---- Los dos textos, plegados ----
+    //
+    //  Van cerrados y se abren al tocarlos. Abiertos son diez o doce líneas
+    //  cada uno y empujan los números tan arriba que hay que arrastrar para
+    //  ver algo: la tarjeta pasa de leerse de una ojeada a leerse buscando.
+    //  Plegados, lo que se ve de golpe son las cifras —que es a lo que se
+    //  entra— y el texto está a un toque.
+    //
+    //  Con `<details>` y no con un botón y JavaScript: se abre y se cierra
+    //  solo, se puede tocar con el teclado, y como la tarjeta se repinta
+    //  entera cuando llegan los datos crudos, un estado guardado a mano se
+    //  perdería en ese repintado. `open` en el HTML es lo que sobrevive.
+    var plegado = function(clase, titulo, texto){
+      return '<details class="' + clase + '">' +
+               '<summary><b>' + titulo + '</b></summary>' +
+               '<p>' + escapar(texto) + '</p>' +
+             '</details>';
+    };
+    // Lo que le dijo su coach. Ya estaba guardado y no se enseñaba en ningún
+    // sitio: es la parte que convierte una tabla de números en algo que se lee.
     var coach = f.motivo
-      ? '<div class="ts-coach"><b>Tu coach de Macros 💪</b>' + escapar(f.motivo) + '</div>'
+      ? plegado('ts-plegable ts-coach', 'Tu coach de Macros 💪', f.motivo)
       : '<div class="ts-coach ts-firma"><b>Tu coach de Macros 💪</b></div>';
     var tuyo = f.nota
-      ? '<div class="ts-tuyo"><b>Lo que dijiste</b>' + escapar(f.nota) + '</div>' : '';
+      ? plegado('ts-plegable ts-tuyo', 'Lo que dijiste', f.nota) : '';
 
     return '<div class="ts-marca">MACROS</div>' +
       '<div class="ts-nombre">' + escapar(nombreDeQuienEs()) + '</div>' +

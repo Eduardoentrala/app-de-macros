@@ -989,6 +989,29 @@
   display:block;color:var(--ink);font:700 11px/1.4 sans-serif;
   margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em;
 }
+
+/* Los dos textos van plegados: abiertos son diez o doce lineas cada uno y
+   empujan los numeros fuera de la pantalla, que es justo a lo que se entra. */
+.ts-plegable summary{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  cursor:pointer;list-style:none;padding:2px 0;
+}
+/* Safari pinta su propio triangulo y ademas rompe el flex del summary. */
+.ts-plegable summary::-webkit-details-marker{display:none;}
+.ts-plegable summary b{margin-bottom:0;}
+/* La flecha la ponemos nosotros, y gira al abrir: dice que hay algo debajo
+   sin necesidad de leer nada. */
+.ts-plegable summary::after{
+  content:'›';font:400 19px/1 sans-serif;color:var(--ink-faint);
+  transform:rotate(90deg);transition:transform .18s ease;flex:none;
+}
+.ts-plegable[open] summary::after{transform:rotate(-90deg);}
+.ts-plegable summary:active{opacity:.6;}
+.ts-plegable p{margin:8px 0 0;}
+/* La zona tocable llega a 44: el summary es una linea de texto de 16 px y el
+   dedo no es un puntero. Va con relleno de verdad y no con un ::after, que
+   aqui chocaria con la flecha. */
+.ts-plegable summary{min-height:44px;}
 /* Sin respuesta del coach queda solo la firma, y una firma sola no necesita
    una raya encima separandola de nada. */
 .ts-firma{border-top:none;padding-top:0;margin-top:18px;}

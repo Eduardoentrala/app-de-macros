@@ -142,9 +142,23 @@ console.log('\n— Y la cintura, que es lo que mide el cambio físico —');
   check('no se borra al apuntar el peso sin medirla',
     !/cintura_cm: cintura \|\| null/.test(guardar));
 
-  // Un dedazo en la cintura no puede costarle el peso del día.
+  // Un dedazo en la cintura no puede costarle el peso del día. Se mira lo
+  // que HACE y no cómo está escrito: la línea creció al añadirle el aviso
+  // —antes se descartaba en silencio y el toast felicitaba por el peso sin
+  // mencionarla, así que parecía que había entrado— y fijar el texto literal
+  // ponía esto rojo sin que nada estuviera mal.
+  const plano = APP.replace(/\s+/g, ' ');
+  check('se comprueba el rango de la cintura',
+    /cin < 40 \|\| cin > 200/.test(plano));
   check('un valor absurdo se ignora, no rechaza el peso',
-    /if\(cin != null && \(cin < 40 \|\| cin > 200\)\) cin = null;/.test(APP));
+    /\(cin < 40 \|\| cin > 200\); if\(cinturaFuera\) cin = null;/.test(plano) ||
+    /\(cin < 40 \|\| cin > 200\)\) cin = null;/.test(plano),
+    'lo que no puede hacer es un `return`: quien se equivoca tecleando la ' +
+    'cintura no debería perder el peso de hoy');
+  check('y se dice que no se guardó',
+    /no se guardó/.test(plano),
+    'descartarla callando es lo peor que puede hacerse con algo que solo se ' +
+    'mide una vez al mes. Ver la-cintura-no-se-perdia');
 
   const j = APP.indexOf('function cinturasRecientes(');
   const cin = APP.slice(j, j + 700);
