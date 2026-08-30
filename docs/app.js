@@ -12836,12 +12836,30 @@
     m.apuntados = true; m.comida = comida;
     pintarChat();
 
-    var cadena = m.alimentos.reduce(function(prev, a){
+    // SE SIGUE DONDE SE QUEDÓ, no se empieza de cero.
+    //
+    //  Si uno de la cadena falla, los de antes YA ESTÁN en el servidor. El
+    //  `catch` deja reintentar —y hace bien— pero antes la cadena volvía a
+    //  empezar por el primero, y eso lo apuntaba OTRA VEZ: el id se genera
+    //  en cada llamada, a propósito, así que el reintento crea una fila
+    //  nueva en vez de chocar. El arroz salía dos veces en el diario y sus
+    //  calorías contaban dobles en el anillo.
+    //
+    //  Deshacer los que ya entraron tampoco vale: están arriba, y borrarlos
+    //  para volver a ponerlos son más viajes y más cosas que pueden fallar.
+    //  Se apunta por dónde iba y se reanuda ahí.
+    var desde = m.yaFueron || 0;
+    var pendientes = m.alimentos.slice(desde);
+
+    var cadena = pendientes.reduce(function(prev, a){
       return prev.then(function(){
         return sbAgregarAlimento(a, comida).then(function(fila){
           if(fila) a.id = fila.id;
           COMIDAS[comida].push(a);
           sumarAlRegistro(a, 1);
+          // Uno más confirmado. Va aquí dentro y no al final: si el
+          // siguiente revienta, esto ya quedó apuntado.
+          m.yaFueron = (m.yaFueron || 0) + 1;
         });
       });
     }, Promise.resolve());
@@ -12852,7 +12870,16 @@
       toast('toastIA2', m.alimentos.length + ' apuntado(s) en ' + comida.toLowerCase());
     })['catch'](function(e){
       m.apuntados = false; pintarChat();
-      toast('toastIA2', 'No se pudo guardar: ' + traducirError(e.message));
+      // Lo que ya entró SE DICE. «No se pudo guardar» a secas hace pensar
+      // que no entró ninguno, y puede haber entrado la mitad: quien lo lea
+      // así vuelve a apuntarlos a mano y acaba con todo duplicado.
+      var hechos = m.yaFueron || 0;
+      toast('toastIA2', hechos
+        ? 'Se apuntaron ' + hechos + ' de ' + m.alimentos.length +
+          '. Toca otra vez para los que faltan.'
+        : 'No se pudo guardar: ' + traducirError(e.message));
+      // La pantalla ya tiene lo que sí entró; que se vea.
+      if(hechos){ pintarFilasComidas(); pintarComida(); }
     });
   }
 
