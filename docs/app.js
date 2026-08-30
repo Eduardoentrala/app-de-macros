@@ -2981,14 +2981,19 @@
   //
   //  Devuelve true si lo ha hecho, para que quien llame sepa que no tiene
   //  que mandar nada.
-  function retocarEnCola(id, cambios){
+  //
+  //  `tabla` dice a cuál de ellas: la cola lleva comidas y alimentos
+  //  guardados a la vez, y los dos usan ids del mismo estilo. Sin mirarlo,
+  //  editar los macros de un guardado podría metérselos a un apunte del
+  //  diario que casualmente compartiera id.
+  function retocarEnCola(id, cambios, tabla){
     if(!id) return false;
     for(var i = 0; i < COLA.length; i++){
       var x = COLA[i];
       // Por `fila` Y por ruta: la cola lleva pesos, fotos y borrados, y
       // retocar por id a secas podría meterle una cantidad a un peso.
       if(x.fila !== id || !x.op || !x.op.body) continue;
-      if(x.ruta.indexOf('/diary_entries') < 0) continue;
+      if(x.ruta.indexOf(tabla || '/diary_entries') < 0) continue;
       var cuerpo;
       try { cuerpo = JSON.parse(x.op.body); } catch(e){ return false; }
       for(var k in cambios) if(cambios.hasOwnProperty(k)) cuerpo[k] = cambios[k];
@@ -3197,9 +3202,17 @@
     pintarListas();
     toast('toastGuardados', a.n + ' borrado');
 
+    if(!a.id || !sesion) return;
+
+    // Si su alta sigue en la cola, se cancela y no se manda nada. Un DELETE
+    // de una fila que el servidor no ha visto nunca no borra —cero filas es
+    // un 204 normal, sin error— y luego la cola sube el alta: el alimento
+    // RESUCITA al recargar. Es lo mismo que ya hace `sbQuitarAlimento`.
+    if(desencolar(a.id)) return;
+
     // Si el borrado falla se devuelve a la lista: enseñar como borrado algo
     // que sigue en la base es peor que no borrarlo.
-    if(a.id && sesion){
+    {
       sbFetch('/rest/v1/saved_foods?id=eq.' + a.id, { method:'DELETE' })
         ['catch'](function(e){
           MIS_ALIMENTOS.splice(i, 0, a);
@@ -3665,7 +3678,9 @@
       back();
       toast('toastGuardados', nombre + ' actualizado');
 
-      if(ed.id && sesion){
+      if(ed.id && sesion && !retocarEnCola(ed.id,
+            { name:ed.n, unit:ed.u, protein_g:ed.P, carbs_g:ed.C, fat_g:ed.G },
+            '/saved_foods')){
         sbFetch('/rest/v1/saved_foods?id=eq.' + ed.id, {
           method:'PATCH', headers:{ 'Prefer':'return=minimal' },
           body: JSON.stringify({ name:ed.n, unit:ed.u,
@@ -3749,6 +3764,12 @@
     toast('toastComida', '«' + g.n + '» actualizado');
 
     if(!g.id || !sesion) return;
+
+    // Si su alta sigue en la cola, se retoca ahí: el PATCH no encontraría la
+    // fila, contestaria que si, y despues la cola subiria los macros VIEJOS.
+    if(retocarEnCola(g.id, { protein_g:P, carbs_g:C, fat_g:G },
+                     '/saved_foods')) return;
+
     sbFetch('/rest/v1/saved_foods?id=eq.' + g.id, {
       method:'PATCH', headers:{ 'Prefer':'return=minimal' },
       body: JSON.stringify({ protein_g:P, carbs_g:C, fat_g:G })
