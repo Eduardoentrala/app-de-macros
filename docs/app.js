@@ -8586,13 +8586,23 @@
   // con nada. Salen de sus macros, que es lo que la app ya calcula.
   function generarPlan(semana){
     if(!planEditando || !sesion) return;
+
+    // DE QUIÉN ES ESTO, DECIDIDO UNA SOLA VEZ Y AQUÍ.
+    //
+    //  `planEditando` cambia en cuanto se abre el plan de otra persona, y
+    //  armar un plan con IA tarda segundos. Leyéndolo en cada paso, la
+    //  petición salía mezclada: los macros de quien se pidió, pero el
+    //  nombre y las llaves de IA de quien se acabara de abrir.
+    var quien = planEditando.userId;
+    var suNombre = planEditando.nombre;
+
     var btn = document.getElementById(semana ? 'peGenerarSemana' : 'peGenerar');
     var textoOriginal = btn.textContent;
     btn.disabled = true;
     btn.textContent = semana ? 'Armando la semana…' : 'Pensando…';
 
     sbFetch('/rest/v1/profiles?select=goal_protein_g,goal_carbs_g,goal_fat_g' +
-            '&id=eq.' + planEditando.userId + '&limit=1')
+            '&id=eq.' + quien + '&limit=1')
       .then(function(ps){
         var p = (ps || [])[0];
         if(!p || !p.goal_protein_g){
@@ -8606,8 +8616,8 @@
           // IA del entrenador -que es quien pide- en vez de las de la
           // persona a la que se le esta escribiendo, y apagarle la semana a
           // alguien no serviria de nada.
-          cliente: planEditando.userId,
-          nombre: planEditando.nombre,
+          cliente: quien,
+          nombre: suNombre,
           calorias: cal,
           proteina: p.goal_protein_g,
           // Los tres, no solo la proteína: sin carbos ni grasas el modelo
@@ -8619,6 +8629,15 @@
         });
       })
       .then(function(r){
+        // Y AL LLEGAR, ¿SIGUE SIENDO SU EDITOR? Si entre tanto se abrio el
+        // plan de otra persona, escribir aqui volcaria el plan de una en la
+        // ficha de la otra — y `peGuardar` guarda con el `planEditando` DE
+        // AHORA, asi que se guardaria de verdad, diciendo «Plan guardado».
+        //
+        // Es la misma guarda que ya hace `abrirEditorPlan()` al volver de
+        // pedir el plan guardado; aqui faltaba.
+        if(!planEditando || planEditando.userId !== quien) return;
+
         // Se vuelca en los campos, no se guarda: quien firma el plan es
         // el entrenador, y tiene que poder corregirlo antes.
         if(r.nombre) document.getElementById('peNombre').value = r.nombre;
