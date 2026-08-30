@@ -10436,6 +10436,25 @@
     })['catch'](function(e){
       IA_MSGS.pop();
       IA_MSGS.push({ rol:'el', texto: traducirError(e.message) });
+
+      // LAS FOTOS VUELVEN. Se vacían antes de llamar para que la pantalla
+      // quede limpia mientras se espera, y eso está bien; lo que faltaba
+      // era el otro lado. Se pueden adjuntar cuatro y la burbuja solo
+      // enseña la primera, así que al fallar desaparecían las cuatro y tres
+      // no dejaban ni rastro: había que volver a hacerlas.
+      //
+      // Y sin señal —que es cuando más falla— eso es lo contrario de lo que
+      // hace el resto de la app: apuntar una comida sin red no borra lo que
+      // escribiste, lo guarda y avisa.
+      //
+      // Solo cuando falla. Reponerlas siempre haría que la siguiente
+      // pregunta arrastrara las fotos de la anterior y se analizaran dos
+      // veces, gastando otra consulta del día.
+      //
+      // El texto no se repone a propósito: sigue a la vista en la burbuja
+      // de la propia persona, así que no se ha perdido.
+      if(fotosEnvio.length){ IA_FOTOS = fotosEnvio; pintarFotoIA(); }
+
       pintarChat();
     }).then(function(){
       iaOcupado = false;
