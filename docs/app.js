@@ -2921,6 +2921,41 @@
     if(alimentoEditando && confirmarCantidad) confirmarCantidad();
   });
 
+  // Cambia lo que va a mandar un alta que TODAVÍA ESTÁ EN LA COLA.
+  //
+  //  Al apuntar sin señal, el id lo pone el teléfono y `a.id` se asigna
+  //  igual: el `catch` devuelve la fila que se iba a mandar. Así que editar
+  //  la cantidad después mandaba un PATCH de una fila que el servidor no ha
+  //  visto nunca. Sin señal eso falla y deshace la edición —no se puede
+  //  corregir lo que acabas de apuntar—; y con señal recién vuelta, el
+  //  PATCH no encuentra nada, PostgREST contesta 204 porque cero filas
+  //  cambiadas no es un error, y después la cola sube la CANTIDAD VIEJA. La
+  //  pantalla dice 150 y el servidor guarda 100.
+  //
+  //  Si el alta sigue pendiente, se retoca ahí y ya está: todavía no ha
+  //  salido. Es la misma idea que `desencolar()` al borrar algo que no
+  //  había subido — no mandar correcciones de lo que nadie ha visto.
+  //
+  //  Devuelve true si lo ha hecho, para que quien llame sepa que no tiene
+  //  que mandar nada.
+  function retocarEnCola(id, cambios){
+    if(!id) return false;
+    for(var i = 0; i < COLA.length; i++){
+      var x = COLA[i];
+      // Por `fila` Y por ruta: la cola lleva pesos, fotos y borrados, y
+      // retocar por id a secas podría meterle una cantidad a un peso.
+      if(x.fila !== id || !x.op || !x.op.body) continue;
+      if(x.ruta.indexOf('/diary_entries') < 0) continue;
+      var cuerpo;
+      try { cuerpo = JSON.parse(x.op.body); } catch(e){ return false; }
+      for(var k in cambios) if(cambios.hasOwnProperty(k)) cuerpo[k] = cambios[k];
+      x.op.body = JSON.stringify(cuerpo);
+      colaGuardar();
+      return true;
+    }
+    return false;
+  }
+
   function guardarCantidadEditada(){
     var a = alimentoEditando;
     var antes = { cant:a.cant, P:a.P, C:a.C, G:a.G };
@@ -2935,7 +2970,13 @@
     pintarComida();
     toast('toastComida', a.n + ': ' + un(a.cant) + ' ' + abreviarUnidad(a.u));
 
-    if(a.id && sesion){
+    if(!a.id || !sesion) return;
+
+    // Si su alta sigue en la cola, se cambia ahí y no hay nada que mandar.
+    if(retocarEnCola(a.id, { quantity: a.cant, protein_g: a.P,
+                             carbs_g: a.C, fat_g: a.G })) return;
+
+    {
       sbFetch('/rest/v1/diary_entries?id=eq.' + a.id, {
         method:'PATCH', headers:{ 'Prefer':'return=minimal' },
         body: JSON.stringify({ quantity: a.cant, protein_g: a.P, carbs_g: a.C, fat_g: a.G })
