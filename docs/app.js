@@ -9486,17 +9486,25 @@
       method: 'POST', body: JSON.stringify({ usuario: u.id })
     })
       .then(function(r){
-        if(r && r.sueltos){
-          toast('toastAdmin', 'Cuenta borrada, pero ' + r.sueltos +
-                              ' fotos no se pudieron quitar del servidor.');
-        }
-      })
-      .then(function(){
         var i = USUARIOS.indexOf(u);
         if(i >= 0) USUARIOS.splice(i, 1);
         cerrarFicha();
         pintarAdmin();
-        toast('toastAdmin', u.n + ' fue eliminado.');
+
+        // UN SOLO AVISO, y por una razón. Antes eran dos seguidos y los dos
+        // en el mismo hueco: el de «fue eliminado» le pisaba el texto al de
+        // las fotos antes de que el navegador llegara a pintarlo. O sea que
+        // el único mensaje que de verdad importaba —quedaron fotos de una
+        // persona en un servidor después de que pidiera que no quedara nada
+        // suyo— no se veía nunca.
+        //
+        // Y no hay segunda oportunidad de enterarse: la cuenta ya está
+        // borrada, y con ella la lista de rutas de donde salían.
+        var sueltos = (r && r.sueltos) || 0;
+        toast('toastAdmin', sueltos
+          ? u.n + ' fue eliminado, pero ' + sueltos +
+            ' de sus fotos no se pudieron quitar del servidor.'
+          : u.n + ' fue eliminado.');
       })['catch'](function(err){
         toast('toastAdmin', 'No se pudo eliminar: ' + traducirError(err.message));
       }).then(function(){
