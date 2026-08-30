@@ -2324,7 +2324,18 @@
     avatarInput.value = '';            // deja volver a elegir la misma
     if(!file) return;
     var reader = new FileReader();
+    // Los dos fallos posibles, dichos. Sin esto, elegir un archivo que no se
+    // puede leer —o que el navegador no sabe decodificar, como un HEIC en un
+    // móvil viejo— no abría la hoja de recortar y no pasaba absolutamente
+    // nada: ni aviso, ni error. Desde fuera es «el botón no hace nada», que
+    // es el sintoma más caro de esta app.
+    reader.onerror = function(){
+      toast('toastPerfil', 'No se pudo leer ese archivo. Prueba con otra foto.');
+    };
     reader.onload = function(ev){
+      avaImg.onerror = function(){
+        toast('toastPerfil', 'Ese archivo no se ve como una imagen. Prueba con otra.');
+      };
       avaImg.onload = function(){
         ava.natW = avaImg.naturalWidth;
         ava.natH = avaImg.naturalHeight;
@@ -6227,6 +6238,12 @@
               return;
             }
             var fr = new FileReader();
+            // Si la lectura falla, se dice. Sin esto `listo` no se llamaba
+            // NUNCA: el aviso se quedaba en «Comprimiendo…» hasta recargar
+            // la app, sin un error en ninguna consola. El que llama ya sabe
+            // tratar un null —enseña «No se pudo leer la imagen»—, así que
+            // basta con avisarle por el camino que ya existe.
+            fr.onerror = function(){ listo(null); };
             fr.onload = function(){
               // `blob` va aparte del base64: es lo que se sube al bucket.
               // El base64 solo sirve para pintarla al instante sin esperar.
