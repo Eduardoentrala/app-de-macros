@@ -7533,6 +7533,19 @@
 
   var GASTO = null, gastoDias = 30, gastoCargando = false;
 
+  // «claude-sonnet-5» se lee mal en una frase. Esto lo deja en «Sonnet 5»,
+  // y si mañana aparece uno que no está en la lista, se enseña su nombre
+  // tal cual en vez de esconderlo: saber que hay un modelo desconocido es
+  // parte de poder fiarse del número.
+  function nombreDeModelo(m){
+    var bonitos = {
+      'claude-opus-5': 'Opus 5',
+      'claude-sonnet-5': 'Sonnet 5',
+      'claude-haiku-4-5-20251001': 'Haiku 4.5'
+    };
+    return bonitos[m] || m;
+  }
+
   function pesosDe(f){
     var p = PRECIO_IA[f.modelo] || PRECIO_IA['claude-opus-5'];
     var ent = Number(f.entrada) || 0;
@@ -7637,10 +7650,43 @@
           '<div class="val"><b>$' + g.pesos.toFixed(0) + '</b><span>' + pct + '%</span></div>' +
         '</div>';
       }).join('') +
-      '<p class="cmp-aviso">Son los tokens EXACTOS que devolvió Anthropic, a ' +
-      '$' + PRECIO_IA['claude-opus-5'].ent + ' y $' + PRECIO_IA['claude-opus-5'].sal +
-      ' por millón y ' + USD_MXN + ' pesos por dólar. Lo que más pese aquí es ' +
-      'lo que más ahorra apagar en las llaves de cada persona.</p>';
+      // EL PIE DICE EL PRECIO DE LO QUE DE VERDAD CORRIÓ.
+      //
+      //  El dinero ya se calculaba bien —`pesosDe()` mira el modelo de cada
+      //  fila— pero aquí el modelo estaba escrito a mano, así que decía 5 y
+      //  25 pasara lo que pasara. Y eso engaña justo cuando más se mira este
+      //  panel: al cambiar de modelo para gastar menos. El gasto baja de
+      //  verdad y la pantalla que debe confirmarlo enseña los precios del
+      //  modelo viejo, así que la cuenta no se puede comprobar.
+      //
+      //  Si corrieron dos, se dicen los dos.
+      (function(){
+        var vistos = [], falta = false;
+        GASTO.forEach(function(f){
+          var m = f.modelo || 'claude-opus-5';
+          if(vistos.indexOf(m) < 0) vistos.push(m);
+          if(!PRECIO_IA[m]) falta = true;
+        });
+        var lista = vistos.map(function(m){
+          var p = PRECIO_IA[m];
+          // Sin precio se dice ahí mismo, o la frase queda coja: «un modelo
+          // por millón» no significa nada.
+          return nombreDeModelo(m) + (p ? ' a $' + p.ent + ' y $' + p.sal
+                                        : ' (sin precio)');
+        }).join(', ');
+
+        return '<p class="cmp-aviso">Son los tokens EXACTOS que devolvió ' +
+          'Anthropic: ' + escapar(lista) + ' por millón, y ' + USD_MXN +
+          ' pesos por dólar. Lo que más pese aquí es lo que más ahorra apagar ' +
+          'en las llaves de cada persona.' +
+          // Y si algún modelo no tiene precio, se dice. Callarlo deja un
+          // número con dos decimales que puede estar al doble.
+          (falta
+            ? ' <b>Ojo: hay respuestas de un modelo cuyo precio no tengo, y ' +
+              'esas están contadas a precio de Opus. Ese total puede no ser ' +
+              'exacto.</b>'
+            : '') + '</p>';
+      })();
   }
 
   function pintarAdmin(){
