@@ -3538,8 +3538,30 @@
       var hoja = document.getElementById('preguntaSheet');
       var si = document.getElementById('preguntaSi');
       var no = document.getElementById('preguntaNo');
-      document.getElementById('preguntaTitulo').textContent = titulo;
-      document.getElementById('preguntaTexto').textContent = texto;
+      var tit = document.getElementById('preguntaTitulo');
+      var txt = document.getElementById('preguntaTexto');
+
+      // SI LA HOJA NO ESTÁ, SE CANCELA Y SE DICE. No se espera.
+      //
+      //  Esta promesa solo se resuelve cuando alguien pulsa uno de sus dos
+      //  botones. Sin hoja no hay pulsación posible, así que el flujo que la
+      //  esperaba —apuntar la comida, guardar el alimento— no continúa
+      //  nunca, y no queda un solo error en ninguna consola. Desde fuera es
+      //  «le doy a guardar y no pasa nada», que es el sintoma más caro de
+      //  esta app y ya costó una tarde.
+      //
+      //  Se responde que NO, o sea cancelar: los que llaman ya lo tratan, y
+      //  en el caso que dolió —«¿le cambio los macros?»— cancelar significa
+      //  no tocar la ficha Y APUNTAR LA COMIDA IGUAL, que es a lo que la
+      //  persona venía.
+      if(!hoja || !si || !no || !tit || !txt){
+        toast('toastComida', 'No pude abrir la confirmación. Inténtalo otra vez.');
+        listo(false);
+        return;
+      }
+
+      tit.textContent = titulo;
+      txt.textContent = texto;
       si.textContent = textoSi || 'Sí';
 
       var cerrar = function(respuesta){
@@ -3558,6 +3580,21 @@
       no.addEventListener('click', alNo);
       hoja.addEventListener('click', alFondo);
       hoja.classList.add('open');
+
+      // Y ABIERTA, ¿SE VE? `offsetParent` nulo quiere decir que no se está
+      // pintando — la misma comprobación que usa `toast()`, y la que cubre
+      // el caso que de verdad pasó: la hoja vivía dentro de una vista, las
+      // vistas apagadas son `display:none`, y se abría midiendo 0×0 con la
+      // clase puesta, `display:flex` y `opacity:1`. Todo decía que estaba
+      // abierta menos la pantalla.
+      //
+      // Eso ya se arregló sacándola de las vistas y tiene su prueba; esto
+      // es para que si vuelve a pasar por otro motivo, el peor caso sea «no
+      // pasa nada y te lo digo».
+      if(hoja.offsetParent === null){
+        cerrar(false);
+        toast('toastComida', 'No pude abrir la confirmación. Inténtalo otra vez.');
+      }
     });
   }
 
