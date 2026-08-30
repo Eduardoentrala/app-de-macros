@@ -833,8 +833,13 @@
           el: tr,
           id: tr.dataset.id || null,
           orden: series.length + 1,
-          reps: Math.max(0, Number(ins[0].value) || 0),
-          peso: Math.max(0, Number(ins[1].value) || 0),
+          // ACOTADOS ARRIBA TAMBIÉN. La base exige `between 0 and 1000` en
+          // los dos, y los campos de la pantalla no tienen `min` ni `max`:
+          // un dedo torpe —o alguien apuntando en libras— manda 1500 y se
+          // cae el guardado de TODA la rutina, no solo el de esa serie.
+          // Mil kilos y mil repeticiones no le quedan cortos a nadie.
+          reps: Math.min(1000, Math.max(0, Number(ins[0].value) || 0)),
+          peso: Math.min(1000, Math.max(0, Number(ins[1].value) || 0)),
           hecho: !!tr.querySelector('.set-check.done')
         });
       });
@@ -1015,7 +1020,7 @@
               return sbFetch('/rest/v1/exercise_sets?id=eq.' + p.id, { method:'DELETE' });
             });
 
-          var guardadas = ej.series.map(function(s){
+          var unaSerie = function(s){
             var c = {
               user_id: sesion.user.id, routine_exercise_id: ejId,
               sort_order: s.orden, reps: s.reps, weight_kg: s.peso, done: s.hecho
@@ -1029,9 +1034,36 @@
                   // Igual que arriba: la fila que se leyó se queda con su id.
                   if(s.el && !s.el.dataset.id) s.el.dataset.id = idDevuelto(r);
                 });
-          });
+          };
 
-          return Promise.all(borradas.concat(guardadas));
+          // EL ORDEN DE ESTAS ESCRITURAS NO ES UN DETALLE.
+          //
+          //  `exercise_sets` lleva un índice único por (ejercicio, orden)
+          //  —parcial: solo cuenta lo que no está archivado—, y el orden se
+          //  recalcula desde la pantalla, así que quitar una serie del medio
+          //  RENUMERA las de abajo. Mandándolo todo a la vez había dos
+          //  carreras, las dos comprobadas contra Postgres:
+          //
+          //    · Se borra la 1 y la 2 pasa a ser 1. Si el UPDATE llega antes
+          //      que el archivado, la 1 sigue ocupando el hueco.
+          //    · La 3 pasa a 2 y la 2 pasa a 1. Si la primera llega antes,
+          //      la 2 todavía vale 2. Esta no la arregla el orden de envío:
+          //      las dos son UPDATE y salían en paralelo.
+          //
+          //  Se ve como «No se pudo guardar», con parte de la rutina ya
+          //  escrita: la pantalla y la base dicen cosas distintas.
+          //
+          //  Primero los borrados, ESPERÁNDOLOS. Y después las series de una
+          //  en una, de menor a mayor orden: como solo se pueden añadir al
+          //  final o quitar —no se arrastran—, el destino siempre es menor o
+          //  igual que el actual, y subiendo desde el 1 el hueco está libre
+          //  antes de ocuparlo.
+          var enOrden = ej.series.slice().sort(function(a, b){ return a.orden - b.orden; });
+          return Promise.all(borradas).then(function(){
+            return enOrden.reduce(function(cola, s){
+              return cola.then(function(){ return unaSerie(s); });
+            }, Promise.resolve());
+          });
         });
     });
   }
