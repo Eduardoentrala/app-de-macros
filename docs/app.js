@@ -12528,8 +12528,18 @@
   }
 
   // El rango en palabras: «18 de agosto al 24 de agosto».
+  //
+  // CON LA MISMA GUARDA QUE `rangoCorto`, y por el mismo motivo: las dos
+  // reciben lo que devuelve `semanaQueJuzga`, que devuelve `null` a
+  // propósito cuando la fila no trae una fecha que se pueda leer. Su
+  // hermana lo miraba y esta no, así que la misma fila daba «Semana » en
+  // la lista y «Semana NaN de undefined al NaN de undefined» en la
+  // tarjeta. Hoy no pasa —`semana` es `date not null` y todas las filas
+  // vienen de la base—, pero la única razón de que no pase está en el
+  // otro fichero.
   function rangoEnPalabras(iso){
     var r = rangoDeSemana(iso);
+    if(!r || isNaN(r.ini)) return '';
     var dia = function(d){ return d.getDate() + ' de ' + MESES_LARGO[d.getMonth()]; };
     return dia(r.ini) + ' al ' + dia(r.fin);
   }

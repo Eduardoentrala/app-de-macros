@@ -307,6 +307,30 @@ console.log('\nY la tarjeta dice lo que tiene que decir');
   ok(rangoEnPalabras('2026-08-18') === '18 de agosto al 24 de agosto',
      'el rango se dice en palabras, como en la referencia',
      'salió «' + rangoEnPalabras('2026-08-18') + '»');
+
+  // Y CUANDO NO HAY FECHA QUE LEER, calla.
+  //
+  // `semanaQueJuzga` devuelve `null` a propósito si la fila no trae una
+  // fecha buena, y sus dos consumidores tienen que hacer lo mismo con ese
+  // null. `rangoCorto` —el de la lista— lo miraba desde el principio;
+  // `rangoEnPalabras` —el de la tarjeta— no, así que la misma fila daba
+  // «Semana » en un sitio y «Semana NaN de undefined al NaN de undefined»
+  // en el otro.
+  //
+  // Hoy no llega ninguna fila así: `semana` es `date not null` y todas
+  // vienen de la base. Pero eso lo garantiza el OTRO fichero, y las dos
+  // mitades no se hablan.
+  const { rangoCorto, semanaQueJuzga } = hacer();
+  ok(semanaQueJuzga({}) === null && semanaQueJuzga({ semana: 'lunes' }) === null,
+     'una fila sin fecha legible no da semana',
+     'si esto deja de devolver null, lo de abajo no prueba nada');
+  for (const malo of [null, undefined, '', 'lunes']) {
+    ok(rangoEnPalabras(malo) === '',
+       'y sin fecha la tarjeta no dice rango (' + JSON.stringify(malo) + ')',
+       'salió «' + rangoEnPalabras(malo) + '»');
+    ok(rangoCorto(malo) === '', 'ni la lista (' + JSON.stringify(malo) + ')',
+       'salió «' + rangoCorto(malo) + '»');
+  }
   ok(html.includes('18 de agosto al 24 de agosto'), 'y sale en la tarjeta');
   ok(html.includes('Eduardo Entrala'), 'con el nombre de quien es');
   ok(html.includes('No logró sus macros'), 'y el sello, que es lo primero que se busca');
