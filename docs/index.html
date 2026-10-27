@@ -112,7 +112,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '2852e1790a';
+    var SELLO = 'fd99bebafb';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -1325,7 +1325,15 @@
 
         <div class="bottom-bar">
           <button class="btn-primary" id="saveSessionBtn">Guardar sesión</button>
-          <button class="btn-ghost-text">Borrar última sesión</button>
+          <!-- Aquí vivía «Borrar última sesión» y NO HACÍA NADA: sin `id`, sin
+               manejador y sin ningún escuchador delegado que lo alcanzara. Se
+               pulsaba y no pasaba nada, debajo mismo del botón principal.
+               Y no era un cable suelto: la 0007 deja `workout_sessions` fuera
+               de lo archivable a propósito -«son historial, no se editan ni se
+               borran en el uso normal»-. El botón ofrecía justo lo que la base
+               rechaza por diseño. Si algún día hace falta deshacer una sesión,
+               hay que decidir antes qué pasa con la racha y con las gráficas
+               que ya la contaron. -->
         </div>
         <div class="toast" id="toastRutina">Sesión guardada</div>
 
@@ -2065,7 +2073,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '2852e1790a';
+    var SELLO = 'fd99bebafb';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que

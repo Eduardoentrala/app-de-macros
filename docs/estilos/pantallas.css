@@ -663,7 +663,9 @@
 [data-view="ejercicio"] .card,
 [data-view="library"] .card{ border:1px solid var(--borde-tarjeta); }
 .ex-head{padding:14px 16px 12px;border-bottom:1px solid var(--line);}
-.ex-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+/* En bloque: el volumen ya no es una columna a la derecha sino una linea
+   debajo, asi que no hay dos cosas que repartir. */
+.ex-top{display:block;}
 /* Sin esto no hay puntos suspensivos que valgan. Un elemento flex trae
    `min-width:auto`, o sea que se niega a encoger por debajo de lo que mide
    su contenido: la columna del nombre se estiraba a 413px dentro de una
@@ -682,13 +684,48 @@
 .ex-delta.up{color:var(--green);}
 .ex-delta.down{color:var(--red);}
 .ex-delta.same{color:var(--ink-faint);}
-.ex-vol .prev{display:block;font-size:11px;font-weight:600;opacity:.7;margin-top:2px;}
-.ex-vol{font:600 12.5px/1.3 sans-serif;color:var(--ink-faint);text-align:right;font-variant-numeric:tabular-nums;}
+/* EL VOLUMEN, EN UNA LINEA DEBAJO DEL NOMBRE.
+   Iba a la derecha y en tres lineas -«vol», el numero y «antes N»-, asi
+   que la cabecera medía tres renglones y al nombre le quedaba media
+   columna: «Peso muerto femoral con barra» se partia en dos.
+   Debajo y seguido ocupa un renglon y el nombre se lleva el ancho entero,
+   que es lo que se lee primero. El punto de separacion solo aparece si
+   hay sesion anterior: `:not(:empty)`, porque cuando no la hay el texto
+   se deja vacio y un punto suelto se leeria como un fallo. */
+.ex-vol{font:600 11.5px/1.3 sans-serif;color:var(--ink-faint);text-align:left;
+  font-variant-numeric:tabular-nums;margin-top:3px;}
+.ex-vol .rot{text-transform:uppercase;letter-spacing:.06em;font-size:9.5px;}
+.ex-vol .prev{opacity:.75;}
+.ex-vol .prev:not(:empty)::before{content:' · ';opacity:.6;}
 .ex-pills{display:flex;gap:6px;align-items:center;margin-top:10px;flex-wrap:wrap;}
 .ex-pills .chip{padding:7px 11px;font-size:11.5px;}
-.ex-pills .icon-mini{margin-left:auto;display:flex;gap:8px;}
-.icon-mini button{background:none;border:none;color:var(--ink-faint);cursor:pointer;font-size:15px;padding:2px;}
+.ex-pills .icon-mini{margin-left:auto;display:flex;gap:12px;align-items:center;}
+/* CUATRO BOTONES DE 20x21 QUE EL DEDO NO ALCANZA.
+   Se midieron: 20, 19, 19 y 13 de ancho por 21 de alto, todos muy por
+   debajo de los 44 que pide Apple, y uno de ellos QUITA el ejercicio. Se
+   quedaron fuera del arreglo de los demas botones chicos porque entonces
+   no se miro esta tarjeta.
+   Como alli: no se agranda el boton, se agranda su zona sensible. El
+   hueco entre ellos no se deja al azar, para que las zonas no se monten
+   unas sobre otras, que seria cambiar un fallo por otro peor.
+
+   SE MIDIERON LOS SOLAPES, que es lo que convierte este arreglo en un
+   fallo peor: una zona montada encima de la del vecino se come su toque,
+   y aqui el vecino es «quitar». Con los botones a su ancho natural -20,
+   19, 19 y 13- las distancias entre centros no eran iguales y tres zonas
+   de 40 se pisaban. Igualandolos a 28 con 12 de hueco, los centros caen
+   cada 40 y una zona de 38 no llega a tocar la de al lado. */
+.icon-mini button{background:none;border:none;color:var(--ink-faint);cursor:pointer;
+  font-size:15px;padding:2px;position:relative;
+  min-width:28px;display:inline-flex;align-items:center;justify-content:center;}
+.icon-mini button::after{
+  content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:100%;height:100%;min-width:38px;min-height:44px;
+}
 .icon-mini button.danger{color:var(--red);}
+/* El lapiz va dibujado y necesita tamano: un `font-size` no mueve un SVG,
+   que sin ancho ni alto se pinta a 300x150 y rompe la fila entera. */
+.icon-mini button svg{width:16px;height:16px;display:block;}
 
 .sets-table{width:100%;border-collapse:collapse;}
 .sets-table th{
@@ -728,7 +765,16 @@
 .set-check::after{ content:'';position:absolute;inset:-11px -4px -11px -14px; }
 .clock-btn::after{ content:'';position:absolute;inset:-11px -10px -11px -4px; }
 .rm-set::after  { content:'';position:absolute;inset:-11px -10px -11px -4px; }
-.clock-btn{background:none;border:none;font-size:15px;cursor:pointer;color:var(--red);}
+/* EL CRONOMETRO, DIBUJADO Y EN GRIS.
+   Era un emoji de despertador y ademas en rojo, cuatro veces seguidas en
+   la misma tarjeta: lo mas llamativo de la pantalla, y en el color que
+   en esta app significa «cuidado». No marca ningun estado -el descanso
+   se enseña arriba, no aqui-, asi que el rojo no decia nada. */
+.clock-btn{background:none;border:none;cursor:pointer;color:var(--ink-faint);
+  display:inline-flex;align-items:center;}
+.clock-btn svg{width:17px;height:17px;display:block;}
+.nota-badge svg{width:13px;height:13px;display:inline-block;vertical-align:-2px;}
+.ex-pills .chip svg{width:13px;height:13px;margin-right:5px;vertical-align:-2px;}
 /* La × no se deshace: un poco más de aire que las demás. Equivocarse aquí
    cuesta la serie entera, no un cronómetro de más. */
 .rm-set{background:none;border:none;color:var(--ink-faint);font-size:14px;cursor:pointer;margin-left:4px;}

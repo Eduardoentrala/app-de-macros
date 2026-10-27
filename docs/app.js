@@ -288,8 +288,17 @@
     if(typeof marcarTodasLasNotas === 'function') marcarTodasLasNotas();
   }
 
+  // QUÉ HACER AL ACEPTAR. Null quiere decir lo de siempre: renombrar el día.
+  //
+  //  La hoja se escribió para los días y el botón de guardar iba derecho a
+  //  `activeTab()`. Ahora la usan dos cosas, así que quien la abre dice qué
+  //  hacer con lo escrito. Sin esto habría una segunda hoja igual al lado,
+  //  con su propio campo y su propio foco, para pedir exactamente lo mismo.
+  var nameSheetAccion = null;
+
   function openNameSheet(opts){
     opts = opts || {};
+    nameSheetAccion = opts.alGuardar || null;
     nameSheetTitle.textContent = opts.title || 'Nombre del día';
     dayNameInput.value = opts.value || '';
     nameSheet.classList.add('open');
@@ -297,6 +306,7 @@
   }
   function closeNameSheet(){
     nameSheet.classList.remove('open');
+    nameSheetAccion = null;
     // Si cancelaste al crear un día nuevo, se descarta
     if(pendingNewTab){
       var prev = pendingNewTab.previousElementSibling;
@@ -352,6 +362,15 @@
   document.getElementById('nameSave').addEventListener('click', function(){
     var val = dayNameInput.value.trim();
     if(!val){ dayNameInput.focus(); return; }
+    // Si quien la abrio dijo que hacer, se hace eso y nada mas: lo de abajo
+    // es de los dias y tocaria la pestana activa, que aqui no pinta nada.
+    if(nameSheetAccion){
+      var hacer = nameSheetAccion;
+      nameSheetAccion = null;
+      nameSheet.classList.remove('open');
+      hacer(val);
+      return;
+    }
     var t = activeTab();
     if(t) t.textContent = val;
     pendingNewTab = null;            // se confirma, ya no se descarta
@@ -534,11 +553,11 @@
     var card = document.createElement('div');
     card.className = 'exercise-card';
     card.innerHTML = '<div class="ex-head"><div class="ex-top">'+
-      '<div><div class="ex-name">'+escapar(name)+' <span class="nota-badge" hidden title="Tiene notas">📝</span></div>'+
+      '<div><div class="ex-name">'+escapar(name)+' <span class="nota-badge" hidden title="Tiene notas" aria-label="Tiene notas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5.5 4.2h8.2L18.5 9v10.8h-13Z"/><path d="M13.5 4.2V9h5"/></svg></span></div>'+
       '<div class="nota-previa" hidden title="Toca «notas» para verla entera"></div><div class="ex-delta"></div></div>'+
-      '<div class="ex-vol">vol<br><b class="vol-num">0</b><span class="prev"></span></div></div>'+
+      '<div class="ex-vol"><span class="rot">vol</span> <b class="vol-num">0</b><span class="prev"></span></div></div>'+
       '<div class="ex-pills">'+
-      '<button class="chip" data-act="grafica">📈 gráfica</button>'+
+      '<button class="chip" data-act="grafica"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 4.5v15h16"/><path d="M7.5 15.6 11 11.2l2.9 2.3 4.3-6"/></svg>gráfica</button>'+
       '<button class="chip" data-act="notas">notas</button>'+
       '<span class="icon-mini">'+
       '<button data-act="subir" title="Subir ejercicio">▲</button>'+
@@ -546,7 +565,7 @@
       '<button class="danger" data-act="quitar" title="Quitar ejercicio">×</button></span></div></div>'+
       '<table class="sets-table"><tr><th>set</th><th class="num">reps</th><th class="num">peso</th><th></th></tr>'+
       '<tr><td>1</td><td class="num"><input class="set-input" type="number" inputmode="decimal" step="any" value="10"></td><td class="num"><input class="set-input" type="number" inputmode="decimal" step="any" value="0"></td>'+
-      '<td><div class="set-row-actions"><div class="set-check">✓</div><button class="clock-btn">⏰</button><button class="rm-set">×</button></div></td></tr></table>'+
+      '<td><div class="set-row-actions"><div class="set-check">✓</div><button class="clock-btn" aria-label="Descanso"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="13.6" r="7.4"/><path d="M12 10v3.6h2.5"/><path d="M9.4 2.9h5.2"/><path d="M12 2.9v2.3"/></svg></button><button class="rm-set">×</button></div></td></tr></table>'+
       '<div class="add-set-row"><button class="add-set">+ set</button></div>';
     return card;
   }
@@ -634,7 +653,7 @@
         '<td class="num"><input class="set-input" type="number" inputmode="decimal" step="any" value="'+reps+'"></td>'+
         '<td class="num"><input class="set-input" type="number" inputmode="decimal" step="any" value="'+peso+'"></td>'+
         '<td><div class="set-row-actions"><div class="set-check">✓</div>'+
-        '<button class="clock-btn">⏰</button><button class="rm-set">×</button></div></td>';
+        '<button class="clock-btn" aria-label="Descanso"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="13.6" r="7.4"/><path d="M12 10v3.6h2.5"/><path d="M9.4 2.9h5.2"/><path d="M12 2.9v2.3"/></svg></button><button class="rm-set">×</button></div></td>';
       table.appendChild(tr);
       recalcCard(c);
       return;
@@ -678,7 +697,68 @@
     }
     if(act.dataset.act === 'notas'){ abrirNotas(card, nombre); return; }
     if(act.dataset.act === 'grafica'){ abrirGrafica(card, nombre); return; }
+    if(act.dataset.act === 'nombre'){
+      openNameSheet({
+        title: 'Nombre del ejercicio',
+        value: nombre,
+        alGuardar: function(nuevo){ renombrarEjercicio(nombre, nuevo); }
+      });
+      return;
+    }
   });
+
+  // ---- Cambiar el nombre de un ejercicio ----
+  //
+  //  DEL NOMBRE CUELGAN TRES COSAS, y las tres en sitios distintos: la
+  //  rutina (`routine_exercises.name`, que puede estar en varios días), el
+  //  historial (dentro del JSON de cada sesión guardada, de donde sale
+  //  `HISTORIAL[nombre]` y por tanto la gráfica) y la nota (`exercise_notes`,
+  //  con su único por nombre).
+  //
+  //  Por eso NO se hace con tres peticiones desde aquí sino con
+  //  `renombrar_ejercicio`: o se mueven las tres o no se mueve ninguna. Tres
+  //  PATCH sueltos pueden fallar a la mitad y dejar la rutina diciendo una
+  //  cosa y la gráfica otra, que es peor que no poder renombrar.
+  //
+  //  Y SE ESPERA AL SERVIDOR antes de tocar la pantalla. Aquí no vale el
+  //  «pinta ya y arregla si falla» del resto de la app: lo que se pinta no
+  //  es un número que se pueda devolver a su sitio, es el nombre del que
+  //  cuelga todo lo demás.
+  function renombrarEjercicio(viejo, nuevo){
+    nuevo = String(nuevo || '').trim();
+    if(!nuevo || nuevo === viejo) return;
+    if(!sesion || !sesion.user){
+      toast('toastRutina', 'Inicia sesión para cambiar el nombre');
+      return;
+    }
+    sbRpc('renombrar_ejercicio', { p_viejo: viejo, p_nuevo: nuevo })
+      .then(function(){
+        // La pantalla: puede haber dos tarjetas con ese nombre si el mismo
+        // ejercicio está dos veces en el día que se está viendo.
+        Array.from(document.querySelectorAll('.exercise-card .ex-name'))
+          .forEach(function(el){
+            if(el.childNodes[0] && el.childNodes[0].textContent.trim() === viejo)
+              el.childNodes[0].textContent = nuevo + ' ';
+          });
+
+        // Y lo que esta pantalla tiene en memoria, que es de donde salen la
+        // gráfica y la nota SIN volver a pedir nada. Sin esto, abrir la
+        // gráfica justo después enseñaría «necesitas dos sesiones» sobre un
+        // ejercicio con meses detrás.
+        if(HISTORIAL[viejo]){
+          HISTORIAL[nuevo] = (HISTORIAL[nuevo] || []).concat(HISTORIAL[viejo]);
+          delete HISTORIAL[viejo];
+        }
+        if(NOTAS[viejo]){
+          NOTAS[nuevo] = NOTAS[nuevo] ? (NOTAS[nuevo] + '\n\n' + NOTAS[viejo]) : NOTAS[viejo];
+          delete NOTAS[viejo];
+        }
+        toast('toastRutina', 'Ahora se llama «' + nuevo + '»');
+      })
+      ['catch'](function(e){
+        toast('toastRutina', 'No se pudo cambiar el nombre: ' + traducirError(e.message));
+      });
+  }
 
   // ---- Notas por ejercicio ----
   // Van por NOMBRE de ejercicio, no por la tarjeta: la nota es de "press
@@ -861,7 +941,7 @@
       '<td class="num"><input class="set-input" type="number" inputmode="decimal" step="any" value="' + s.reps + '"></td>' +
       '<td class="num"><input class="set-input" type="number" inputmode="decimal" step="any" value="' + s.peso + '"></td>' +
       '<td><div class="set-row-actions"><div class="set-check' + (s.hecho ? ' done' : '') + '">✓</div>' +
-      '<button class="clock-btn">⏰</button><button class="rm-set">×</button></div></td></tr>';
+      '<button class="clock-btn" aria-label="Descanso"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="13.6" r="7.4"/><path d="M12 10v3.6h2.5"/><path d="M9.4 2.9h5.2"/><path d="M12 2.9v2.3"/></svg></button><button class="rm-set">×</button></div></td></tr>';
   }
 
   function htmlEjercicio(ej){
@@ -871,13 +951,21 @@
     return '<div class="exercise-card" data-id="' + ej.id + '">' +
       '<div class="ex-head"><div class="ex-top">' +
       '<div><div class="ex-name">' + escapar(ej.nombre) +
-        ' <span class="nota-badge" hidden title="Tiene notas">📝</span></div>' +
+        ' <span class="nota-badge" hidden title="Tiene notas" aria-label="Tiene notas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5.5 4.2h8.2L18.5 9v10.8h-13Z"/><path d="M13.5 4.2V9h5"/></svg></span></div>' +
         '<div class="nota-previa" hidden title="Toca «notas» para verla entera"></div><div class="ex-delta"></div></div>' +
-      '<div class="ex-vol">vol<br><b class="vol-num">0</b><span class="prev"></span></div></div>' +
+      '<div class="ex-vol"><span class="rot">vol</span> <b class="vol-num">0</b><span class="prev"></span></div></div>' +
       '<div class="ex-pills">' +
-      '<button class="chip" data-act="grafica">📈 gráfica</button>' +
+      '<button class="chip" data-act="grafica"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 4.5v15h16"/><path d="M7.5 15.6 11 11.2l2.9 2.3 4.3-6"/></svg>gráfica</button>' +
       '<button class="chip" data-act="notas">notas</button>' +
       '<span class="icon-mini">' +
+      // CAMBIAR EL NOMBRE. No estaba: el nombre se escribía al crear el
+      // ejercicio y para corregir una falta había que borrarlo y volver a
+      // crearlo —perdiendo su nota y su gráfica por el camino—.
+      '<button data-act="nombre" aria-label="Cambiar el nombre" title="Cambiar el nombre">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" ' +
+      'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' +
+      '<path d="M4.6 19.4h3.3L19 8.3a1.9 1.9 0 0 0-2.7-2.7L5.3 16.7Z"/>' +
+      '<path d="M14.9 7.1 17.6 9.8"/></svg></button>' +
       '<button data-act="subir" title="Subir ejercicio">▲</button>' +
       '<button data-act="bajar" title="Bajar ejercicio">▼</button>' +
       '<button class="danger" data-act="quitar" title="Quitar ejercicio">×</button></span></div></div>' +
