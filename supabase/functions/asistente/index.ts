@@ -52,7 +52,7 @@ const CORS = {
 //
 // Ahora lo dice: un GET sin sesión devuelve este sello y nada más.
 // `pruebas/funciones-vivas.mjs` lo compara con el del repo.
-const SELLO = '0eb7e419cd';
+const SELLO = '08a5f50f9a';
 
 // Tope diario por persona. Es la única defensa contra que un solo usuario
 // -o un token robado- vacíe la cuenta en una noche con un bucle.
@@ -1206,9 +1206,20 @@ function enPalabras(iso: string): string {
 }
 
 async function numerosDelAviso(admin: ReturnType<typeof createClient>, userId: string, hoy: string): Promise<string> {
+  // LOS MISMOS DÍAS QUE CARGA LA APP (`DIAS_ATRAS`), y no catorce.
+  //
+  //  Con catorce, la racha que se cuenta aquí abajo no podía pasar de 14 por
+  //  construcción. A quien llevaba 36 días seguidos se le decía al modelo
+  //  «lleva 14 días seguidos», y el modelo escribía «dos semanas seguidas
+  //  apuntando, eso es lo que de verdad cuesta» mientras la pantalla de al
+  //  lado, en la misma vista, ponía «🔥 36 días».
+  //
+  //  No se lo inventó: escribió el número que se le dio. El aviso que iba a
+  //  felicitarle por el esfuerzo le recortaba tres semanas de ese esfuerzo.
+  const VENTANA = 60;
   const [diario, pesos] = await Promise.all([
     admin.from('diary_entries').select('entry_date')
-      .eq('user_id', userId).gte('entry_date', diaMas(hoy, -13)).lte('entry_date', hoy),
+      .eq('user_id', userId).gte('entry_date', diaMas(hoy, -(VENTANA - 1))).lte('entry_date', hoy),
     admin.from('weight_logs').select('log_date, weight_kg')
       .eq('user_id', userId).gte('log_date', diaMas(hoy, -21)).lte('log_date', hoy)
       .order('log_date', { ascending: false }),
@@ -1221,8 +1232,13 @@ async function numerosDelAviso(admin: ReturnType<typeof createClient>, userId: s
   // Seguidos hacia atrás desde hoy. Si hoy todavía no ha apuntado nada no se
   // le cuenta como roto: el día no ha terminado, y decirle que perdió la
   // racha a las nueve de la mañana es falso.
-  let seguidos = 0;
-  for (let s = dias.has(hoy) ? 0 : 1; s < 14; s++) {
+  // Y SI LA RACHA LLEGA AL BORDE DE LA VENTANA, es un mínimo y hay que
+  // decirlo así. Ensanchar la ventana sola no arregla nada: con sesenta en
+  // vez de catorce, a quien lleve sesenta y uno se le vuelve a recortar. Lo
+  // que no puede pasar es dar un número corto como si fuera el total.
+  let seguidos = 0, tope = false;
+  for (let s = dias.has(hoy) ? 0 : 1; ; s++) {
+    if (s >= VENTANA) { tope = true; break; }
     if (!dias.has(diaMas(hoy, -s))) break;
     seguidos++;
   }
@@ -1232,7 +1248,8 @@ async function numerosDelAviso(admin: ReturnType<typeof createClient>, userId: s
 
   const lineas = [`Hoy es ${enPalabras(hoy)}.`];
   lineas.push(`Apuntó ${deSiete} de los últimos 7 días.`);
-  if (seguidos >= 2) lineas.push(`Lleva ${seguidos} días seguidos apuntando.`);
+  if (seguidos >= 2) lineas.push(
+    `Lleva ${tope ? 'al menos ' : ''}${seguidos} días seguidos apuntando.`);
   lineas.push(ultimo === null
     ? 'No tiene nada apuntado en las últimas dos semanas.'
     : ultimo === hoy ? 'Ya apuntó algo hoy.'

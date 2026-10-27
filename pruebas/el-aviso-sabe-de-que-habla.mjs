@@ -243,5 +243,69 @@ console.log('\nUna fecha ilegible no deja el aviso ahí para siempre');
   ok(!h.pintado.some(p => p.t === 'rota'), 'y no se enseña');
 }
 
+console.log('\nLa racha que se le cuenta al modelo es la de verdad');
+{
+  // ESTO SE VIO EN UNA CAPTURA. El aviso decía «Dos semanas seguidas
+  // apuntando, eso es lo que de verdad cuesta y ahí lo llevas» mientras la
+  // cabecera de la MISMA pantalla ponía «🔥 36 días».
+  //
+  // El modelo no se lo inventó —eso ya se arregló— : escribió el número que
+  // se le dio. La consulta del aviso pedía catorce días de diario, así que
+  // la racha que se cuenta sobre ellos no podía pasar de 14 por
+  // construcción. El aviso que iba a felicitarle por el esfuerzo le
+  // recortaba tres semanas de ese esfuerzo.
+  //
+  // Dos mitades, y la primera sola no basta: igualar la ventana a la que
+  // carga la app, Y decir «al menos» cuando la racha llegue al borde —con
+  // sesenta, a quien lleve sesenta y uno se le volvería a recortar—.
+  const fn = FN.replace(/\r\n/g, '\n');
+  const ventana = Number((fn.match(/const VENTANA = (\d+);/) || [])[1]);
+  const diasAtras = Number((APP.match(/var DIAS_ATRAS = (\d+)/) || [])[1]);
+  ok(!!ventana && !!diasAtras, 'se leen las dos ventanas',
+     'servidor=' + ventana + ' app=' + diasAtras);
+  ok(ventana === diasAtras,
+     `el servidor mira los mismos ${diasAtras} días que carga la app`,
+     'servidor ' + ventana + ' contra app ' + diasAtras + ': la racha del ' +
+     'aviso y la del 🔥 de la cabecera salen de la misma cuenta, y si las ' +
+     'ventanas se separan dicen números distintos en la misma pantalla');
+  ok(new RegExp('gte\\(.entry_date., diaMas\\(hoy, -\\(VENTANA - 1\\)\\)\\)').test(fn),
+     'y la consulta usa esa ventana, no un número suelto');
+
+  // EJECUTADO. Que la ventana sea 60 no prueba que la cuenta sea correcta.
+  const bucle = (fn.match(/let seguidos = 0, tope = false;[\s\S]*?\n  \}/) || [])[0];
+  ok(!!bucle, 'se encuentra el bucle de la racha');
+  const diaMas = (iso, n) => {
+    const d = new Date(iso + 'T12:00:00Z');
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  };
+  const contar = (dias, hoy) => new Function('dias', 'hoy', 'diaMas', 'VENTANA',
+    bucle + '\n return {seguidos, tope};')(dias, hoy, diaMas, ventana);
+  const HOY = '2026-10-27';
+  const conRacha = (n, hoyTambien = true) => {
+    const s = new Set();
+    for (let i = hoyTambien ? 0 : 1; s.size < n; i++) s.add(diaMas(HOY, -i));
+    return s;
+  };
+  const frase = (r) => `Lleva ${r.tope ? 'al menos ' : ''}${r.seguidos} días seguidos apuntando.`;
+
+  ok(frase(contar(conRacha(36), HOY)) === 'Lleva 36 días seguidos apuntando.',
+     'treinta y seis días seguidos se cuentan como treinta y seis',
+     'salió «' + frase(contar(conRacha(36), HOY)) + '»; con la ventana de 14 ' +
+     'salía «Lleva 14 días seguidos», que el modelo escribió como «dos semanas»');
+  ok(contar(conRacha(36), HOY).tope === false,
+     'y sin el «al menos», porque no toca el borde');
+  ok(contar(conRacha(36, false), HOY).seguidos === 36,
+     'y si hoy todavía no apuntó nada, no se le rompe la racha',
+     'el día no ha terminado');
+  const borde = contar(conRacha(ventana + 25), HOY);
+  ok(borde.tope === true && frase(borde).startsWith('Lleva al menos '),
+     'y una racha más larga que la ventana se da como mínimo',
+     'salió «' + frase(borde) + '»: dar un número corto como si fuera el ' +
+     'total es el fallo que se está arreglando, no la ventana en sí');
+  ok(/Lleva \$\{tope \? 'al menos ' : ''\}\$\{seguidos\}/.test(fn),
+     'y la frase que se le manda lo dice así');
+}
+
 console.log(`\n${pasan} bien, ${fallan} mal`);
 process.exit(fallan ? 1 : 0);
