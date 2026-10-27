@@ -98,10 +98,15 @@ console.log('\n— La IA ve las semanas de antes, no una suelta —');
     return APP.slice(i);
   })();
   check('se traen los chequeos anteriores', i > 0);
-  check('con el sueño incluido', /select=semana,hambre,energia,sueno/.test(trozo));
-  check('filtra por usuario', /user_id=eq\.' \+ sesion\.user\.id/.test(trozo));
-  check('cuatro semanas, de la vieja a la nueva',
-    /slice\(0, 4\)\.reverse\(\)/.test(trozo));
+  // La consulta se mudó a `sbSemanasGuardadas()`: la misma que usa «Mis
+  // semanas» y que ahora trae el arranque, para no pedir lo mismo dos veces.
+  const iSel = APP.indexOf('function sbSemanasGuardadas(');
+  const seleccion = iSel < 0 ? '' : APP.slice(iSel, APP.indexOf('\n  }', iSel));
+  check('con el sueño incluido', /select=semana,hambre,energia,sueno/.test(seleccion));
+  check('filtra por usuario', /user_id=eq\.' \+ sesion\.user\.id/.test(seleccion));
+  check('veinte semanas, de la vieja a la nueva',
+    /slice\(0, 20\)\.reverse\(\)/.test(trozo),
+    'eran cuatro cuando la tabla se borraba al año; ahora hay con qué comparar');
   // La de ahora se manda aparte y todavía no está guardada.
   check('descarta la semana en curso', /x\.semana !== isoDe\(anclaSemana\)/.test(trozo));
   check('sin historial se decide igual', /\['catch'\]\(function\(\)\{ return \[\]; \}\)/.test(trozo));

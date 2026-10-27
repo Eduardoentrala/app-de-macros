@@ -122,7 +122,9 @@ console.log('\nY se le dice qué hacer con eso');
 // ------------------------------------------------------------------
 console.log('\nLa app pide el historial entero, no seis columnas');
 {
-  const f = sacar('function chequeosDeAntes(){');
+  // La consulta vive ahora en `sbSemanasGuardadas()`, compartida con «Mis
+  // semanas» y con la medición del gasto: una sola petición para los tres.
+  const f = sacar('function sbSemanasGuardadas(){');
   for (const col of ['media_cal', 'cal_antes', 'media_p', 'meta_p', 'peso_medio',
                      'volumen', 'dias_apuntados', 'sesiones']) {
     ok(new RegExp(col).test(f), `pide «${col}»`,

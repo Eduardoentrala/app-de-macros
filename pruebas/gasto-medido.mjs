@@ -31,12 +31,34 @@ const i = APP.indexOf('  var GM = {');
 const j = APP.indexOf('  // Las DOS semanas que se comparan');
 const TROZO = APP.slice(i, j);
 
-function montar(semanas, estimado) {
+// `serieParaMedir` junta dos fuentes, así que hacen falta las dos. También
+// de verdad, sacadas del fuente: la clave con la que se guarda cada fila no
+// es la semana que describe, y copiar ese desfase aquí a mano es pedir que
+// un día se separen.
+const sacarFn = (cabecera) => {
+  const a = APP.indexOf(cabecera);
+  if (a < 0) throw new Error('no encuentro: ' + cabecera);
+  let n = 0, b = APP.indexOf('{', a);
+  for (; b < APP.length; b++) {
+    if (APP[b] === '{') n++;
+    else if (APP[b] === '}') { n--; if (!n) return APP.slice(a, b + 1); }
+  }
+  throw new Error('llaves sin cerrar en ' + cabecera);
+};
+const APOYO = sacarFn('function isoDe(d){') + '\n' +
+              sacarFn('function semanaQueJuzga(f){') + '\n';
+
+// `guardadas` son las filas de `chequeos_semanales` que el arranque deja
+// cargadas en SEMANAS: la parte LARGA de la serie. Vacía por defecto, que
+// es como vivía esta prueba antes de que la medición pudiera mirar más
+// atrás de lo que cabe en el diario del teléfono.
+function montar(semanas, estimado, guardadas = []) {
   const resumenDeSemanas = () => semanas;
   const gastoEstimado = () => ({ gasto: estimado });
   const KCAL_POR_KG = 7700;
-  return new Function('resumenDeSemanas', 'gastoEstimado', 'KCAL_POR_KG',
-    TROZO + '\n return gastoMedido;')(resumenDeSemanas, gastoEstimado, KCAL_POR_KG);
+  return new Function('resumenDeSemanas', 'gastoEstimado', 'KCAL_POR_KG', 'SEMANAS',
+    APOYO + TROZO + '\n return gastoMedido;')(
+    resumenDeSemanas, gastoEstimado, KCAL_POR_KG, guardadas);
 }
 // Una semana buena: 7 días apuntados, 3 pesajes.
 const sem = (fecha, cal, peso, dias = 7, pesajes = 3) =>
@@ -226,6 +248,110 @@ console.log('\n— Y se le enseña a quien es —');
     'un fallo aquí no puede dejar el Perfil a medio pintar');
   check('dice con cuánto se midió', /g\.semanas \+ ' semanas y ' \+ g\.dias/.test(p));
   check('y lo compara con la fórmula', /de lo que decía la fórmula del registro/.test(p));
+}
+
+// ------------------------------------------------------------------
+// LO QUE HACE QUE SE AFINE CON EL TIEMPO.
+//
+// Antes esto medía sobre una ventana fija de cuatro semanas del diario que
+// el teléfono tiene en memoria. O sea que en la semana 4 y en el año 2 el
+// número tenía exactamente la misma precisión: la app no aprendía.
+//
+// Ahora la serie se alarga con `chequeos_semanales` -que desde la 0055 no
+// se borra-, lo reciente pesa más que lo viejo, y el tope de cordura se
+// ensancha según cuántas semanas lo respalden.
+// ------------------------------------------------------------------
+
+// Una fila guardada. OJO con la clave: se guarda con la semana SIGUIENTE a
+// la que describe, por eso el +7.
+const lunes = (n) => {
+  const d = new Date('2026-01-05T12:00:00');   // un lunes
+  d.setDate(d.getDate() + 7 * n);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') +
+         '-' + String(d.getDate()).padStart(2, '0');
+};
+const guard = (n, cal, peso, dias = 7) =>
+  ({ semana: lunes(n + 1), dias_apuntados: dias, media_cal: cal, peso_medio: peso });
+
+console.log('\n— La serie ya no se queda en cuatro semanas —');
+{
+  // Veinte semanas guardadas, comiendo 2.000 y bajando 0,2 kg por semana.
+  // Su gasto: 2.000 + 0,2 × 7700 / 7 = 2.220.
+  const largas = [];
+  for (let n = 0; n < 20; n++) largas.push(guard(n, 2000, 90 - 0.2 * n));
+  const r = montar([], 2200, largas)();
+  check('mide con las veinte', r.estado === 'ok' && r.semanas === 20,
+        JSON.stringify({ estado: r.estado, semanas: r.semanas }));
+  check('y da el gasto real', Math.abs(r.gasto - 2220) <= 2, `dio ${r.gasto}`);
+  check('con los días de todas', r.dias === 140, `dio ${r.dias}`);
+}
+
+console.log('\n— Y lo reciente manda sobre lo viejo —');
+{
+  // Ocho semanas bajando medio kilo (gasto 2.550) y luego ocho planas
+  // (gasto 2.000). Comiendo 2.000 siempre. Su metabolismo de HOY es 2.000.
+  const cambio = [];
+  let peso = 90;
+  for (let n = 0; n < 8; n++) { cambio.push(guard(n, 2000, peso)); peso -= 0.5; }
+  for (let n = 8; n < 16; n++) cambio.push(guard(n, 2000, peso));
+  const r = montar([], 2300, cambio)();
+
+  // Sin ponderar, la recta saldría a medio camino de las dos épocas. Con la
+  // vida media de ocho semanas, la mitad reciente pesa mucho más.
+  check('el número se va hacia lo reciente', r.gasto < 2275,
+        `dio ${r.gasto}: el punto medio entre las dos épocas es 2275, y tiene ` +
+        `que quedar por debajo porque lo de hoy es peso plano`);
+  check('sin irse del todo a lo de hoy', r.gasto > 2000,
+        `dio ${r.gasto}: lo viejo informa, no se tira`);
+}
+
+console.log('\n— El tope se ensancha con la confianza —');
+{
+  // Come 2.000 con el peso plano: su gasto son 2.000. La fórmula del
+  // registro dice 2.900, un 31% más. Es el caso real de quien tiene un
+  // metabolismo que Mifflin no describe.
+  const haz = (cuantas) => {
+    const s = [];
+    for (let n = 0; n < cuantas; n++) s.push(guard(n, 2000, 84));
+    return montar([], 2900, s)();
+  };
+
+  const pocas = haz(4);
+  check('con cuatro semanas no se cree un 31%', pocas.estado === 'fuera_de_rango',
+        JSON.stringify({ estado: pocas.estado, margen: pocas.margen }) +
+        ': con tan poco, eso es una semana rara y no un metabolismo');
+  check('y dice con qué margen lo midió', pocas.margen === 0.25, `dio ${pocas.margen}`);
+
+  const muchas = haz(12);
+  check('con doce sí', muchas.estado === 'ok',
+        JSON.stringify({ estado: muchas.estado, margen: muchas.margen }) +
+        ': tres meses de semanas completas ya no son ruido, y quien de verdad ' +
+        'gasta un 30% menos no puede quedarse sin sus calorías para siempre');
+  check('con el margen abierto', muchas.margen === 0.40, `dio ${muchas.margen}`);
+  check('y el gasto es el medido', muchas.gasto === 2000, `dio ${muchas.gasto}`);
+}
+
+console.log('\n— Pero no se quita nunca del todo —');
+{
+  // Un error sistemático al apuntar -pesar siempre de menos- daría esto, y
+  // tener veinte semanas no lo arregla: las tendría todas igual de mal.
+  const s = [];
+  for (let n = 0; n < 20; n++) s.push(guard(n, 2000, 84));
+  const r = montar([], 4200, s)();
+  check('un 52% se sigue tirando con veinte semanas', r.estado === 'fuera_de_rango',
+        JSON.stringify({ estado: r.estado, margen: r.margen }));
+}
+
+console.log('\n— Las dos fuentes se juntan sin pisarse —');
+{
+  // La misma semana en las dos: la local gana, que es la que sabe cuántos
+  // pesajes hubo. Si se duplicara, contaría dos veces y la recta se torcería.
+  const dupe = [guard(0, 2000, 90), guard(1, 2000, 89.8), guard(2, 2000, 89.6)];
+  // `lunes(1)` describe la semana que empieza en `lunes(0)`.
+  const local = [{ semana: lunes(0), dias_apuntados: 7, media_cal: 2000,
+                   peso_medio: 90, dias_con_peso: 3, fotos: 0 }];
+  const r = montar(local, 2200, dupe)();
+  check('no se cuenta dos veces', r.semanas === 3, `dio ${r.semanas} semanas`);
 }
 
 console.log(`\n${ok} pasan · ${mal} fallan`);

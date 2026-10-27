@@ -61,27 +61,43 @@ console.log('\nY los demás: lo que se manda y lo que se lee, iguales');
 {
   // Cada pareja: cuánto manda la app y cuánto lee la función. Si no
   // coinciden, o se pierde información o se pide de más.
+  // El de las semanas va anclado AL ENVÍO. `resumenDeSemanas()` se llama
+  // ahora también desde `serieParaMedir()` -con ocho, para medir el gasto-
+  // y el primer número que se cruzaba era ese, no el que se manda.
+  const iEnvio = APP.indexOf("accion: 'semana'");
+  const envioSemana = APP.slice(Math.max(0, iEnvio - 1200), iEnvio + 1600);
   const parejas = [
-    ['cinturas', /CINTURAS\.slice\(-(\d+)\)/, 'las medidas de cintura'],
-    ['semanas', /resumenDeSemanas\((\d+)\)/, 'los resúmenes de semanas'],
+    ['cinturas', /CINTURAS\.slice\(-(\d+)\)/, 'las medidas de cintura', APP],
+    ['semanas', /var sem = resumenDeSemanas\((\d+)\)/, 'los resúmenes de semanas', envioSemana],
   ];
-  for (const [campo, patron, dicho] of parejas) {
-    const manda = (APP.match(patron) || [])[1];
+  for (const [campo, patron, dicho, donde] of parejas) {
+    const manda = (donde.match(patron) || [])[1];
     const lee = topeEn(campo);
     ok(manda != null && lee != null && Number(manda) === lee,
        `${dicho}: la app manda ${manda} y la función lee ${lee}`);
   }
 
-  // El historial de chequeos: la app pide 5 y quita el de la semana en
-  // curso, así que manda 4.
-  // Anclado a SU función: `chequeos_semanales` sale en varios sitios del
-  // archivo y el primer `limit=` que se cruzaba era de otra consulta.
+  // EL HISTORIAL YA NO ES UNA PAREJA, y es a propósito. La app manda
+  // veinte semanas y la función las usa en dos sitios distintos:
+  //
+  //   · las CUATRO últimas en detalle (hambre, energía, sueño, macros…),
+  //     que es lo que ya hacía;
+  //   · y TODAS para la lista de ajustes que ya se probaron, que es lo que
+  //     deja no repetir un camino que no funcionó.
+  //
+  // Así que aquí no se comprueba que los números coincidan sino que nada se
+  // quede sin leer: que se manden veinte y que la función mire el array
+  // entero en alguna parte.
   const iCheq = APP.indexOf('function chequeosDeAntes()');
   const suyo = APP.slice(iCheq, APP.indexOf('\n  }', iCheq));
-  const pide = (suyo.match(/limit=(\d+)/) || [])[1];
-  const lee = topeEn('historial');
-  ok(pide != null && lee != null && Number(pide) - 1 === lee,
-     `los chequeos: la app pide ${pide} y descuenta el de esta semana, la función lee ${lee}`);
+  ok(/slice\(0, 20\)/.test(suyo), 'los chequeos: la app manda veinte semanas',
+     'cuatro era lo que había cuando la tabla se borraba al año; desde la ' +
+     '0055 hay historial con el que comparar');
+  ok(topeEn('historial') === 4,
+     'de las que la función lee cuatro en detalle');
+  ok(/const todas = Array\.isArray\(cuerpo\.historial\)/.test(SEMANA),
+     'y el resto no se tira: se usan enteras para los ajustes anteriores',
+     'si solo se leyeran cuatro, mandar veinte sería pedir de más');
 }
 
 // ------------------------------------------------------------------

@@ -52,7 +52,7 @@ const CORS = {
 //
 // Ahora lo dice: un GET sin sesión devuelve este sello y nada más.
 // `pruebas/funciones-vivas.mjs` lo compara con el del repo.
-const SELLO = '631494ccda';
+const SELLO = '3ac7dcd5cf';
 
 // Tope diario por persona. Es la única defensa contra que un solo usuario
 // -o un token robado- vacíe la cuenta en una noche con un bucle.
@@ -468,6 +468,25 @@ NUNCA LLAMES «ESTANCAMIENTO» A UN PESO QUIETO SIN MIRAR ANTES SU OBJETIVO.
 Es la frase que más daño hace de las que puedes escribir aquí: a quien
 mantiene le dice que fracasó haciendo justo lo que quería, y a quien está
 ganando músculo le dice que pare cuando empezaba a funcionar.
+
+LO QUE YA PROBASTE CON ESTA PERSONA
+
+Si te paso una lista de ajustes anteriores, léela antes de decidir. Es la
+diferencia entre alguien que lleva seis meses con ella y alguien que la
+acaba de conocer, y hasta ahora no la tenías: la app guardaba cada decisión
+con su motivo y no se la volvía a leer a nadie.
+
+- UN AJUSTE QUE YA SE PROBÓ Y NO FUNCIONÓ NO SE REPITE sin decir por qué
+  esta vez sería distinto. Volver a bajarla a las mismas calorías que hace
+  tres meses no le movieron el peso es hacerle perder otro mes.
+- SI ALGO SÍ FUNCIONÓ, apóyate en ello y dilo: «cuando te subimos a 2.200 en
+  septiembre volviste a bajar, vamos a hacer eso otra vez».
+- DOS INTENTOS SEGUIDOS SIN RESULTADO POR EL MISMO CAMINO significan que el
+  camino no es ese. Mira otra cosa: la proteína, el entreno, el sueño, o si
+  lo que se apunta se parece a lo que de verdad se come.
+
+Y no lo recites. Un entrenador no dice «según el registro del 14 de julio»;
+dice «esto ya lo intentamos y no salió».
 
 QUÉ MIRAS, EN ESTE ORDEN
 
@@ -1996,6 +2015,31 @@ Deno.serve(async (req) => {
           }).join('\n') + `\n`
         : '';
 
+      // LAS DECISIONES QUE YA SE TOMARON, con su motivo.
+      //
+      // `previas` son las cuatro últimas en detalle. Esto es lo otro: todo
+      // lo que se le ha ajustado en el histórico que llega -hasta veinte
+      // semanas-, en una línea cada uno, para poder ver si un camino ya se
+      // intentó. Solo las semanas en que se TOCÓ algo: las demás ya salen
+      // arriba y repetirlas sería gastar prompt en decir que no pasó nada.
+      //
+      // El motivo se recorta: es texto que escribió el modelo y puede
+      // venir largo, y aquí hace falta el titular, no el párrafo.
+      const todas = Array.isArray(cuerpo.historial)
+        ? (cuerpo.historial as Record<string, unknown>[]) : [];
+      const tocadas = todas.filter((p) => p.ajusto === true);
+      const decisiones = tocadas.length
+        ? `\nAJUSTES QUE YA SE LE HICIERON (del más viejo al más reciente):\n` +
+          tocadas.map((p) => {
+            const de = p.cal_antes != null ? `de ${p.cal_antes} ` : '';
+            const motivo = String(p.motivo ?? '').trim();
+            return `- ${p.semana}: ${de}a ${p.cal_despues} cal` +
+                   (motivo ? ` — ${motivo.slice(0, 180)}` : '');
+          }).join('\n') +
+          `\nMira qué pasó con el peso en las semanas siguientes antes de ` +
+          `repetir ninguno.\n`
+        : '';
+
       // La báscula no distingue grasa de agua de músculo. La cintura sí, y
       // es lo que convierte "el peso no baja" en "el peso no baja PERO está
       // perdiendo grasa", que es un mensaje completamente distinto.
@@ -2144,6 +2188,7 @@ Deno.serve(async (req) => {
         `- Hambre: ${encuesta.hambre ?? '—'}/5 · Energía: ${encuesta.energia ?? '—'}/5 · ` +
         `Sueño: ${encuesta.sueno ?? '—'}/5  (3 = normal)\n` +
         historial +
+        decisiones +
         cinturas +
         (cuerpo.nota ? `- Dice: "${String(cuerpo.nota).slice(0, 300)}"\n` : '') +
         `- ¿Hay material para ajustar?: ${hayMaterial ? 'sí' : 'NO'}` +

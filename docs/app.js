@@ -10108,7 +10108,12 @@
         // y se cree; undefined es «no se pudo preguntar» y entonces manda la
         // copia del teléfono. Juntarlos haría que un bache de red le quitara
         // la pestaña a quien sí lo tiene.
-        sbPlanDe(sesion.user.id)['catch'](function(){ return undefined; })
+        sbPlanDe(sesion.user.id)['catch'](function(){ return undefined; }),
+        // Las semanas guardadas. Con ellas mide `gastoMedido()`, así que
+        // tienen que estar antes de que nadie le pregunte cuánto gasta.
+        // Si fallan, lista vacía: se mide con lo que el diario alcance, que
+        // es lo que se hacía siempre.
+        sbSemanasGuardadas()['catch'](function(){ return []; })
       ])
       .then(function(res){
         var p = res[0], filas = res[1] || [], pesos = res[2] || [],
@@ -10123,6 +10128,9 @@
           guardarMiPlan();
         }
         refrescarPestanaPlan();
+
+        // Y el historial de semanas, que es con lo que se mide el gasto.
+        if(Array.isArray(res[8]) && res[8].length) SEMANAS = res[8];
 
         // ---- Eventos ----
         // Antes que nada: el balance del día se calcula con esto, así que
@@ -11995,55 +12003,149 @@
   // es PEOR que una estimación floja, porque se deja de dudar de él. De ahí
   // las guardas, que son la mitad del trabajo.
   var GM = {
-    SEMANAS: 3,     // menos que esto y el agua pesa más que la grasa
-    DIAS: 5,        // días apuntados por semana
-    PESAJES: 2,     // pesajes por semana
-    MARGEN: 0.25    // cuánto puede alejarse del estimado antes de tirarlo
+    SEMANAS: 3,       // menos que esto y el agua pesa más que la grasa
+    DIAS: 5,          // días apuntados por semana
+    PESAJES: 2,       // pesajes por semana
+    MARGEN: 0.25,     // el suelo: cuánto puede alejarse con 3 o 4 semanas
+    MARGEN_TOPE: 0.40,// el techo, con doce o más
+    VIDA_MEDIA: 8,    // cada ocho semanas, lo de atrás pesa la mitad
+    LARGO: 60         // cuántas semanas entran como mucho en la medición
   };
 
+  // EL TOPE DE CORDURA, QUE SE ENSANCHA CON LA CONFIANZA.
+  //
+  //  Con tres o cuatro semanas, un número que se aleja un 25% del estimado
+  //  casi siempre es una semana rara —un viaje, una gripe, un fin de semana
+  //  sin apuntar— y darlo por bueno movería las calorías por algo que no
+  //  vuelve a pasar. Con doce semanas detrás ya no es ruido: es su
+  //  metabolismo, y la equivocada es la fórmula del registro.
+  //
+  //  El tope fijo castigaba justo a quien más lo necesita. Quien de verdad
+  //  gasta un 30% menos de lo que dice Mifflin no recibía nunca sus
+  //  calorías correctas, por muchos meses que apuntara: su medición caía
+  //  siempre fuera y siempre se tiraba.
+  //
+  //  Pero no se quita del todo nunca. Un error sistemático al apuntar la
+  //  comida —pesar siempre de menos— se convertiría en calorías reales sin
+  //  nada que lo frene, y eso no lo arregla tener más semanas: las tendría
+  //  todas igual de mal. El 40% es el suelo de seguridad que queda.
+  function margenDe(semanas){
+    if(semanas >= 12) return GM.MARGEN_TOPE;
+    if(semanas >= 9)  return 0.35;
+    if(semanas >= 5)  return 0.30;
+    return GM.MARGEN;
+  }
+
+  // LA SERIE CON LA QUE SE MIDE EL GASTO. Dos fuentes, y cada una aporta lo
+  // que a la otra le falta:
+  //
+  //   · EL DIARIO que el teléfono tiene en memoria. Son 60 días, o sea unas
+  //     ocho semanas, y de ellas se sabe todo: cuántos días apuntó y cuántas
+  //     veces se pesó. Es el dato fino.
+  //   · LAS SEMANAS GUARDADAS. Llegan hasta donde llegue el historial —desde
+  //     la 0055 ya no se borra— pero no guardan cuántos pesajes hubo, solo
+  //     el peso medio de la semana.
+  //
+  //  Lo reciente manda y lo viejo alarga. Donde están las dos gana la local,
+  //  que es exacta.
+  //
+  //  `dias_con_peso` no está en la tabla: a las semanas que solo vienen de
+  //  ahí se les exige peso medio, que ya implica al menos un pesaje. Es un
+  //  filtro más flojo que el de dos, y es aceptable porque son justo las
+  //  viejas, las que menos pesan en la cuenta. La 0056 añade la columna, así
+  //  que el hueco se cierra solo según se guarden semanas nuevas.
+  function serieParaMedir(){
+    var por = {};
+
+    (SEMANAS || []).forEach(function(f){
+      var iso = semanaQueJuzga(f);     // la fila se guarda con la clave de la
+      if(!iso) return;                 // semana SIGUIENTE a la que describe
+      if(f.media_cal == null || f.peso_medio == null) return;
+      if(!(Number(f.dias_apuntados) >= GM.DIAS)) return;
+      var pesajes = f.dias_con_peso == null ? null : Number(f.dias_con_peso);
+      if(pesajes !== null && pesajes < GM.PESAJES) return;
+      por[iso] = {
+        semana: iso,
+        dias_apuntados: Number(f.dias_apuntados),
+        media_cal: Number(f.media_cal),
+        peso_medio: Number(f.peso_medio)
+      };
+    });
+
+    resumenDeSemanas(8).forEach(function(x){
+      if(x.media_cal == null || x.peso_medio == null) return;
+      if(x.dias_apuntados < GM.DIAS || x.dias_con_peso < GM.PESAJES) return;
+      por[x.semana] = {
+        semana: x.semana,
+        dias_apuntados: x.dias_apuntados,
+        media_cal: x.media_cal,
+        peso_medio: x.peso_medio
+      };
+    });
+
+    // Ordenadas de la más vieja a la más nueva, que es lo que espera la
+    // recta de abajo, y recortadas por si alguien lleva años.
+    return Object.keys(por).sort().slice(-GM.LARGO).map(function(k){ return por[k]; });
+  }
+
   function gastoMedido(){
-    var todas = resumenDeSemanas(4);
     // Solo semanas COMPLETAS de verdad. Una con tres días apuntados no dice
     // lo que se comió esa semana, dice lo que se comió tres días de ella.
-    var s = todas.filter(function(x){
-      return x.dias_apuntados >= GM.DIAS && x.dias_con_peso >= GM.PESAJES &&
-             x.media_cal != null && x.peso_medio != null;
-    });
+    // El filtro vive en `serieParaMedir`, que es quien junta las fuentes.
+    var s = serieParaMedir();
     if(s.length < GM.SEMANAS)
       return { estado: 'faltan_semanas', semanas: s.length, faltan: GM.SEMANAS - s.length };
 
-    // Recta de mínimos cuadrados sobre las MEDIAS semanales, no sobre los
-    // pesos sueltos. El peso de un día se mueve un kilo por agua o sal; la
-    // media de la semana no. Y la pendiente usa todos los puntos, no el
-    // primero contra el último, que es tirar la mitad de los datos.
-    var n = s.length, sx = 0, sy = 0, sxy = 0, sxx = 0;
-    for(var i = 0; i < n; i++){
-      sx += i; sy += s[i].peso_medio; sxy += i * s[i].peso_medio; sxx += i * i;
-    }
-    var den = n * sxx - sx * sx;
-    if(!den) return { estado: 'faltan_semanas', semanas: n, faltan: 1 };
-    var kgPorSemana = (n * sxy - sx * sy) / den;
+    // PONDERADA POR ANTIGÜEDAD, y esto es lo que hace que la medición se
+    // afine con el tiempo en vez de quedarse igual para siempre.
+    //
+    // Antes entraban cuatro semanas y todas valían lo mismo, así que en la
+    // semana 4 y en el año 2 el número tenía exactamente la misma
+    // precisión. Ahora pueden entrar cincuenta, pero un metabolismo de hace
+    // un año no describe el de hoy: cada `VIDA_MEDIA` semanas lo de atrás
+    // pesa la mitad. Lo viejo informa, lo reciente manda.
+    //
+    // Y dentro de cada semana sigue contando cuántos días apuntó, que es lo
+    // que ya se hacía: de una semana de siete días se sabe más que de una
+    // de cinco.
+    var n = s.length;
+    var w = s.map(function(x, i){
+      var edad = (n - 1) - i;                 // 0 = la más reciente
+      return Math.pow(0.5, edad / GM.VIDA_MEDIA) * (x.dias_apuntados / 7);
+    });
 
-    // Ponderada por días apuntados: una semana de 7 días pesa más que una
-    // de 5, porque se sabe más de ella.
-    var totalCal = 0, totalDias = 0;
-    for(var j = 0; j < n; j++){
-      totalCal += s[j].media_cal * s[j].dias_apuntados;
-      totalDias += s[j].dias_apuntados;
+    // Recta de mínimos cuadrados PONDERADA sobre las MEDIAS semanales, no
+    // sobre los pesos sueltos. El peso de un día se mueve un kilo por agua
+    // o sal; la media de la semana no. Y la pendiente usa todos los puntos,
+    // no el primero contra el último, que es tirar la mitad de los datos.
+    var S = 0, Sx = 0, Sy = 0, Sxy = 0, Sxx = 0, Scal = 0, totalDias = 0;
+    for(var i = 0; i < n; i++){
+      S    += w[i];
+      Sx   += w[i] * i;
+      Sy   += w[i] * s[i].peso_medio;
+      Sxy  += w[i] * i * s[i].peso_medio;
+      Sxx  += w[i] * i * i;
+      Scal += w[i] * s[i].media_cal;
+      totalDias += s[i].dias_apuntados;
     }
-    var mediaCal = Math.round(totalCal / totalDias);
+    var den = S * Sxx - Sx * Sx;
+    if(!den) return { estado: 'faltan_semanas', semanas: n, faltan: 1 };
+    var kgPorSemana = (S * Sxy - Sx * Sy) / den;
+
+    // La media de calorías se pondera igual que la pendiente, y tiene que
+    // ser así: las dos describen el mismo tramo. Con una media de todo el
+    // historial y una pendiente de lo reciente, la resta mezcla dos épocas.
+    var mediaCal = Math.round(Scal / S);
     var gasto = Math.round(mediaCal - (kgPorSemana * KCAL_POR_KG / 7));
 
-    // El tope de cordura. Si se aleja más de un 25% del estimado, eso no es
-    // un metabolismo: es una semana rara -un viaje, una gripe, un fin de
-    // semana sin apuntar- y darlo por bueno le movería las calorías por algo
-    // que no volverá a pasar.
     var est = Math.round(gastoEstimado().gasto);
     if(!est || !isFinite(gasto) || gasto <= 0)
       return { estado: 'faltan_semanas', semanas: n, faltan: 1 };
-    if(Math.abs(gasto - est) / est > GM.MARGEN)
+
+    var margen = margenDe(n);
+    if(Math.abs(gasto - est) / est > margen)
       return { estado: 'fuera_de_rango', gasto: gasto, estimado: est,
-               semanas: n, dias: totalDias };
+               semanas: n, dias: totalDias, margen: margen };
 
     return {
       estado: 'ok',
@@ -12052,7 +12154,10 @@
       kg_por_semana: Math.round(kgPorSemana * 100) / 100,
       media_cal: mediaCal,
       semanas: n,
-      dias: totalDias
+      dias: totalDias,
+      // Cuánto se le dejó alejarse de la fórmula. Va fuera porque es lo que
+      // explica por qué una medición se creyó y otra parecida no.
+      margen: margen
     };
   }
 
@@ -12405,28 +12510,34 @@
   // cada semana como si fuera la primera. Traerlos no le cuesta nada a
   // quien usa la app -no hay que preguntarle nada más- y es lo que más
   // cambia lo que el entrenador es capaz de ver.
+  // VEINTE SEMANAS, NO CUATRO. Y ya no se piden aparte: las trae el
+  // arranque en `SEMANAS`, que es la misma consulta que usa «Mis semanas».
+  //
+  //  Eran cuatro porque más atrás no había nada que mirar: la tabla se
+  //  borraba a los doce meses y el teléfono solo se descarga 60 días de
+  //  diario. Desde la 0055 el historial no se borra, así que por fin hay
+  //  con qué comparar.
+  //
+  //  Y van CON SU `motivo`. Cada lunes la IA escribe por qué hizo lo que
+  //  hizo, se guarda, y hasta ahora no lo volvía a leer nadie: la app no
+  //  recordaba sus propias decisiones. Sin eso no se puede decir «esto ya
+  //  lo intentamos en julio y no fue», que es justo lo que separa a quien
+  //  lleva seis meses contigo de quien te conoce hoy.
+  //
+  //  Veinte y no todas: lo que importa para decidir es el último medio año
+  //  largo, y el prompt tiene que seguir cabiendo.
   function chequeosDeAntes(){
     if(!sesion || !sesion.user) return Promise.resolve([]);
-    // TODO LO QUE EL CIERRE DEJÓ GUARDADO, no solo la encuesta. Desde que
-    // cada cierre deja su foto hay veinte columnas por semana; aquí se
-    // pedían seis y el resto se guardaba para nadie.
-    //
-    // Y es lo único que queda a partir de los 60 días: el teléfono solo se
-    // descarga ese trozo de diario, así que `resumenDeSemanas()` no puede
-    // reconstruir nada más atrás. Esta tabla es la memoria larga.
-    return sbFetch('/rest/v1/chequeos_semanales' +
-                   '?select=semana,hambre,energia,sueno,ajusto,cal_despues,' +
-                   'cal_antes,media_cal,media_p,meta_p,peso_medio,volumen,' +
-                   'dias_apuntados,sesiones' +
-                   '&user_id=eq.' + sesion.user.id +
-                   '&order=semana.desc&limit=5')
-      // Cuatro semanas antes de esta. La de ahora se manda aparte y todavía
-      // no está guardada, así que se descarta si aparece.
-      .then(function(f){
-        return (f || []).filter(function(x){ return x.semana !== isoDe(anclaSemana); })
-                        .slice(0, 4).reverse();
-      })
-      ['catch'](function(){ return []; });   // sin historial se decide igual
+    // La de esta semana todavía no está guardada; si apareciera, fuera: se
+    // manda aparte y entera.
+    var quitarLaDeAhora = function(f){
+      return (f || []).filter(function(x){ return x.semana !== isoDe(anclaSemana); })
+                      .slice(0, 20).reverse();   // de la más vieja a la más nueva
+    };
+    // Normalmente ya están cargadas. Si el arranque no pudo, se piden: sin
+    // historial se decide igual, pero peor, y merece el viaje.
+    if(SEMANAS && SEMANAS.length) return Promise.resolve(quitarLaDeAhora(SEMANAS));
+    return sbSemanasGuardadas().then(quitarLaDeAhora)['catch'](function(){ return []; });
   }
 
   // Las cinturas que haya, con su fecha: lo que importa es la direccion, no
@@ -12456,6 +12567,49 @@
 
   var SEMANAS = [];
 
+  // LAS SEMANAS GUARDADAS, en un solo sitio y para tres cosas.
+  //
+  //  Esta consulta la pedía solo «Mis semanas» al abrirse. Ahora también se
+  //  trae en el arranque, porque de estas filas dependen dos cosas más:
+  //
+  //   · `gastoMedido()`, que hasta ahora medía con la ventana de cuatro
+  //     semanas que el teléfono tiene en el diario y por eso no se afinaba
+  //     nunca más allá del primer mes.
+  //   · El cierre del lunes, que necesita saber QUÉ SE PROBÓ ANTES y cómo
+  //     respondió el cuerpo —de ahí que venga `motivo`—.
+  //
+  //  Una consulta, tres usos. Y de paso «Mis semanas» abre al instante.
+  //
+  //  DIEZ AÑOS, que es como decir «todo». La base ya no borra nada: la 0055
+  //  quitó la limpieza de los doce meses porque eran 52 filas al año por
+  //  persona —el historial entero de todo el mundo ocupaba 96 kB, la mitad
+  //  que UNA foto— y porque era justo el dato que solo vale pasado un año.
+  //
+  //  Y sigue habiendo un tope, aunque sea enorme. No es para ahorrar
+  //  espacio: es que esto se pinta en un teléfono, y una consulta sin
+  //  límite es una promesa de traer lo que haya. Quinientas veinte filas
+  //  son nada; un día sin tope, el día que alguien lleve veinte años, no se
+  //  sabe. Si alguna vez se llega aquí, lo que toca es paginar.
+  //  Y `hambre,energia,sueno` no sobran aunque «Mis semanas» no los pinte:
+  //  el cierre del lunes los lee para distinguir dormir mal de un deficit
+  //  excesivo, que dan las mismas respuestas y piden lo contrario.
+  //
+  //  El filtro por persona va pegado al nombre de la tabla a proposito:
+  //  `filtro-usuario.mjs` mira una ventana corta detras de cada lectura, y
+  //  un comentario largo en medio la deja fuera y da la lectura por
+  //  «sin dueño». Paso al escribir esto.
+  function sbSemanasGuardadas(){
+    if(!sesion || !sesion.user) return Promise.resolve([]);
+    return sbFetch('/rest/v1/chequeos_semanales' +
+        '?select=semana,hambre,energia,sueno,dias_apuntados,media_cal,cal_antes,cal_despues,' +
+        'media_p,media_c,media_g,meta_p,meta_c,meta_g,' +
+        'peso_medio,peso_medio_antes,volumen,volumen_antes,sesiones,cintura,' +
+        'ajusto,motivo,nota' +
+        '&user_id=eq.' + sesion.user.id +
+        '&order=semana.desc&limit=520')
+      .then(function(filas){ return filas || []; });
+  }
+
   function cargarMisSemanas(){
     var caja = document.getElementById('semanasLista');
     if(!caja) return Promise.resolve();
@@ -12474,15 +12628,9 @@
     // son nada; un día sin tope, el día que alguien lleve veinte años, no
     // se sabe. Si alguna vez se llega aquí, lo que toca es paginar, no
     // subir el número.
-    return sbFetch('/rest/v1/chequeos_semanales' +
-        '?select=semana,dias_apuntados,media_cal,cal_antes,cal_despues,' +
-        'media_p,media_c,media_g,meta_p,meta_c,meta_g,' +
-        'peso_medio,peso_medio_antes,volumen,volumen_antes,sesiones,cintura,' +
-        'ajusto,motivo,nota' +
-        '&user_id=eq.' + sesion.user.id +
-        '&order=semana.desc&limit=520')
+    return sbSemanasGuardadas()
       .then(function(filas){
-        SEMANAS = filas || [];
+        SEMANAS = filas;
         pintarMisSemanas();
       })
       ['catch'](function(){
