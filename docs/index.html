@@ -112,7 +112,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '42a12cb74a';
+    var SELLO = '96f02b5833';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -1437,7 +1437,7 @@
                      mismo, separados por un borde, y había que juntarlos con la
                      vista para saber de qué semana hablaba la pantalla. -->
                 <div class="ring-label" style="margin-bottom:2px;">SEMANA EN CURSO</div>
-                <div class="week-range" id="ejWeekRange" style="margin-bottom:6px;">—</div>
+                <div class="week-range" id="ejWeekRange">—</div>
                 <div class="week-num" id="ejDias">0</div>
                 <!-- El «de N» lo pone el JS con los días que dijo que
                      entrena. Escrito a mano decía «de 7» aunque el número
@@ -2048,7 +2048,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '42a12cb74a';
+    var SELLO = '96f02b5833';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que

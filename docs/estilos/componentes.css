@@ -328,6 +328,24 @@ table.week-table tr.today td{font-weight:800;}
 .week-range{
   margin:-4px 20px 8px;font:600 12.5px/1 sans-serif;color:var(--ink-faint);
 }
+/* El MISMO rango, pero DENTRO de la tarjeta.
+   Los márgenes de arriba son los del de Diario, que va suelto entre el
+   rótulo de la sección y la tarjeta: los 20 px de los lados lo alinean con
+   el margen de la página y el -4 lo pega al rótulo. Dentro de una tarjeta
+   los dos estorban. Los 20 px lo sangraban respecto a «SEMANA EN CURSO» y
+   además le quitaban 40 px de ancho, así que «del 27 de octubre al 2 de
+   noviembre» partía en dos; y el -4, con `line-height:1`, subía ese trozo
+   hasta montarse sobre el rótulo.
+   Y 1.3 de interlínea porque en un teléfono estrecho todavía puede partir,
+   y a 1 las dos líneas se tocan.
+
+   PARTE IGUALADO. Las semanas que cruzan de mes -once o doce al año- no
+   caben en una línea al lado del anillo: «del 27 de octubre al 2 de
+   noviembre» son 228 px y la columna mide 205. Sin esto se parte por donde
+   toque y deja «noviembre» colgando solo; con esto corta por «al» y salen
+   dos líneas parejas, que se leen como si fueran a propósito. Donde no se
+   entiende no pasa nada: se parte como siempre. */
+.week-card-title .week-range{margin:0 0 6px;line-height:1.3;text-wrap:balance;}
 .week-goal{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:4px;}
 .week-goal div{background:var(--app-bg);border-radius:13px;padding:13px 8px;text-align:center;}
 .week-goal b{display:block;font:800 17px/1 sans-serif;color:var(--ink);font-variant-numeric:tabular-nums;}
