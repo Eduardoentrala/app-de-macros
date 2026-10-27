@@ -64,6 +64,14 @@ const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', '
 // pero si mañana saliera de otro sitio esto seguiría escapándolo.
 const escapar = new Function('return ' + sacar('function escapar(t){'))();
 
+// El rango lo nombra `rangoCorto`, la misma de «Mis semanas». Antes cada
+// pantalla lo decía a su manera y al pasar de una a otra había que traducir.
+const MESES_LARGO = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
+  'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const rangoCorto = new Function('MESES_LARGO', 'isoDe',
+  sacar('function rangoDeSemana(iso){') + '\n' + sacar('function rangoCorto(iso){') +
+  '\nreturn rangoCorto;')(MESES_LARGO, iso);
+
 // Se pinta de verdad y se recoge lo que pone en cada hueco.
 // `reg` aparte de `dias` a propósito: con solo `dias = 4`, pasarle
 // `undefined` activaba ESE valor por defecto y el caso «no se sabe cuántos
@@ -78,13 +86,13 @@ function pintar({ sesiones = {}, dias = 4, ancla, hoy, reg }) {
     }),
   };
   const f = new Function('document', 'SESIONES', 'anclaSemana', 'HOY', 'iso', 'fmtFecha',
-    'DIAS', 'reg', 'escapar', 'Date',
+    'DIAS', 'reg', 'escapar', 'Date', 'rangoCorto',
     sacar('function pintarEjercicio(){') + '; pintarEjercicio();');
   // `=== undefined` y no `||`: con `||`, pasarle `reg: null` —el primer
   // arranque, antes de que la carga del perfil conteste— caía en el
   // respaldo de aquí y ese caso no llegaba nunca a la función.
   f(doc, sesiones, ancla, hoy, iso, fmtFecha, DIAS,
-    reg === undefined ? { dias } : reg, escapar, Date);
+    reg === undefined ? { dias } : reg, escapar, Date, rangoCorto);
   return puesto;
 }
 
@@ -195,8 +203,9 @@ console.log('\nSin saber cuántos días entrena, no se inventa un número raro')
 console.log('\nY el rango de la semana sigue saliendo');
 {
   const r = pintar({ sesiones: {}, dias: 4, ancla, hoy: dia(6) });
-  ok(/25 ago/.test(r.ejWeekRange || '') && /31 ago/.test(r.ejWeekRange || ''),
-     'del 25 al 31 de agosto', 'dice: ' + r.ejWeekRange);
+  ok(/del 25 al 31 de agosto/.test(r.ejWeekRange || ''),
+     'y con las mismas palabras que «Mis semanas», no «Del 25 ago al 31 ago»',
+     'dice: ' + r.ejWeekRange);
 }
 
 // ------------------------------------------------------------------

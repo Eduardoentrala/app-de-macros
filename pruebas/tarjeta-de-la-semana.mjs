@@ -400,8 +400,14 @@ console.log('\nUna fila habla de la semana ANTERIOR a la que dice su columna');
      'y la búsqueda de los apuntes también',
      'sin esto se traen el cardio y las sesiones de la semana equivocada y ' +
      'se mezclan con unas medias que son de otra');
-  ok(/rangoCorto\(semanaQueJuzga\(f\)\)/.test(APP),
-     'y el título de cada fila de la lista');
+  // En la lista pasa por una variable —la fila también necesita el mes—,
+  // así que se mira la función entera: que saque el iso de `semanaQueJuzga`
+  // y que el título salga de ahí. Lo que no puede es leer `f.semana`, que
+  // es la semana SIGUIENTE a la que la fila juzga.
+  const lista = sacar('function pintarMisSemanas(){');
+  ok(/semanaQueJuzga\(f\)/.test(lista) && /rangoCorto\(iso\)/.test(lista),
+     'y el título de cada fila de la lista',
+     'salió: ' + (lista.match(/rangoCorto\([^)]*\)/g) || ['(ninguno)']).join(', '));
   // Nadie debe volver a leer la columna cruda para hablar de la semana.
   ok(!/rangoEnPalabras\(f\.semana\)/.test(APP) && !/crudosDeSemana\(f\.semana\)/.test(APP),
      'y ya nadie usa la columna en crudo para eso');

@@ -118,13 +118,16 @@ console.log('\n— La IA ve las semanas de antes, no una suelta —');
 console.log('\n— Y la cintura, que es lo que mide el cambio físico —');
 {
   check('hay campo de cintura', /id="cinturaInput"/.test(HTML));
-  // Solo aparece cuando toca: se esconde al medirla y vuelve al mes.
-  // Pedirla a diario seria recoger ruido, porque el error de la cinta es
-  // mayor que lo que cambia una cintura en una semana.
+  // Solo aparece cuando toca: se esconde al medirla y vuelve a los quince
+  // dias. Pedirla a diario seria recoger ruido, porque el error de la cinta
+  // es mayor que lo que cambia una cintura en una semana.
   check('el bloque empieza escondido', /id="cinturaBloque" hidden/.test(HTML));
   check('y dice que toca medirla', /Cintura \(cm\) · toca medirla/.test(HTML));
-  check('dice cada cuánto', /Se pide una vez al mes/.test(HTML));
-  check('hay un plazo, no un capricho', /var DIAS_ENTRE_CINTURAS = 28;/.test(APP));
+  check('dice cada cuánto', /Se pide cada quince días/.test(HTML));
+  // El número no se escribe aquí: si mañana vuelve a cambiar, lo que importa
+  // es que SIGA habiendo un plazo fijo y que la pantalla lo diga, no que sea
+  // 15. Clavarlo aquí solo obliga a tocar esta línea en cada cambio.
+  check('hay un plazo, no un capricho', /var DIAS_ENTRE_CINTURAS = \d+;/.test(APP));
   check('si nunca la midió, se la pide', /if\(!CINTURAS\.length\) return true;/.test(APP));
   check('se esconde al guardarla', /bloque\.hidden = !tocaMedirCintura\(\);/.test(APP));
   // Si volviera con el numero del mes pasado, se guardaria el viejo sin
@@ -168,11 +171,15 @@ console.log('\n— Y la cintura, que es lo que mide el cambio físico —');
   check('sin pedirlas otra vez a la base', /return Promise\.resolve\(CINTURAS\.slice\(-6\)/.test(cin));
   check('y se le mandan', /cinturas: extra\[2\]/.test(APP));
 
-  // El historial, debajo de la grafica.
-  check('hay lista de medidas', /id="cinturaHist"/.test(HTML));
-  check('con su encabezado', /MEDIDAS DE CINTURA/.test(HTML));
-  check('va debajo de la gráfica',
-    HTML.indexOf('id="pesoChart"') < HTML.indexOf('id="cinturaHist"'));
+  // El historial YA NO VIVE EN PESO. Con la medida cada quince dias sumaba
+  // veinticuatro renglones al anio debajo de la grafica, asi que se fue a su
+  // propia pantalla y en Peso quedo una linea que no crece.
+  check('hay lista de medidas', /id="cinturaFilas"/.test(HTML));
+  check('con su pantalla propia', /data-view="cintura"/.test(HTML));
+  check('y se llega desde Peso',
+    /id="cinturaIr"[^>]*data-push="cintura"/.test(HTML));
+  check('la fila va debajo de la gráfica',
+    HTML.indexOf('id="pesoChart"') < HTML.indexOf('id="cinturaIr"'));
   check('cada fila lleva la fecha', /Medida el ' \+ fmtFecha/.test(APP));
   // El numero solo no dice nada; la direccion si.
   check('y cuánto cambió', /var dif = previa \? Math\.round\(\(m\.cm - previa\.cm\)/.test(APP));

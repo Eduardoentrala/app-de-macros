@@ -16,7 +16,7 @@
 //    susecivamente hasta que se registre la medicion y entonces si hasta su
 //    proxima vez que le toque medir»
 //
-// «Una vez al mes» era CUANDO TOCA -los 28 dias de `tocaMedirCintura`-, no
+// «Una vez al mes» era CUANDO TOCA -los dias de `tocaMedirCintura`-, no
 // cuanto dura la ×. Aqui se habia leido como lo segundo y la × callaba el
 // aviso hasta el mes siguiente.
 //
@@ -104,7 +104,7 @@ console.log('\n— Cada uno con su ciclo —');
   // PESO Y CINTURA, POR DÍA. La cintura callaba un MES —se guardaba
   // '2026-08'— y eso salía de leer «una vez al mes cuando toque» como si
   // hablara de la ×. No hablaba de eso: habla de CUÁNDO TOCA, que es lo que
-  // decide `tocaMedirCintura()` con sus 28 días. Textualmente:
+  // decide `tocaMedirCintura()` con sus días. Textualmente:
   //
   //   «necesito que si se quite la notificacion al precionar la equis que
   //    lo cierra pero al otro dia mande de nuevo la notificacion asi
@@ -290,9 +290,14 @@ console.log('\n— La semana de fotos es la de cada quien —');
   }
 }
 
-console.log('\n— Y la cintura, el día 28 y no el 29 —');
+// El número sale de app.js: si mañana vuelve a cambiar, esto cambia con él.
+// Escrito a mano aquí, la prueba seguiría midiendo contra su propia copia.
+const DIAS_CINTURA = Number((APP.match(/var DIAS_ENTRE_CINTURAS = (\d+);/) || [])[1]);
+if (!DIAS_CINTURA) { console.log('  FALLA  no encuentro DIAS_ENTRE_CINTURAS'); process.exit(1); }
+
+console.log(`\n— Y la cintura, el día ${DIAS_CINTURA} y no el ${DIAS_CINTURA + 1} —`);
 {
-  // EL FALLO, medido:  se midió el 21 de julio, DIAS_ENTRE_CINTURAS = 28
+  // EL FALLO, medido:  se midió el 21 de julio, con el ciclo puesto en 28
   //
   //     día 27 -> no      día 28 -> NO      día 29 -> le toca
   //
@@ -309,7 +314,7 @@ console.log('\n— Y la cintura, el día 28 y no el 29 —');
   // Se ejecuta la del fichero, no una copia.
   const hacer = c => new Function('CINTURAS', 'HOY', 'DIAS_ENTRE_CINTURAS',
     fn + '\nreturn tocaMedirCintura;');
-  const toca = (medida, cuando) => hacer()([{ fecha: medida }], cuando, 28)();
+  const toca = (medida, cuando) => hacer()([{ fecha: medida }], cuando, DIAS_CINTURA)();
   const masDias = (medida, n) => { const d = new Date(medida + 'T12:00:00');
     d.setDate(d.getDate() + n); d.setHours(0, 0, 0, 0); return d; };
 
@@ -319,11 +324,12 @@ console.log('\n— Y la cintura, el día 28 y no el 29 —');
                                ['2026-03-15', 'cruzando el cambio de horario'],
                                ['2026-01-20', 'cruzando el cambio de mes'],
                                ['2025-12-15', 'cruzando el fin de año']]) {
-    check(`${que}: el día 27 todavía no`, !toca(medida, masDias(medida, 27)));
-    check(`  · y el 28 sí`,               toca(medida, masDias(medida, 28)),
-      'salia el 29: medio dia de retraso que se acumula');
+    check(`${que}: el día ${DIAS_CINTURA - 1} todavía no`,
+      !toca(medida, masDias(medida, DIAS_CINTURA - 1)));
+    check(`  · y el ${DIAS_CINTURA} sí`, toca(medida, masDias(medida, DIAS_CINTURA)),
+      'salia un dia tarde: medio dia de retraso que se acumula');
   }
-  check('y si nunca se la ha medido, le toca ya', hacer()([], new Date(), 28)());
+  check('y si nunca se la ha medido, le toca ya', hacer()([], new Date(), DIAS_CINTURA)());
 }
 
 console.log('\n— La × calla, no borra —');

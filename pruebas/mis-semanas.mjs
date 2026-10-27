@@ -62,17 +62,20 @@ function sacar(cabecera) {
 const fuente = [
   'function escapar(t){', 'function isoDe(d){', 'function rangoDeSemana(iso){',
   'function semanaQueJuzga(f){', 'function rangoCorto(iso){',
-  'function pintarMisSemanas(){',
+  'function mesDeSemana(iso){', 'function pintarMisSemanas(){',
 ].map(sacar).join('\n');
 
 const MESES_LARGO = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio',
   'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 
-function pinta(filas) {
+// `anclaSemana` es el primer día de la semana que se está viviendo: lo que
+// la lista enseña arriba. Se pasa fijo para que la prueba no dependa de qué
+// día se corra.
+function pinta(filas, ancla = new Date('2026-09-01T12:00:00')) {
   let puesto = '';
   const doc = { getElementById: () => ({ set innerHTML(v) { puesto = v; } }) };
-  new Function('MESES_LARGO', 'SEMANAS', 'document',
-    fuente + '\npintarMisSemanas();')(MESES_LARGO, filas, doc);
+  new Function('MESES_LARGO', 'SEMANAS', 'anclaSemana', 'document',
+    fuente + '\npintarMisSemanas();')(MESES_LARGO, filas, ancla, doc);
   return puesto;
 }
 
@@ -188,6 +191,41 @@ console.log('\nUna fila vieja no revienta ni inventa nada');
      'un «0 de 7 días» afirma que no apuntó nada; el hueco dice que no se sabe');
   ok(!/NaN|undefined|null/.test(html), 'y sin NaN ni undefined a la vista',
      html.slice(0, 300));
+}
+
+console.log('\nSe ve en qué semana estás, que es justo la que no está guardada');
+{
+  // La semana en curso no se guarda hasta el lunes, así que la pantalla que
+  // va de tus semanas no decía en cuál estás. Ahora sale arriba.
+  const html = pinta([SEMANA_BUENA], new Date('2026-09-15T12:00:00'));
+  ok(/En curso/.test(html), 'la semana que corre sale arriba');
+  ok(/del 15 al 21 de septiembre/.test(html), 'con su rango, como las demás',
+     'salió: ' + (html.match(/sem-ahora-rango">[^<]*/) || ['(nada)'])[0]);
+
+  // Va antes de la primera fila guardada, así que todo lo de delante es suyo.
+  const ahora = html.slice(0, html.indexOf('sem-card'));
+  ok(!/data-sem/.test(ahora), 'y no se puede tocar: hasta el lunes no hay nada que abrir',
+     'con la misma forma que las de abajo, tocarla y que no pase nada se lee como rota');
+}
+
+console.log('\nY se agrupan por mes, que es como se busca una');
+{
+  const mismoMes = [SEMANA_BUENA, Object.assign({}, SEMANA_BUENA, { semana: '2026-08-18' })];
+  const html = pinta(mismoMes);
+  ok((html.match(/sem-mes/g) || []).length === 1,
+     'dos semanas del mismo mes llevan un solo rótulo');
+  ok(/agosto 2026/.test(html), 'con el mes y el año',
+     'se guardan doce meses: dos «enero» seguidos no se distinguen sin el año');
+
+  // La del 2026-08-04 juzga del 28 de julio al 3 de agosto: empieza en julio.
+  const dosMeses = [SEMANA_BUENA, Object.assign({}, SEMANA_BUENA, { semana: '2026-08-04' })];
+  const h2 = pinta(dosMeses);
+  ok((h2.match(/sem-mes/g) || []).length === 2, 'y dos cuando cambia el mes');
+  ok(/julio 2026/.test(h2), 'la que cruza cae en el mes en que empezó',
+     'y el rango de la fila ya nombra los dos, así que no se pierde nada');
+
+  ok(!/>Semana /.test(html), 'y ninguna fila repite la palabra «Semana»',
+     'estaba en las cincuenta y dos filas, así que no distinguía ninguna');
 }
 
 console.log('\nLa lista es solo lista');

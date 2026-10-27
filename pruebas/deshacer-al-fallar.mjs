@@ -102,7 +102,19 @@ console.log('\n— Los otros sitios que ya lo hacían bien —');
 
   // La previa del objetivo no persiste nada: prueba el calculo y lo deja
   // como estaba en la misma linea.
-  const obj = APP.slice(APP.indexOf('function pintarPreviaObjetivo('), APP.indexOf('function pintarPreviaObjetivo(') + 400);
+  //
+  // Contando llaves y no con una ventana de N caracteres: estaba cortada a
+  // 400 y se cayó sola en cuanto la función creció, sin que nadie tocara lo
+  // que vigila. Una ventana fija mide el tamaño del fichero.
+  const obj = (function(){
+    const i = APP.indexOf('function pintarPreviaObjetivo(');
+    let n = 0, j = APP.indexOf('{', i);
+    for (; j < APP.length; j++) {
+      if (APP[j] === '{') n++;
+      else if (APP[j] === '}') { n--; if (!n) return APP.slice(i, j + 1); }
+    }
+    return '';
+  })();
   check('probar un objetivo no lo cambia', /reg\.objetivo = antes;/.test(obj));
 }
 

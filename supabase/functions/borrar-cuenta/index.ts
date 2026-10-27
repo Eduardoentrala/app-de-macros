@@ -38,9 +38,14 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, content-type, apikey, x-client-info',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Max-Age': '86400',
 };
+
+// El sello de esta copia, puesto por herramientas/sellar-funciones.mjs. Un
+// GET sin sesión lo devuelve, y así se sabe desde fuera si lo que corre ahí
+// es lo del repo. La explicación larga está en asistente/index.ts.
+const SELLO = '063f37208a';
 
 const BUCKET = 'progress-photos';
 
@@ -52,6 +57,7 @@ const json = (cuerpo: unknown, status = 200) =>
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
+  if (req.method === 'GET') return json({ sello: SELLO });
   if (req.method !== 'POST') return json({ error: 'Método no permitido.' }, 405);
 
   const url = Deno.env.get('SUPABASE_URL')!;

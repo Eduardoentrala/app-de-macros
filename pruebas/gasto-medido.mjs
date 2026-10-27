@@ -179,8 +179,18 @@ console.log('\n— Viaja al cierre de semana —');
   check('la fórmula del estimado está en un solo sitio',
     (APP.match(/6\.25\*alt/g) || []).length === 1,
     'copiada, un día se corrige una y la otra no, y la medición se compara contra otra fórmula');
+  // Y la usan las dos, ahora con un escalón en medio:
+  //
+  //   calcularMacros -> gastoParaDecidir -> gastoEstimado
+  //   gastoMedido ----------------------> gastoEstimado   (su tope de cordura)
+  //
+  // `gastoParaDecidir` es quien prefiere lo medido cuando lo hay, que es lo
+  // que faltaba: la app enseñaba «Tu gasto real: 2.121» en Perfil y seguía
+  // recalculando las calorías con los 2.740 de la fórmula.
   check('y la usan las dos', /function gastoEstimado\(\)/.test(APP) &&
-    /var base = gastoEstimado\(\);/.test(APP));
+    /var est = gastoEstimado\(\);/.test(APP) &&
+    /var base = gastoParaDecidir\(\);/.test(APP),
+    'si la calculadora vuelve a llamar directo al estimado, se pierde la medición');
 }
 
 console.log('\n— La IA lo usa, y con freno —');

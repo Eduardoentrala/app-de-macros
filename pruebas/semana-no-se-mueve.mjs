@@ -120,8 +120,23 @@ console.log('\n— Y no se promete un reinicio que ya no pasa —');
   // Sin nombrar el día: "hasta el domingo" le mentía a quien acaba en lunes.
   check('y que la semana sigue', /sigue hasta que termine/.test(HTML));
   // El aviso de la hoja de objetivo decía lo mismo y también sobraba.
-  check('el aviso viejo del objetivo ya no está', !/id="objAviso"/.test(HTML));
-  check('ni el código que lo encendía', !/getElementById\('objAviso'\)/.test(APP));
+  //
+  // HOY VUELVE A HABER UN `objAviso`, y está bien que lo haya: dice que
+  // cambiar de objetivo sustituye lo que el cierre de los lunes llevaba
+  // ajustado, que es verdad y hace falta saberlo antes de tocar el botón.
+  // Así que lo que se vigila aquí ya no es el elemento sino LA MENTIRA que
+  // hizo que lo quitaran: que la semana se corta y hoy pasa a ser el día 1.
+  // La frase ENTERA, no «conteo vuelve a cero» a secas: la tarjeta «Tu
+  // semana» dice «el conteo vuelve a cero solo, cada martes», que es verdad
+  // y tiene que poder decirlo.
+  check('nadie dice ya que cambiar el objetivo corte la semana',
+    !/conteo vuelve a cero y hoy pasa a ser tu día 1/.test(HTML) &&
+    !/conteo vuelve a cero y hoy pasa a ser tu día 1/.test(APP));
+  check('ni que hoy pasa a ser el día 1',
+    !/pasa a ser tu día 1/.test(HTML) && !/pasa a ser tu día 1/.test(APP));
+  // Y el código que lo encendía: salía solo si ya habías contado días.
+  check('ni queda el código que lo encendía',
+    !/sumaSemana\(\)\.cal === 0/.test(APP));
 }
 
 console.log(`\n${ok} pasan · ${mal} fallan`);

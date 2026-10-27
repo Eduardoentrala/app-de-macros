@@ -1990,16 +1990,59 @@
   var objSheet = document.getElementById('objSheet');
   var objElegido = null;
 
+  // LO QUE SE ENSEÑA AQUÍ SON TUS CALORÍAS, NO LAS DE LA FÓRMULA.
+  //
+  //  Esta hoja llamaba siempre a `calcularMacros()` y pintaba su resultado,
+  //  también al abrirla sin tocar nada —al abrir se preselecciona el
+  //  objetivo que ya tienes—. Y eso no es tu meta: es lo que daría la
+  //  calculadora si empezaras hoy de cero.
+  //
+  //  Tu meta son los GRAMOS del perfil, que es lo que el cierre de cada
+  //  lunes va moviendo. Medido en una cuenta de verdad: los gramos daban
+  //  1.947 cal y la hoja enseñaba 2.192 debajo del rótulo «Calorías al
+  //  día», como si fuera un dato suyo.
+  //
+  //  Así que con el objetivo que YA tienes se enseña lo tuyo. La fórmula
+  //  sale solo al elegir otro objetivo, y entonces se dice que es un cambio
+  //  —«pasarías de X a Y»— y no una cifra que ya fuera verdad.
   function pintarPreviaObjetivo(){
+    var mias  = metasVigentes || leerMetas();
+    var ahora = calDe(mias);
+    // Sin gramos todavía no hay «lo tuyo» que enseñar: cuenta como cambio y
+    // manda la fórmula. Pasa en una cuenta recién creada.
+    var igual = objElegido === reg.objetivo && ahora > 0;
+
     var antes = reg.objetivo;
     reg.objetivo = objElegido;              // se prueba el cálculo con el nuevo
     var m = calcularMacros();
     reg.objetivo = antes;                   // y se deja como estaba hasta guardar
 
-    document.getElementById('objCal').textContent = mil(m.cal) + ' cal';
+    var cal = igual ? ahora : m.cal;
+    var P = igual ? mias.P : m.P,
+        C = igual ? mias.C : m.C,
+        G = igual ? mias.G : m.G;
+    // El ritmo, del déficit DE VERDAD: el de las calorías que se están
+    // enseñando contra el gasto que se está enseñando. Con el de la fórmula,
+    // la hoja decía «bajar ~0,50 kg por semana» al lado de unas calorías que
+    // dan otro ritmo distinto.
+    var kgSemana = (cal - m.gasto) * 7 / KCAL_POR_KG;
+
+    document.getElementById('objCal').textContent = mil(cal) + ' cal';
     document.getElementById('objNota').textContent =
-      'Gastas ~' + mil(Math.round(m.gasto)) + ' al día · ' + textoRitmo(m.kgSemana) +
-      ' · P ' + m.P + ' · C ' + m.C + ' · G ' + m.G;
+      (igual ? '' : 'Pasarías de ' + mil(ahora) + ' a ' + mil(cal) + ' cal · ') +
+      'Gastas ~' + mil(Math.round(m.gasto)) + (m.medido ? ' medidas' : '') + ' al día · ' +
+      textoRitmo(kgSemana) + ' · P ' + P + ' · C ' + C + ' · G ' + G;
+
+    // Y lo que de verdad hay que avisar antes de tocar el botón grande.
+    var aviso = document.getElementById('objAviso');
+    if(aviso){
+      aviso.className = igual ? 'wc-safe' : 'wc-warn';
+      aviso.textContent = igual
+        ? '✓ Valen desde hoy. Tu semana sigue su curso y no pierdes nada de lo apuntado.'
+        : 'Tu semana sigue su curso y no pierdes nada de lo apuntado, pero esto ' +
+          'sustituye lo que el cierre de los lunes llevaba ajustado: tus calorías ' +
+          'vuelven al cálculo.';
+    }
 
     Array.from(document.querySelectorAll('#objOpts .meta-opt')).forEach(function(b){
       b.classList.toggle('active', b.dataset.obj === objElegido);
@@ -2026,6 +2069,13 @@
 
   document.getElementById('objGuardar').addEventListener('click', function(){
     if(!objElegido) return;
+    // EL MISMO OBJETIVO NO SE «GUARDA». Guardar reescribe los gramos con los
+    // de la fórmula, y sin cambiar de objetivo eso solo puede hacer una
+    // cosa: borrar de un toque lo que el cierre de los lunes llevaba
+    // ajustado —semanas de moverte las calorías según tu peso, lo que
+    // apuntaste y el hambre—. Quien entra a mirar y sale por el botón
+    // grande no está pidiendo eso.
+    if(objElegido === reg.objetivo){ cerrarObjetivo(); return; }
     reg.objetivo = objElegido;
 
     var m = calcularMacros();
@@ -3841,8 +3891,11 @@
     document.getElementById('ejRing').setAttribute('stroke-dashoffset',
       String(Math.round(182 - 182 * parte)));
 
-    var fin = new Date(ini); fin.setDate(fin.getDate() + 6);
-    document.getElementById('ejWeekRange').textContent = 'Del ' + fmtFecha(ini) + ' al ' + fmtFecha(fin);
+    // CON LAS MISMAS PALABRAS QUE «MIS SEMANAS». Las dos pantallas hablan
+    // de semanas y cada una las nombraba a su manera -«Del 25 ago al 31 ago»
+    // aquí, «del 25 al 31 de agosto» allá-, así que al pasar de una a otra
+    // había que traducir para saber si eran la misma.
+    document.getElementById('ejWeekRange').textContent = rangoCorto(iso(ini));
 
   }
 
@@ -4063,6 +4116,62 @@
     return pts;
   }
 
+  // ---- El dibujo de una serie en el tiempo ----
+  //
+  //  La línea, la rejilla con sus números y las cuatro fechas de abajo.
+  //  Estaba dentro de `pintarPeso`, y la cintura tiene exactamente la misma
+  //  forma —una fecha y un número—, así que copiarlo habría dejado dos
+  //  gráficas que se separan en cuanto alguien toque una.
+  //
+  //  `pts` llega ya filtrado y ordenado, con `{d: Date, v: número}`. Lo
+  //  único que cambia entre las dos es cómo se rotula el eje de abajo —el
+  //  peso depende del rango que se esté mirando—, así que eso entra como
+  //  función.
+  function svgDeSerie(pts, etiquetaX){
+    // Con muchos puntos la línea se vuelve una mancha: se muestrea. El
+    // último no se pierde nunca, que es el dato de hoy.
+    var vista = pts;
+    if(vista.length > 45){
+      var paso = Math.ceil(vista.length / 45);
+      vista = pts.filter(function(_, i){ return i % paso === 0 || i === pts.length - 1; });
+    }
+
+    var W = 320, H = 180, L = 34, R = 312, T = 18, B = 142;
+    var min = Math.min.apply(null, vista.map(function(p){ return p.v; }));
+    var max = Math.max.apply(null, vista.map(function(p){ return p.v; }));
+    if(max - min < 1){ var c = (max + min) / 2; min = c - 0.5; max = c + 0.5; }
+    var pad = (max - min) * 0.15; min -= pad; max += pad;
+
+    function x(i){ return vista.length === 1 ? L : L + i * (R - L) / (vista.length - 1); }
+    function y(v){ return B - (v - min) / (max - min) * (B - T); }
+
+    var svg = '<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="175" role="img">';
+    for(var g = 0; g <= 3; g++){
+      var gy = T + g * (B - T) / 3;
+      var gv = max - (max - min) * g / 3;
+      svg += '<line x1="'+L+'" y1="'+gy+'" x2="'+R+'" y2="'+gy+'" stroke="var(--line)"/>'+
+             '<text x="0" y="'+(gy+3.5)+'" font-size="9.5" fill="var(--ink-faint)">'+gv.toFixed(1)+'</text>';
+    }
+    svg += '<polyline fill="none" stroke="var(--ink)" stroke-width="2.4" stroke-linejoin="round" points="'+
+           vista.map(function(p,i){ return x(i)+','+y(p.v); }).join(' ')+'"/>';
+    // Puntos: pocos cuando hay muchos datos, para no saturar
+    var mostrarPuntos = vista.length <= 20;
+    svg += '<g fill="var(--ink)">' + vista.map(function(p,i){
+      var esUltimo = i === vista.length - 1;
+      if(!mostrarPuntos && !esUltimo) return '';
+      return '<circle cx="'+x(i)+'" cy="'+y(p.v)+'" r="'+(esUltimo ? 4.2 : 3.2)+'"/>';
+    }).join('') + '</g>';
+    // Fechas del eje X
+    var marcas = [0, Math.floor(vista.length/3), Math.floor(vista.length*2/3), vista.length-1]
+      .filter(function(v,i,a){ return a.indexOf(v) === i; });
+    svg += marcas.map(function(i){
+      var anchor = i === 0 ? 'start' : (i === vista.length-1 ? 'end' : 'middle');
+      return '<text x="'+x(i)+'" y="'+(H-14)+'" font-size="9.5" fill="var(--ink-faint)" text-anchor="'+anchor+'">'+
+             etiquetaX(vista[i])+'</text>';
+    }).join('');
+    return svg + '</svg>';
+  }
+
   function pintarPeso(){
     var pts = serieDePeso();
     var cont = document.getElementById('pesoChart');
@@ -4095,50 +4204,16 @@
       : (difKg > 0 ? 'Subiste ' : 'Bajaste ') + Math.abs(difKg).toFixed(1) + ' kg en ' +
         NOMBRE_RANGO[RANGO] + ' · de ' + ini.toFixed(1) + ' a ' + fin.toFixed(1) + ' kg';
 
-    // Para el año se muestrean puntos para que la línea se lea bien
-    var vista = pts;
-    if(vista.length > 45){
-      var paso = Math.ceil(vista.length / 45);
-      vista = pts.filter(function(_, i){ return i % paso === 0 || i === pts.length - 1; });
-    }
-
-    var W = 320, H = 180, L = 34, R = 312, T = 18, B = 142;
-    var min = Math.min.apply(null, vista.map(function(p){ return p.w; }));
-    var max = Math.max.apply(null, vista.map(function(p){ return p.w; }));
-    if(max - min < 1){ var c = (max + min) / 2; min = c - 0.5; max = c + 0.5; }
-    var pad = (max - min) * 0.15; min -= pad; max += pad;
-
-    function x(i){ return vista.length === 1 ? L : L + i * (R - L) / (vista.length - 1); }
-    function y(w){ return B - (w - min) / (max - min) * (B - T); }
-
-    var svg = '<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="175" role="img">';
-    for(var g = 0; g <= 3; g++){
-      var gy = T + g * (B - T) / 3;
-      var gw = max - (max - min) * g / 3;
-      svg += '<line x1="'+L+'" y1="'+gy+'" x2="'+R+'" y2="'+gy+'" stroke="var(--line)"/>'+
-             '<text x="0" y="'+(gy+3.5)+'" font-size="9.5" fill="var(--ink-faint)">'+gw.toFixed(1)+'</text>';
-    }
-    svg += '<polyline fill="none" stroke="var(--ink)" stroke-width="2.4" stroke-linejoin="round" points="'+
-           vista.map(function(p,i){ return x(i)+','+y(p.w); }).join(' ')+'"/>';
-    // Puntos: pocos cuando hay muchos datos, para no saturar
-    var mostrarPuntos = vista.length <= 20;
-    svg += '<g fill="var(--ink)">' + vista.map(function(p,i){
-      var esUltimo = i === vista.length - 1;
-      if(!mostrarPuntos && !esUltimo) return '';
-      return '<circle cx="'+x(i)+'" cy="'+y(p.w)+'" r="'+(esUltimo ? 4.2 : 3.2)+'"/>';
-    }).join('') + '</g>';
-    // Fechas del eje X
-    var marcas = [0, Math.floor(vista.length/3), Math.floor(vista.length*2/3), vista.length-1]
-      .filter(function(v,i,a){ return a.indexOf(v) === i; });
-    svg += marcas.map(function(i){
-      var p = vista[i];
-      var etq = RANGO === 'anio'
-        ? MESES[p.d.getMonth()]
-        : String(p.d.getMonth()+1).padStart(2,'0')+'-'+String(p.d.getDate()).padStart(2,'0');
-      var anchor = i === 0 ? 'start' : (i === vista.length-1 ? 'end' : 'middle');
-      return '<text x="'+x(i)+'" y="'+(H-14)+'" font-size="9.5" fill="var(--ink-faint)" text-anchor="'+anchor+'">'+etq+'</text>';
-    }).join('');
-    cont.innerHTML = svg + '</svg>';
+    // En el año, el mes; en los rangos cortos, el día. Un «10-19» repetido
+    // doce veces no distingue octubres de distintos años, y un «oct» suelto
+    // no sirve para ver una semana.
+    cont.innerHTML = svgDeSerie(
+      pts.map(function(p){ return { d: p.d, v: p.w }; }),
+      function(p){
+        return RANGO === 'anio'
+          ? MESES[p.d.getMonth()]
+          : String(p.d.getMonth()+1).padStart(2,'0')+'-'+String(p.d.getDate()).padStart(2,'0');
+      });
   }
 
   document.getElementById('pesoRango').addEventListener('click', function(e){
@@ -4151,26 +4226,31 @@
   });
 
   // ---- La cintura ----
-  // No se pide todos los días: se mide una vez al mes y ya. El error de la
+  // No se pide todos los días: se mide cada quince días y ya. El error de la
   // cinta -cómo de apretada, un dedo más arriba, si soltaste el aire- ronda
   // el centímetro, que es MÁS de lo que cambia una cintura en una semana.
   // Pedirla cada día sería recoger ruido y encima cansar a quien la apunta.
   //
+  // Quince días es más o menos el suelo de lo que vale la pena medir: por
+  // debajo, lo que se lee es la cinta y no el cuerpo. Antes era un mes, y un
+  // mes es tarde para enterarte de que la cintura no se movió.
+  //
   // Así que el campo aparece solo cuando toca, se va al guardarla, y vuelve
-  // al mes siguiente.
+  // a los quince días.
   var CINTURAS = [];                    // [{fecha, cm}], de la vieja a la nueva
-  var DIAS_ENTRE_CINTURAS = 28;
+  var DIAS_ENTRE_CINTURAS = 15;
 
   // SE CUENTAN DÍAS DE CALENDARIO, NO HORAS, y eso no es una sutileza.
   //
   // Estaba comparando `HOY` -que va a medianoche- contra el MEDIODÍA del día
-  // en que se midió. El día 28 solo habían pasado 27,5, así que no llegaba a
-  // 28 y el aviso salía el 29. Medio día de retraso, todos los meses, y
-  // acumulándose: la medida se corre un día cada dos meses.
+  // en que se midió. El día en que tocaba habían pasado medio día menos de
+  // los que pedía la cuenta, así que no llegaba y el aviso salía un día
+  // tarde. Medio día de retraso en cada ciclo, y acumulándose: la medida se
+  // corre un día cada dos ciclos.
   //
   // Ahora las dos fechas van a medianoche y la resta da días enteros. El
   // `round` es por el cambio de horario: un día puede durar 23 o 25 horas,
-  // y sin él la resta daría 27,96 y volveríamos al mismo sitio.
+  // y sin él la resta daría 14,96 y volveríamos al mismo sitio.
   function tocaMedirCintura(){
     if(!CINTURAS.length) return true;   // nunca la ha medido
     var ultima = new Date(CINTURAS[CINTURAS.length - 1].fecha + 'T12:00:00');
@@ -4180,9 +4260,9 @@
 
   function pintarCintura(){
     var bloque = document.getElementById('cinturaBloque');
-    var hist   = document.getElementById('cinturaHist');
-    var filas  = document.getElementById('cinturaFilas');
-    if(!bloque || !hist || !filas) return;
+    var ir     = document.getElementById('cinturaIr');
+    var sub    = document.getElementById('cinturaResumen');
+    if(!bloque || !ir || !sub) return;
 
     bloque.hidden = !tocaMedirCintura();
     // El campo se vacía al esconderlo: si volviera con el número del mes
@@ -4196,7 +4276,37 @@
     // base al abrir la app, o al deshacer un guardado que falló.
     if(typeof revisarRecordatorios === 'function') revisarRecordatorios();
 
-    hist.hidden = !CINTURAS.length;
+    // La fila de resumen: una línea que no crece por muchas medidas que
+    // haya. Sin ninguna se esconde —no hay nada que abrir— y además sería
+    // la única fila de la app que lleva a una pantalla vacía.
+    ir.hidden = !CINTURAS.length;
+    if(CINTURAS.length){
+      var ult = CINTURAS[CINTURAS.length - 1].cm;
+      var total = CINTURAS.length > 1
+        ? Math.round((ult - CINTURAS[0].cm) * 10) / 10 : null;
+      sub.textContent = ult + ' cm' + (
+        total == null ? ' · primera medida'
+        : total === 0 ? ' · igual que al empezar'
+        : ' · ' + (total > 0 ? '+' : '−') + Math.abs(total) + ' cm desde que empezaste');
+    }
+
+    pintarPantallaCintura();
+  }
+
+  // ---- La pantalla de la cintura ----
+  //
+  //  Se repinta desde `pintarCintura`, o sea en los mismos tres sitios por
+  //  los que pasa cualquier cambio. Y no al abrir la vista: una pantalla que
+  //  se pinta sola al entrar se queda vieja si el dato cambia mientras está
+  //  abierta, y aquí puede pasar —se guarda la medida desde Peso, que está
+  //  justo detrás—.
+  function pintarPantallaCintura(){
+    var cont    = document.getElementById('cinChart');
+    var delta   = document.getElementById('cinDelta');
+    var resumen = document.getElementById('cinResumen');
+    var filas   = document.getElementById('cinturaFilas');
+    if(!cont || !delta || !resumen || !filas) return;
+
     // De la más reciente a la más vieja: lo último medido es lo que se mira.
     filas.innerHTML = CINTURAS.slice().reverse().map(function(m, i, arr){
       var previa = arr[i + 1];          // la de antes en el tiempo
@@ -4212,6 +4322,36 @@
                '<div class="mf-dif ' + clase + '">' + texto + '</div>' +
              '</div>';
     }).join('');
+
+    // Con una sola medida no hay línea que dibujar, y hay que decirlo: un
+    // hueco en blanco se lee como que algo falló.
+    if(CINTURAS.length < 2){
+      cont.innerHTML = '<div class="sin-datos">Con una sola medida todavía no hay tendencia.</div>';
+      delta.textContent = '—';
+      delta.className = 'chart-delta';
+      resumen.textContent = CINTURAS.length
+        ? 'La próxima medida ya dirá si sube o baja.'
+        : 'Todavía no has medido tu cintura.';
+      return;
+    }
+
+    var ini = CINTURAS[0].cm, fin = CINTURAS[CINTURAS.length - 1].cm;
+    var dif = Math.round((fin - ini) * 10) / 10;
+    // Bajar la cintura se pinta como bajar el peso -en verde- porque
+    // significa lo mismo, y aquí incluso con menos dudas: la báscula no
+    // distingue grasa de músculo y la cinta sí.
+    delta.textContent = (dif > 0 ? '+' : dif < 0 ? '−' : '') + Math.abs(dif) + ' cm';
+    delta.className = 'chart-delta ' + (dif > 0 ? 'sube' : dif < 0 ? 'baja' : '');
+    resumen.textContent = dif === 0
+      ? 'Igual que tu primera medida · ' + fin + ' cm'
+      : (dif > 0 ? 'Subiste ' : 'Bajaste ') + Math.abs(dif) +
+        ' cm desde la primera · de ' + ini + ' a ' + fin + ' cm';
+
+    // La fecha entera en el eje: las medidas van cada quince días y pueden
+    // cruzar de año, así que un «10-19» no diría de cuál.
+    cont.innerHTML = svgDeSerie(CINTURAS.map(function(m){
+      return { d: new Date(m.fecha + 'T12:00:00'), v: m.cm };
+    }), function(p){ return fmtFecha(p.d); });
   }
 
   // Guardar peso: se registra en la fecha de hoy y la gráfica se actualiza
@@ -4236,7 +4376,7 @@
 
     //  Y si no hay ninguno, se DICE. Un botón que no responde y no explica
     //  por qué es indistinguible de uno roto —y aquí encima se pierde algo
-    //  que solo se mide una vez al mes—.
+    //  que solo se mide cada quince días—.
     if(!(v > 0)){
       toast('toastPeso', cin != null
         ? 'Para guardar la cintura hace falta también tu peso de hoy.'
@@ -4248,14 +4388,14 @@
     //
     // PERO SE DICE. Antes se descartaba en silencio y el toast de abajo
     // felicitaba por el peso guardado sin mencionar la cintura, así que
-    // parecía que había entrado. Se mide una vez al mes: perderla callando
+    // parecía que había entrado. Se mide cada quince días: perderla callando
     // es lo peor que puede hacerse con ella.
     var cinturaFuera = cin != null && (cin < 40 || cin > 200);
     if(cinturaFuera) cin = null;
     // Se guarda cómo estaba TODO lo que se va a tocar, no solo el peso. La
     // cintura se metía en memoria y no se retiraba nunca si el guardado
     // fallaba: quedaba una medida que no existe en la base, `tocaMedirCintura()`
-    // creía que ya se había medido y no la volvía a pedir en 28 días, y el
+    // creía que ya se había medido y no la volvía a pedir en quince días, y el
     // cierre del domingo se la mandaba a la IA para que razonara sobre ella.
     var k = isoDe(HOY), antes = PESOS[k], cinturasAntes = CINTURAS.slice();
     PESOS[k] = Math.round(v * 10) / 10;
@@ -4669,8 +4809,40 @@
     return { tmb: tmb, gasto: tmb * nivel.f, nivel: nivel, peso: peso, alt: alt, edad: edad };
   }
 
+  // EL GASTO CON EL QUE SE DECIDE, que no siempre es el de la fórmula.
+  //
+  //  Mifflin por el factor de actividad es una estimación de población:
+  //  acierta de media y falla en cada persona concreta. Por eso existe
+  //  `gastoMedido()`, que lo saca de lo que ESTA persona comió y de cómo se
+  //  movió su peso, y que la app ya le enseña en Perfil como «Tu gasto
+  //  real».
+  //
+  //  Hasta aquí las dos cosas vivían separadas: la app enseñaba el gasto
+  //  medido en una tarjeta y seguía recalculando las calorías con la
+  //  fórmula. Medido en una cuenta de verdad: la fórmula decía 2.740 y lo
+  //  medido con cuatro semanas y 28 días apuntados daba 2.121. Seiscientas
+  //  diecinueve de diferencia, y la propia tarjeta lo decía con esas
+  //  palabras. Recalcular con la fórmula le habría puesto «mantener» en
+  //  2.740: seiscientas por encima de su mantenimiento real, o sea subir de
+  //  peso creyendo que mantiene.
+  //
+  //  Solo se usa lo medido cuando `gastoMedido()` contesta 'ok' —semanas
+  //  completas suficientes y dentro de su margen de cordura—. Si no, la
+  //  fórmula, que es lo único que hay. Y en el alta nunca hay medición, así
+  //  que allí esto es exactamente lo de antes.
+  function gastoParaDecidir(){
+    var est = gastoEstimado();
+    var g = null;
+    // Igual que `pintarGastoReal`: vive mil líneas más abajo y esto corre
+    // también en el arranque, antes de que exista.
+    try{ if(typeof gastoMedido === 'function') g = gastoMedido(); }catch(e){}
+    var usar = (g && g.estado === 'ok' && g.gasto > 0) ? g.gasto : est.gasto;
+    return { tmb: est.tmb, nivel: est.nivel, peso: est.peso, alt: est.alt,
+             edad: est.edad, gasto: usar, medido: usar !== est.gasto };
+  }
+
   function calcularMacros(){
-    var base = gastoEstimado();
+    var base = gastoParaDecidir();
     var edad = base.edad, alt = base.alt, peso = base.peso;
     var tmb = base.tmb, nivel = base.nivel, gasto = base.gasto;
 
@@ -4707,7 +4879,7 @@
     document.getElementById('regDetalle').textContent =
       'Gastas ~' + mil(Math.round(gasto)) + ' cal al día · ' + textoRitmo(kgSemana);
     return {cal:cal, P:P, C:C, G:G, peso:peso, alt:alt, edad:edad,
-            gasto:gasto, kgSemana:kgSemana};
+            gasto:gasto, kgSemana:kgSemana, medido:base.medido};
   }
 
   function grupoOpciones(id, campo){
@@ -7031,6 +7203,9 @@
       document.getElementById('panelTarjetaSub').textContent = 'toda la plataforma';
     }
     pintarPanel();
+    // El rol decide por sí solo si la pestaña Plan existe: un coach la
+    // conserva aunque no tenga plan propio.
+    refrescarPestanaPlan();
   }
 
   document.getElementById('abrirPanel').addEventListener('click', function(){
@@ -7957,6 +8132,47 @@
     }catch(e){}
   }
 
+  // ¿HAY ALGO QUE VER EN PLAN?
+  //
+  //  Un plan sin comidas no es un plan: la fila puede existir con el nombre
+  //  puesto y la lista vacía mientras el entrenador lo está escribiendo.
+  //  Esta es LA definición, y la usan las dos cosas que dependen de ella
+  //  —lo que se pinta dentro y si la pestaña existe—, porque con dos
+  //  definiciones acabarían discrepando: una pestaña que lleva a «todavía
+  //  no tienes un plan» es exactamente lo que se quiere quitar.
+  function tengoPlan(){
+    return !!(MI_PLAN && (MI_PLAN.comidas || []).length);
+  }
+
+  // LA PESTAÑA PLAN SOLO PARA QUIEN TIENE ALGO QUE VER AHÍ.
+  //
+  //  No todo el mundo lleva plan de comidas. A quien no lo lleva, la pestaña
+  //  le ocupaba un quinto de la barra para enseñarle siempre lo mismo: que
+  //  no tiene plan. Y la barra de abajo es el único sitio de la app donde el
+  //  espacio está de verdad contado.
+  //
+  //  El entrenador la conserva siempre, tenga plan propio o no: es donde los
+  //  escribe y donde inscribe a su gente.
+  //
+  //  Se quita con `hidden` y no con una clase: `[hidden]` lleva
+  //  `display:none !important` en base.css y gana al `display:flex` de
+  //  `.bottom-tabs button`, que si no lo dejaría visible.
+  function refrescarPestanaPlan(){
+    var suya = ROL === 'coach' || ROL === 'org_admin' || ROL === 'super_admin';
+    var hay = suya || tengoPlan();
+    var bs = document.querySelectorAll('[data-tabbar="plan"]');
+    for(var i = 0; i < bs.length; i++) bs[i].hidden = !hay;
+
+    // Y si se la quitan estando dentro —el entrenador le borra el plan
+    // mientras lo mira—, no se le deja en una pantalla sin pestaña activa:
+    // la barra se quedaría con cuatro botones y ninguno encendido, que se
+    // lee como que la app se perdió.
+    if(!hay){
+      var v = document.querySelector('.app-view.active');
+      if(v && v.dataset.view === 'plan') goto('diario', false);
+    }
+  }
+
   function cargarMiPlanGuardado(){
     if(!sesion || !sesion.user) return false;
     var d = null;
@@ -7996,7 +8212,7 @@
 
   function pintarMiPlan(sinRed){
     var cont = document.getElementById('planMio');
-    if(!MI_PLAN || !(MI_PLAN.comidas || []).length){
+    if(!tengoPlan()){
       cont.innerHTML = sinRed
         ? '<div class="plan-vacio"><div class="ico">📡</div>' +
           '<b>Sin conexión</b>' +
@@ -8259,6 +8475,7 @@
       // segunda consulta a `planes` con todos los ids metidos en la URL,
       // que además se rompía sola en cuanto la lista crecía.
       guardarMiPlan();
+      refrescarPestanaPlan();
       pintarMiPlan();
       pintarPlanClientes();
     })['catch'](function(e){
@@ -9833,6 +10050,12 @@
     // Si hay señal, lo del servidor llega después y lo sustituye.
     cargarDespensa();
 
+    // Y el plan guardado, por el mismo motivo y uno más: de él depende que
+    // la pestaña Plan exista. Puesto ya, quien lo tiene no ve la barra de
+    // abajo cambiar de cuatro botones a cinco al segundo de abrir la app.
+    cargarMiPlanGuardado();
+    refrescarPestanaPlan();
+
     // Va DENTRO de la función a propósito. Como constante suelta arriba
     // valdría `undefined` al arrancar: el bloque de datos está al final del
     // archivo pero cargarDatos() se llama antes, y aunque la función sí se
@@ -9858,13 +10081,34 @@
         // encendidos y se apagarían solos medio segundo después, delante de
         // la persona. Y si falla, nulo significa todo encendido: un
         // problema de red no puede apagarle la IA a nadie.
-        sbRpc('ia_permisos_ver', { p_cliente: sesion.user.id })['catch'](function(){ return null; })
+        sbRpc('ia_permisos_ver', { p_cliente: sesion.user.id })['catch'](function(){ return null; }),
+        // ¿Lleva plan de comidas? De esto depende que la pestaña Plan
+        // exista, así que se pregunta en el ARRANQUE y con todo lo demás.
+        //
+        // No sirve mirarlo al abrir Plan, que es donde se miraba: `cargarPlan()`
+        // solo corre al entrar en la pestaña, así que sería preguntárselo a
+        // una puerta cerrada justamente por lo que se va a contestar —quien
+        // tuviera plan no vería nunca la pestaña para ir a enterarse—.
+        //
+        // Y si falla devuelve `undefined`, NO null: null es «no tiene plan»
+        // y se cree; undefined es «no se pudo preguntar» y entonces manda la
+        // copia del teléfono. Juntarlos haría que un bache de red le quitara
+        // la pestaña a quien sí lo tiene.
+        sbPlanDe(sesion.user.id)['catch'](function(){ return undefined; })
       ])
       .then(function(res){
         var p = res[0], filas = res[1] || [], pesos = res[2] || [],
             alimentos = res[3] || [], recetas = res[4] || [], eventos = res[5] || [];
         MIS_LLAVES = res[6] || null;
         aplicarLlavesIa();
+
+        // El plan, y con él la pestaña. `undefined` es «no se pudo
+        // preguntar»: se deja lo que haya traído la copia del teléfono.
+        if(res[7] !== undefined){
+          MI_PLAN = res[7];
+          guardarMiPlan();
+        }
+        refrescarPestanaPlan();
 
         // ---- Eventos ----
         // Antes que nada: el balance del día se calcula con esto, así que
@@ -10733,7 +10977,7 @@
 
   // ---- Los tres recordatorios de arriba ----
   //
-  // Peso todos los días, fotos una vez por semana, cintura una vez al mes.
+  // Peso todos los días, fotos una vez por semana, cintura cada quince días.
   // Los tres funcionan igual: salen cuando toca, se van SOLOS en cuanto se
   // hace la cosa, y la × los calla hasta el ciclo siguiente.
   //
@@ -10780,8 +11024,8 @@
     //  no medirse en todo el mes sin enterarse.
     //
     //  Con el día, el aviso vuelve mañana y pasado hasta que se mida. Y en
-    //  cuanto se mide, `tocaMedirCintura()` lo apaga solo hasta los 28 días
-    //  siguientes: la × no tiene que hacer ese trabajo.
+    //  cuanto se mide, `tocaMedirCintura()` lo apaga solo hasta los quince
+    //  días siguientes: la × no tiene que hacer ese trabajo.
     if(cual === 'peso' || cual === 'cintura') return isoDe(HOY);
 
     // Fotos: la semana de la persona y no la ISO. Si no, a quien empieza en
@@ -10902,18 +11146,54 @@
     }
   });
 
+  // UN AVISO CADUCA A LOS TRES DÍAS.
+  //
+  //  Se quedaba en pantalla hasta que alguien tocaba «Entendido», sin
+  //  caducar nunca. Y mientras hubiera uno sin leer, la consulta de aquí
+  //  abajo salía antes de preguntar si tocaba otro, así que tampoco llegaba
+  //  el siguiente. Un «llevas una racha» podía seguir ahí una semana
+  //  después, cuando ya no se apuntaba nada: felicitando por algo que había
+  //  dejado de ser verdad y tapando de paso el aviso que sí tocaba.
+  //
+  //  Pasó, y con capturas: el mismo texto en pantalla el 13 y el 19 de
+  //  octubre. El 13, el diario decía «1 de 7 días» tres centímetros encima
+  //  de un aviso que hablaba de una buena semana.
+  //
+  //  Tres días porque es lo que dura siendo cierto. Los motivos miran
+  //  ventanas de siete días y no se repiten antes de siete; a los tres, el
+  //  aviso ya está hablando de otra semana.
+  var DIAS_AVISO_VIVO = 3;
+
+  // Caducar es MARCARLO COMO VISTO, no esconderlo. Quien decide si toca uno
+  // nuevo es la base —`aviso_pendiente` se calla mientras haya alguno sin
+  // leer—, así que un aviso escondido solo en la pantalla seguiría tapando a
+  // todos los siguientes para siempre.
+  function retirarAvisosCaducados(){
+    var corte = new Date(Date.now() - DIAS_AVISO_VIVO * 86400000).toISOString();
+    return sbFetch('/rest/v1/avisos_coach?user_id=eq.' + sesion.user.id +
+                   '&visto_en=is.null&creado_en=lt.' + encodeURIComponent(corte), {
+      method: 'PATCH',
+      headers: { 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ visto_en: new Date().toISOString() })
+    });
+  }
+
   function revisarAvisoDelCoach(){
     if(!sesion || !sesion.user || MI_NIVEL_IA !== 'plus') return;
 
     // Primero lo que ya esté escrito y sin leer: eso no cuesta un céntimo.
-    sbFetch('/rest/v1/avisos_coach?select=id,texto&visto_en=is.null' +
+    sbFetch('/rest/v1/avisos_coach?select=id,texto,creado_en&visto_en=is.null' +
             '&user_id=eq.' + sesion.user.id + '&order=creado_en.desc&limit=1')
       .then(function(filas){
-        if(filas && filas.length){
-          pintarAvisoCoach(filas[0].texto, filas[0].id);
+        var hay = filas && filas.length ? filas[0] : null;
+        // Una fecha ilegible cuenta como caducada: con `NaN` la resta es
+        // falsa y cae de este lado sola. Es el lado correcto —se retira y se
+        // pide otro— y no el de dejarla en pantalla para siempre.
+        if(hay && Date.now() - Date.parse(hay.creado_en) < DIAS_AVISO_VIVO * 86400000){
+          pintarAvisoCoach(hay.texto, hay.id);
           return null;
         }
-        // Y si no hay ninguno, ¿toca uno nuevo? Lo decide Postgres, gratis.
+        // Y si no hay ninguno vivo, ¿toca uno nuevo? Lo decide Postgres, gratis.
         //
         // CON LA FECHA DEL TELÉFONO. Antes no se mandaba y allá se usaba
         // `current_date`, que va en UTC: desde las 18:00 de México para la
@@ -10923,13 +11203,23 @@
         //
         // Las comidas se guardan con la fecha del teléfono; leerlas con otra
         // no podía salir bien.
-        return sbRpc('aviso_pendiente', { p_usuario: sesion.user.id, p_hoy: isoDe(HOY) });
+        var preguntar = function(){
+          return sbRpc('aviso_pendiente', { p_usuario: sesion.user.id, p_hoy: isoDe(HOY) });
+        };
+        // Y lo caducado se retira ANTES de preguntar: la base se calla
+        // mientras haya alguno sin leer, así que sin esto contestaría que no
+        // toca ninguno por culpa del viejo que acabamos de descartar.
+        return hay ? retirarAvisosCaducados().then(preguntar) : preguntar();
       })
       .then(function(motivo){
         if(!motivo) return;
         // Solo aquí se gasta una consulta, y solo cuando de verdad hay algo
         // que decir. Son cuatro o cinco al mes por persona.
-        return iaLlamar({ accion: 'aviso', motivo: motivo })
+        // LA FECHA DEL TELÉFONO TAMBIÉN AQUÍ. Es la que decidió el motivo
+        // y es la que allá cuenta los días apuntados: con dos fechas
+        // distintas, el motivo y los números que lo acompañan hablarían de
+        // semanas distintas y el aviso se contradiría solo.
+        return iaLlamar({ accion: 'aviso', motivo: motivo, hoy: isoDe(HOY) })
           .then(function(r){
             if(!r || !r.texto) return;
             // La MISMA fecha que arriba. Con una distinta, se pide el aviso
@@ -12527,6 +12817,18 @@
         ' al ' + r.fin.getDate() + ' de ' + mes(r.fin);
   }
 
+  // El mes al que pertenece una semana: el de su PRIMER día. Una semana que
+  // cruza de mes cae en el que empezó, y el rango de la fila ya nombra los
+  // dos, así que no se pierde nada.
+  //
+  // Lleva el año porque se guardan doce meses: sin él, dos «ENERO» seguidos
+  // en la misma pantalla no se distinguen.
+  function mesDeSemana(iso){
+    var r = rangoDeSemana(iso);
+    if(!r || isNaN(r.ini)) return '';
+    return MESES_LARGO[r.ini.getMonth()] + ' ' + r.ini.getFullYear();
+  }
+
   // El rango en palabras: «18 de agosto al 24 de agosto».
   //
   // CON LA MISMA GUARDA QUE `rangoCorto`, y por el mismo motivo: las dos
@@ -12695,14 +12997,55 @@
     // Cuatro huecos no informan de nada y ocupan el sitio de lo que sí. La
     // lista es para encontrar una semana; lo que hay dentro está en su
     // tarjeta, que además sabe reconstruirlo de los apuntes.
-    caja.innerHTML = SEMANAS.map(function(f, i){
+    //
+    // PERO QUITADOS LOS RECUADROS QUEDÓ UNA COLUMNA DE FILAS IGUALES. Todas
+    // empezaban con la palabra «Semana» y seguían con un rango largo, así que
+    // a partir de la tercera el ojo no tenía dónde agarrarse: para encontrar
+    // una había que leerlas de una en una. Y la semana que estás viviendo no
+    // aparecía —no se guarda hasta el lunes—, de modo que la pantalla que va
+    // de tus semanas no decía en cuál estás.
+    //
+    // Tres cosas lo arreglan, y ninguna añade un dato nuevo:
+    //   · El mes como rótulo. Una semana se busca por ahí —«la de
+    //     septiembre»—, no por el número que hace en la lista.
+    //   · Fuera la palabra «Semana» de cada fila: estaba en las cincuenta y
+    //     dos, así que no distinguía ninguna. El título de la pantalla ya
+    //     dice que son semanas.
+    //   · Los días debajo y no al lado. Al lado competían con la fecha por
+    //     el ancho y en pantalla estrecha la fecha se cortaba con puntos
+    //     suspensivos, que es justo el dato que se está buscando.
+    var html = '';
+
+    // La semana en curso, arriba. No es tocable: hasta el lunes no hay nada
+    // guardado que abrir.
+    var ahora = rangoCorto(isoDe(anclaSemana));
+    if(ahora){
+      html += '<div class="sem-ahora">' +
+        '<div class="sem-ahora-tit">En curso</div>' +
+        '<div class="sem-ahora-rango">' + escapar(ahora) + '</div>' +
+        '<div class="sem-ahora-pie">Se guarda aquí el lunes, al contestar el chequeo.</div>' +
+      '</div>';
+    }
+
+    var mesPrevio = '';
+    html += SEMANAS.map(function(f, i){
+      var iso  = semanaQueJuzga(f);
       var dias = f.dias_apuntados;
-      return '<div class="sem-card sem-sola" data-sem="' + i + '">' +
-        '<div class="sem-cab"><b>Semana ' + escapar(rangoCorto(semanaQueJuzga(f))) + '</b>' +
-          '<span>' + (dias == null ? '' : dias + ' de 7 días') + '</span></div>' +
+      var mes  = mesDeSemana(iso);
+      var rotulo = '';
+      if(mes && mes !== mesPrevio){
+        mesPrevio = mes;
+        rotulo = '<div class="sem-mes">' + escapar(mes) + '</div>';
+      }
+      return rotulo +
+        '<div class="sem-card sem-sola" data-sem="' + i + '">' +
+        '<div class="sem-cab"><b>' + escapar(rangoCorto(iso)) + '</b>' +
+          (dias == null ? '' : '<span>' + dias + ' de 7 días</span>') + '</div>' +
         '<i class="sem-ir">›</i>' +
       '</div>';
     }).join('');
+
+    caja.innerHTML = html;
   }
 
   // Tocar una semana abre su tarjeta.

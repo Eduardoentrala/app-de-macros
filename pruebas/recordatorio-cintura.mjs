@@ -7,7 +7,7 @@
 //
 // Ahora guarda el DÍA, igual que el peso: mañana vuelve, y pasado, hasta
 // que se registre la medida. En cuanto se registra, quien lo apaga es
-// `tocaMedirCintura()` —28 días— y no la ×.
+// `tocaMedirCintura()` —los días que diga `DIAS_ENTRE_CINTURAS`— y no la ×.
 //
 // Esta prueba EJECUTA las dos funciones reales sacadas de app.js contra un
 // almacenamiento y un calendario de mentira, y recorre los días uno a uno.
@@ -34,9 +34,10 @@ function sacar(desde, hasta) {
 const fCiclo = sacar('  function cicloDeRecordatorio(cual){', '\n  }');
 const fCallado = sacar('  function recordatorioCallado(cual){', '\n  }');
 const fToca = sacar('  function tocaMedirCintura(){', '\n  }');
-// Los 28 días, SACADOS DEL CÓDIGO y no escritos aquí. Con el número
-// repetido en la prueba, cambiarlo en la app no rompía nada: la prueba
-// seguía midiendo contra su propia copia.
+// Los días entre medidas, SACADOS DEL CÓDIGO y no escritos aquí. Con el
+// número repetido en la prueba, cambiarlo en la app no rompía nada: la
+// prueba seguía midiendo contra su propia copia. Pasaron de 28 a 15 y esto
+// fue lo único que no hubo que tocar.
 const mDias = APP.match(/var DIAS_ENTRE_CINTURAS = (\d+);/);
 
 // Y la línea que de verdad ejecuta la ×, sacada de su manejador. Escrita a
@@ -53,6 +54,8 @@ if (!fCiclo || !fCallado || !fToca || !mDias || !lineaCerrar) {
   ].filter(Boolean).join(', '));
   process.exit(1);
 }
+
+const DIAS = Number(mDias[1]);
 
 // El mundo de mentira: un calendario que se puede mover y un almacenamiento
 // en memoria. Todo lo demás es el código de verdad.
@@ -131,21 +134,21 @@ console.log('\nEn cuanto se mide, se calla sola');
 
   diaMas(m, 1);
   ok(m.sale() === false, 'y al día siguiente tampoco sale');
-  diaMas(m, 20);
-  ok(m.sale() === false, 'ni tres semanas después');
+  diaMas(m, DIAS - 3);
+  ok(m.sale() === false, `ni el día ${DIAS - 2} de los ${DIAS}`);
 }
 
 // ------------------------------------------------------------------
-console.log('\nY vuelve cuando toca de nuevo, a los 28 días');
+console.log(`\nY vuelve cuando toca de nuevo, a los ${DIAS} días`);
 {
   const m = montar();
   m.estado.cinturas.push({ fecha: '2026-08-22', cm: 84 });
   ok(m.sale() === false, 'recién medida, callada');
 
-  diaMas(m, 27);
-  ok(m.sale() === false, 'el día 27 todavía no');
+  diaMas(m, DIAS - 1);
+  ok(m.sale() === false, `el día ${DIAS - 1} todavía no`);
   diaMas(m, 1);
-  ok(m.sale() === true, 'el día 28 vuelve a salir');
+  ok(m.sale() === true, `el día ${DIAS} vuelve a salir`);
 
   // Y ahí empieza otra vez: cerrar hoy, volver mañana.
   m.cerrar();

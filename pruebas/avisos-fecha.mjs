@@ -34,11 +34,26 @@ const check = (n, cond, extra = '') => {
   else { mal++; console.log(`  FALLA ${n}${extra ? '\n        ' + extra : ''}`); }
 };
 
+// La función entera, contando llaves. Estaba cortada por una ventana de
+// 2200 caracteres y se rompió en cuanto la función creció: `guardar_aviso`
+// se quedó fuera del trozo y dos comprobaciones empezaron a fallar sin que
+// nadie hubiera tocado lo que vigilan. Una ventana fija mide el tamaño del
+// fichero, no lo que dice.
+function sacar(cabecera) {
+  const i = APP.indexOf(cabecera);
+  if (i < 0) return '';
+  let n = 0, j = APP.indexOf('{', i);
+  for (; j < APP.length; j++) {
+    if (APP[j] === '{') n++;
+    else if (APP[j] === '}') { n--; if (!n) return APP.slice(i, j + 1); }
+  }
+  return '';
+}
+
 console.log('\n— El teléfono dice qué día es —');
 {
-  const i = APP.indexOf('function revisarAvisoDelCoach(');
-  const fn = APP.slice(i, i + 2200);
-  check('la función existe', i > 0);
+  const fn = sacar('function revisarAvisoDelCoach(');
+  check('la función existe', fn.length > 0);
   check('se manda la fecha al preguntar si toca',
     /aviso_pendiente', \{ p_usuario: sesion\.user\.id, p_hoy: isoDe\(HOY\) \}/.test(fn),
     'sin esto se usa current_date, que va en UTC, y por la tarde mira un dia que no existe');
@@ -49,6 +64,8 @@ console.log('\n— El teléfono dice qué día es —');
   // con fechas distintas, se pide el aviso con una y se guarda comprobando
   // con otra, y el guardado falla DESPUES de haber pagado la consulta de IA.
   const a = fn.indexOf("aviso_pendiente'"), b = fn.indexOf("guardar_aviso'");
+  // `hoy: isoDe(HOY)` -el que viaja a la IA con el aviso- no cuenta aquí:
+  // lleva otro nombre a propósito y estas dos son las de la base.
   const dosVeces = (fn.match(/p_hoy: isoDe\(HOY\)/g) || []).length;
   check('las dos con la misma fecha', a > 0 && b > a && dosVeces === 2,
     'con fechas distintas se paga la IA y luego el guardado la rechaza');
