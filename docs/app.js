@@ -11877,13 +11877,22 @@
     // menos son el MISMO dato, y para lo que se decide aquí no lo son:
     // adelgazar quedándose corto de proteína es adelgazar perdiendo también
     // músculo, y la báscula baja igual en los dos casos.
-    var dias = 0, suma = 0, sP = 0, sC = 0, sG = 0;
+    var dias = 0, suma = 0, sP = 0, sC = 0, sG = 0, pesados = 0;
     for(var d = new Date(desde); d < hasta; d.setDate(d.getDate() + 1)){
-      var r = REGISTRO[isoDe(d)];
+      var k = isoDe(d);
+      var r = REGISTRO[k];
       if(r){
         dias++; suma += calDe(r);
         sP += Number(r.P) || 0; sC += Number(r.C) || 0; sG += Number(r.G) || 0;
       }
+      // CUÁNTAS VECES SE PESÓ ESA SEMANA. Es la otra mitad de si la semana
+      // sirve para medir: con un solo pesaje, el «peso medio» es un peso
+      // suelto con otro nombre, y el agua de un día lo mueve un kilo.
+      //
+      // Hace falta ahora porque la medición del gasto dejó de hacerse sobre
+      // los 60 días que caben en el teléfono y pasó al historial largo, y
+      // ahí este dato no estaba guardado. Columna nueva en la 0056.
+      if(PESOS[k] != null) pesados++;
     }
     // CUÁNTO HACE QUE NO SE PESA. Sin esto, el cierre daba por bueno
     // ajustar calorías con dos pesos de hace tres semanas: se apuntó la
@@ -11897,6 +11906,7 @@
 
     return {
       dias_apuntados: dias,
+      dias_con_peso: pesados,
       dias_sin_pesarse: diasSinPesarse,
       meta_cal: calDe(meta),
       meta_p: meta.P, meta_c: meta.C, meta_g: meta.G,
@@ -12086,6 +12096,64 @@
     // Ordenadas de la más vieja a la más nueva, que es lo que espera la
     // recta de abajo, y recortadas por si alguien lleva años.
     return Object.keys(por).sort().slice(-GM.LARGO).map(function(k){ return por[k]; });
+  }
+
+  // CUÁNTO SE PUEDE AFINAR CON LO QUE HAY APUNTADO.
+  //
+  //  Todo esto funciona si la persona apunta. La app ya sabía si apuntaba
+  //  —`dias_apuntados` está en cada semana guardada— pero no se lo decía
+  //  nunca, así que apuntar bien y apuntar a medias se sentían igual: el
+  //  esfuerzo no tenía ninguna consecuencia visible.
+  //
+  //  Esto lo convierte en algo que se ve: cuántas semanas completas lleva,
+  //  si con eso ya se puede medir su gasto, y cuánto se le puede mover por
+  //  semana. Y dice qué hace falta para que una semana cuente, que es lo
+  //  único accionable —cinco días apuntados y dos pesajes—.
+  //
+  //  EL TOPE NO ES UN CAPRICHO. Mover 200 calorías con tres semanas medidas
+  //  es moverlas a ciegas; con tres meses detrás, mover solo 100 es ir más
+  //  despacio de lo que los datos permiten. El tamaño del paso sale de la
+  //  confianza, igual que el margen.
+  function nivelDeAfinado(){
+    var completas = serieParaMedir().length;
+    var g = gastoMedido();
+    var medido = !!(g && g.estado === 'ok');
+
+    // Sin medición no se afina nada: se mueve lo mínimo y con cuidado.
+    var tope = !medido ? 100
+             : completas >= 12 ? 200
+             : completas >= 8  ? 150
+             : 100;
+
+    return {
+      completas: completas,
+      medido: medido,
+      tope: tope,
+      margen: medido ? g.margen : null,
+      // Lo que hace que una semana cuente. Va aquí y no escrito en la
+      // pantalla para que no se separen el día que cambien.
+      dias: GM.DIAS,
+      pesajes: GM.PESAJES,
+      faltan: Math.max(0, GM.SEMANAS - completas)
+    };
+  }
+
+  // Lo mismo, en una frase. Se enseña en «Mis semanas», que es donde se
+  // mira el historial y por tanto donde la frase viene a cuento.
+  function frameAfinado(){
+    var a = nivelDeAfinado();
+    var cuenta = 'Una semana cuenta con ' + a.dias + ' días apuntados y ' +
+                 a.pesajes + ' pesajes.';
+    if(!a.medido){
+      return a.faltan > 0
+        ? 'Llevas ' + a.completas + (a.completas === 1 ? ' semana completa' : ' semanas completas') +
+          '. Con ' + GM.SEMANAS + ' puedo medir tu gasto real y empezar a ajustarte. ' + cuenta
+        : 'Todavía no puedo medir tu gasto con lo apuntado. ' + cuenta;
+    }
+    return 'Mido tu gasto real con ' + a.completas +
+           (a.completas === 1 ? ' semana completa' : ' semanas completas') +
+           ': puedo ajustarte hasta ' + a.tope + ' cal por semana. ' +
+           (a.tope < 200 ? 'Cada semana completa afina más. ' + cuenta : cuenta);
   }
 
   function gastoMedido(){
@@ -12410,6 +12478,11 @@
         // hay semanas suficientes para que signifique algo. Es lo único de
         // todo esto que no depende de lo que dijo al registrarse.
         gasto: gastoMedido(),
+        // Y cuánto se puede afinar con lo que hay apuntado. Es lo que
+        // decide el tamaño del paso: con tres semanas medidas, mover 200
+        // calorías es moverlas a ciegas; con tres meses, moverlas de 100 en
+        // 100 es ir más despacio de lo que los datos permiten.
+        afinado: nivelDeAfinado(),
         pesos: pesosRecientes,
         // Sin esto, el peso plano siempre parece estancamiento. Con el
         // entreno delante se distingue lo que de verdad son dos cosas
@@ -12430,6 +12503,22 @@
 
       if(r.ajusto && r.cal_nueva) aplicarCaloriasNuevas(r.cal_nueva);
       guardarChequeo(r, laFoto);
+
+      // LO QUE EL CIERRE APRENDIÓ DE ESTA PERSONA.
+      //
+      //  Igual que la memoria del chat: la escribe el modelo entera y la
+      //  guarda la app. Va en `aprendido_cierre` y no en `memoria_ia`
+      //  porque las dos se reescriben completas y con dos escritores se
+      //  pisan —por eso hasta ahora el cierre solo leía—.
+      //
+      //  En silencio: si no se guarda, el lunes que viene se decide con
+      //  una nota de hace dos semanas en vez de una de hace una. Es peor,
+      //  no es grave, y avisar de esto encima del mensaje del cierre sería
+      //  ruido justo cuando la persona está leyendo sus calorías nuevas.
+      if(typeof r.aprendido === 'string' && r.aprendido.trim()){
+        sbActualizarPerfil({ aprendido_cierre: r.aprendido.trim().slice(0, 800) })
+          ['catch'](function(){});   // en silencio: a propósito
+      }
 
       // El mismo botón pasa a cerrar. Antes se quedaba en "Listo" apagado y
       // había que salir por "Ahora no", que ahí ya no significa nada: la
@@ -12601,7 +12690,7 @@
   function sbSemanasGuardadas(){
     if(!sesion || !sesion.user) return Promise.resolve([]);
     return sbFetch('/rest/v1/chequeos_semanales' +
-        '?select=semana,hambre,energia,sueno,dias_apuntados,media_cal,cal_antes,cal_despues,' +
+        '?select=semana,hambre,energia,sueno,dias_apuntados,dias_con_peso,media_cal,cal_antes,cal_despues,' +
         'media_p,media_c,media_g,meta_p,meta_c,meta_g,' +
         'peso_medio,peso_medio_antes,volumen,volumen_antes,sesiones,cintura,' +
         'ajusto,motivo,nota' +
@@ -13195,6 +13284,10 @@
         '<div class="sem-ahora-tit">En curso</div>' +
         '<div class="sem-ahora-rango">' + escapar(ahora) + '</div>' +
         '<div class="sem-ahora-pie">Se guarda aquí el lunes, al contestar el chequeo.</div>' +
+        // Lo que se gana apuntando. Va en esta tarjeta y no suelto arriba
+        // porque habla de la semana que se está viviendo, que es la única
+        // sobre la que todavía se puede hacer algo.
+        '<div class="sem-ahora-afina">' + escapar(frameAfinado()) + '</div>' +
       '</div>';
     }
 

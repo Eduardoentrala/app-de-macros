@@ -68,7 +68,7 @@ const CIERRE = bloqueDeAccion('semana');
 // ------------------------------------------------------------------
 console.log('\nEl objetivo llega, y sale de la base');
 {
-  ok(/\.select\('memoria_ia, goal'\)/.test(CIERRE), 'se lee `goal` del perfil',
+  ok(/\.select\('memoria_ia, goal[^']*'\)/.test(CIERRE), 'se lee `goal` del perfil',
      'el campo existe desde el registro; lo que faltaba era traerlo aquí');
 
   // Lo que NO puede pasar: que lo mande el navegador.

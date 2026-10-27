@@ -378,8 +378,13 @@ console.log('\n— El botón de «Entiendo» —');
   // dejó de encontrarse. `indexOf` devolvió -1, el recorte salió vacío y las
   // cuatro comprobaciones de aquí abajo se pusieron rojas sin que el botón
   // hubiera cambiado en nada.
+  // HASTA EL FINAL DEL MANEJADOR, no 600 caracteres. Esta ventana ya se
+  // quedó corta una vez -de ahí el comentario de arriba- y se volvió a
+  // quedar corta al meter entre medias el guardado de lo que el cierre
+  // aprende. Una ventana fija mide el tamaño del código, no lo que dice.
   const i = APP.search(/guardarChequeo\(r[,)]/);
-  const trozo = i < 0 ? '' : APP.slice(i, i + 600);
+  const finManejador = i < 0 ? -1 : APP.indexOf("\n    })['catch']", i);
+  const trozo = i < 0 ? '' : APP.slice(i, finManejador > i ? finManejador : i + 600);
   check('se guarda el chequeo', i >= 0,
     'sin esto, el lunes siguiente vuelve a salir como si no lo hubiera contestado');
   check('el botón pasa a decir Entiendo', /btn\.textContent = 'Entiendo';/.test(trozo));

@@ -52,7 +52,7 @@ const CORS = {
 //
 // Ahora lo dice: un GET sin sesión devuelve este sello y nada más.
 // `pruebas/funciones-vivas.mjs` lo compara con el del repo.
-const SELLO = '3ac7dcd5cf';
+const SELLO = '169eaebe23';
 
 // Tope diario por persona. Es la única defensa contra que un solo usuario
 // -o un token robado- vacíe la cuenta en una noche con un bucle.
@@ -410,8 +410,11 @@ const ESQUEMA_SEMANA = {
     cal_nueva: { anyOf: [{ type: 'null' }, { type: 'integer' }] },
     // Para el historial, no para la pantalla: por qué se hizo lo que se hizo.
     motivo:    { type: 'string' },
+    // Y lo que quiere seguir sabiendo de esta persona la próxima vez.
+    // Puede ser null: no todas las semanas enseñan algo.
+    aprendido: { anyOf: [{ type: 'null' }, { type: 'string' }] },
   },
-  required: ['mensaje', 'ajusto', 'cal_nueva', 'motivo'],
+  required: ['mensaje', 'ajusto', 'cal_nueva', 'motivo', 'aprendido'],
   additionalProperties: false,
 } as const;
 
@@ -487,6 +490,34 @@ con su motivo y no se la volvía a leer a nadie.
 
 Y no lo recites. Un entrenador no dice «según el registro del 14 de julio»;
 dice «esto ya lo intentamos y no salió».
+
+LO QUE APRENDES DE ELLA, PARA LA PRÓXIMA VEZ
+
+Tienes una nota tuya que sobrevive de un lunes al siguiente. Es TUYA y de
+este cierre: el chat tiene la suya aparte y no se tocan.
+
+Devuelve en "aprendido" la versión completa y reescrita de esa nota, no un
+añadido. Si esta semana no enseñó nada nuevo, devuelve null y se queda la
+que había.
+
+Máximo 800 caracteres. El límite obliga a soltar lo que dejó de importar.
+
+Sirve para lo que no está en ninguna tabla:
+- Qué ajustes se probaron y CÓMO RESPONDIÓ su cuerpo. "Bajar 150 en agosto
+  no movió nada en tres semanas; bajar 250 en septiembre sí."
+- A qué ritmo baja de verdad cuando cumple, que casi nunca es el que dice
+  la fórmula.
+- Qué se le atraviesa siempre: los findes, los viajes, las semanas de
+  guardia.
+- Lo que ya se le dijo y no hace falta repetir.
+
+NO sirve para números que ya tienes cada semana -su peso, sus macros, lo
+que comió-, ni para el detalle de una semana suelta.
+
+Y PONLE FECHA DENTRO DE LA FRASE. Esta nota la vas a leer dentro de seis
+meses sin saber cuándo la escribiste: "en septiembre de 2026 bajamos a
+2.100 y se quedó sin energía" se entiende; "bajamos a 2.100 y se quedó sin
+energía" no dice si fue el mes pasado o el año pasado.
 
 QUÉ MIRAS, EN ESTE ORDEN
 
@@ -1876,7 +1907,7 @@ Deno.serve(async (req) => {
       let haciaDonde = '';
       {
         const { data: mem } = await admin
-          .from('profiles').select('memoria_ia, goal').eq('id', userId).single();
+          .from('profiles').select('memoria_ia, goal, aprendido_cierre').eq('id', userId).single();
         const texto = String(mem?.memoria_ia ?? '').trim();
         if (texto) {
           loQueSe = `\n\nLO QUE YA SABES DE ESTA PERSONA (notas tuyas de otras ` +
@@ -1889,6 +1920,15 @@ Deno.serve(async (req) => {
           subir: 'SUBIR DE PESO',
         };
         const suyo = COMO_SE_LLAMA[String(mem?.goal ?? '')];
+        // Su nota del cierre anterior. Va con la memoria del chat y detrás
+        // de los números, por lo mismo: lo que decide son los datos, y esto
+        // es el contexto que los explica.
+        const aprendido = String(mem?.aprendido_cierre ?? '').trim();
+        if (aprendido) {
+          loQueSe += `\n\nLO QUE APRENDISTE DE ELLA EN CIERRES ANTERIORES (tu ` +
+                     `nota, escrita por ti, NO mediciones):\n${aprendido.slice(0, 800)}`;
+        }
+
         haciaDonde = suyo
           ? `\n\nSU OBJETIVO ES: ${suyo}.`
           : `\n\nSU OBJETIVO: no consta. Sé prudente y no llames estancamiento ` +
@@ -2013,6 +2053,35 @@ Deno.serve(async (req) => {
               `sueño ${p.sueno ?? '—'}` +
               (p.ajusto ? ` · se le ajustó a ${p.cal_despues} cal` : ' · no se tocó');
           }).join('\n') + `\n`
+        : '';
+
+      // CUÁNTO SE LE PUEDE MOVER, que depende de cuánto se sabe de ella.
+      //
+      // El prompt decía «muévele poco: entre 100 y 200» y ya está, así que
+      // movía lo mismo con tres semanas medidas que con tres meses. Con
+      // tres semanas, 200 es moverlas a ciegas; con tres meses detrás,
+      // moverlas de 100 en 100 es ir más despacio de lo que los datos
+      // permiten y alargar el proceso sin motivo.
+      //
+      // El tope se ACOTA aquí aunque venga ya calculado: llega en el cuerpo,
+      // igual que el gasto medido, y un número inventado desde la consola no
+      // puede convertirse en un salto de calorías.
+      const af = (cuerpo.afinado ?? null) as Record<string, unknown> | null;
+      const tope = af ? Math.min(200, Math.max(50, Math.round(Number(af.tope) || 100))) : 0;
+      const afinado = af
+        ? `\nCUÁNTO PUEDES MOVERLE ESTA VEZ:\n` +
+          `- Lleva ${Number(af.completas) || 0} semanas completas apuntadas` +
+          (af.medido ? `, y con ellas se le mide el gasto de verdad.\n`
+                     : `, que todavía no bastan para medirle el gasto.\n`) +
+          `- NO le muevas más de ${tope} calorías. No es una sugerencia: es` +
+          ` hasta donde llega lo que se sabe de ella.\n` +
+          (Number(af.faltan) > 0
+            ? `- Le faltan ${Number(af.faltan)} semanas completas para poder` +
+              ` medirle el gasto. Una semana cuenta con ${Number(af.dias) || 5}` +
+              ` días apuntados y ${Number(af.pesajes) || 2} pesajes. Si esta vino` +
+              ` floja de eso, díselo UNA vez, sin regañar y sin repetirlo cada` +
+              ` semana.\n`
+            : '')
         : '';
 
       // LAS DECISIONES QUE YA SE TOMARON, con su motivo.
@@ -2189,6 +2258,7 @@ Deno.serve(async (req) => {
         `Sueño: ${encuesta.sueno ?? '—'}/5  (3 = normal)\n` +
         historial +
         decisiones +
+        afinado +
         cinturas +
         (cuerpo.nota ? `- Dice: "${String(cuerpo.nota).slice(0, 300)}"\n` : '') +
         `- ¿Hay material para ajustar?: ${hayMaterial ? 'sí' : 'NO'}` +

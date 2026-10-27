@@ -74,8 +74,13 @@ const MESES_LARGO = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'jul
 function pinta(filas, ancla = new Date('2026-09-01T12:00:00')) {
   let puesto = '';
   const doc = { getElementById: () => ({ set innerHTML(v) { puesto = v; } }) };
-  new Function('MESES_LARGO', 'SEMANAS', 'anclaSemana', 'document',
-    fuente + '\npintarMisSemanas();')(MESES_LARGO, filas, ancla, doc);
+  // `frameAfinado` vive junto a la medición del gasto y tiene medio archivo
+  // de dependencias detrás. Aquí se sustituye: lo que esta prueba vigila es
+  // que la frase SE PINTE y dónde, no qué dice —de eso se encarga
+  // `gasto-medido`, que sí ejecuta la cuenta—.
+  new Function('MESES_LARGO', 'SEMANAS', 'anclaSemana', 'frameAfinado', 'document',
+    fuente + '\npintarMisSemanas();')(
+    MESES_LARGO, filas, ancla, () => 'LO QUE SE GANA APUNTANDO', doc);
   return puesto;
 }
 
@@ -206,6 +211,14 @@ console.log('\nSe ve en qué semana estás, que es justo la que no está guardad
   const ahora = html.slice(0, html.indexOf('sem-card'));
   ok(!/data-sem/.test(ahora), 'y no se puede tocar: hasta el lunes no hay nada que abrir',
      'con la misma forma que las de abajo, tocarla y que no pase nada se lee como rota');
+
+  // Y dentro de esa misma tarjeta, lo que se gana apuntando: cuántas
+  // semanas completas lleva y cuánto se le puede ajustar con eso.
+  ok(/LO QUE SE GANA APUNTANDO/.test(ahora),
+     'y dice qué se gana apuntando bien',
+     'la app sabía si apuntabas y no te lo decía nunca, así que apuntar bien ' +
+     'y apuntar a medias se sentían igual');
+  ok(/sem-ahora-afina/.test(ahora), 'con su propio sitio en la tarjeta');
 }
 
 console.log('\nY se agrupan por mes, que es como se busca una');

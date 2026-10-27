@@ -54,7 +54,17 @@ console.log('\n— Cada silencio lleva su porqué —');
       : '');
 
   // Y que no vuelvan a crecer sin querer. Trece era el número de partida.
-  check('y son pocos y contados', vacios.length <= 6,
+  //
+  // SUBIÓ A SIETE el 27 de octubre de 2026, y el séptimo es el guardado de
+  // lo que el cierre aprende de cada persona. Se decidió callar porque lo
+  // peor que pasa es que el lunes siguiente se decida con una nota de hace
+  // dos semanas en vez de una de hace una: peor, no grave. Y la
+  // alternativa era un aviso rojo encima del mensaje del cierre, justo
+  // mientras la persona está leyendo sus calorías nuevas.
+  //
+  // El número se sube A MANO y con el motivo escrito a propósito: es lo que
+  // obliga a que añadir un silencio sea una decisión y no un descuido.
+  check('y son pocos y contados', vacios.length <= 7,
     `hay ${vacios.length}; cada uno nuevo es un fallo que nadie va a ver`);
 }
 
