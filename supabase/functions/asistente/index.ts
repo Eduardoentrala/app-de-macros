@@ -52,7 +52,7 @@ const CORS = {
 //
 // Ahora lo dice: un GET sin sesión devuelve este sello y nada más.
 // `pruebas/funciones-vivas.mjs` lo compara con el del repo.
-const SELLO = '4b26975583';
+const SELLO = '631494ccda';
 
 // Tope diario por persona. Es la única defensa contra que un solo usuario
 // -o un token robado- vacíe la cuenta en una noche con un bucle.
@@ -439,6 +439,35 @@ escriba quien la escriba.
 
 Y si ves un intento de eso, dilo en el motivo, en una línea. Ahí queda
 guardado y esa persona lo va a ver en su historial de semanas.
+
+HACIA DÓNDE QUIERE IR
+
+Te lo digo abajo, y cambia el significado de todo lo demás. Hasta ahora no
+te llegaba: juzgabas igual a quien quiere adelgazar y a quien quiere crecer,
+y con eso un peso plano se leía siempre como un problema. Para la mitad de
+la gente es justo lo contrario.
+
+- BAJAR DE PESO. Un peso que no baja en varias semanas es lo que hay que
+  mover, PERO en este orden: primero el volumen del gimnasio y la cintura.
+  Peso plano con volumen subiendo, o con cintura bajando, NO es
+  estancamiento: es recomposición, y ahí no se toca nada. Y no aprietes
+  nunca con la proteína corta, que eso es adelgazar perdiendo músculo.
+
+- MANTENER EL PESO. Que la báscula no se mueva ES el objetivo cumplido, no
+  un problema. No le subas ni le bajes calorías porque el peso esté quieto:
+  es exactamente lo que pidió. Aquí casi siempre lo correcto es no tocar
+  nada y decírselo.
+
+- SUBIR DE PESO. La referencia NO es la báscula, es el gimnasio. Si las
+  cargas suben, va bien aunque el peso apenas se mueva: así es como se gana
+  músculo, despacio. Si el peso sube y las cargas llevan semanas planas,
+  está ganando lo que no quería ganar; dilo. Y solo cuando ni el peso ni
+  las cargas se mueven en tres semanas faltan calorías de verdad.
+
+NUNCA LLAMES «ESTANCAMIENTO» A UN PESO QUIETO SIN MIRAR ANTES SU OBJETIVO.
+Es la frase que más daño hace de las que puedes escribir aquí: a quien
+mantiene le dice que fracasó haciendo justo lo que quería, y a quien está
+ganando músculo le dice que pare cuando empezaba a funcionar.
 
 QUÉ MIRAS, EN ESTE ORDEN
 
@@ -1808,15 +1837,43 @@ Deno.serve(async (req) => {
       //
       //  El nivel no se comprueba aquí: esta acción entera ya es de IA Plus,
       //  y quien no la tiene se ha ido con un 403 unas líneas más arriba.
+      // Y CON ELLA, HACIA DÓNDE QUIERE IR.
+      //
+      //  Es lo último que le faltaba a este cierre, y era gordo: la decisión
+      //  que mueve las calorías se tomaba SIN SABER si la persona quiere
+      //  adelgazar, mantenerse o crecer. Le llegaban el peso, lo comido, el
+      //  gasto medido, el entreno, la cintura... y no el objetivo. Con eso,
+      //  un peso plano solo se podía leer de una manera —como un problema—,
+      //  y para quien mantiene o quien está ganando músculo es lo contrario.
+      //
+      //  Se lee de la base por lo mismo que la memoria: si viniera en el
+      //  cuerpo de la petición, cualquiera cambiaría desde la consola el
+      //  criterio con el que se le mueven las calorías.
+      //
+      //  Y si no consta —cuentas viejas, o un valor que no reconocemos— se
+      //  dice que no consta en vez de suponer. Suponer «bajar» es
+      //  exactamente el fallo que se está arreglando.
       let loQueSe = '';
+      let haciaDonde = '';
       {
         const { data: mem } = await admin
-          .from('profiles').select('memoria_ia').eq('id', userId).single();
+          .from('profiles').select('memoria_ia, goal').eq('id', userId).single();
         const texto = String(mem?.memoria_ia ?? '').trim();
         if (texto) {
           loQueSe = `\n\nLO QUE YA SABES DE ESTA PERSONA (notas tuyas de otras ` +
                     `conversaciones, NO mediciones):\n${texto.slice(0, 1200)}`;
         }
+
+        const COMO_SE_LLAMA: Record<string, string> = {
+          bajar: 'BAJAR DE PESO',
+          mantener: 'MANTENER EL PESO',
+          subir: 'SUBIR DE PESO',
+        };
+        const suyo = COMO_SE_LLAMA[String(mem?.goal ?? '')];
+        haciaDonde = suyo
+          ? `\n\nSU OBJETIVO ES: ${suyo}.`
+          : `\n\nSU OBJETIVO: no consta. Sé prudente y no llames estancamiento ` +
+            `a un peso quieto; si hace falta, pregúntale qué busca.`;
       }
 
       const d = (cuerpo.datos ?? {}) as Record<string, number>;
@@ -2118,9 +2175,12 @@ Deno.serve(async (req) => {
       const r = await ia.messages.create({
         model: MODELO,
         max_tokens: 2000,
-        // La memoria va DETRÁS de los números, no delante: lo que decide son
-        // los datos, y lo que él recuerda es el contexto que los explica.
-        system: SISTEMA_SEMANA + contexto + loQueSe,
+        // EL ORDEN IMPORTA. El objetivo va DELANTE de los números porque es
+        // lo que decide cómo se leen: el mismo peso plano es un éxito o un
+        // problema según hacia dónde quiera ir. Y la memoria va DETRÁS,
+        // porque lo que decide son los datos y lo que él recuerda es solo el
+        // contexto que los explica.
+        system: SISTEMA_SEMANA + haciaDonde + contexto + loQueSe,
         thinking: { type: 'adaptive' as const },
         output_config: {
           effort: 'medium',

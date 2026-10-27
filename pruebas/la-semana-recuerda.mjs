@@ -159,7 +159,11 @@ console.log('\nY se le entrega marcada por lo que es');
   // Y QUE LLEGUE AL MODELO. Leerla y no pasársela es hacer una consulta a la
   // base para nada, y no había nada que lo comprobara: una mutación quitó
   // `loQueSe` del `system:` y la prueba se quedó tan tranquila.
-  ok(/system: SISTEMA_SEMANA \+ contexto \+ loQueSe/.test(SEMANA),
+  // Sin clavar la concatenación entera: entre medias ya entró `haciaDonde`
+  // —el objetivo de la persona— y entrará lo que haga falta. Lo que esta
+  // prueba vigila es que la memoria llegue al `system:` y que llegue LA
+  // ÚLTIMA, detrás de los números, que es donde tiene que ir.
+  ok(/system: SISTEMA_SEMANA\b[^,\n]*\+ loQueSe,/.test(SEMANA),
      'y se le pasa de verdad en el prompt del sistema',
      'sin esto se lee la memoria de la base y se tira');
 }
