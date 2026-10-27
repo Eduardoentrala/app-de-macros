@@ -433,6 +433,68 @@ console.log('\n— El mensaje dice las tres cosas que se pidieron —');
     /porque no tengo con qué leer tu semana/.test(trozo));
 }
 
+console.log('\n— El motivo cabe en su columna sin partir palabras —');
+{
+  // ESTO SE VIO EN UNA CAPTURA, no aquí: la tarjeta de la semana acababa
+  // en «… Proteína 1». El motivo del cierre se guardaba con un
+  // `.slice(0, 500)` a cuchillo porque la columna es
+  // `motivo text check (length(motivo) <= 500)`, y al modelo nunca se le
+  // dijo que tuviera 500. Escribía 550 y la app cortaba por la mitad.
+  //
+  // Y no es cosmético desde que el cierre lee sus propias decisiones: ese
+  // motivo vuelve como historial de veinte semanas, así que un trozo
+  // partido no se lee mal una vez, se lee mal cada lunes.
+  //
+  // Las dos mitades: que el prompt diga el tope, y que el recorte corte
+  // limpio cuando aun así se pase.
+  const app = APP.replace(/\r\n/g, '\n');
+  const fn = FN.replace(/\r\n/g, '\n');
+
+  const tope = (readFileSync(join(RAIZ, 'supabase', 'migrations',
+    '0024_eventos_y_chequeo_semanal.sql'), 'utf8')
+    .match(/length\(motivo\)\s*<=\s*(\d+)/) || [])[1];
+  check('la columna dice su tope', !!tope, 'si no se lee, esto no compara nada');
+  check('y el prompt se lo dice al modelo',
+    new RegExp('Máximo ' + tope + ' caracteres').test(fn),
+    'sin eso escribe lo que quiera y la app lo corta: el tope existe en la ' +
+    'base y el modelo no lo sabe');
+  check('y le dice por qué importa',
+    /te vuelve a ti como historial/.test(fn),
+    'un límite sin motivo se lee como capricho y se ignora');
+
+  check('la app lo recorta con el tope de la columna',
+    new RegExp('motivo: recortarTexto\\(r\\.motivo, ' + tope + '\\)').test(app),
+    'si los dos números se separan, o se pierde texto de más o rebota la fila');
+
+  // Ejecutado. Un `.slice` también cumpliría el tope.
+  const sacar = (cab) => {
+    const i = app.indexOf(cab);
+    let n = 0, j = app.indexOf('{', i);
+    for (; j < app.length; j++) {
+      if (app[j] === '{') n++;
+      else if (app[j] === '}') { n--; if (!n) return app.slice(i, j + 1); }
+    }
+    throw new Error('llaves sin cerrar');
+  };
+  const recortar = new Function('return ' + sacar('function recortarTexto(txt, tope){'))();
+  const t = Number(tope);
+  const real = 'Objetivo bajar. Meta 1947, ingesta media 2201. ' + 'bla '.repeat(200) +
+               'Proteína 137/140, suficiente.';
+  const salida = recortar(real, t);
+  check('lo recortado cabe', salida.length <= t, 'salió ' + salida.length);
+  // La última palabra que queda tiene que ser una palabra ENTERA del
+  // original. Es lo único que distingue un corte limpio de un `.slice`:
+  // los dos cumplen el tope, pero el segundo deja «Proteína 1».
+  const ultima = salida.replace(/…$/, '').trim().split(/\s+/).pop();
+  check('y la última palabra está entera',
+    new RegExp('(^|\\s)' + ultima.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') +
+               '(\\s|$)').test(real),
+    'acabó en «' + ultima + '», que no es una palabra del original: ' +
+    'el corte la partió');
+  check('un texto sin espacios también cabe', recortar('a'.repeat(999), t).length <= t);
+  check('y lo que ya cabía no se toca', recortar('motivo corto', t) === 'motivo corto');
+}
+
 console.log('\n— Y no quedó nada del camino que se descartó —');
 {
   const migraciones = readdirSync(join(RAIZ, 'supabase', 'migrations'));

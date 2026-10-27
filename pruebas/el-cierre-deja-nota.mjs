@@ -89,9 +89,34 @@ console.log('\nEl modelo la devuelve, y la app la guarda');
      'y la pide siempre, aunque venga vacía');
 
   const cierreApp = APP.slice(APP.indexOf('guardarChequeo(r, laFoto);'));
-  ok(/aprendido_cierre: r\.aprendido\.trim\(\)\.slice\(0, 800\)/.test(cierreApp),
+  ok(/aprendido_cierre: recortarTexto\(r\.aprendido, 800\)/.test(cierreApp),
      'la app la guarda recortada al tope de la columna',
      'sin el recorte, 801 caracteres rebotan contra el check y se pierde entera');
+
+  // EJECUTADO, no mirado. Antes esto comprobaba que en el código pusiera
+  // `.slice(0, 800)`, que es mirar la letra y no lo que hace: un `.slice`
+  // cumplía el tope y partía la palabra por la mitad. El motivo del cierre
+  // salió así en la tarjeta —«… Proteína 1»— y eso vuelve al modelo como
+  // historial, así que se lee cortado cada lunes.
+  const recortar = new Function('return ' + sacarDe(APP, 'function recortarTexto(txt, tope){'))();
+  const largo = 'palabra '.repeat(200);          // 1600, de sobra
+  ok(recortar(largo, 800).length <= 800, 'y lo recortado cabe en la columna',
+     'salió ' + recortar(largo, 800).length + ': el check la rechaza y se pierde entera');
+  ok(!/palabr$|palab$|pala$|pal$|pa$|p$/.test(recortar(largo, 800).replace(/…$/, '')),
+     'sin partir la última palabra',
+     'acabó en «' + recortar(largo, 800).slice(-14) + '»');
+  ok(recortar('a'.repeat(900), 800).length <= 800,
+     'y un texto sin un solo espacio también cabe',
+     'sin sitio donde cortar limpio sigue habiendo que cumplir el tope');
+  ok(recortar('x'.repeat(798) + '😀 y más', 800).length <= 800 &&
+     !/[\uD800-\uDFFF]/.test(recortar('x'.repeat(798) + '😀 y más', 800)),
+     'y un emoji justo en el corte no deja media letra',
+     'medio carácter no es UTF-8 válido: Postgres rechaza la fila ENTERA, ' +
+     'así que no se pierde la nota, se pierde el chequeo');
+  ok(recortar(null, 800) === null && recortar('   ', 800) === null,
+     'y sin nada que guardar devuelve null',
+     'un texto vacío borraría la nota que ya había');
+  ok(recortar('nota corta', 800) === 'nota corta', 'y lo que cabe no se toca');
   ok(/typeof r\.aprendido === 'string' && r\.aprendido\.trim\(\)/.test(cierreApp),
      'y solo si vino algo', 'un null no puede borrar la nota que ya había');
 }

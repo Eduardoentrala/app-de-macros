@@ -52,7 +52,7 @@ const CORS = {
 //
 // Ahora lo dice: un GET sin sesión devuelve este sello y nada más.
 // `pruebas/funciones-vivas.mjs` lo compara con el del repo.
-const SELLO = '169eaebe23';
+const SELLO = '0eb7e419cd';
 
 // Tope diario por persona. Es la única defensa contra que un solo usuario
 // -o un token robado- vacíe la cuenta en una noche con un bucle.
@@ -716,6 +716,9 @@ REGLAS DURAS
   Cuatro frases como mucho.
 - Nunca consejo médico.
 - "motivo" es aparte, para el historial: ahí sí sé concreto y técnico.
+  Máximo 500 caracteres. No es un consejo: lo que pase de ahí se corta, y
+  este motivo te vuelve a ti como historial las próximas veinte semanas.
+  Un motivo cortado lo lees cortado cada lunes.
 `.trim();
 
 // El mensaje que la persona NO pidió. Va sin esquema JSON a propósito: son

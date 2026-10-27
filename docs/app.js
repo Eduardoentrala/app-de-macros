@@ -12516,7 +12516,7 @@
       //  no es grave, y avisar de esto encima del mensaje del cierre sería
       //  ruido justo cuando la persona está leyendo sus calorías nuevas.
       if(typeof r.aprendido === 'string' && r.aprendido.trim()){
-        sbActualizarPerfil({ aprendido_cierre: r.aprendido.trim().slice(0, 800) })
+        sbActualizarPerfil({ aprendido_cierre: recortarTexto(r.aprendido, 800) })
           ['catch'](function(){});   // en silencio: a propósito
       }
 
@@ -13416,6 +13416,33 @@
     };
   }
 
+  // `enRango` para texto: lo que escribe el modelo tiene que caber en la
+  // columna, y si no cabe hay que cortarlo SIN partir una palabra.
+  //
+  //  Cortar a cuchillo dejaba el motivo acabado en «… Proteína 1». Y eso no
+  //  es solo feo en la tarjeta: desde que el cierre lee sus propias
+  //  decisiones, ese motivo vuelve a entrar como historial de veinte
+  //  semanas. Un trozo partido no se lee mal una vez, se lee mal cada lunes.
+  //
+  //  Es la red, no la solución: el prompt ya le pide al modelo que quepa.
+  //  Esto es para cuando se pase de todos modos.
+  function recortarTexto(txt, tope){
+    var s = String(txt == null ? '' : txt).trim();
+    if(!s) return null;
+    if(s.length <= tope) return s;
+    // Uno menos, que el puntito también ocupa.
+    var corte = s.slice(0, tope - 1);
+    // Si el corte cae en medio de un par sustituto —un emoji— queda media
+    // letra, que no es UTF-8 válido: Postgres rechaza la fila ENTERA, y
+    // entonces no se guarda el chequeo, no el motivo.
+    if(/[\uD800-\uDBFF]$/.test(corte)) corte = corte.slice(0, -1);
+    var esp = corte.lastIndexOf(' ');
+    // Solo si queda frase: con un corte muy al principio es mejor la
+    // palabra partida que dejarlo en nada.
+    if(esp > tope * 0.6) corte = corte.slice(0, esp);
+    return corte.replace(/[\s,;:(«¿¡]+$/, '') + '…';
+  }
+
   function guardarChequeo(r, foto){
     if(!sesion || !sesion.user) return;
     var q = respuestasChequeo();
@@ -13431,7 +13458,7 @@
       hambre: q.hambre || null, energia: q.energia || null, sueno: q.sueno || null,
       nota: document.getElementById('chqNota').value.trim() || null,
       ajusto: !!r.ajusto,
-      motivo: (r.motivo || '').slice(0, 500) || null,
+      motivo: recortarTexto(r.motivo, 500),
       cal_antes: Math.round(datosDeLaSemana().meta_cal) || null,
       cal_despues: r.ajusto && r.cal_nueva ? Math.round(r.cal_nueva) : null
     }, foto || {}));
