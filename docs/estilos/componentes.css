@@ -432,12 +432,12 @@ table.week-table tr.today td{font-weight:800;}
    fallo por otro peor. Se midieron con la zona puesta y salieron cinco, que
    es justo por lo que hay dos reglas aqui abajo y no una. */
 .back-btn, .prof-edit, .btn-mini,
-#renameDayBtn, #deleteDayBtn, #pesoReiniciar, #iaCerrar{
+#renameDayBtn, #deleteDayBtn, #pesoReiniciar, #iaCerrar, #iaBtn{
   position:relative;
 }
 .back-btn::after, .prof-edit::after, .btn-mini::after,
 #renameDayBtn::after, #deleteDayBtn::after, #pesoReiniciar::after,
-#iaCerrar::after{
+#iaCerrar::after, #iaBtn::after{
   content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
   width:100%;height:100%;min-width:44px;min-height:44px;
 }

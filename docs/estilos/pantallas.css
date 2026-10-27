@@ -245,11 +245,15 @@
 
 /* Los atajos de la primera pantalla */
 .ia-atajo{
-  display:block;width:calc(100% - 32px);margin:0 16px 8px;text-align:left;
+  display:flex;align-items:center;gap:11px;
+  width:calc(100% - 32px);margin:0 16px 8px;text-align:left;
   padding:15px 16px;border-radius:14px;border:none;cursor:pointer;
   background:var(--card-bg);box-shadow:var(--shadow);
   font:600 14px/1.3 sans-serif;color:var(--ink);
 }
+/* Un punto mas claro que la letra. Al mismo tono competian: dos negros del
+   mismo peso y el ojo no sabe cual leer primero. */
+.ia-atajo-icono{flex:none;width:18px;height:18px;color:var(--ink-soft);}
 .ia-atajo:active{opacity:.6;}
 
 /* Barra de escritura, pegada abajo */
@@ -264,6 +268,14 @@
   flex:0 0 auto;width:44px;height:44px;border-radius:50%;border:none;cursor:pointer;
   display:flex;align-items:center;justify-content:center;font-size:18px;
 }
+/* Los tres iconos de la barra van DIBUJADOS, no son emojis.
+   Un emoji lo pinta cada telefono a su manera y no se deja tenir: la camara
+   de iOS es gris con brillos y la de Android plana y azul, asi que eran lo
+   unico de esta barra que no seguia el color del resto. Dibujados se tinen
+   con `currentColor` —el gris del circulo claro, el blanco del oscuro— y
+   cambian solos con el tema. */
+.ia-icono svg, .ia-enviar svg{width:21px;height:21px;}
+.ia-icono svg{color:var(--ink);}
 .ia-icono{background:var(--pill-bg);}
 /* Mientras escucha. El latido no es adorno: es lo único que distingue
    "te estoy oyendo" de "no pasó nada al pulsar", y sin eso la gente vuelve
@@ -283,14 +295,36 @@
 
 .ia-momento{display:flex;gap:7px;margin:10px 0 4px;}
 .ia-momento .meta-opt{flex:1;padding:9px 4px;text-align:center;font:700 12.5px/1 sans-serif;}
-.ia-fila{
-  display:flex;align-items:flex-start;gap:10px;padding:11px 0;
-  border-bottom:1px solid var(--line);
-}
-.ia-fila:last-child{border-bottom:none;}
+/* EL SEPARADOR PASA AL ENVOLTORIO, no a la fila.
+   Cada alimento son ahora dos piezas -su nombre y su rejilla de macros- y
+   la raya tiene que ir debajo de las dos. Dejandola en `.ia-fila` caia
+   entre el nombre y sus propios numeros, partiendo el alimento en vez de
+   separarlo del siguiente. */
+.ia-item{padding:11px 0;border-bottom:1px solid var(--line);}
+.ia-item:last-child{border-bottom:none;}
+.ia-fila{display:flex;align-items:flex-start;gap:10px;}
 .ia-fila .txt{flex:1;min-width:0;}
 .ia-fila b{display:block;font:700 13.5px/1.3 sans-serif;color:var(--ink);}
 .ia-fila span{display:block;font:600 11.5px/1.4 sans-serif;color:var(--ink-faint);margin-top:3px;}
+/* Un dato por columna, con su nombre debajo. Es la misma forma que ya usa
+   la tarjeta de la semana: el numero manda y el rotulo explica, en vez de
+   cuatro cosas distintas en una linea gris.
+   `tabular-nums` para que dos tarjetas seguidas tengan las columnas
+   alineadas: con cifras de ancho variable un 354 y un 1.120 bailan y la
+   pila entera se ve descuadrada. */
+.ia-macros{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:4px;
+  margin-top:11px;padding-top:11px;border-top:1px solid var(--line);
+}
+.ia-macros div{text-align:center;min-width:0;}
+.ia-macros b{
+  display:block;font:800 15px/1 sans-serif;color:var(--ink);
+  font-variant-numeric:tabular-nums;
+}
+.ia-macros span{
+  display:block;font:700 9px/1 sans-serif;letter-spacing:.07em;
+  text-transform:uppercase;color:var(--ink-faint);margin-top:5px;
+}
 /* Marca de cuánto se fía el asistente de esos macros. Sin esto, una
    estimación floja se lee igual que un dato seguro. */
 .ia-duda{

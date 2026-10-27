@@ -10449,9 +10449,26 @@
   var IA_MSGS = [];           // { rol:'yo'|'el', texto, foto?, alimentos? }
   var iaOcupado = false;
 
+  // LOS ICONOS VAN DIBUJADOS, no son emojis.
+  //
+  //  Un 🛒 o un 🍽️ los pinta cada teléfono a su manera —el de iOS es gris y
+  //  con brillos, el de Android plano y de color— y no se pueden teñir, así
+  //  que eran lo único de estas tarjetas que no seguía el color del texto.
+  //  Dibujados se tiñen con `currentColor`, quedan del mismo peso que la
+  //  letra y cambian solos con el tema oscuro.
+  var iconoSVG = function(trazos){
+    return '<svg class="ia-atajo-icono" viewBox="0 0 24 24" fill="none" ' +
+           'stroke="currentColor" stroke-width="1.6" stroke-linecap="round" ' +
+           'stroke-linejoin="round" aria-hidden="true" focusable="false">' +
+           trazos + '</svg>';
+  };
   var IA_ATAJOS = [
-    { icono:'🛒', texto:'Hazme la lista del súper' },
-    { icono:'🍽️', texto:'¿Qué me recomiendas comer hoy?' }
+    { icono: iconoSVG('<path d="M3.2 4h2.2l2.3 10.2a1.7 1.7 0 0 0 1.7 1.3h7.6a1.7 1.7 0 0 0 1.6-1.2L20.4 7.6H6.1"/>' +
+                      '<circle cx="9.6" cy="19.4" r="1.3"/><circle cx="17" cy="19.4" r="1.3"/>'),
+      texto:'Hazme la lista del súper' },
+    { icono: iconoSVG('<path d="M6.6 3v4.6a2 2 0 0 0 4 0V3"/><path d="M8.6 9.6V21"/>' +
+                      '<path d="M16.6 3c1.7 1.2 2.2 3.3 2.2 5.2 0 1.6-.9 2.7-2.2 3V21"/>'),
+      texto:'¿Qué me recomiendas comer hoy?' }
   ];
 
   // Lo que su entrenador le dejó encendido. Nace vacío y VACÍO SIGNIFICA
@@ -10734,8 +10751,11 @@
         'También te digo qué te conviene comer con lo que te queda del día.' +
         '</div></div>' +
         IA_ATAJOS.map(function(a){
+          // Con un `span` alrededor del texto y no dos espacios: el icono ya
+          // no es una letra, así que la separación la pone la rejilla y no
+          // una pareja de espacios que además se comían al partir la línea.
           return '<button class="ia-atajo" data-atajo="' + escapar(a.texto) + '">' +
-                 a.icono + '  ' + escapar(a.texto) + '</button>';
+                 a.icono + '<span>' + escapar(a.texto) + '</span></button>';
         }).join('');
       return;
     }
@@ -10762,13 +10782,32 @@
     return '<div class="calc-box" style="margin:0 16px 10px;">' +
       m.alimentos.map(function(a){
         var cal = Math.round(a.P*4 + a.C*4 + a.G*9);
-        return '<div class="ia-fila">' +
+        // UN DATO POR COLUMNA, con su nombre debajo.
+        //
+        //  Iba todo en una línea gris: «109 g · 354 cal · P6 C51 G14». Cuatro
+        //  cosas de peso muy distinto —lo que pesa el alimento, lo que suma al
+        //  día, y los tres macros— con el mismo tamaño y el mismo color, así
+        //  que no había nada que mirar primero.
+        //
+        //  Y LOS MACROS EN CLAVE. «P6 C51 G14» lo entiende quien hizo la app.
+        //  Era el único sitio de toda la pantalla que no hablaba en español, y
+        //  justo el que hay que revisar, porque son una estimación.
+        var celda = function(valor, rotulo){
+          return '<div><b>' + valor + '</b><span>' + rotulo + '</span></div>';
+        };
+        return '<div class="ia-item">' +
+          '<div class="ia-fila">' +
           (a.seguridad !== 'alta'
             ? '<span class="ia-duda ' + a.seguridad + '">' +
               (a.seguridad === 'baja' ? 'a ojo' : 'aprox') + '</span>' : '') +
           '<div class="txt"><b>' + escapar(a.n) + '</b><span>' +
-            un(a.cant) + ' ' + escapar(abreviarUnidad(a.u)) + ' · ' + mil(cal) + ' cal · ' +
-            'P' + un(a.P) + ' C' + un(a.C) + ' G' + un(a.G) + '</span></div></div>';
+            un(a.cant) + ' ' + escapar(abreviarUnidad(a.u)) + '</span></div></div>' +
+          '<div class="ia-macros">' +
+            celda(mil(cal), 'cal') +
+            celda(un(a.P) + ' g', 'Proteína') +
+            celda(un(a.C) + ' g', 'Carbos') +
+            celda(un(a.G) + ' g', 'Grasas') +
+          '</div></div>';
       }).join('') +
       '<div class="ia-momento" style="margin-top:10px;">' +
         ['Desayuno','Comida','Cena'].map(function(c){

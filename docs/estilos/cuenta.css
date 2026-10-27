@@ -82,6 +82,12 @@
 .meta-opt{
   text-align:left;padding:14px;border-radius:14px;border:1.5px solid var(--line);
   background:var(--app-bg);cursor:pointer;
+  /* EL COLOR, QUE FALTABA. Los de esta pantalla llevan dentro un `<b>` que
+     sí lo fija, así que nadie lo echaba en falta; pero los tres del chat
+     -«Desayuno / Comida / Cena»- llevan el texto suelto, y un `<button>`
+     sin `color` cae al del sistema: en iOS, azul. Salían azules en el
+     teléfono y negros en el escritorio, y eran lo único azul de la app. */
+  color:var(--ink);
 }
 .meta-opt b{display:block;font:700 14.5px/1 sans-serif;color:var(--ink);}
 .meta-opt span{display:block;font:500 12px/1 sans-serif;color:var(--ink-faint);margin-top:5px;}

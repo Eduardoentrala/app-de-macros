@@ -18,6 +18,32 @@
 }
 .icon-btn.dark{background:var(--ink);color:var(--card-bg);}
 
+/* El botón del asistente: píldora clara con borde, con su nombre.
+   Era un círculo negro con un ✨ dentro. El círculo negro lo convertía en lo
+   más oscuro de toda la pantalla —más que el número de calorías, que es a lo
+   que se entra— y el emoji no se dejaba teñir.
+   Claro con borde pesa lo justo: se ve, se encuentra, y no compite con el
+   dato. El color sale de las mismas variables que el resto, así que el tema
+   oscuro lo sigue sin una regla aparte.
+
+   CON `.tabrow` DELANTE, y no `.ia-btn` a secas. La regla de al lado es
+   `.tabrow button`, que pesa más que una clase sola y le ganaba el borde, el
+   fondo, el color, la fuente y el relleno: el botón salía gris, plano y sin
+   borde, o sea ninguna de las seis opciones. No se ve leyendo el CSS —las
+   dos reglas están a treinta líneas— sino midiendo el botón ya pintado. */
+.tabrow .ia-btn{
+  display:flex;align-items:center;gap:6px;height:32px;padding:0 13px 0 11px;
+  border:1.5px solid var(--line);border-radius:16px;
+  background:var(--card-bg);color:var(--ink);
+  font:700 12.5px/1 sans-serif;cursor:pointer;flex:none;
+}
+/* Que se note al tocarlo. El de antes no se hundía, no se aclaraba y no
+   hacía nada: en un teléfono lento no sabías si habías acertado y se tocaba
+   dos veces. */
+.tabrow .ia-btn:active{background:var(--pill-bg);transform:scale(.97);}
+.tabrow .ia-btn:focus-visible{outline:2px solid var(--ink);outline-offset:2px;}
+.tabrow .ia-btn svg{flex:none;}
+
 .back-header{
   background:var(--card-bg);
   padding:16px 18px 10px;

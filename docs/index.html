@@ -112,7 +112,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = 'cc78c73cf5';
+    var SELLO = '2852e1790a';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -160,7 +160,24 @@
           <div class="tabrow">
             <button class="tab-hoy active" data-tab="hoy">Hoy</button>
             <button class="tab-semana" data-tab="semana">Semana</button>
-            <div class="tabrow-float"><button class="icon-btn dark" id="iaBtn" title="Asistente">✨</button></div>
+            <!-- EL ICONO VA DIBUJADO, no es un emoji.
+                 Un ✨ lo pinta cada teléfono a su manera -naranja en iOS, morado
+                 en Android- y no se puede teñir, así que era lo único de esta
+                 fila que no seguía el color del resto. Dibujado se tiñe con
+                 `currentColor` y cambia solo con el tema.
+                 Y con el nombre al lado: un destello suelto no dice si eso son
+                 ajustes, premios o magia. Esta es la función estrella de la app
+                 y era la única sin nombre. -->
+            <div class="tabrow-float">
+              <button class="ia-btn" id="iaBtn" aria-label="Abrir el asistente">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="1.6" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                  <path d="M12 3.2 13.5 9.1 19.4 10.6 13.5 12.1 12 18 10.5 12.1 4.6 10.6 10.5 9.1Z"/>
+                  <path d="M18.6 3.4 19.2 5.6 21.4 6.2 19.2 6.8 18.6 9 18 6.8 15.8 6.2 18 5.6Z"/>
+                </svg>
+                <span>Asistente</span>
+              </button>
+            </div>
           </div>
 
           <div class="quickrow">
@@ -610,13 +627,13 @@
           <div id="iaFotoZona"></div>
           <div class="ia-entrada">
             <button class="ia-icono" id="iaTomarFoto" title="Foto del platillo"
-              aria-label="Tomar foto o elegir de la galería">📷</button>
+              aria-label="Tomar foto o elegir de la galería"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3.5 8.8A2.3 2.3 0 0 1 5.8 6.5h1.9l1.1-2h6.4l1.1 2h1.9a2.3 2.3 0 0 1 2.3 2.3v8.4a2.3 2.3 0 0 1-2.3 2.3H5.8a2.3 2.3 0 0 1-2.3-2.3Z"/><circle cx="12" cy="13" r="3.4"/></svg></button>
             <!-- Se esconde solo si el teléfono no sabe transcribir, y solo
                  aparece con IA Plus. -->
-            <button class="ia-icono" id="iaHablar" title="Dictar" hidden>🎙️</button>
+            <button class="ia-icono" id="iaHablar" title="Dictar" aria-label="Dictar" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="9.2" y="2.8" width="5.6" height="10.8" rx="2.8"/><path d="M5.8 11.4a6.2 6.2 0 0 0 12.4 0"/><path d="M12 17.6V21"/></svg></button>
             <textarea id="iaTexto" rows="1" maxlength="500"
               placeholder="Escribe tu mensaje…"></textarea>
-            <button class="ia-enviar" id="iaEnviar" title="Enviar">➤</button>
+            <button class="ia-enviar" id="iaEnviar" title="Enviar" aria-label="Enviar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 19.5V5.2"/><path d="M6.3 10.9 12 5.2l5.7 5.7"/></svg></button>
           </div>
         </div>
         <div class="toast" id="toastIA2">Listo</div>
@@ -2048,7 +2065,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = 'cc78c73cf5';
+    var SELLO = '2852e1790a';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que
