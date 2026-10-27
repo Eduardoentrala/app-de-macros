@@ -215,7 +215,7 @@ console.log('\nY se agrupan por mes, que es como se busca una');
   ok((html.match(/sem-mes/g) || []).length === 1,
      'dos semanas del mismo mes llevan un solo rótulo');
   ok(/agosto 2026/.test(html), 'con el mes y el año',
-     'se guardan doce meses: dos «enero» seguidos no se distinguen sin el año');
+     'se guarda todo el historial: dos «enero» seguidos no se distinguen sin el año');
 
   // La del 2026-08-04 juzga del 28 de julio al 3 de agosto: empieza en julio.
   const dosMeses = [SEMANA_BUENA, Object.assign({}, SEMANA_BUENA, { semana: '2026-08-04' })];

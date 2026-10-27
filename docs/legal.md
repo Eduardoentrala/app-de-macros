@@ -77,8 +77,15 @@ llevarte.
 
 ## Cuánto tiempo los guardamos
 
-Mientras tengas cuenta. Las fotos de progreso se borran solas a los seis
-meses.
+Mientras tengas cuenta. Nada se borra solo con el tiempo: ni tu diario, ni
+tus pesos, ni tus fotos de progreso, ni el historial de tus semanas. Se
+guardan para que puedas mirar atrás, que es media razón de llevar un
+registro.
+
+Hasta octubre de 2026 este aviso decía que las fotos se borraban solas a los
+seis meses. No era cierto —la limpieza nunca llegó a programarse— y
+preferimos decir lo que de verdad pasa antes que dejar escrita una promesa
+que no se cumplía.
 
 Si borras tu cuenta, se borra **todo de verdad**: tu perfil, tu diario, tus
 pesos, tus fotos, tus rutinas y el historial interno. No queda copia y no

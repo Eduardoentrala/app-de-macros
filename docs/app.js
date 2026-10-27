@@ -6613,7 +6613,7 @@
     return sbFetch('/rest/v1/progress_photos' +
         '?select=week_key,pose,storage_path,bytes,width,height' +
         '&user_id=eq.' + quien +
-        '&week_key=gte.' + claveLimiteFotos() +   // solo seis meses
+        '&week_key=gte.' + claveLimiteFotos() +   // hasta dos años atrás
         '&order=week_key.desc')
       .then(function(fs){
         fs = fs || [];
@@ -6631,12 +6631,26 @@
       });
   }
 
-  // Las fotos se guardan seis meses. Pasado eso dejan de mostrarse, y la
-  // función limpiar_fotos_viejas() de la migración 0011 las quita de la base.
-  // Se compara por clave de semana ('2026-W31'), que ordena bien también
-  // entre años: '2025-W52' < '2026-W01'.
+  // HASTA DÓNDE ATRÁS SE PIDEN LAS FOTOS.
+  //
+  //  Eran seis meses, y ese número venía de un borrado que NO EXISTE: la
+  //  `limpiar_fotos_viejas()` de la 0011 hay que llamarla a mano siendo
+  //  super admin y nadie lo ha hecho nunca —se comprobó: en el proyecto ni
+  //  siquiera está instalado pg_cron—. O sea que las fotos de hace más de
+  //  seis meses seguían ahí, ocupando, y la app simplemente dejaba de
+  //  enseñarlas. Lo peor de los dos mundos.
+  //
+  //  Ahora son dos años, y el número no sale de un plazo de retención sino
+  //  de lo que cuesta pintarlas: `sbCargarFotos` FIRMA UNA URL POR FOTO y
+  //  las firma todas de golpe. Son cuatro por semana, o sea unas doscientas
+  //  al año; pedir diez años serían dos mil firmas cada vez que se abre
+  //  Fotos. Quitarlo del todo pide firmar según se vaya mirando, que es
+  //  otro cambio y más grande.
+  //
+  //  Se compara por clave de semana ('2026-W31'), que ordena bien también
+  //  entre años: '2025-W52' < '2026-W01'.
   function claveLimiteFotos(){
-    var MESES_FOTOS = 6;      // dentro: como constante suelta valdría
+    var MESES_FOTOS = 24;     // dentro: como constante suelta valdría
     var d = new Date(HOY);    // undefined al arrancar, por el hoisting de var
     d.setMonth(d.getMonth() - MESES_FOTOS);
     return claveSemana(d);
@@ -12448,16 +12462,25 @@
     if(!sesion || !sesion.user){ caja.innerHTML = ''; return Promise.resolve(); }
     if(!SEMANAS.length) caja.innerHTML = '<p class="cmp-aviso">Cargando…</p>';
 
-    // Sesenta y no cincuenta y dos: la base guarda doce meses, y pedir un
-    // poco de más evita quedarse corto el día que la limpieza vaya un pelo
-    // por detrás.
+    // DIEZ AÑOS, que es como decir «todo». La base ya no borra nada: la
+    // 0055 quitó la limpieza de los doce meses porque eran 52 filas al año
+    // por persona —el historial entero de todo el mundo ocupaba 96 kB, la
+    // mitad que UNA foto— y porque era justo el dato que solo vale pasado
+    // un año.
+    //
+    // Y sigue habiendo un tope, aunque sea enorme. No es para ahorrar
+    // espacio: es que esto se pinta en un teléfono, y una consulta sin
+    // límite es una promesa de traer lo que haya. Quinientas veinte filas
+    // son nada; un día sin tope, el día que alguien lleve veinte años, no
+    // se sabe. Si alguna vez se llega aquí, lo que toca es paginar, no
+    // subir el número.
     return sbFetch('/rest/v1/chequeos_semanales' +
         '?select=semana,dias_apuntados,media_cal,cal_antes,cal_despues,' +
         'media_p,media_c,media_g,meta_p,meta_c,meta_g,' +
         'peso_medio,peso_medio_antes,volumen,volumen_antes,sesiones,cintura,' +
         'ajusto,motivo,nota' +
         '&user_id=eq.' + sesion.user.id +
-        '&order=semana.desc&limit=60')
+        '&order=semana.desc&limit=520')
       .then(function(filas){
         SEMANAS = filas || [];
         pintarMisSemanas();
@@ -12987,7 +13010,7 @@
     if(!SEMANAS.length){
       caja.innerHTML = '<p class="cmp-aviso">Todavía no tienes semanas guardadas. ' +
         'Cada lunes, al contestar «¿Cómo te fue la semana?», se guarda aquí un ' +
-        'resumen. Se conservan doce meses.</p>';
+        'resumen. Se guardan todas: ninguna se borra con el tiempo.</p>';
       return;
     }
     // SOLO LA FECHA Y CUÁNTOS DÍAS. Los cuatro recuadros —peso, comida,
