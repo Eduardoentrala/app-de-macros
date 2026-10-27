@@ -21,7 +21,17 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
-const FN = readFileSync(join(RAIZ, 'supabase', 'functions', 'asistente', 'index.ts'), 'utf8');
+// Los finales de linea se normalizan AL LEER.
+//
+// El repositorio guarda LF y git los rescribe en CRLF al sacar los
+// archivos, asi que despues de un checkout este fichero llega con \r\n y
+// cualquier busqueda de un bloque escrito con \n deja de encontrarlo.
+//
+// Paso de verdad: estas dos pruebas se cayeron solas despues de un merge,
+// sin que nadie tocara ni el codigo que vigilan ni la prueba. Las demas ya
+// lo hacian; estas dos eran las unicas que no.
+const FN = readFileSync(join(RAIZ, 'supabase', 'functions', 'asistente', 'index.ts'), 'utf8')
+  .replace(/\r\n/g, '\n');
 
 let pasan = 0, fallan = 0;
 const ok = (c, q, extra = '') => {
