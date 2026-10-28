@@ -209,7 +209,13 @@ console.log('\nA las dos horas se cierra sola, GUARDANDO');
   ok(!!g, 'a las dos horas en punto, guarda');
   ok(g && g.sola === true, 'y marcada como cerrada por la app',
      'el aviso tiene que poder decir que no la guardó la persona');
-  ok(g && g.minutos === 120, 'con los minutos que duró', 'salió ' + (g && g.minutos));
+  // SIN DURACIÓN, A PROPÓSITO. Este cierre salta SIEMPRE a las dos horas
+  // en punto, se siguiera entrenando o se hubiera olvidado el botón: 120
+  // sería mentira en uno de los dos casos. Y desde que el cierre del lunes
+  // mira si las sesiones se acortan, ese 120 inventado le enseñaría lo
+  // contrario de lo que pasó. «No lo sé» es un dato; 120 no lo es.
+  ok(g && g.minutos === null, 'y SIN duración',
+     'salió ' + (g && g.minutos) + ': ver `sesiones-que-se-acortan`');
   ok(justo.sesionInicio === null, 'y el cronómetro se para');
 
   // LA FECHA ES LA DEL ARRANQUE, no la de hoy. Empezar a las 23:40, cerrar
@@ -221,8 +227,9 @@ console.log('\nA las dos horas se cierra sola, GUARDANDO');
      'entrenamiento de anoche en el día de mañana');
 
   const pasado = correr(135 * 60, INICIO);
-  ok(guardadoDe(pasado) && guardadoDe(pasado).minutos === 135,
-     'y si se pasa, se guarda lo que de verdad duró');
+  ok(!!guardadoDe(pasado) && pasado.sesionInicio === null,
+     'y si la app estuvo cerrada y ya se pasó, también cierra',
+     'el cierre se mira al pintar, así que salta en cuanto se vuelve a abrir');
 
   // SE PARA ANTES DE GUARDAR: `pintarCrono` corre cada segundo, así que si
   // el guardado no encontrara nada —una rutina sin pesos— y el cronómetro

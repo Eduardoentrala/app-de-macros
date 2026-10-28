@@ -52,7 +52,7 @@ const CORS = {
 //
 // Ahora lo dice: un GET sin sesión devuelve este sello y nada más.
 // `pruebas/funciones-vivas.mjs` lo compara con el del repo.
-const SELLO = '5d823f604a';
+const SELLO = '8fe667697f';
 
 // Tope diario por persona. Es la única defensa contra que un solo usuario
 // -o un token robado- vacíe la cuenta en una noche con un bucle.
@@ -610,6 +610,25 @@ QUÉ MIRAS, EN ESTE ORDEN
    seis es media. Sin mirar el plan, «solo entrenó 3» se lee siempre como
    poco, y a quien entrena tres días por elección se le estaría regañando
    cada lunes por hacer justo lo que dijo que iba a hacer.
+
+   Y CUÁNTO DURÓ CADA SESIÓN, si te paso la duración media. Las veces y el
+   volumen no distinguen «entrenó igual» de «entrenó las mismas veces pero
+   a medias», y eso segundo es una señal temprana: se acorta la sesión
+   antes de que se note en el peso o en la encuesta.
+
+   - Duración bastante más corta Y volumen abajo → está rindiendo menos.
+     Mira el sueño y el hambre antes de tocar calorías: lo más probable es
+     que le falte descanso o que el déficit lleve demasiado tiempo.
+   - Más corta pero el volumen IGUAL O MEJOR → eso no es fatiga, es que
+     entrena más apretado. No se lo señales como un problema: es lo
+     contrario.
+   - Más larga y el volumen igual → está tardando más en lo mismo. Suele
+     ser descanso entre series, no falta de comida. No muevas nada por eso.
+
+   NO LO MENCIONES SI NO TE LO PASO, y no lo conviertas en el motivo del
+   ajuste: es una pista para mirar en la dirección correcta, no una
+   medición. Las calorías se mueven por el peso, lo que comió y cómo se
+   siente.
 
 5. LO QUE DIJERON SUS FOTOS, si te lo paso. Es lo único de toda la app que
    distingue grasa de músculo: la báscula no sabe, la cintura sabe en un
@@ -2096,9 +2115,26 @@ Deno.serve(async (req) => {
       // Si no llega el plan —una app vieja, o alguien que no lo dijo— no se
       // inventa: se calla esa parte y se juzga como antes.
       const plan = e && e.dias_previstos ? ` de ${e.dias_previstos} que planea` : '';
+      // CUÁNTO DURARON, cuando se sabe.
+      //
+      //  Es lo único que distingue «entrenó las mismas veces pero a medias»
+      //  de «entrenó igual». El volumen sube y baja con el peso levantado y
+      //  con las descargas; media hora menos en el gimnasio, semana tras
+      //  semana, es otra cosa: es la señal de que algo se está apagando
+      //  —sueño, carga, ganas— antes de que lo diga la báscula.
+      //
+      //  SOLO SI HAY LAS DOS MEDIAS. La app manda `null` cuando no llega a
+      //  dos sesiones cronometradas, porque una tarde corta no es una
+      //  tendencia. Y el dato es nuevo: al principio será null casi
+      //  siempre, que es justo lo que tiene que pasar.
+      const duracion = (e && e.minutos != null && e.minutos_antes != null)
+        ? `\n- Duración media: ${e.minutos} min por sesión esta semana, ` +
+          `${e.minutos_antes} min la anterior`
+        : '';
       const entreno = e
         ? `\n- Entrenó ${e.sesiones} veces${plan} (${e.sesiones_antes} la semana anterior)\n` +
-          `- Volumen: ${e.volumen} kg esta semana, ${e.volumen_antes} kg la anterior`
+          `- Volumen: ${e.volumen} kg esta semana, ${e.volumen_antes} kg la anterior` +
+          duracion
         : '';
 
       // Las semanas de antes. Una semana suelta casi no dice nada: hambre 4

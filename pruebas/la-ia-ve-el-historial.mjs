@@ -87,8 +87,13 @@ console.log('\nLa app manda cuántos días dijo que entrena');
 // ------------------------------------------------------------------
 console.log('\nY la función lo pone al lado de lo que hizo');
 {
+  // EL CORTE ACABA EN `entreno`, no en el primer `: '';` que aparezca.
+  // Entre medias se coló el bloque de la duracion, que tambien acaba asi, y
+  // el trozo se quedaba sin la definicion de `entreno`: ReferenceError y
+  // rojo sin que nada estuviera roto.
   const armar = new Function('e', trozo(
-    'const plan = e && e.dias_previstos', "        : '';") + '; return entreno;');
+    'const plan = e && e.dias_previstos', '          duracion\n        : \'\';') +
+    '; return entreno;');
 
   const cumplio = armar({ sesiones: 4, sesiones_antes: 4, dias_previstos: 4,
                           volumen: 21500, volumen_antes: 20100 });

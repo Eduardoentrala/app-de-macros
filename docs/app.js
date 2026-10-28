@@ -1635,13 +1635,22 @@
     if(cerrandoSola || guardandoSesion) return;
     cerrandoSola = true;
     var desde = sesionInicio;
-    var minutos = Math.round(seg / 60);
     // SE PARA ANTES DE GUARDAR. `pintarCrono` corre cada segundo: si el
     // guardado no encontrara nada que guardar -una rutina sin pesos- y el
     // cronometro siguiera vivo, esto se repetiria sesenta veces por minuto.
     pararCrono();
     try{
-      guardarSesionAhora({ fecha: isoDe(new Date(desde)), minutos: minutos, sola: true });
+      // SIN DURACION, A PROPOSITO.
+      //
+      //  Este cierre salta SIEMPRE a las dos horas en punto, se siguiera
+      //  entrenando o se hubiera olvidado el boton. O sea que el numero
+      //  seria 120 en los dos casos, y uno de los dos es mentira.
+      //
+      //  Y la duracion ya no es decoracion: el cierre del lunes la mira
+      //  para ver si las sesiones se estan acortando. Meterle un 120
+      //  inventado le enseñaria justo lo contrario de lo que paso.
+      //  «No lo se» es un dato; 120 no lo es.
+      guardarSesionAhora({ fecha: isoDe(new Date(desde)), minutos: null, sola: true });
     }catch(e){
       toast('toastRutina', 'No pude cerrar tu sesión sola: ' + traducirError(e && e.message));
     }
@@ -12980,7 +12989,7 @@
     // «+9% vs anterior» de la pantalla; al cierre de semana solo llegaba el
     // volumen total, así que la IA no podía saber en QUÉ ejercicio subiste.
     return sbFetch('/rest/v1/workout_sessions' +
-        '?select=session_date,total_volume,exercises&session_date=gte.' + desde +
+        '?select=session_date,total_volume,exercises,duration_min&session_date=gte.' + desde +
         '&user_id=eq.' + sesion.user.id + '&order=session_date.asc')
       .then(function(filas){
         var corte = isoDe(iniCerrada);
@@ -13001,13 +13010,32 @@
         //  las dos cuentan como trabajo hecho.
         var estaSemana = [], anterior = [];
         var diasEsta = {}, diasAntes = {};
+        // CUANTO DURAN LAS SESIONES.
+        //
+        //  Solo las que tienen el dato. `duration_min` es nuevo -antes no lo
+        //  llenaba nadie- y las sesiones cerradas solas a las dos horas lo
+        //  dejan a null a proposito, porque ahi el numero no significa nada.
+        //  Contar un null como cero diria que entreno cero minutos, que es
+        //  una afirmacion y no un hueco: es justo el fallo que ya se pago
+        //  con los macros.
+        var minEsta = [], minAntes = [];
         (filas || []).forEach(function(f){
           if(f.session_date >= finCerrada) return;   // de la semana en curso
           var esDeEsta = f.session_date >= corte;
           (esDeEsta ? estaSemana : anterior).push(Number(f.total_volume) || 0);
           (esDeEsta ? diasEsta : diasAntes)[f.session_date] = true;
+          var m = f.duration_min == null ? null : Number(f.duration_min);
+          if(m != null && isFinite(m) && m > 0)
+            (esDeEsta ? minEsta : minAntes).push(m);
         });
         var suma = function(a){ return a.reduce(function(x, y){ return x + y; }, 0); };
+        // La media, o null si no hay con que hacerla. Y con DOS sesiones
+        // como minimo: una sola tarde corta no es una tendencia, es una
+        // tarde corta, y mandarla como «duracion de la semana» invita a
+        // leerla como si lo fuera.
+        var media = function(a){
+          return a.length >= 2 ? Math.round(suma(a) / a.length) : null;
+        };
 
         // Y las cuatro semanas por separado, con su fecha, para la tendencia.
         var porSemana = [];
@@ -13151,6 +13179,17 @@
           dias_previstos: (reg && reg.dias >= 1 && reg.dias <= 7) ? Number(reg.dias) : null,
           volumen: Math.round(suma(estaSemana)),
           volumen_antes: Math.round(suma(anterior)),
+          // CUANTO DURARON, de media. Es lo unico que distingue «entreno
+          // igual de veces pero a medias» de «entreno igual»: el volumen
+          // sube y baja con el peso levantado, pero media hora menos en el
+          // gimnasio tres semanas seguidas es otra cosa.
+          //
+          // Null cuando no hay suficientes sesiones cronometradas. El dato
+          // es nuevo, asi que al principio casi siempre sera null, y eso
+          // esta bien: no decir nada es mejor que decirlo a medias.
+          minutos: media(minEsta),
+          minutos_antes: media(minAntes),
+          sesiones_con_tiempo: minEsta.length,
           por_semana: porSemana,
           ejercicios: ejercicios.slice(0, 8)
         };
