@@ -265,17 +265,29 @@ console.log('\nLo guardado manda; lo que falta se rellena');
      'esto es lo que quita los siete guiones seguidos');
   ok(vieja.dias === 1, 'con sus días apuntados');
 
-  // El cardio: solo el de la semana.
-  ok(conDatos.cardio === 45, 'el cardio suma solo los días de esa semana',
-     'salió ' + conDatos.cardio + ': el del día 30 no es de esta semana');
-  ok(conDatos.metaCardio === 120, 'y su meta sale del perfil');
-  ok(conDatos.metaDias === 7, 'los días de entreno también');
+  ok(conDatos.metaDias === 7, 'los días de entreno salen del perfil');
+
+  // EL CARDIO SE FUE, Y CON EL SU CONSULTA.
+  //
+  //  La fila decia «0 / 180 min» para siempre: la app no tiene forma de
+  //  apuntar cardio -`cardio_logs` existe desde la 0001 y nadie escribe en
+  //  ella- y el cierre del lunes ni lo mira. Una meta que no se puede poner
+  //  y un registro que no se puede llenar, enseñados en la tarjeta.
+  //
+  //  Y no hacia falta para las calorias: el gasto medido sale de lo que
+  //  come y de como se mueve su peso, asi que el cardio ya entra por ahi
+  //  aunque no se apunte ni un minuto.
+  ok(conDatos.cardio === undefined && conDatos.metaCardio === undefined,
+     'y el cardio ya no se calcula',
+     'calcularlo sin enseñarlo es trabajo que no se ve: salió ' +
+     JSON.stringify([conDatos.cardio, conDatos.metaCardio]));
 
   // Sin red no se rompe: se enseña lo guardado.
   const sinRed = armarSemana({ semana: '2026-08-18', media_p: 150, meta_p: 170,
     media_cal: 2028, cal_antes: 2275 }, null);
-  ok(sinRed.P === 150 && sinRed.cardio === null,
-     'sin red se enseña lo guardado y el resto queda en hueco');
+  ok(sinRed.P === 150 && sinRed.sesiones == null,
+     'sin red se enseña lo guardado y el resto queda en hueco',
+     'lo guardado en la fila se pinta; lo que había que ir a buscar, no');
 
   // Y si no hay meta de calorías guardada, se deduce de los macros.
   const sinMeta = armarSemana({ semana: '2026-08-18', meta_p: 170, meta_c: 230, meta_g: 75,
@@ -338,8 +350,10 @@ console.log('\nY la tarjeta dice lo que tiene que decir');
   ok(html.includes('195g / 230g') && html.includes('72g / 75g'), 'los carbos y las grasas');
   ok(html.includes('2028 / 2275'), 'y las calorías');
   ok(html.includes('4 / 7 días'), 'los días de fuerza contra su meta');
-  ok(/0 \/ 120 min/.test(html), 'y el cardio contra la suya',
-     'sin cardio apuntado son cero minutos, no un hueco: la semana pasó igual');
+  ok(!/min<\/b>/.test(html) && !/Cardio/.test(html),
+     'y no hay fila de cardio',
+     'decia «0 / 180 min» siempre, y eso enseña a desconfiar de los numeros ' +
+     'de al lado, que si son buenos');
   ok(html.includes('Subieron <b>1</b>'), 'la progresión de fuerza');
   ok(html.includes('Ahí te dejo'), 'y lo que le contestó su coach',
      'es la parte que convierte una tabla de números en algo que se lee');

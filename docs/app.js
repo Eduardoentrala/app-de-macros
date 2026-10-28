@@ -10489,9 +10489,9 @@
     return sbFetch('/rest/v1/profiles?select=*&id=eq.' + sesion.user.id)
       .then(function(f){
         // Se guarda tal cual además de devolverlo. La tarjeta de «Mis
-        // semanas» necesita `cardio_goal_min` y `dias_entreno`, y son cosas
-        // que solo viven en el perfil: sin esto habría que volver a pedir el
-        // perfil entero cada vez que se abre una semana.
+        // semanas» necesita `dias_entreno`, y eso solo vive en el perfil:
+        // sin esto habría que volver a pedir el perfil entero cada vez que
+        // se abre una semana.
         MI_PERFIL = (f && f[0]) || null;
         return MI_PERFIL;
       });
@@ -11172,7 +11172,7 @@
   // despliegue, la app funciona como siempre en vez de apagarse sola.
   var MIS_LLAVES = null;
   // El perfil recién traído, tal cual. Lo llena `sbPerfil()` y lo lee la
-  // tarjeta de «Mis semanas», que necesita las metas de entreno y de cardio.
+  // tarjeta de «Mis semanas», que necesita la meta de días de entreno.
   //
   // SE DECLARA AQUÍ ARRIBA, no junto a quien lo usa seis mil líneas más
   // abajo: `var` iza la declaración pero no la asignación, así que un
@@ -13561,8 +13561,13 @@
     return { desde: isoDe(a), hasta: isoDe(b), ini: a, fin: b };
   }
 
-  // Los apuntes, el cardio y las sesiones de esa semana —y de la anterior,
-  // que hace falta para saber si cada ejercicio subió o bajó—.
+  // Los apuntes y las sesiones de esa semana —y de la anterior, que hace
+  // falta para saber si cada ejercicio subió o bajó—.
+  //
+  // AQUÍ SE PEDÍA TAMBIÉN EL CARDIO. Se quitó con su fila de la tarjeta: la
+  // app no tiene forma de apuntar cardio -`cardio_logs` existe desde la
+  // 0001 y nadie escribe en ella-, así que esa consulta traía una lista
+  // vacía en cada apertura para pintar un «0 / 180 min» eterno.
   function crudosDeSemana(iso){
     // LA SEMANA EN CURSO NO SE GUARDA EN LA CACHÉ. Las pasadas ya no cambian
     // —lo que se comió el mes pasado es lo que se comió— pero la de esta
@@ -13584,10 +13589,9 @@
     };
     return Promise.all([
       q('diary_entries', 'entry_date,protein_g,carbs_g,fat_g,calories', 'entry_date', r.desde),
-      q('cardio_logs', 'log_date,minutes', 'log_date', r.desde),
       q('workout_sessions', 'session_date,exercises,total_volume', 'session_date', isoDe(antes))
     ]).then(function(x){
-      var d = { comidas: x[0], cardio: x[1], sesiones: x[2], desde: r.desde, hasta: r.hasta,
+      var d = { comidas: x[0], sesiones: x[1], desde: r.desde, hasta: r.hasta,
                 desdeAntes: isoDe(antes) };
       if(!enCurso) CACHE_SEMANA[iso] = d;
       return d;
@@ -13716,7 +13720,7 @@
       P: f.media_p, C: f.media_c, G: f.media_g, cal: f.media_cal,
       metaP: f.meta_p, metaC: f.meta_c, metaG: f.meta_g, metaCal: f.cal_antes,
       dias: f.dias_apuntados, sesiones: f.sesiones,
-      cardio: null, metaCardio: null, metaDias: null, prog: null,
+      metaDias: null, prog: null,
       peso: f.peso_medio != null ? Number(f.peso_medio) : null,
       pesoAntes: f.peso_medio_antes != null ? Number(f.peso_medio_antes) : null,
       cintura: f.cintura != null ? Number(f.cintura) : null,
@@ -13731,12 +13735,6 @@
         if(m.G == null) m.G = med.G;
         if(m.cal == null) m.cal = med.cal;
         if(m.dias == null) m.dias = med.dias;
-      }
-      if(Array.isArray(crudos.cardio)){
-        m.cardio = crudos.cardio.reduce(function(a, c){
-          var f2 = String(c.log_date || '').slice(0, 10);
-          return (f2 >= crudos.desde && f2 <= crudos.hasta) ? a + (Number(c.minutes) || 0) : a;
-        }, 0);
       }
       if(Array.isArray(crudos.sesiones)){
         if(m.sesiones == null){
@@ -13793,8 +13791,6 @@
     // lo vuelca ahí al cargar— y así sigue valiendo si alguien lo cambia en
     // la pantalla sin haber recargado.
     m.metaDias   = (reg && reg.dias != null) ? Number(reg.dias) : null;
-    m.metaCardio = (MI_PERFIL && MI_PERFIL.cardio_goal_min != null)
-                   ? Number(MI_PERFIL.cardio_goal_min) : null;
     // LAS METAS DE MACROS QUE NO SE GUARDARON. Sin ellas la tarjeta enseñaba
     // «152g / —» en los tres y el sello se quedaba en «no hay datos
     // suficientes» aunque estuviera todo lo demás, porque `logroSusMacros`
@@ -13970,9 +13966,6 @@
           '<div class="ts-fila"><span>Fuerza</span><b>' +
             (m.sesiones == null ? '—' : m.sesiones) + ' / ' +
             (m.metaDias == null ? '—' : m.metaDias) + ' días</b></div>' +
-          '<div class="ts-fila"><span>Cardio</span><b>' +
-            (m.cardio == null ? '—' : m.cardio) + ' / ' +
-            (m.metaCardio == null ? '—' : m.metaCardio) + ' min</b></div>' +
           (m.dias == null ? '' :
             '<div class="ts-fila"><span>Apuntó</span><b>' + m.dias + ' / 7 días</b></div>') +
         '</div>' +
@@ -13998,7 +13991,7 @@
       // Se calla A PROPÓSITO, y es el único sitio de la tarjeta donde vale
       // hacerlo: la hoja YA está pintada con lo que había guardado, que es lo
       // que la IA vio y lo que de verdad importa. Esto solo iba a completar
-      // el cardio y la progresión. Un aviso rojo por no poder añadir un
+      // la progresión. Un aviso rojo por no poder añadir un
       // adorno haría parecer rota una pantalla que se está viendo entera.
       //
       // Lo que NO se hace aquí es dejar huecos donde había datos: si esto
