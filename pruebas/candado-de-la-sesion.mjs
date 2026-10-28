@@ -52,7 +52,7 @@ console.log('\nEl candado se suelta aunque algo reviente');
   // función de guardado que lanza, y se comprueba que un segundo toque
   // sigue llegando. Si el candado se queda cerrado, no llega.
   const fuente = APP.slice(APP.indexOf("  document.getElementById('saveSessionBtn')"),
-                           APP.indexOf('  function guardarSesionAhora(){'));
+                           APP.indexOf('  function guardarSesionAhora(opciones){'));
 
   // EL CANDADO SE DECLARA DENTRO, compartido entre el manejador de verdad y
   // el doble. Se intentó primero pasándolo como parámetro a `new Function` y
@@ -69,7 +69,7 @@ console.log('\nEl candado se suelta aunque algo reviente');
   const api = new Function('document', 'toast', 'traducirError', `
     var guardandoSesion = false;
     var intentos = 0;
-    function guardarSesionAhora(){
+    function guardarSesionAhora(opciones){
       if(guardandoSesion) return;
       guardandoSesion = true;
       intentos++;
@@ -104,7 +104,7 @@ console.log('\nY el candado sigue haciendo su trabajo');
 {
   // No vaya a ser que el arreglo lo haya dejado sin efecto: sigue teniendo
   // que impedir el doble guardado mientras uno está en marcha.
-  const f = sacar('  function guardarSesionAhora(){');
+  const f = sacar('  function guardarSesionAhora(opciones){');
   ok(/if\(guardandoSesion\) return;/.test(f), 'un toque con otro en marcha no dispara');
   ok(/guardandoSesion = true;/.test(f), 'y se cierra al empezar');
 
@@ -121,7 +121,7 @@ console.log('\nY el candado sigue haciendo su trabajo');
 // ------------------------------------------------------------------
 console.log('\nY lo que se ve cuando no hay nada que guardar');
 {
-  const f = sacar('  function guardarSesionAhora(){');
+  const f = sacar('  function guardarSesionAhora(opciones){');
   // Un `return` mudo aquí se lee como que el botón está roto.
   ok(/No hay series con peso que guardar/.test(f),
      'se dice que no hay series, en vez de no hacer nada',

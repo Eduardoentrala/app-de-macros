@@ -81,8 +81,11 @@ console.log('\nY se para al guardar la sesión');
   ok((APP.match(/pararCrono\(\);/g) || []).length >= 2,
      'por los dos caminos del guardado',
      'hay una salida temprana cuando no hay sesión, y es la que más se olvida');
-  ok(/pararCrono\(\);\n      toast\('toastRutina', 'Sesión guardada · '/.test(APP),
+  ok(/pararCrono\(\);\n      toast\('toastRutina', \(opciones && opciones\.sola/.test(APP),
      'y en el camino bueno, justo antes de avisar');
+  ok(/'Llevabas dos horas: guardé tu sesión sola · '/.test(APP),
+     'y el aviso dice si la cerró la app',
+     '«Sesión guardada» a secas, sin haberla pulsado, se lee como un fallo');
 }
 
 // ------------------------------------------------------------------
@@ -155,6 +158,101 @@ console.log('\nSobrevive a cerrar la app, al cambio de día y a lo que haga falt
 }
 
 // ------------------------------------------------------------------
+console.log('\nA las dos horas se cierra sola, GUARDANDO');
+{
+  // No es un tope que corte el tiempo y lo tire —eso es justo lo que se
+  // quitó—: es guardar la sesión. Dos horas es más de lo que dura
+  // cualquier entrenamiento, así que llegar ahí significa que se olvidó el
+  // botón, y lo que no puede pasar es que el trabajo de esa tarde se quede
+  // sin registrar porque nadie lo pulsó.
+  const correr = (segundos, inicio) => {
+    const llamadas = [];
+    return new Function('segundos', 'inicio', 'llamadas',
+      'var sesionInicio = inicio, cronoTick = 1, guardandoSesion = false;' +
+      // EL UMBRAL SE LEE DEL CÓDIGO, no se copia aquí. Escrito a mano, esta
+      // prueba seguía pasando con el tope cambiado a una hora: comprobaba
+      // su propia copia. Se vio mutando.
+      (APP.match(/var TOPE_AUTO = [^;]+;/) || ['var TOPE_AUTO = 0;'])[0] +
+      'var cerrandoSola = false;' +
+      'var CLAVE_SESION = "k";' +
+      'var localStorage = { removeItem: function(){}, setItem: function(){}, getItem: function(){ return ""; } };' +
+      'var ahora = inicio + segundos * 1000;' +
+      'var Date = function(ms){ this.ms = ms; };' +
+      'Date.now = function(){ return ahora; };' +
+      'function isoDe(d){ return "dia(" + d.ms + ")"; }' +
+      'function clearInterval(){}' +
+      'function toast(_i, t){ llamadas.push({ aviso: t }); }' +
+      'function traducirError(m){ return m; }' +
+      'function guardarSesionAhora(o){ llamadas.push({ guardado: o }); }' +
+      'var pintado = null;' +
+      'var document = { getElementById: function(){ return { hidden: true,' +
+      '  querySelector: function(){ return { set textContent(v){ pintado = v; } }; } }; } };' +
+      sacar('function fmtLargo(seg){') + '\n' +
+      sacar('function pintarCrono(){') + '\n' +
+      sacar('function cerrarSesionSola(seg){') + '\n' +
+      sacar('function pararCrono(){') + '\n' +
+      'pintarCrono();' +
+      'return { llamadas: llamadas, sesionInicio: sesionInicio, pintado: pintado };'
+    )(segundos, inicio, llamadas);
+  };
+  const INICIO = 1700000000000;
+  const guardadoDe = (r) => (r.llamadas.find((x) => x.guardado) || {}).guardado;
+
+  const antes = correr(119 * 60, INICIO);
+  ok(!guardadoDe(antes) && antes.sesionInicio !== null,
+     'a la hora cincuenta y nueve sigue corriendo',
+     'cerrar antes de tiempo seria cortar un entrenamiento de verdad');
+  ok(antes.pintado === '1:59:00', 'y pinta el tiempo', 'pintó ' + antes.pintado);
+
+  const justo = correr(120 * 60, INICIO);
+  const g = guardadoDe(justo);
+  ok(!!g, 'a las dos horas en punto, guarda');
+  ok(g && g.sola === true, 'y marcada como cerrada por la app',
+     'el aviso tiene que poder decir que no la guardó la persona');
+  ok(g && g.minutos === 120, 'con los minutos que duró', 'salió ' + (g && g.minutos));
+  ok(justo.sesionInicio === null, 'y el cronómetro se para');
+
+  // LA FECHA ES LA DEL ARRANQUE, no la de hoy. Empezar a las 23:40, cerrar
+  // la app y abrirla a las 10:00 salta este cierre: esa sesión es del día
+  // en que se entrenó.
+  ok(g && g.fecha === 'dia(' + INICIO + ')',
+     'y la fecha es la del arranque, no la de hoy',
+     'salió ' + (g && g.fecha) + ': guardarla con la de hoy mete el ' +
+     'entrenamiento de anoche en el día de mañana');
+
+  const pasado = correr(135 * 60, INICIO);
+  ok(guardadoDe(pasado) && guardadoDe(pasado).minutos === 135,
+     'y si se pasa, se guarda lo que de verdad duró');
+
+  // SE PARA ANTES DE GUARDAR: `pintarCrono` corre cada segundo, así que si
+  // el guardado no encontrara nada —una rutina sin pesos— y el cronómetro
+  // siguiera vivo, esto se repetiría sesenta veces por minuto.
+  const cerrar = sacar('function cerrarSesionSola(seg){');
+  ok(cerrar.indexOf('pararCrono();') < cerrar.indexOf('guardarSesionAhora('),
+     'y se para ANTES de intentar guardar',
+     'si no, una rutina sin pesos lo reintentaría cada segundo');
+  ok(/if\(cerrandoSola \|\| guardandoSesion\) return;/.test(cerrar),
+     'y no se pisa con un guardado a mano en curso');
+}
+
+console.log('\nY la sesión guarda cuánto duró');
+{
+  // `workout_sessions.duration_min` existe desde la 0001 y no la llenaba
+  // nadie. Ahora hay cronómetro, así que hay dato.
+  const g = sacar('function guardarSesionAhora(opciones){');
+  ok(/duration_min: minutos/.test(g), 'se manda en la fila');
+  ok(/Math\.min\(600, Math\.max\(0, Math\.round\(minutos\)\)\)/.test(g),
+     'acotado a lo que acepta la columna',
+     'fuera de rango no falla ese campo: falla la fila entera y la sesión ' +
+     'no se guarda');
+  ok(/sesionInicio \? Math\.round\(\(Date\.now\(\) - sesionInicio\) \/ 60000\) : null/.test(g),
+     'y sale del cronómetro cuando lo hay');
+  ok(/\(opciones && opciones\.minutos != null\)/.test(g),
+     'o de quien llama, que es como lo sabe el cierre automático',
+     'ahí el cronómetro ya se paró, así que el dato tiene que viajar');
+}
+
+// ------------------------------------------------------------------
 console.log('\nY mientras corre tampoco se corta');
 {
   const pintar = sacar('function pintarCrono(){');
@@ -167,9 +265,11 @@ console.log('\nY mientras corre tampoco se corta');
   // LO ÚNICO QUE LO PARA ES GUARDAR. Tres sitios: los dos caminos del
   // guardado y el de encolarlo sin señal, que también es guardarlo.
   const paradas = (APP.match(/pararCrono\(\);/g) || []).length;
-  ok(paradas === 4, `se para en ${paradas} sitios`,
-     'tres son los del guardado -con sesión, sin sesión y encolado- y el ' +
-     'cuarto el del reloj movido. Uno más y hay que mirar cuál');
+  ok(paradas === 5, `se para en ${paradas} sitios`,
+     'tres son los del guardado —con sesión, sin sesión y encolado—, el ' +
+     'cuarto el del reloj movido y el quinto el cierre de las dos horas, ' +
+     'que guarda antes. Uno más y hay que mirar cuál: cada sitio que lo ' +
+     'pare sin guardar es tiempo de entrenamiento que se tira');
 }
 
 // ------------------------------------------------------------------

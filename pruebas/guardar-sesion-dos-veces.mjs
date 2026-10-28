@@ -48,7 +48,7 @@ const ok = (c, q, extra = '') => {
 function manejador() {
   const decl = APP.indexOf('  var guardandoSesion = false;');
   if (decl < 0) throw new Error('no encuentro el candado `guardandoSesion`');
-  const cab = '  function guardarSesionAhora(){';
+  const cab = '  function guardarSesionAhora(opciones){';
   const i = APP.indexOf(cab, decl);
   if (i < 0) throw new Error('no encuentro `guardarSesionAhora`');
   let n = 0, j = APP.indexOf('{', i);
@@ -116,6 +116,10 @@ function montar({ filasQueYaHay = [], fallaLaConsulta = false,
     // camino con red, así que estas dicen «hay red» y `encolar` solo deja
     // constancia: si alguna vez se llama en estas pruebas, es que el camino
     // bueno dejó de serlo.
+    // La sesion guarda cuanto duro, y eso sale del cronometro. Aqui no hay:
+    // null significa «sin cronometro», que es lo que pasa si se guarda sin
+    // haber marcado ninguna serie.
+    sesionInicio: null,
     sinConexion: () => false,
     esperaMejorMomento: () => false,
     pararCrono: () => {},

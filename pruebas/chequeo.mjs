@@ -197,11 +197,26 @@ console.log('\n— El porcentaje se mueve mientras entrenas —');
   check('y guardar la sesión lo apaga',
     /c\.removeAttribute\('data-tocado'\);/.test(APP));
   // Y se repinta después de guardar, que es lo que apaga los porcentajes en
-  // pantalla. Se ancla en el manejador de "Guardar sesión": `saveCurrentDay`
-  // aparece tres veces en el archivo y un indexOf a secas coge la primera.
-  const g = APP.indexOf("getElementById('saveSessionBtn')");
+  // pantalla.
+  //
+  // SE MIRA LA FUNCIÓN ENTERA, contando llaves. Antes se cortaba una
+  // ventana de 4000 caracteres desde el manejador del botón, y el día que
+  // la función creció —el cierre automático de las dos horas— el `recalcAll`
+  // se quedó fuera de la ventana y esto salió rojo sin que nada se hubiera
+  // roto. Es el mismo fallo que ya se pagó en `cierre-semana`.
+  const g = (() => {
+    const i = APP.indexOf('function guardarSesionAhora(opciones){');
+    if (i < 0) return '';
+    let n = 0, j = APP.indexOf('{', i);
+    for (; j < APP.length; j++) {
+      if (APP[j] === '{') n++;
+      else if (APP[j] === '}') { n--; if (!n) return APP.slice(i, j + 1); }
+    }
+    return '';
+  })();
+  check('se encuentra el guardado de sesión', g.length > 500, `${g.length} caracteres`);
   check('se repinta después de guardar, para que se apague de verdad',
-    /removeAttribute\('data-tocado'\)[\s\S]*recalcAll\(\);/.test(APP.slice(g, g + 4000)));
+    /removeAttribute\('data-tocado'\)[\s\S]*recalcAll\(\);/.test(g));
 
   // Ya no queda el veredicto que sobrevivía al guardado.
   check('no queda el porcentaje que se quedaba pegado',

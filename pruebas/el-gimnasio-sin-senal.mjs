@@ -46,9 +46,9 @@ function sacar(cab) {
 // ------------------------------------------------------------------
 console.log('\nSin señal se encola en vez de deshacerse');
 {
-  const guardar = sacar('function guardarSesionAhora(){');
+  const guardar = sacar('function guardarSesionAhora(opciones){');
   const iQueue = guardar.indexOf('if(sinConexion(e) || esperaMejorMomento(e))');
-  const iDeshacer = guardar.indexOf('delete SESIONES[iso(HOY)];', iQueue > 0 ? iQueue : 0);
+  const iDeshacer = guardar.indexOf('delete SESIONES[fecha];', iQueue > 0 ? iQueue : 0);
 
   ok(iQueue > 0, 'el fallo de red se distingue del rechazo del servidor',
      'un «no hay red» y un «ese dato no vale» son cosas opuestas y se trataban igual');
@@ -59,7 +59,7 @@ console.log('\nSin señal se encola en vez de deshacerse');
   ok(/buscar: busca/.test(guardar), 'y con CÓMO buscarse',
      'sin eso, subir la cola crea otra fila y duplica el volumen del día: el ' +
      'mismo fallo que ya se arregló mirando antes de guardar');
-  ok(/clave: 'sesion:' \+ iso\(HOY\) \+ ':' \+ \(diaId \|\| ''\)/.test(guardar),
+  ok(/clave: 'sesion:' \+ fecha \+ ':' \+ \(diaId \|\| ''\)/.test(guardar),
      'una por día y día de rutina',
      'volver a darle al botón sin señal reemplaza la que esperaba; dos días ' +
      'de rutina distintos el mismo día siguen siendo dos');

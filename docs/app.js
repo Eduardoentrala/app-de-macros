@@ -1594,7 +1594,21 @@
     if(!c) return;
     if(!sesionInicio){ c.hidden = true; return; }
     var seg = Math.floor((Date.now() - sesionInicio) / 1000);
-    // NO HAY TOPE. Aquí había uno de seis horas que retiraba el cronómetro
+
+    // A LAS DOS HORAS SE CIERRA SOLA.
+    //
+    //  No es un tope que corte el tiempo y lo tire -eso es justo lo que se
+    //  quito-: es guardar la sesion. Dos horas es mas de lo que dura
+    //  cualquier entrenamiento, asi que llegar ahi significa que se olvido
+    //  el boton, y lo que no puede pasar es que el trabajo de esa tarde se
+    //  quede sin registrar porque nadie lo pulso.
+    //
+    //  Se guarda con la fecha del ARRANQUE, no la de hoy: empezar a las
+    //  23:40, cerrar la app y abrirla a las 10:00 salta este cierre, y esa
+    //  sesion es del dia en que se entreno.
+    if(seg * 1000 >= TOPE_AUTO){ cerrarSesionSola(seg); return; }
+
+    // NO HAY TOPE QUE LA TIRE. Aquí había uno de seis horas que retiraba el cronómetro
     // solo, y eso es cortar el tiempo de un entrenamiento que todavía no se
     // ha guardado. Lo único que lo para es guardar la sesión.
     //
@@ -1612,6 +1626,26 @@
     try{ localStorage.setItem(CLAVE_SESION, iso(HOY) + '|' + sesionInicio); }catch(e){}
     if(!cronoTick) cronoTick = setInterval(pintarCrono, 1000);
     pintarCrono();
+  }
+
+  var TOPE_AUTO = 2 * 3600 * 1000;
+  var cerrandoSola = false;
+
+  function cerrarSesionSola(seg){
+    if(cerrandoSola || guardandoSesion) return;
+    cerrandoSola = true;
+    var desde = sesionInicio;
+    var minutos = Math.round(seg / 60);
+    // SE PARA ANTES DE GUARDAR. `pintarCrono` corre cada segundo: si el
+    // guardado no encontrara nada que guardar -una rutina sin pesos- y el
+    // cronometro siguiera vivo, esto se repetiria sesenta veces por minuto.
+    pararCrono();
+    try{
+      guardarSesionAhora({ fecha: isoDe(new Date(desde)), minutos: minutos, sola: true });
+    }catch(e){
+      toast('toastRutina', 'No pude cerrar tu sesión sola: ' + traducirError(e && e.message));
+    }
+    cerrandoSola = false;
   }
 
   function pararCrono(){
@@ -4468,10 +4502,19 @@
     }
   });
 
-  function guardarSesionAhora(){
+  // `opciones.fecha`   — el dia al que pertenece la sesion. Por defecto hoy.
+  // `opciones.minutos`  — lo que duro, si se sabe.
+  // `opciones.sola`     — la cerro la app, no la persona.
+  //
+  //  LA FECHA SE PUEDE PASAR porque el cierre automatico de las dos horas
+  //  puede saltar al dia SIGUIENTE: se empieza a las 23:40, se cierra la
+  //  app, se abre a las 10:00 y han pasado mas de dos horas. Esa sesion es
+  //  del dia en que se entreno, no del dia en que la app se dio cuenta.
+  function guardarSesionAhora(opciones){
     if(guardandoSesion) return;
     guardandoSesion = true;
-    SESIONES[iso(HOY)] = true;
+    var fecha = (opciones && opciones.fecha) || iso(HOY);
+    SESIONES[fecha] = true;
 
     // La rutina es la PLANTILLA, que se sigue editando. Esto es el
     // HISTORIAL: una foto de lo que se hizo hoy, que ya no cambia aunque
@@ -4534,15 +4577,27 @@
     if(!sesion || !sesion.user){ guardandoSesion = false; pararCrono(); toast('toastRutina', 'Sesión guardada'); return; }
     if(!detalle.length){ guardandoSesion = false; toast('toastRutina', 'No hay series con peso que guardar'); return; }
 
+    // CUANTO DURO, que la columna existe desde la 0001 y no la llenaba
+    // nadie. Ahora hay cronometro, asi que hay dato.
+    //
+    //  Se acota a lo que acepta la columna -0 a 600-: fuera de rango no
+    //  falla ese campo, falla la fila entera y la sesion no se guarda.
+    var minutos = (opciones && opciones.minutos != null)
+      ? opciones.minutos
+      : (sesionInicio ? Math.round((Date.now() - sesionInicio) / 60000) : null);
+    minutos = (minutos != null && isFinite(minutos))
+      ? Math.min(600, Math.max(0, Math.round(minutos))) : null;
+
     var tab = activeTab();
     var diaId = (tab && tab.dataset.id) || null;
     var fila = {
       user_id: sesion.user.id,
-      session_date: iso(HOY),
+      session_date: fecha,
       routine_day_id: diaId,
       day_name: tab ? tab.textContent.trim() : null,
       exercises: detalle,
-      total_volume: total
+      total_volume: total,
+      duration_min: minutos
     };
 
     // SI YA HAY UNA SESIÓN DE HOY PARA ESTE MISMO DÍA DE RUTINA, SE
@@ -4566,7 +4621,7 @@
     //  no casa nada y siempre se crearía fila nueva.
     var busca = '/rest/v1/workout_sessions?select=id' +
                 '&user_id=eq.' + sesion.user.id +
-                '&session_date=eq.' + iso(HOY) +
+                '&session_date=eq.' + fecha +
                 (diaId ? '&routine_day_id=eq.' + diaId : '&routine_day_id=is.null') +
                 '&limit=1';
 
@@ -4594,7 +4649,9 @@
       }).then(function(){
       guardandoSesion = false;
       pararCrono();
-      toast('toastRutina', 'Sesión guardada · ' + mil(total) + ' kg de volumen');
+      toast('toastRutina', (opciones && opciones.sola
+        ? 'Llevabas dos horas: guardé tu sesión sola · '
+        : 'Sesión guardada · ') + mil(total) + ' kg de volumen');
     })['catch'](function(e){
       guardandoSesion = false;
 
@@ -4623,7 +4680,7 @@
                 body: JSON.stringify(fila) },
           // Una por día y día de rutina: volver a darle al botón sin señal
           // reemplaza la que esperaba, no añade otra.
-          clave: 'sesion:' + iso(HOY) + ':' + (diaId || ''),
+          clave: 'sesion:' + fecha + ':' + (diaId || ''),
           tipo: 'sesion'
         });
         pararCrono();
@@ -4633,7 +4690,7 @@
 
       // Se deshace lo local: si no se guardó, la racha y las gráficas no
       // deben contarla.
-      delete SESIONES[iso(HOY)];
+      delete SESIONES[fecha];
       detalle.forEach(function(d){
         if(HISTORIAL[d.nombre]) HISTORIAL[d.nombre].pop();
       });

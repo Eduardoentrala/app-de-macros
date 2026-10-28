@@ -128,7 +128,7 @@ console.log('\n— Y una sesión de entreno que no se guarda —');
   // manejador es ahora un envoltorio de tres líneas que suelta el candado si
   // algo revienta —ver candado-de-la-sesion—. Lo que se prueba aquí, el
   // deshacer, vive en la función.
-  const i = APP.indexOf('  function guardarSesionAhora(){');
+  const i = APP.indexOf('  function guardarSesionAhora(opciones){');
   const fn = (() => {
     if (i < 0) return '';
     let n = 0, j = APP.indexOf('{', i);
@@ -141,7 +141,10 @@ console.log('\n— Y una sesión de entreno que no se guarda —');
   check('existe el guardado de sesión', i > 0);
 
   // Lo que ya se deshacía.
-  check('se deshace la sesión', /delete SESIONES\[iso\(HOY\)\];/.test(fn));
+  // `fecha` y no `iso(HOY)`: el guardado acepta la fecha del arranque, para
+  // que el cierre automatico de las dos horas no meta el entrenamiento de
+  // anoche en el dia de hoy.
+  check('se deshace la sesión', /delete SESIONES\[fecha\];/.test(fn));
   check('y el historial de volumen', /HISTORIAL\[d\.nombre\]\.pop\(\);/.test(fn));
 
   // LO QUE FALTABA, y era justo lo que se ve.
