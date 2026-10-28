@@ -52,7 +52,7 @@ const CORS = {
 //
 // Ahora lo dice: un GET sin sesión devuelve este sello y nada más.
 // `pruebas/funciones-vivas.mjs` lo compara con el del repo.
-const SELLO = 'f5bff1f1d2';
+const SELLO = '5d823f604a';
 
 // Tope diario por persona. Es la única defensa contra que un solo usuario
 // -o un token robado- vacíe la cuenta en una noche con un bucle.
@@ -610,6 +610,25 @@ QUÉ MIRAS, EN ESTE ORDEN
    seis es media. Sin mirar el plan, «solo entrenó 3» se lee siempre como
    poco, y a quien entrena tres días por elección se le estaría regañando
    cada lunes por hacer justo lo que dijo que iba a hacer.
+
+5. LO QUE DIJERON SUS FOTOS, si te lo paso. Es lo único de toda la app que
+   distingue grasa de músculo: la báscula no sabe, la cintura sabe en un
+   punto, las fotos dicen DÓNDE está cambiando el cuerpo.
+
+   - Peso plano y las fotos diciendo que la cintura se marca o la espalda
+     se abre → recomposición. Igual que con el volumen: NO toques nada y
+     dile por qué, porque es exactamente aquí donde se abandona.
+   - Peso bajando y las fotos sin cambio y la cintura quieta → eso es agua
+     o lo que lleve dentro, no grasa. Dilo sin dramatizar.
+   - Las fotos sin cambio y todo lo demás sin cambio → es información, no
+     un fallo. Tres semanas son pocas.
+
+   PERO NO ES DE ESTA SEMANA. Esa comparación se hace una vez al mes y
+   sobre las fotos que haya, que pueden ser de hace semanas. Úsala para
+   entender la tendencia, NUNCA para explicar los siete días que estás
+   cerrando ni para justificar el ajuste. Si la nombras, di de cuándo es.
+   Y si contradice a la cintura de esta semana, manda la medida: un número
+   de ayer dice más que una foto del mes pasado.
 
    Y si te paso EJERCICIO POR EJERCICIO, léelo antes de llamar a nada
    «estancamiento». El volumen total esconde lo que pasa dentro: subir un
@@ -1963,6 +1982,46 @@ Deno.serve(async (req) => {
           ? `\n\nSU OBJETIVO ES: ${suyo}.`
           : `\n\nSU OBJETIVO: no consta. Sé prudente y no llames estancamiento ` +
             `a un peso quieto; si hace falta, pregúntale qué busca.`;
+
+        // LO QUE DIJERON SUS FOTOS.
+        //
+        //  La comparación mensual se calculaba, se enseñaba en la pantalla
+        //  de Fotos y AHÍ MORÍA: no la leía nadie más. Ocho imágenes al
+        //  modelo una vez al mes para que el cierre —la decisión que mueve
+        //  las calorías— no se enterara.
+        //
+        //  Y es el único dato de toda la app que distingue grasa de
+        //  músculo. La báscula no sabe; la cintura sabe en un punto; las
+        //  fotos dicen DÓNDE está cambiando el cuerpo. Justo lo que hace
+        //  falta cuando el peso no se mueve, que es cuando la gente lo deja.
+        //
+        //  SE LEE DE LA BASE y no del cuerpo, igual que la memoria: lo
+        //  escribió el modelo en otra llamada y lo guarda el servidor.
+        //
+        //  Y SOLO SI ES RECIENTE. Un análisis de hace cuatro meses no habla
+        //  de esta semana, y arrastrarlo haría que el cierre explicara el
+        //  presente con un cuerpo que ya no es el suyo.
+        const { data: af } = await admin
+          .from('analisis_fotos').select('mes, mensaje, semana_vieja, semana_nueva')
+          .eq('user_id', userId).order('mes', { ascending: false }).limit(1);
+        const foto = af && af[0];
+        const mesFoto = String(foto?.mes ?? '');
+        const hoyMes = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'America/Mexico_City', year: 'numeric', month: '2-digit',
+        }).format(new Date()).slice(0, 7);
+        const mesesDesde = (a: string, b: string) => {
+          const [ay, am] = a.split('-').map(Number);
+          const [by, bm] = b.split('-').map(Number);
+          if (!ay || !am || !by || !bm) return 99;
+          return (ay * 12 + am) - (by * 12 + bm);
+        };
+        if (foto?.mensaje && mesFoto && mesesDesde(hoyMes, mesFoto) <= 2) {
+          loQueSe += `\n\nLO QUE DIJERON SUS FOTOS (comparación de ${mesFoto}` +
+            (foto.semana_vieja && foto.semana_nueva
+              ? `, entre ${foto.semana_vieja} y ${foto.semana_nueva}` : '') +
+            `). Es lo ÚNICO que distingue grasa de músculo, y NO es de esta ` +
+            `semana:\n${String(foto.mensaje).slice(0, 700)}`;
+        }
       }
 
       const d = (cuerpo.datos ?? {}) as Record<string, number>;
