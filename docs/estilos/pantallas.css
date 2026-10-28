@@ -774,7 +774,11 @@
   display:inline-flex;align-items:center;}
 .clock-btn svg{width:17px;height:17px;display:block;}
 .nota-badge svg{width:13px;height:13px;display:inline-block;vertical-align:-2px;}
-.ex-pills .chip svg{width:13px;height:13px;margin-right:5px;vertical-align:-2px;}
+/* `.chip` ya es flex con su hueco, asi que el icono no lleva margen
+   propio: sumaria al `gap` y quedaria despegado del texto. */
+.chip svg{width:13px;height:13px;flex:none;}
+#timerChip svg{width:14px;height:14px;}
+#timerChip .t{font-variant-numeric:tabular-nums;}
 /* La × no se deshace: un poco más de aire que las demás. Equivocarse aquí
    cuesta la serie entera, no un cronómetro de más. */
 .rm-set{background:none;border:none;color:var(--ink-faint);font-size:14px;cursor:pointer;margin-left:4px;}

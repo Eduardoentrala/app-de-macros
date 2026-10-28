@@ -1514,12 +1514,53 @@
     syncPresets(p.dataset.secs);
   });
   customSecs.addEventListener('input', function(){ syncPresets(customSecs.value); });
-  document.getElementById('timerSave').addEventListener('click', function(){
-    var v = Math.min(900, Math.max(5, Number(customSecs.value) || 180));
+  // EL DESCANSO SE GUARDA, que es lo que no hacía.
+  //
+  //  Esto ponía la variable, escribía el chip y avisaba «Descanso: 2:00».
+  //  Y ya. Nada iba a ningún sitio: `restSeconds` nace valiendo 180 en cada
+  //  arranque, así que al cerrar y abrir la app volvía a 3:00. Es la peor
+  //  forma de perder un ajuste: la que te dice que lo hizo.
+  //
+  //  Va en el PERFIL y no en `routine_exercises.rest_seconds` —que existe
+  //  desde la 0001 y no usa nadie— porque esa es por ejercicio y aquí hay
+  //  un solo cronómetro para toda la rutina. El ajuste es de la persona.
+  //
+  //  Los topes son los de la columna. Si se separan, o se pierde lo
+  //  tecleado o rebota la fila entera; hay una prueba que los compara.
+  var DESCANSO_MIN = 5, DESCANSO_MAX = 900;
+
+  function ponerDescanso(v){
     restSeconds = v;
-    timerChip.textContent = '⏱ ' + fmt(v);
+    var t = timerChip.querySelector('.t');
+    if(t) t.textContent = fmt(v);
+  }
+
+  // Lo que eligió, si lo eligió alguna vez. Nulo es «no lo ha tocado» y
+  // entonces manda el valor con el que arranca la pantalla: inventarle una
+  // preferencia que no ha expresado es peor que dejar el de siempre.
+  function aplicarDescansoGuardado(seg){
+    var v = Math.round(Number(seg));
+    if(!(v >= DESCANSO_MIN && v <= DESCANSO_MAX)) return;
+    ponerDescanso(v);
+  }
+
+  document.getElementById('timerSave').addEventListener('click', function(){
+    var v = Math.min(DESCANSO_MAX, Math.max(DESCANSO_MIN, Number(customSecs.value) || 180));
+    ponerDescanso(v);
     timerSheet.classList.remove('open');
-    toast('toastRutina', 'Descanso: ' + fmt(v));
+    // SE AVISA CUANDO ESTÁ ARRIBA, no al pulsar. La pantalla ya cambió
+    // -el descanso siguiente usa el nuevo número aunque falle la red- pero
+    // «Descanso: 2:00» es una promesa de que mañana seguirá ahí, y esa
+    // promesa la cumple el servidor, no esta función.
+    sbActualizarPerfil({ descanso_seg: v })
+      .then(function(){
+        if(MI_PERFIL) MI_PERFIL.descanso_seg = v;
+        toast('toastRutina', 'Descanso: ' + fmt(v));
+      })
+      ['catch'](function(e){
+        toast('toastRutina', 'Descanso: ' + fmt(v) + ', pero no se guardó: ' +
+              traducirError(e.message));
+      });
   });
 
   // Un aviso abajo, durante segundo y medio.
@@ -10208,6 +10249,11 @@
             alimentos = res[3] || [], recetas = res[4] || [], eventos = res[5] || [];
         MIS_LLAVES = res[6] || null;
         aplicarLlavesIa();
+
+        // El descanso que eligió. Va aquí y no al abrir Rutina porque el
+        // chip se ve en cuanto se entra, y pintarlo con 3:00 para
+        // corregirlo medio segundo después se lee como un fallo.
+        if(p) aplicarDescansoGuardado(p.descanso_seg);
 
         // El plan, y con él la pestaña. `undefined` es «no se pudo
         // preguntar»: se deja lo que haya traído la copia del teléfono.
