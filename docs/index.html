@@ -112,7 +112,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = 'f7ff9d8e67';
+    var SELLO = '77fccc2b8d';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -592,6 +592,13 @@
           <div id="mealSugeridos"></div>
           <div class="empty-search" id="mealEmpty">Busca un alimento arriba</div>
           <div id="mealList"></div>
+          <!-- GUARDAR LO QUE ACABAS DE APUNTAR COMO RECETA.
+               Va aqui y no en «Mis recetas» con un formulario en blanco: un
+               formulario de ingredientes obliga a teclear otra vez lo que ya
+               esta en la lista de arriba. Tu desayuno de siempre ya lo
+               apuntaste; lo util es poder repetirlo, no volver a escribirlo.
+               Solo aparece si la comida tiene algo dentro. -->
+          <button class="btn-outline" id="mealAReceta" hidden>Guardar esta comida como receta</button>
         </div>
         <div class="totals-bar">
           <div class="totals-grid">
@@ -2091,7 +2098,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = 'f7ff9d8e67';
+    var SELLO = '77fccc2b8d';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que

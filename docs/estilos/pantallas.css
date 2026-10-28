@@ -1188,3 +1188,8 @@
    una raya encima separandola de nada. */
 .ts-firma{border-top:none;padding-top:0;margin-top:18px;}
 .ts-firma b{margin-bottom:0;color:var(--ink-faint);}
+
+/* El boton de guardar la comida como receta: con los mismos margenes que
+   el resto de la pantalla. Suelto a la izquierda se leia como un resto
+   de la lista de arriba y no como una accion. */
+#mealAReceta{display:block;width:calc(100% - 32px);margin:4px 16px 18px;}

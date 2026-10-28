@@ -2858,6 +2858,8 @@
     var cont = document.getElementById('mealList');
     document.getElementById('mealAddTitle').textContent = comidaActual;
     document.getElementById('mealEmpty').style.display = lista.length ? 'none' : '';
+    var aReceta = document.getElementById('mealAReceta');
+    if(aReceta) aReceta.hidden = !lista.length;
 
     cont.innerHTML = lista.length ? '<div class="food-list">' + lista.map(function(a, i){
       prepararAlimento(a);
@@ -2987,7 +2989,7 @@
     });
   })();
 
-  function agregarAlimento(a){
+  function agregarAlimento(a, opciones){
     var comida = comidaActual;      // se fija: la pantalla puede cambiar mientras se guarda
     var enHoy = apuntandoEnHoy();
     var dia = diaDeApunte();
@@ -3004,9 +3006,14 @@
     // rehacer la semana porque ese día ya cuenta para ella.
     if(!enHoy) actualizarSemana();
 
-    volverA('mealadd', 'diario');   // conserva el camino: diario › mealadd
-    toast('toastComida', a.n + ' agregado a ' + comida +
-          (enHoy ? '' : ' del ' + fmtFecha(dia)));
+    // Al apuntar una receta se llama a esto una vez por ingrediente, y
+    // entonces el aviso y el volver los hace quien llama, UNA sola vez:
+    // cinco «agregado a Desayuno» seguidos tapan la pantalla entera.
+    if(!(opciones && opciones.calla)){
+      volverA('mealadd', 'diario'); // conserva el camino: diario › mealadd
+      toast('toastComida', a.n + ' agregado a ' + comida +
+            (enHoy ? '' : ' del ' + fmtFecha(dia)));
+    }
 
     // Se guarda en segundo plano: la pantalla ya respondió, que es lo que
     // hace que la app se sienta rápida. Pero si el guardado falla hay que
@@ -3430,8 +3437,14 @@
       ? document.getElementById('buscarRecetas').value.trim() : '';
     document.getElementById('recetaList').innerHTML = recs.length
       ? recs.map(function(r){
-          return '<div class="food-card"><div class="fc-main"><div class="fc-name">'+escapar(r.n)+'</div>'+
-            '<div class="fc-sub">'+r.cal+' kcal por porción · '+r.vis+'</div></div>'+
+          // TOCABLE. A «Mis recetas» solo se llega desde dentro de una
+          // comida -es el unico sitio que lleva aqui-, asi que al tocar una
+          // ya se sabe a donde va y no hay que preguntar nada.
+          return '<div class="food-card" data-receta="'+escapar(String(r.id||''))+'">'+
+            '<div class="fc-main"><div class="fc-name">'+escapar(r.n)+'</div>'+
+            '<div class="fc-sub">'+((r.ing||[]).length ? (r.ing.length +
+              ((r.ing.length === 1) ? ' alimento · ' : ' alimentos · ')) : '')+
+              r.cal+' kcal · '+r.vis+'</div></div>'+
             '<span style="color:var(--ink-faint)">›</span></div>';
         }).join('')
       : vacio(!!qRec, escritoRec,
@@ -3446,6 +3459,17 @@
     var e = document.getElementById(id);
     if(e) e.addEventListener('input', pintarListas);
   });
+
+  (function(){
+    var caja = document.getElementById('recetaList');
+    if(!caja) return;
+    caja.addEventListener('click', function(e){
+      var c = e.target.closest('[data-receta]');
+      if(!c) return;
+      var r = RECETAS.filter(function(x){ return String(x.id) === c.dataset.receta; })[0];
+      if(r) apuntarReceta(r);
+    });
+  })();
 
   function conectarLista(id, datos){
     document.getElementById(id).addEventListener('click', function(e){
@@ -3522,6 +3546,109 @@
     }
   }
 
+  // ---- Recetas: guardar una comida, y volver a apuntarla ----
+  //
+  //  POR QUE ASI Y NO CON UN FORMULARIO DE INGREDIENTES.
+  //
+  //   «Mis recetas» existia desde siempre -tabla, listado, buscador y hasta
+  //   el estado vacio- y NO HABIA FORMA DE CREAR NINGUNA. Lo normal seria
+  //   añadir un formulario: nombre, porciones, y una lista donde ir
+  //   buscando ingredientes uno a uno.
+  //
+  //   Pero eso es teclear por segunda vez lo que ya esta apuntado arriba.
+  //   Tu desayuno de siempre ya lo registraste esta mañana; lo que hace
+  //   falta no es volver a escribirlo, es poder repetirlo. Asi que la
+  //   receta se guarda DESDE la comida, con lo que ya hay dentro.
+  //
+  //  Y se vuelve a apuntar desde el buscador de la comida, no desde «Mis
+  //  recetas»: ahi se sabe a que comida va -estas dentro de ella- y no hay
+  //  que preguntar si esto es desayuno o cena.
+  function guardarComidaComoReceta(nombre){
+    var lista = (COMIDAS[comidaActual] || []).slice();
+    if(!lista.length) return;
+    if(!sesion || !sesion.user){
+      toast('toastComida', 'Inicia sesión para guardar recetas');
+      return;
+    }
+    var un1 = function(x){ return Math.round((Number(x) || 0) * 10) / 10; };
+    // Se guarda lo COMIDO, no la porcion base: la receta es esta comida tal
+    // y como fue, con sus cantidades.
+    var ing = lista.map(function(a){
+      return { n: String(a.n || '').slice(0, 80), u: a.u || 'Gramos',
+               cant: un1(a.cant), P: un1(a.P), C: un1(a.C), G: un1(a.G) };
+    });
+    var tot = ing.reduce(function(t, x){
+      t.P += x.P; t.C += x.C; t.G += x.G; return t;
+    }, { P:0, C:0, G:0 });
+
+    var fila = {
+      user_id: sesion.user.id,
+      name: String(nombre || '').trim().slice(0, 80) || comidaActual,
+      servings: 1,
+      ingredients: ing,
+      // La columna es numeric(8,2) y pide >= 0. Se acota aqui por lo de
+      // siempre: un numero fuera de rango no tumba ese campo, tumba la
+      // fila entera y la receta no se guarda.
+      protein_g: Math.min(999999, Math.max(0, un1(tot.P))),
+      carbs_g:   Math.min(999999, Math.max(0, un1(tot.C))),
+      fat_g:     Math.min(999999, Math.max(0, un1(tot.G)))
+    };
+
+    sbFetch('/rest/v1/recipes', {
+      method:'POST', headers:{ 'Prefer':'return=representation' },
+      body: JSON.stringify(fila)
+    }).then(function(r){
+      var creada = (r && r[0]) || {};
+      RECETAS.unshift({
+        id: creada.id, n: fila.name, ing: ing, vis: 'privada',
+        cal: Math.round(fila.protein_g * 4 + fila.carbs_g * 4 + fila.fat_g * 9)
+      });
+      if(typeof guardarDespensa === 'function') guardarDespensa();
+      if(typeof pintarListas === 'function') pintarListas();
+      toast('toastComida', 'Receta «' + fila.name + '» guardada · ' +
+            ing.length + (ing.length === 1 ? ' alimento' : ' alimentos'));
+    })['catch'](function(e){
+      toast('toastComida', 'No se pudo guardar la receta: ' + traducirError(e.message));
+    });
+  }
+
+  // Apuntar una receta entera en la comida que se esta mirando.
+  //
+  //  Cada ingrediente pasa por `agregarAlimento`, que es el unico camino
+  //  que sabe apuntar bien: suma al dia, repinta, persiste y deshace si
+  //  falla. Lo unico que se le pide es que se calle, para dar UN aviso al
+  //  final en vez de uno por alimento.
+  function apuntarReceta(r){
+    var ing = (r && r.ing) || [];
+    if(!ing.length){
+      toast('toastComida', 'Esa receta no tiene alimentos dentro');
+      return;
+    }
+    var comida = comidaActual;
+    ing.forEach(function(x){
+      agregarAlimento({ n:x.n, u:x.u || 'Gramos', cant:Number(x.cant) || 0,
+                        P:Number(x.P) || 0, C:Number(x.C) || 0, G:Number(x.G) || 0 },
+                      { calla: true });
+    });
+    volverA('mealadd', 'diario');
+    toast('toastComida', r.n + ' · ' + ing.length +
+          (ing.length === 1 ? ' alimento' : ' alimentos') + ' en ' + comida);
+  }
+
+  (function(){
+    var b = document.getElementById('mealAReceta');
+    if(!b) return;
+    b.addEventListener('click', function(){
+      var lista = COMIDAS[comidaActual] || [];
+      if(!lista.length) return;
+      openNameSheet({
+        title: 'Nombre de la receta',
+        value: comidaActual + ' de siempre',
+        alGuardar: guardarComidaComoReceta
+      });
+    });
+  })();
+
   // ---- Sugerencias mientras escribes ----
   // Salen de lo que otras personas ya guardaron. Qué se sugiere y qué no lo
   // decide la base (buscar_alimentos): solo aparece lo que varias personas
@@ -3547,7 +3674,10 @@
     var deCatalogo = lista.filter(function(a){ return a.fuente === 'catalogo'; });
     var deGente    = lista.filter(function(a){ return a.fuente === 'gente'; });
 
-    if(!lista.length){
+    // Si no hay alimentos pero SI una receta tuya, no es «no encontre
+    // nada»: lo de abajo se salta y se pinta la receta.
+    var hayReceta = typeof filtrar === 'function' && filtrar(RECETAS, texto, 'n').length;
+    if(!lista.length && !hayReceta){
       mealSugeridos.innerHTML = '<p class="calc-note" style="padding:14px 20px 0;">' +
         (sinRed
           ? 'Sin conexión: ahora solo puedo buscar entre tus alimentos guardados, ' +
@@ -3587,7 +3717,22 @@
         }).join('') + '</div>';
     };
 
-    mealSugeridos.innerHTML = aviso +
+    // LAS RECETAS, LAS PRIMERAS. Son tuyas, las armaste tu y meten varios
+    // alimentos de un toque: si lo que buscas coincide con una, es casi
+    // seguro lo que querias.
+    var recetas = (typeof filtrar === 'function' ? filtrar(RECETAS, texto, 'n') : []);
+    var bloqueRecetas = !recetas.length ? '' :
+      '<div class="sug-franja">Tus recetas<small>varias cosas de un toque</small></div>' +
+      '<div class="food-list">' + recetas.map(function(r){
+        var n = (r.ing || []).length;
+        return '<div class="food-card" data-receta="' + escapar(String(r.id || '')) + '">' +
+          '<div class="fc-main"><div class="fc-name">' + escapar(r.n) + '</div>' +
+          '<div class="fc-sub">' + n + (n === 1 ? ' alimento' : ' alimentos') +
+          ' · ' + mil(r.cal) + ' cal</div></div>' +
+          '<span style="color:var(--ink-faint);font-size:19px;">+</span></div>';
+      }).join('') + '</div>';
+
+    mealSugeridos.innerHTML = aviso + bloqueRecetas +
       bloque('Tus guardados', 'lo que ya usas', deMios) +
       bloque('Base de datos', 'medido, en gramos', deCatalogo) +
       bloque('De otras personas', 'lo que registran otros', deGente);
@@ -3715,6 +3860,12 @@
   });
 
   mealSugeridos.addEventListener('click', function(e){
+    var rec = e.target.closest('[data-receta]');
+    if(rec){
+      var r = RECETAS.filter(function(x){ return String(x.id) === rec.dataset.receta; })[0];
+      if(r) apuntarReceta(r);
+      return;
+    }
     var c = e.target.closest('[data-sug]');
     if(!c) return;
     var a = SUGERIDOS[Number(c.dataset.sug)];
@@ -10228,7 +10379,9 @@
                    '&order=veces_usado.desc,name.asc');
   }
   function sbRecetas(){
-    return sbFetch('/rest/v1/recipes?select=id,name,servings,calories,is_public' +
+    // `ingredients` hace falta para poder APUNTARLA otra vez. Sin eso la
+    // receta es un nombre y un numero: se ve en la lista y no sirve.
+    return sbFetch('/rest/v1/recipes?select=id,name,servings,calories,is_public,ingredients' +
                    '&user_id=eq.' + sesion.user.id +
                    '&order=created_at.desc');
   }
@@ -10639,6 +10792,7 @@
           var porciones = Math.max(1, Number(r.servings) || 1);
           RECETAS.push({ id:r.id, n:r.name,
                          cal: Math.round((Number(r.calories)||0) / porciones),
+                         ing: Array.isArray(r.ingredients) ? r.ingredients : [],
                          vis: r.is_public ? 'pública' : 'privada' });
         });
         pintarListas();
