@@ -52,7 +52,7 @@ const CORS = {
 //
 // Ahora lo dice: un GET sin sesión devuelve este sello y nada más.
 // `pruebas/funciones-vivas.mjs` lo compara con el del repo.
-const SELLO = '08a5f50f9a';
+const SELLO = 'f5bff1f1d2';
 
 // Tope diario por persona. Es la única defensa contra que un solo usuario
 // -o un token robado- vacíe la cuenta en una noche con un bucle.
@@ -801,6 +801,16 @@ ningún número- y sus números del mes. Tu trabajo es juntarlos.
 NO VISTE LAS FOTOS. Lo que se vio ya está escrito y no se toca. No añadas
 detalles visuales que no estén ahí, ni los adornes: si el texto dice
 "apenas se aprecia diferencia", eso es lo que hay.
+
+CADA NÚMERO CON SU PERIODO. Las fotos cubren un rango concreto, y abajo
+te digo cuál. Lo que venga marcado como POSTERIOR a la última foto no
+puede verse en esas fotos, pasó después: no lo uses para explicar lo que
+se ve ni para decir que las fotos lo confirman.
+
+Y si ahí hay movimiento -la cintura bajó después de la última foto-, esa
+es la frase más útil que le puedes dar: las fotos son de antes y todavía
+no lo enseñan. Dilo así, con la fecha. Lo que no vale es juntarlo todo y
+dejarle creer que la app se contradice.
 
 PARA QUÉ SIRVE ESTO
 La báscula no distingue grasa de agua de músculo. La cintura sí, pero
@@ -2502,14 +2512,69 @@ Deno.serve(async (req) => {
       // Concatenación y no plantillas: aquí van plantillas ANIDADAS dentro de
       // una plantilla, y eso es lo que más se rompe al copiar el fichero de
       // un sitio a otro. Se lee igual y no hay nada que escapar.
+      // LOS NÚMEROS DE DENTRO Y LOS DE DESPUÉS, SEPARADOS.
+      //
+      //  Aquí se mandaban los últimos ocho pesos y las últimas seis
+      //  cinturas, sin más. Pero las fotos que se están comparando son las
+      //  de la ÚLTIMA SERIE COMPLETA, que puede ser de hace un mes si no ha
+      //  subido fotos desde entonces. O sea que al modelo le llegaban fotos
+      //  de septiembre con medidas de octubre encima, y tenía que adivinar
+      //  cuáles tocaban.
+      //
+      //  Se vio en una captura: el análisis decía «la cintura sigue
+      //  exactamente donde estaba» mientras el cierre del lunes decía
+      //  «cintura 94 (sep) → 91.5 (21-oct), pérdida de grasa clara». No se
+      //  contradicen —hablan de periodos distintos— pero ninguno de los dos
+      //  lo decía, y eso se lee como que la app se equivoca.
+      //
+      //  Lo de después no se tira: una cintura que bajó DESPUÉS de la
+      //  última foto es justo lo que explica por qué las fotos no lo
+      //  enseñan todavía. Pero va aparte y con su nombre.
+      const finNueva = lunesDeClave(semanaNueva) + 6 * 86400000;
+      const iniVieja = lunesDeClave(semanaVieja);
+      const dentroDeLasFotos = (iso: unknown) => {
+        const t = Date.parse(String(iso) + 'T12:00:00Z');
+        return isFinite(t) && t >= iniVieja && t <= finNueva;
+      };
+      // Con las partes UTC a mano y NO con `toISOString().slice(0,10)`.
+      //
+      //  Aquí el instante ya viene en UTC —`lunesDeClave` lo arma con
+      //  `Date.UTC`— así que las dos formas darían lo mismo. Se escribe así
+      //  igualmente porque la regla de esta función es que ninguna fecha de
+      //  calendario salga de `toISOString`: cuando el instante NO es UTC
+      //  puro, por las tardes de México ya va en el día siguiente, y eso ya
+      //  se pagó una vez (la 0038, con la racha). Una regla con excepciones
+      //  que hay que razonar caso por caso no es una regla.
+      const dia = (ms: number) => {
+        const d = new Date(ms);
+        return d.getUTCFullYear() + '-' +
+               String(d.getUTCMonth() + 1).padStart(2, '0') + '-' +
+               String(d.getUTCDate()).padStart(2, '0');
+      };
+      const lista = (xs: Record<string, unknown>[], f: (x: Record<string, unknown>) => string) =>
+        xs.map(f).join(' · ');
+
+      const pDentro = p.filter((x) => dentroDeLasFotos(x.fecha));
+      const pFuera = p.filter((x) => !dentroDeLasFotos(x.fecha));
+      const cDentro = c.filter((x) => dentroDeLasFotos(x.log_date));
+      const cFuera = c.filter((x) => !dentroDeLasFotos(x.log_date));
+      const unPeso = (x: Record<string, unknown>) => x.fecha + ': ' + x.kg + ' kg';
+      const unaCintura = (x: Record<string, unknown>) => x.log_date + ': ' + x.cintura_cm + ' cm';
+
       const numeros =
         '\n\nLO QUE SE VIO EN LAS FOTOS (escrito sin conocer ningún número):\n' +
         '"' + visto + '"\n\n' +
-        'SUS NÚMEROS:\n' +
-        '- Van ' + semanaVieja + ' contra ' + semanaNueva + '.\n' +
-        '- Pesos: ' + (p.length ? p.map((x) => x.fecha + ': ' + x.kg + ' kg').join(' · ') : 'no apuntó') + '\n' +
-        '- Cintura: ' + (c.length ? c.map((x) => x.log_date + ': ' + x.cintura_cm + ' cm').join(' · ') : 'no la midió') + '\n' +
-        (semanaBase ? '- Además tiene fotos desde ' + semanaBase + ', su primera serie.\n' : '');
+        'LO QUE CUBREN ESAS FOTOS: del ' + dia(iniVieja) + ' al ' + dia(finNueva) +
+        ' (' + semanaVieja + ' contra ' + semanaNueva + ').\n\n' +
+        'SUS NÚMEROS DE ESE MISMO PERIODO:\n' +
+        '- Peso: ' + (pDentro.length ? lista(pDentro, unPeso) : 'no apuntó') + '\n' +
+        '- Cintura: ' + (cDentro.length ? lista(cDentro, unaCintura) : 'no la midió') + '\n' +
+        (pFuera.length || cFuera.length
+          ? '\nY ESTO ES POSTERIOR A LA ÚLTIMA FOTO, así que las fotos NO lo enseñan:\n' +
+            (pFuera.length ? '- Peso: ' + lista(pFuera, unPeso) + '\n' : '') +
+            (cFuera.length ? '- Cintura: ' + lista(cFuera, unaCintura) + '\n' : '')
+          : '') +
+        (semanaBase ? '\n- Además tiene fotos desde ' + semanaBase + ', su primera serie.\n' : '');
 
       const decirR = await ia.messages.create({
         model: MODELO,
