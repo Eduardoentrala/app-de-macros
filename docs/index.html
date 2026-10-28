@@ -112,7 +112,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = 'b4229ca608';
+    var SELLO = 'e5b6c2f521';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -706,8 +706,18 @@
           <div class="searchbox"><span>🔍</span><input id="buscarRecetas" placeholder="Buscar receta..."></div>
         </div>
         <div class="scroll"><div id="recetaList" class="food-list"></div></div>
+        <!-- AQUI VIVIA «+ Nueva receta» Y NO HACIA NADA: sin `id`, sin
+             manejador, sin nada que lo escuchara. Y era lo mas llamativo de
+             la pantalla.
+             No era un cable suelto: una receta se arma con lo que ya
+             apuntaste en una comida, asi que desde aqui no hay nada que
+             empezar -acabas de venir de ahi-. En vez del boton, se dice de
+             donde salen, que es lo que de verdad hacia falta saber. -->
         <div class="bottom-bar">
-          <button class="btn-primary">+ Nueva receta</button>
+          <p class="calc-note" style="margin:0 0 10px;text-align:center;">
+            Las recetas se guardan desde una comida: apunta lo que comiste y
+            toca «Guardar como receta».
+          </p>
           <button class="btn-outline" disabled>🔍 Explorar recetas de la comunidad <em class="soon-tag">Próximamente</em></button>
         </div>
       </div>
@@ -2054,6 +2064,23 @@
         </div>
       </div>
 
+      <!-- QUE LLEVA UNA RECETA, ANTES DE APUNTARLA
+           Tocarla la apuntaba de golpe. Una receta son varios alimentos a la
+           vez: apuntar cinco cosas sin haberlas visto es justo lo que luego
+           hay que deshacer una por una.
+           Va FUERA de las vistas, como las demas hojas que se abren desde
+           mas de un sitio. -->
+      <div class="sheet-backdrop" id="recetaSheet">
+        <div class="sheet">
+          <h4 id="recetaNombre">Receta</h4>
+          <p class="hint" id="recetaResumen">—</p>
+          <div id="recetaIng"></div>
+          <button class="btn-primary" id="recetaAgregar">Agregar</button>
+          <button class="btn-ghost-text" id="recetaBorrar">Borrar receta</button>
+          <button class="btn-ghost-text" id="recetaCerrar">Cerrar</button>
+        </div>
+      </div>
+
       <!-- EL NOMBRE, PARA QUIEN LO PIDA
            Vivia DENTRO de la vista de Rutina, porque solo la usaba ella. Al
            reusarla desde Comidas -para ponerle nombre a una receta- dejo de
@@ -2109,7 +2136,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = 'b4229ca608';
+    var SELLO = 'e5b6c2f521';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que

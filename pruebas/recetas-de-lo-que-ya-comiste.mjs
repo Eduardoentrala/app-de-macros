@@ -164,8 +164,8 @@ console.log('\nY aparecen donde se usan');
   const iRec = clic.indexOf("var rec = e.target.closest('[data-receta]');");
   const iSug = clic.indexOf("closest('[data-sug]')");
   ok(iRec > 0 && iSug > 0 && iRec < iSug &&
-     /if\(rec\)\{[\s\S]{0,220}?apuntarReceta\(r\);[\s\S]{0,40}?return;/.test(clic),
-     'y el clic mira primero si es receta, y la apunta',
+     /if\(rec\)\{[\s\S]{0,220}?abrirReceta\(r\);[\s\S]{0,40}?return;/.test(clic),
+     'y el clic mira primero si es receta, y la abre',
      'una receta no tiene índice en SUGERIDOS: mirarla después la haría ' +
      'caer en el camino de los alimentos');
 }
@@ -178,13 +178,69 @@ console.log('\nY desde «Mis recetas» también, que es donde se miran');
   ok(/data-receta="'\+escapar\(String\(r\.id\|\|''\)\)\+'"/.test(APP),
      'y cada tarjeta lleva su id');
   const h = APP.slice(APP.indexOf("var caja = document.getElementById('recetaList');"));
-  ok(/if\(r\) apuntarReceta\(r\);/.test(h.slice(0, 500)),
-     'y al tocarla se apunta en la comida de la que vienes',
-     'a «Mis recetas» solo se llega desde dentro de una comida, así que no ' +
-     'hay que preguntar a cuál va');
+  ok(/if\(r\) abrirReceta\(r\);/.test(h.slice(0, 500)),
+     'y al tocarla se abre lo que lleva',
+     'apuntarla de golpe metía varios alimentos sin que nadie los hubiera ' +
+     'visto, y luego hay que quitarlos uno por uno');
   ok(/data-push="misrecetas"/.test(HTML), 'y ese camino sigue existiendo',
      'si algún día se llega desde otro sitio, `comidaActual` deja de ' +
      'significar algo y esto hay que repensarlo');
+}
+
+// ------------------------------------------------------------------
+console.log('\nTocarla ENSEÑA lo que lleva; apuntarla es el segundo toque');
+{
+  // Tocarla la apuntaba de golpe. Una receta son VARIOS alimentos a la vez,
+  // y apuntar cinco cosas sin haberlas visto es exactamente lo que luego
+  // hay que deshacer una por una.
+  const abrir = sacar('function abrirReceta(r){');
+  ok(/recetaIng'\)\.innerHTML/.test(abrir), 'se pintan sus alimentos');
+  ok(/textoUnidad\(x\.cant, x\.u \|\| 'Gramos'\)/.test(abrir),
+     'con la unidad en plural cuando toca',
+     '`abreviarUnidad` devuelve el singular siempre y salía «2 pieza»');
+  ok(/btn\.textContent = 'Agregar a ' \+ comidaActual;/.test(abrir),
+     'y el botón dice a qué comida va',
+     'desde aquí no se ve la comida: «Agregar» a secas obliga a acordarse ' +
+     'de por dónde se entró');
+  ok(/btn\.disabled = !ing\.length;/.test(abrir),
+     'y no deja apuntar una receta vacía');
+
+  const h = APP.slice(APP.indexOf("document.getElementById('recetaAgregar').addEventListener"));
+  ok(/cerrarReceta\(\);\n      if\(r\) apuntarReceta\(r\);/.test(h.slice(0, 400)),
+     'y al confirmar se cierra y se apunta');
+
+  // La hoja, FUERA de las vistas. Es la lección que acaba de costar que el
+  // botón de guardar no hiciera nada.
+  ok(/id="recetaSheet"/.test(HTML), 'la hoja existe');
+  ok(HTML.indexOf('id="recetaSheet"') > HTML.indexOf('id="semanaSheet"') ||
+     /id="recetaSheet"[\s\S]{0,4000}?id="nameSheet"/.test(HTML),
+     'y vive con las demás hojas sueltas',
+     'dentro de una vista se abriría midiendo 0×0; lo vigila ' +
+     '`hojas-que-cruzan-pantallas`');
+}
+
+console.log('\nY se puede borrar, preguntando');
+{
+  const h = APP.slice(APP.indexOf("document.getElementById('recetaBorrar').addEventListener"));
+  ok(/if\(!btn\.classList\.contains\('confirmando'\)\)\{/.test(h.slice(0, 600)),
+     'el primer toque pregunta');
+  ok(/setTimeout\(reposarBorradoReceta, 4000\)/.test(h.slice(0, 700)), 'y se desarma solo');
+  ok(/user_id=eq\.' \+ sesion\.user\.id/.test(h.slice(0, 1500)),
+     'y el borrado filtra por usuario además del id',
+     'RLS ya lo impediría, pero la regla aquí es no apoyarse solo en ella');
+  ok(/RECETAS\.splice\(i, 0, r\);/.test(h.slice(0, 1800)),
+     'y si el servidor dice que no, vuelve a la lista',
+     'quitarla de la pantalla y callarse es decirle que se borró algo que sigue ahí');
+}
+
+console.log('\nY el botón que no hacía nada ya no está');
+{
+  ok(!/<button class="btn-primary">\+ Nueva receta<\/button>/.test(HTML),
+     '«+ Nueva receta» fuera',
+     'sin `id`, sin manejador, y era lo más llamativo de la pantalla');
+  ok(/Las recetas se guardan desde una comida/.test(HTML),
+     'y en su lugar se dice de dónde salen',
+     'quitar el botón sin explicar deja la misma pregunta sin el botón');
 }
 
 console.log('\n' + pasan + ' bien, ' + fallan + ' mal');

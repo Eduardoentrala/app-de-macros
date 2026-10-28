@@ -3472,7 +3472,7 @@
       var c = e.target.closest('[data-receta]');
       if(!c) return;
       var r = RECETAS.filter(function(x){ return String(x.id) === c.dataset.receta; })[0];
-      if(r) apuntarReceta(r);
+      if(r) abrirReceta(r);
     });
   })();
 
@@ -3639,6 +3639,115 @@
     toast('toastComida', r.n + ' · ' + ing.length +
           (ing.length === 1 ? ' alimento' : ' alimentos') + ' en ' + comida);
   }
+
+  // ---- Qué lleva una receta, antes de apuntarla ----
+  //
+  //  Tocarla la apuntaba de golpe. Una receta son VARIOS alimentos a la
+  //  vez, y apuntar cinco cosas sin haberlas visto es exactamente lo que
+  //  luego hay que deshacer una por una. Primero se enseña, después se
+  //  apunta: dos toques, pero el segundo se da sabiendo qué entra.
+  var recetaAbierta = null;
+
+  function cerrarReceta(){
+    var h = document.getElementById('recetaSheet');
+    if(h) h.classList.remove('open');
+    recetaAbierta = null;
+    reposarBorradoReceta();
+  }
+
+  function abrirReceta(r){
+    recetaAbierta = r;
+    var h = document.getElementById('recetaSheet');
+    if(!h) return;
+    reposarBorradoReceta();
+    document.getElementById('recetaNombre').textContent = r.n;
+
+    var ing = r.ing || [];
+    var tot = ing.reduce(function(t, x){
+      t.P += Number(x.P) || 0; t.C += Number(x.C) || 0; t.G += Number(x.G) || 0;
+      return t;
+    }, { P:0, C:0, G:0 });
+    var cal = Math.round(tot.P * 4 + tot.C * 4 + tot.G * 9);
+
+    document.getElementById('recetaResumen').textContent = ing.length
+      ? ing.length + (ing.length === 1 ? ' alimento · ' : ' alimentos · ') +
+        mil(cal) + ' cal · ' + un(tot.P) + ' P · ' + un(tot.C) + ' C · ' + un(tot.G) + ' G'
+      : 'Esta receta no tiene alimentos dentro.';
+
+    // Uno por línea, con lo que se apuntó. Es lo que se va a meter en la
+    // comida: enseñar otra cosa sería enseñar una receta distinta.
+    document.getElementById('recetaIng').innerHTML = ing.length
+      ? '<div class="food-list">' + ing.map(function(x){
+          return '<div class="food-card"><div class="fc-main">' +
+            '<div class="fc-name">' + escapar(x.n) + '</div>' +
+            // `textoUnidad` y no `abreviarUnidad`: la segunda devuelve el
+            // singular siempre y salia «2 pieza».
+            '<div class="fc-sub">' + un(x.cant) + ' ' + escapar(textoUnidad(x.cant, x.u || 'Gramos')) +
+            ' · ' + mil(Math.round((Number(x.P)||0)*4 + (Number(x.C)||0)*4 + (Number(x.G)||0)*9)) +
+            ' cal</div></div></div>';
+        }).join('') + '</div>'
+      : '';
+
+    var btn = document.getElementById('recetaAgregar');
+    // Dice A DÓNDE va. Desde aquí no se ve la comida, y «Agregar» a secas
+    // obliga a acordarse de por dónde se entró.
+    btn.textContent = 'Agregar a ' + comidaActual;
+    btn.disabled = !ing.length;
+    h.classList.add('open');
+  }
+
+  // Borrar, con la pregunta en el propio botón. Igual que el día de rutina:
+  // una hoja dentro de otra hoja para una decisión de un segundo es de más.
+  var volverABorrarReceta = null;
+  function reposarBorradoReceta(){
+    var b = document.getElementById('recetaBorrar');
+    if(!b) return;
+    clearTimeout(volverABorrarReceta);
+    volverABorrarReceta = null;
+    b.classList.remove('confirmando');
+    b.textContent = 'Borrar receta';
+  }
+
+  (function(){
+    var h = document.getElementById('recetaSheet');
+    if(!h) return;
+    h.addEventListener('click', function(e){ if(e.target === h) cerrarReceta(); });
+    document.getElementById('recetaCerrar').addEventListener('click', cerrarReceta);
+
+    document.getElementById('recetaAgregar').addEventListener('click', function(){
+      var r = recetaAbierta;
+      cerrarReceta();
+      if(r) apuntarReceta(r);
+    });
+
+    document.getElementById('recetaBorrar').addEventListener('click', function(){
+      var btn = this, r = recetaAbierta;
+      if(!r) return;
+      if(!btn.classList.contains('confirmando')){
+        btn.classList.add('confirmando');
+        btn.textContent = '¿Seguro? Borrar';
+        clearTimeout(volverABorrarReceta);
+        volverABorrarReceta = setTimeout(reposarBorradoReceta, 4000);
+        return;
+      }
+      cerrarReceta();
+      // Se quita de la pantalla ya, y se deshace si el servidor dice que no.
+      var i = RECETAS.indexOf(r);
+      if(i >= 0) RECETAS.splice(i, 1);
+      pintarListas();
+      sbFetch('/rest/v1/recipes?id=eq.' + r.id + '&user_id=eq.' + sesion.user.id,
+              { method:'DELETE' })
+        .then(function(){
+          if(typeof guardarDespensa === 'function') guardarDespensa();
+          toast('toastComida', 'Receta borrada');
+        })
+        ['catch'](function(e){
+          if(i >= 0) RECETAS.splice(i, 0, r);
+          pintarListas();
+          toast('toastComida', 'No se pudo borrar: ' + traducirError(e.message));
+        });
+    });
+  })();
 
   (function(){
     var b = document.getElementById('mealAReceta');
@@ -3872,7 +3981,7 @@
     var rec = e.target.closest('[data-receta]');
     if(rec){
       var r = RECETAS.filter(function(x){ return String(x.id) === rec.dataset.receta; })[0];
-      if(r) apuntarReceta(r);
+      if(r) abrirReceta(r);
       return;
     }
     var c = e.target.closest('[data-sug]');

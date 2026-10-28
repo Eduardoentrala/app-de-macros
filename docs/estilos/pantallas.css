@@ -1206,3 +1206,13 @@
   width:100%;height:100%;min-width:44px;min-height:44px;
 }
 #mealAReceta:active{opacity:.5;}
+
+/* La hoja de la receta. El boton de borrar va callado hasta que
+   pregunta, igual que el de borrar un dia de rutina: el rojo se gana
+   cuando hay algo que contestar, no antes. */
+#recetaIng{max-height:46vh;overflow-y:auto;margin:10px 0 4px;}
+#recetaIng .food-card{box-shadow:none;background:var(--app-bg);}
+#recetaBorrar{color:var(--ink-faint);}
+#recetaBorrar.confirmando{color:var(--red);background:var(--red-soft);
+  border-radius:9px;padding:6px 10px;}
+#recetaAgregar:disabled{opacity:.4;}
