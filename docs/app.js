@@ -302,6 +302,11 @@
     opts = opts || {};
     nameSheetAccion = opts.alGuardar || null;
     nameSheetTitle.textContent = opts.title || 'Nombre del día';
+    // La pista y el ejemplo los pone quien la abre: «Ej. Pecho y triceps»
+    // no le dice nada a quien esta nombrando un desayuno.
+    var pista = document.getElementById('nameSheetHint');
+    if(pista) pista.textContent = opts.hint || 'Ponle el nombre que quieras.';
+    dayNameInput.placeholder = opts.ejemplo || 'Ej. Pecho y tríceps';
     dayNameInput.value = opts.value || '';
     nameSheet.classList.add('open');
     setTimeout(function(){ dayNameInput.focus(); dayNameInput.select(); }, 60);
@@ -3643,6 +3648,10 @@
       if(!lista.length) return;
       openNameSheet({
         title: 'Nombre de la receta',
+        hint: 'Se guarda con los ' + lista.length +
+              (lista.length === 1 ? ' alimento' : ' alimentos') +
+              ' que tienes aquí, con sus cantidades.',
+        ejemplo: 'Ej. Avena con plátano',
         value: comidaActual + ' de siempre',
         alGuardar: guardarComidaComoReceta
       });

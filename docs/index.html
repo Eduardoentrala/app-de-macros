@@ -112,7 +112,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '77fccc2b8d';
+    var SELLO = 'b4229ca608';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -598,7 +598,7 @@
                esta en la lista de arriba. Tu desayuno de siempre ya lo
                apuntaste; lo util es poder repetirlo, no volver a escribirlo.
                Solo aparece si la comida tiene algo dentro. -->
-          <button class="btn-outline" id="mealAReceta" hidden>Guardar esta comida como receta</button>
+          <button id="mealAReceta" hidden>Guardar como receta</button>
         </div>
         <div class="totals-bar">
           <div class="totals-grid">
@@ -1415,15 +1415,6 @@
              que confirma- para que la siguiente pregunta no traiga otra
              hoja mas. -->
 
-        <div class="sheet-backdrop" id="nameSheet">
-          <div class="sheet">
-            <h4 id="nameSheetTitle">Nombre del día</h4>
-            <p class="hint">Ponle el nombre que quieras.</p>
-            <input class="name-input" id="dayNameInput" maxlength="24" placeholder="Ej. Pecho y tríceps">
-            <button class="btn-primary" id="nameSave">Guardar nombre</button>
-          </div>
-        </div>
-
         <div class="sheet-backdrop" id="timerSheet">
           <div class="sheet">
             <h4>Descanso entre series</h4>
@@ -2063,6 +2054,26 @@
         </div>
       </div>
 
+      <!-- EL NOMBRE, PARA QUIEN LO PIDA
+           Vivia DENTRO de la vista de Rutina, porque solo la usaba ella. Al
+           reusarla desde Comidas -para ponerle nombre a una receta- dejo de
+           funcionar sin un solo error: el fondo es `position:absolute;
+           inset:0` y se estira contra su ancestro colocado, asi que desde
+           otra pantalla la vista de Rutina esta apagada y la hoja se abria
+           midiendo 0x0. Tocabas el boton y no pasaba nada.
+           Es la misma trampa que el comentario de `semanaSheet` ya avisaba
+           -«ya paso con dos»-. Ahora son tres.
+           El placeholder lo pone quien la abre: «Ej. Pecho y triceps» no
+           ayuda a nadie que este nombrando un desayuno. -->
+      <div class="sheet-backdrop" id="nameSheet">
+        <div class="sheet">
+          <h4 id="nameSheetTitle">Nombre del día</h4>
+          <p class="hint" id="nameSheetHint">Ponle el nombre que quieras.</p>
+          <input class="name-input" id="dayNameInput" maxlength="40" placeholder="Ej. Pecho y tríceps">
+          <button class="btn-primary" id="nameSave">Guardar nombre</button>
+        </div>
+      </div>
+
       <!-- LA SEMANA, DE UNA OJEADA
            Se abre al tocar una semana en «Mis semanas». Va AQUÍ FUERA, con
            las otras hojas sueltas, y no dentro de la vista: el fondo es
@@ -2098,7 +2109,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '77fccc2b8d';
+    var SELLO = 'b4229ca608';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que

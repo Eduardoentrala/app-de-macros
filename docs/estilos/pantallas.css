@@ -1189,7 +1189,20 @@
 .ts-firma{border-top:none;padding-top:0;margin-top:18px;}
 .ts-firma b{margin-bottom:0;color:var(--ink-faint);}
 
-/* El boton de guardar la comida como receta: con los mismos margenes que
-   el resto de la pantalla. Suelto a la izquierda se leia como un resto
-   de la lista de arriba y no como una accion. */
-#mealAReceta{display:block;width:calc(100% - 32px);margin:4px 16px 18px;}
+/* GUARDAR COMO RECETA: TEXTO, NO BOTON.
+   Empezo siendo un boton con recuadro a todo el ancho, y pesaba mas que
+   la comida que acabas de apuntar: lo primero que ve el ojo al bajar es
+   una caja grande, y lo que importa -lo que comiste- queda debajo.
+   Es una accion que se usa una vez por receta y luego nunca mas. Como
+   «Renombrar» en Rutina: texto gris, pequeño, a la derecha, y con su
+   zona de 44 para que el dedo la alcance sin que grite. */
+#mealAReceta{
+  display:block;margin:2px 16px 16px auto;padding:2px 0;
+  border:none;background:none;cursor:pointer;position:relative;
+  font:600 12.5px/1 sans-serif;color:var(--ink-faint);letter-spacing:-.01em;
+}
+#mealAReceta::after{
+  content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:100%;height:100%;min-width:44px;min-height:44px;
+}
+#mealAReceta:active{opacity:.5;}
