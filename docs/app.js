@@ -1580,7 +1580,6 @@
   //  bolsillo es lo normal: se guarda el instante de arranque, no los
   //  segundos contados, así que da igual si la app estuvo abierta o no.
   var CLAVE_SESION = 'macros.sesionInicio';
-  var TOPE_SESION = 6 * 3600 * 1000;   // nadie entrena seis horas
   var sesionInicio = null, cronoTick = null;
 
   function fmtLargo(seg){
@@ -1595,10 +1594,13 @@
     if(!c) return;
     if(!sesionInicio){ c.hidden = true; return; }
     var seg = Math.floor((Date.now() - sesionInicio) / 1000);
-    // Pasado el tope se retira solo. Un «llevas 7:12:40» solo puede
-    // significar que se quedó encendido, y seguir enseñándolo convierte el
-    // cronómetro en algo que no te puedes creer.
-    if(seg < 0 || seg * 1000 > TOPE_SESION){ pararCrono(); return; }
+    // NO HAY TOPE. Aquí había uno de seis horas que retiraba el cronómetro
+    // solo, y eso es cortar el tiempo de un entrenamiento que todavía no se
+    // ha guardado. Lo único que lo para es guardar la sesión.
+    //
+    //  Un arranque en el futuro sí se descarta: eso no es un entrenamiento
+    //  largo, es un reloj que se movió, y enseñaría tiempo en negativo.
+    if(seg < 0){ pararCrono(); return; }
     c.hidden = false;
     var t = c.querySelector('.t');
     if(t) t.textContent = fmtLargo(seg);
@@ -1622,13 +1624,30 @@
 
   // Al abrir la app, por si cerró a mitad del entrenamiento.
   //
-  //  SOLO SI ES DE HOY Y CABE EN EL TOPE. Uno de ayer diría «llevas
-  //  diecinueve horas entrenando», que es peor que no enseñar nada.
+  //  SIN CONDICIONES DE TIEMPO. Aquí se exigía que fuera de HOY y de menos
+  //  de seis horas, y las dos cosas cortan un entrenamiento de verdad:
+  //
+  //   · El día cambia a mitad de la serie si se entrena de noche. Empezar a
+  //     las 23:40 y guardar a las 00:20 borraba el cronómetro al recargar.
+  //   · Y el tope de seis horas decidía por la persona cuánto puede durar
+  //     un entrenamiento.
+  //
+  //  Lo único que para el cronómetro es GUARDAR LA SESIÓN. Si alguien lo
+  //  deja empezado y no guarda, lo sigue viendo: es la verdad —ese
+  //  entrenamiento sigue sin cerrarse— y guardar lo resuelve en un toque.
+  //
+  //  Se guarda el instante de arranque y no los segundos contados, así que
+  //  da igual cuánto estuviera la app cerrada.
   function recuperarCrono(){
     try{
-      var v = String(localStorage.getItem(CLAVE_SESION) || '').split('|');
-      var t = Number(v[1]);
-      if(v[0] !== iso(HOY) || !(t > 0) || Date.now() - t > TOPE_SESION){
+      // El formato lleva la fecha delante por historia; lo que importa es
+      // el instante. Se acepta con y sin ella.
+      var crudo = String(localStorage.getItem(CLAVE_SESION) || '');
+      var partes = crudo.split('|');
+      var t = Number(partes.length > 1 ? partes[1] : partes[0]);
+      // Solo se descarta lo que no es un instante, o uno en el futuro: eso
+      // no es un entrenamiento largo, es un reloj movido.
+      if(!(t > 0) || t > Date.now()){
         localStorage.removeItem(CLAVE_SESION);
         return;
       }
@@ -1659,6 +1678,7 @@
     var t = timerChip.querySelector('.t');
     if(t) t.textContent = fmt(v);
   }
+
 
   // Lo que eligió, si lo eligió alguna vez. Nulo es «no lo ha tocado» y
   // entonces manda el valor con el que arranca la pantalla: inventarle una

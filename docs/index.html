@@ -112,7 +112,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = 'e5b6c2f521';
+    var SELLO = '64bafdddee';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -1309,12 +1309,7 @@
           <div class="back-header-inner">
             <button class="back-btn" data-back>‹ Regresar</button>
             <span class="back-title">Mi Rutina</span>
-            <!-- EL TIEMPO QUE LLEVA ENTRENANDO. Solo aparece cuando hay sesion en
-                 marcha -arranca al marcar la primera serie-, asi que nunca hay dos
-                 numeros de tiempo compitiendo en esta barra. No es un boton: es un
-                 dato, y no se toca. -->
-            <span class="chip crono-sesion" id="cronoSesion" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.4"/><path d="M12 7.3V12l3 1.8"/></svg><b class="t">0:00</b></span>
-            <button class="chip" id="timerChip" aria-label="Descanso entre series"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="13.6" r="7.4"/><path d="M12 10v3.6h2.5"/><path d="M9.4 2.9h5.2"/><path d="M12 2.9v2.3"/></svg><span class="t">3:00</span></button>
+                        <button class="chip" id="timerChip" aria-label="Descanso entre series"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="13.6" r="7.4"/><path d="M12 10v3.6h2.5"/><path d="M9.4 2.9h5.2"/><path d="M12 2.9v2.3"/></svg><span class="t">3:00</span></button>
           </div>
         </div>
         <div class="scroll" style="position:relative;">
@@ -1360,6 +1355,16 @@
 
         <div class="bottom-bar">
           <button class="btn-primary" id="saveSessionBtn">Guardar sesión</button>
+          <!-- EL TIEMPO QUE LLEVAS ENTRENANDO.
+               Estuvo arriba, al lado del chip del descanso, y eran dos
+               relojes con numero pegados: a catorce pixeles los iconos se
+               parecen y habia que pararse a leer cual era cual. Y encima
+               empujaba al titulo, que se posiciona con un hueco fijo para
+               UN chip.
+               Aqui abajo no compite con nada: esta donde se mira al
+               terminar, que es cuando el numero importa. Solo sale si hay
+               sesion en marcha. -->
+          <p class="crono-sesion" id="cronoSesion" hidden>Llevas <b class="t">0:00</b> entrenando</p>
           <!-- Aquí vivía «Borrar última sesión» y NO HACÍA NADA: sin `id`, sin
                manejador y sin ningún escuchador delegado que lo alcanzara. Se
                pulsaba y no pasaba nada, debajo mismo del botón principal.
@@ -2136,7 +2141,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = 'e5b6c2f521';
+    var SELLO = '64bafdddee';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que

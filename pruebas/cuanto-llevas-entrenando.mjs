@@ -86,13 +86,12 @@ console.log('\nY se para al guardar la sesión');
 }
 
 // ------------------------------------------------------------------
-console.log('\nSobrevive a cerrar la app, pero no a que pase el día');
+console.log('\nSobrevive a cerrar la app, al cambio de día y a lo que haga falta');
 {
   // EJECUTADO, con el reloj y el almacén de mentira. Cada caso con su
   // cierre nuevo: `sesionInicio` vive dentro y arrastraría el anterior.
   const crear = (guardado, hoy, ahora) => new Function('guardado', 'hoy', 'ahora',
     'var sesionInicio = null, cronoTick = null, quitado = false;' +
-    'var TOPE_SESION = 6 * 3600 * 1000;' +
     'var CLAVE_SESION = "k";' +
     'var localStorage = { getItem: function(){ return guardado; },' +
     '  removeItem: function(){ quitado = true; }, setItem: function(){} };' +
@@ -113,35 +112,64 @@ console.log('\nSobrevive a cerrar la app, pero no a que pase el día');
   const haceUnaHora = AHORA - 3600 * 1000;
 
   const vivo = crear(HOY + '|' + haceUnaHora, HOY, AHORA);
-  ok(vivo.sesionInicio === haceUnaHora, 'uno de hoy y reciente se recupera',
+  ok(vivo.sesionInicio === haceUnaHora, 'uno de hace una hora se recupera',
      'cerrar la app a mitad del entrenamiento es lo normal');
 
+  // NADA DE LO QUE PASE CON EL TIEMPO LO CORTA. Aquí había dos condiciones
+  // —que fuera de HOY y de menos de seis horas— y las dos cortan
+  // entrenamientos de verdad:
+  //
+  //  · El día cambia a mitad de la serie si se entrena de noche: empezar a
+  //    las 23:40 y guardar a las 00:20 borraba el cronómetro al recargar.
+  //  · Y seis horas era decidir por la persona cuánto puede durar lo suyo.
+  //
+  // Lo único que lo para es guardar la sesión.
   const ayer = crear('2026-10-26|' + haceUnaHora, HOY, AHORA);
-  ok(ayer.sesionInicio === null && ayer.quitado,
-     'uno de ayer no, y además se tira',
-     'diría «llevas diecinueve horas entrenando»');
+  ok(ayer.sesionInicio === haceUnaHora && !ayer.quitado,
+     'y uno empezado ayer también, aunque el día haya cambiado',
+     'entrenar de noche cruza la medianoche, y eso no es un fallo');
 
-  const viejo = crear(HOY + '|' + (AHORA - 7 * 3600 * 1000), HOY, AHORA);
-  ok(viejo.sesionInicio === null && viejo.quitado,
-     'y uno de hace siete horas tampoco, aunque sea de hoy',
-     'nadie entrena siete horas: eso es un cronómetro que se quedó encendido');
+  const largo = crear(HOY + '|' + (AHORA - 7 * 3600 * 1000), HOY, AHORA);
+  ok(largo.sesionInicio === AHORA - 7 * 3600 * 1000 && !largo.quitado,
+     'y uno de hace siete horas sigue ahí',
+     'no se corta el tiempo de algo que todavía no se ha guardado');
 
-  for (const [q, v] of [['vacío', ''], ['sin fecha', '|123'], ['basura', 'xxxx'],
+  // Lo que sí se descarta: lo que no es un instante, y uno en el FUTURO
+  // —eso no es un entrenamiento largo, es un reloj movido, y enseñaría
+  // tiempo en negativo—.
+  const futuro = crear(HOY + '|' + (AHORA + 60000), HOY, AHORA);
+  ok(futuro.sesionInicio === null && futuro.quitado,
+     'pero un arranque en el futuro no',
+     'daría un cronómetro en negativo');
+
+  for (const [q, v] of [['vacío', ''], ['basura', 'xxxx'],
                         ['sin número', HOY + '|'], ['nulo', null]]) {
     const r = crear(v, HOY, AHORA);
     ok(r.sesionInicio === null, `y ${q} no arranca nada`,
        'salió ' + r.sesionInicio);
   }
+  // Y el formato viejo, con fecha delante, se sigue entendiendo: hay
+  // teléfonos con uno guardado ahora mismo.
+  const soloInstante = crear(String(haceUnaHora), HOY, AHORA);
+  ok(soloInstante.sesionInicio === haceUnaHora, 'y vale con o sin la fecha delante');
 }
 
 // ------------------------------------------------------------------
-console.log('\nY si se pasa de la raya mientras corre, se retira solo');
+console.log('\nY mientras corre tampoco se corta');
 {
   const pintar = sacar('function pintarCrono(){');
-  ok(/if\(seg < 0 \|\| seg \* 1000 > TOPE_SESION\)\{ pararCrono\(\); return; \}/.test(pintar),
-     'el tope también se mira al pintar, no solo al recuperar',
-     'si no, quien deja la app abierta ve «7:12:40» y deja de creerse el ' +
-     'cronómetro entero');
+  ok(!/TOPE_SESION/.test(pintar), 'no hay tope que lo retire',
+     'retirarlo solo es cortar el tiempo de un entrenamiento sin guardar');
+  ok(/if\(seg < 0\)\{ pararCrono\(\); return; \}/.test(pintar),
+     'y solo se retira si saliera negativo',
+     'eso no es un entrenamiento, es el reloj del teléfono moviéndose');
+
+  // LO ÚNICO QUE LO PARA ES GUARDAR. Tres sitios: los dos caminos del
+  // guardado y el de encolarlo sin señal, que también es guardarlo.
+  const paradas = (APP.match(/pararCrono\(\);/g) || []).length;
+  ok(paradas === 4, `se para en ${paradas} sitios`,
+     'tres son los del guardado -con sesión, sin sesión y encolado- y el ' +
+     'cuarto el del reloj movido. Uno más y hay que mirar cuál');
 }
 
 // ------------------------------------------------------------------
@@ -153,9 +181,9 @@ console.log('\nEl chip tiene su sitio y nace escondido');
      'y el número tiene su propio hueco');
   ok(!/<button[^>]*id="cronoSesion"/.test(HTML), 'y no es un botón',
      'es un dato, no se toca: el que se toca es el del descanso');
-  ok(/id="cronoSesion"[\s\S]{0,900}?id="timerChip"/.test(HTML),
-     'va antes que el del descanso, no en su sitio',
-     'son dos cosas distintas y las dos tienen que poder verse');
+  ok(/<p class="crono-sesion"[^>]*id="cronoSesion"/.test(HTML),
+     'y es texto, no un chip',
+     'un chip pide que lo toques; esto solo se lee');
 }
 
 // ------------------------------------------------------------------
@@ -185,6 +213,37 @@ console.log('\nY borrar un día pregunta antes');
      'y el rojo se guarda para cuando pregunta',
      'pegado a `.btn-delete-day`: la regla del gris lleva las mismas clases y ' +
      'va más abajo, así que suelto empataba y ganaba ella');
+}
+
+// ------------------------------------------------------------------
+console.log('\nY no satura la cabecera: vive debajo de «Guardar sesión»');
+{
+  // Nació arriba, al lado del chip del descanso, y eran dos relojes con
+  // número pegados: a catorce píxeles los iconos se parecen y había que
+  // pararse a leer cuál era cuál, justo en la pantalla donde menos se
+  // mira. Y encima empujaba al título, que se posiciona con un hueco fijo
+  // de 78 px para UN chip: «Mi Rutina» salía montada encima del reloj.
+  //
+  // Abajo no compite con nada, y está donde se mira al terminar, que es
+  // cuando el número importa.
+  ok(!/<div class="back-header[\s\S]{0,900}?id="cronoSesion"/.test(HTML),
+     'no está en la cabecera',
+     'ahí eran dos relojes y un título peleando por la misma fila');
+  ok(/<div class="bottom-bar">[\s\S]{0,1400}?id="cronoSesion"/.test(HTML),
+     'está en la barra de abajo');
+  ok(/id="saveSessionBtn"[\s\S]{0,900}?id="cronoSesion"/.test(HTML),
+     'y debajo de «Guardar sesión», no encima',
+     'encima empujaría el botón, que es lo que se busca con el pulgar');
+
+  // Y la cabecera vuelve a tener un solo reloj, con su número.
+  ok(/id="timerChip"[\s\S]{0,600}?<span class="t">3:00<\/span>/.test(HTML),
+     'y el del descanso conserva el suyo',
+     'se le quitó mientras convivían; al separarlos ya no hace falta');
+
+  // El chip del descanso mide 68x32: alto corto para un dedo.
+  ok(/#timerChip::after\{/.test(CSS) && /#timerChip[\s\S]{0,220}?min-height:44px/.test(CSS),
+     'y tiene su zona de 44, que no tenía',
+     'no se agranda el chip: crecerlo movería la cabecera entera');
 }
 
 console.log('\n' + pasan + ' bien, ' + fallan + ' mal');
