@@ -4308,6 +4308,40 @@
       toast('toastRutina', 'Sesión guardada · ' + mil(total) + ' kg de volumen');
     })['catch'](function(e){
       guardandoSesion = false;
+
+      // SIN SEÑAL NO SE PIERDE EL ENTRENAMIENTO.
+      //
+      //  El gimnasio es donde el teléfono peor señal tiene y donde más se
+      //  usa esto. Hasta ahora «Guardar sesión» fallaba, se deshacía todo
+      //  lo de la pantalla y, si cerrabas la app, el entrenamiento entero
+      //  se había perdido: las series, el volumen, la racha.
+      //
+      //  La comida ya se encolaba desde siempre. Esto no, y es lo único de
+      //  la app que te puede costar una hora de trabajo.
+      //
+      //  Se encola la fila tal cual, con CÓMO buscarse: al subir ya habrá
+      //  red para preguntar si ese día ya tenía sesión, y así un guardado
+      //  sin señal no duplica el volumen.
+      //
+      //  Y NO SE DESHACE NADA: la sesión cuenta desde ya. Es lo mismo que
+      //  hace el diario con la comida apuntada sin señal, y lo contrario
+      //  sería castigar a quien entrena donde no hay cobertura.
+      if(sinConexion(e) || esperaMejorMomento(e)){
+        encolar({
+          ruta: '/rest/v1/workout_sessions',
+          buscar: busca,
+          op: { method:'POST', headers:{ 'Prefer':'return=minimal' },
+                body: JSON.stringify(fila) },
+          // Una por día y día de rutina: volver a darle al botón sin señal
+          // reemplaza la que esperaba, no añade otra.
+          clave: 'sesion:' + iso(HOY) + ':' + (diaId || ''),
+          tipo: 'sesion'
+        });
+        pararCrono();
+        toast('toastRutina', 'Sesión guardada · se sube cuando haya señal');
+        return;
+      }
+
       // Se deshace lo local: si no se guardó, la racha y las gráficas no
       // deben contarla.
       delete SESIONES[iso(HOY)];
@@ -5902,7 +5936,33 @@
       var item = COLA.filter(function(x){ return !x.dueno || x.dueno === yo; })[0];
       if(!item) return Promise.resolve();
 
-      return sbFetch(item.ruta, item.op)
+      // HAY COSAS QUE NO SE PUEDEN MANDAR A CIEGAS.
+      //
+      //  Una comida es un alta y ya: dos altas iguales son dos comidas, y
+      //  eso es lo que pasó. Una SESIÓN de gimnasio no: si ya hay fila de
+      //  ese día y ese día de rutina, mandar otra duplica el volumen —el
+      //  mismo fallo que se arregló mirando antes de guardar—, y sin señal
+      //  no se puede mirar.
+      //
+      //  Así que la pregunta se aplaza con el envío: el item guarda CÓMO
+      //  buscarse, y se busca al subir, que es cuando por fin hay red. El
+      //  resto —el orden, los reintentos, qué error espera y cuál se tira—
+      //  es el mismo de siempre.
+      var envio = item.buscar
+        ? sbFetch(item.buscar)
+            ['catch'](function(){ return null; })   // si falla, se inserta
+            .then(function(hay){
+              var id = hay && hay[0] && hay[0].id;
+              if(!id) return sbFetch(item.ruta, item.op);
+              return sbFetch(item.ruta + '?id=eq.' + id +
+                             '&user_id=eq.' + item.dueno, {
+                method:'PATCH', headers:{ 'Prefer':'return=minimal' },
+                body: item.op.body
+              });
+            })
+        : sbFetch(item.ruta, item.op);
+
+      return envio
         .then(function(){ subidos++; })
         ['catch'](function(e){
           // Las dos formas de "ahora no": sin red, o el servidor de mal día.

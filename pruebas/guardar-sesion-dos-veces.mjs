@@ -112,6 +112,15 @@ function montar({ filasQueYaHay = [], fallaLaConsulta = false,
     mil: (n) => String(n),
     traducirError: (m) => m,
     avisos: [],
+    // Sin señal la sesión se encola en vez de deshacerse. Aquí interesa el
+    // camino con red, así que estas dicen «hay red» y `encolar` solo deja
+    // constancia: si alguna vez se llama en estas pruebas, es que el camino
+    // bueno dejó de serlo.
+    sinConexion: () => false,
+    esperaMejorMomento: () => false,
+    pararCrono: () => {},
+    encolar: (x) => ctx.encolados.push(x),
+    encolados: [],
     sbFetch, peticiones,
     soltar: () => { const f = pendientes.shift(); if (f) f(); },
     soltarTodo: () => { while (pendientes.length) pendientes.shift()(); },
@@ -268,6 +277,11 @@ console.log('\nY si el guardado falla, se puede reintentar');
 
   ok(ctx.avisos.some((a) => /no se pudo guardar/i.test(a)), 'se avisa del fallo',
      'avisos: ' + JSON.stringify(ctx.avisos));
+  // Y CON RED, NO SE ENCOLA. Lo que encola es el «no hay señal»; un rechazo
+  // del servidor con red es un no de verdad, y guardarlo para reintentarlo
+  // luego lo volveria a rechazar cada vez, atascando la cola.
+  ok(ctx.encolados.length === 0, 'y no se encola: esto fue un no, no un «ahora no»',
+     'encolado: ' + JSON.stringify(ctx.encolados));
   const antes = ctx.peticiones.length;
   clic();
   ok(ctx.peticiones.length > antes, 'y se puede volver a intentar',
