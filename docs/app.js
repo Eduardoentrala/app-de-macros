@@ -6938,10 +6938,33 @@
     if(!ANALISIS || !ANALISIS.mensaje){ caja.hidden = true; return; }
     caja.hidden = false;
     document.getElementById('analisisTxt').textContent = ANALISIS.mensaje;
-    document.getElementById('analisisCuando').textContent = ANALISIS.mes || '';
+
+    // CUÁNDO SE ESCRIBIÓ, EN PALABRAS, Y QUE ES MENSUAL.
+    //
+    //  Decía «2026-10». Hay que descifrarlo, y además no dice lo único que
+    //  de verdad hace falta saber: que esto se hace UNA VEZ AL MES y no
+    //  cambia hasta el siguiente. Sin eso parece que se reescribe cada vez
+    //  que entras, y no se sabe si lo que lees es de hoy o de hace tres
+    //  semanas.
+    var m = String(ANALISIS.mes || '').match(/^(\d{4})-(\d{2})$/);
+    document.getElementById('analisisCuando').textContent = m
+      ? 'Una vez al mes · ' + MESES_LARGO[Number(m[2]) - 1] + ' de ' + m[1]
+      : (ANALISIS.mes || '');
+
+    // Y LAS SEMANAS, también en palabras. «Comparando 2026-W37 con
+    // 2026-W40» son dos claves que no dicen nada: hay que saber de memoria
+    // en qué cae la semana 37. Con las fechas se ve de un vistazo de cuándo
+    // son las fotos que se están comparando, que es justo lo que explica
+    // por qué el texto habla de hace un mes y no de esta semana.
+    var enPalabras = function(k){
+      var lunes = typeof lunesDeClave === 'function' ? lunesDeClave(k) : null;
+      if(!lunes || isNaN(lunes)) return k;
+      return fmtFecha(lunes);
+    };
     document.getElementById('analisisPie').textContent =
       ANALISIS.semana_vieja && ANALISIS.semana_nueva
-        ? 'Comparando ' + ANALISIS.semana_vieja + ' con ' + ANALISIS.semana_nueva + '.'
+        ? 'Compara tus fotos del ' + enPalabras(ANALISIS.semana_vieja) +
+          ' con las del ' + enPalabras(ANALISIS.semana_nueva) + '.'
         : '';
   }
 

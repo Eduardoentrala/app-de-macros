@@ -112,7 +112,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '936bac9093';
+    var SELLO = '83cd027850';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -1182,14 +1182,27 @@
           <!-- La comparación del mes. Sale cuando hay una; si no, ni se
                menciona: un hueco que dice "todavía no" solo genera la
                pregunta de cuándo. -->
-          <div class="card" id="analisisCard" hidden>
-            <div class="goal-head">
-              <div style="font:800 14.5px/1 sans-serif;">Tu mes en fotos</div>
-              <span class="goal-hint" id="analisisCuando">—</span>
-            </div>
+          <!-- PLEGADO, y con `details`.
+               Son quince o veinte lineas que se escriben UNA VEZ AL MES y no
+               cambian hasta el siguiente. Abiertas, ocupaban la pantalla
+               entera cada vez que se entra a Fotos y empujaban abajo lo que
+               se viene a hacer aqui, que es subir las de esta semana.
+               Con `details` y no con un boton: se abre y se cierra solo, se
+               llega con el teclado, y el estado vive en el atributo `open`
+               -que sobrevive a que `pintarAnalisis` reescriba el texto-. -->
+          <details class="card ts-plegable analisis-card" id="analisisCard" hidden>
+            <summary>
+              <div>
+                <div style="font:800 14.5px/1 sans-serif;">Tu mes en fotos</div>
+                <!-- Cuando se escribio, en palabras. Decia «2026-10», que hay
+                     que descifrar, y no decia que esto se hace una vez al mes:
+                     sin eso parece que cambia cada vez que entras. -->
+                <div class="goal-hint" id="analisisCuando">—</div>
+              </div>
+            </summary>
             <p class="analisis-txt" id="analisisTxt">—</p>
             <div class="calc-note" id="analisisPie">—</div>
-          </div>
+          </details>
 
           <button class="btn-primary" id="irComparar" style="width:calc(100% - 32px);margin:0 16px 24px;">Comparar dos semanas</button>
         </div>
@@ -2073,7 +2086,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '936bac9093';
+    var SELLO = '83cd027850';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que

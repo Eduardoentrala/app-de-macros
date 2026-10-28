@@ -239,7 +239,27 @@ console.log('\n— Y se ve —');
   check('nace oculto', /id="analisisCard" hidden/.test(HTML));
   check('se pinta lo guardado, sin gastar IA',
     /analisis_fotos\?select=mes,mensaje/.test(APP));
-  check('dice que dos semanas compara', /Comparando ' \+ ANALISIS\.semana_vieja/.test(APP));
+  check('dice qué dos semanas compara',
+    /ANALISIS\.semana_vieja/.test(APP) && /ANALISIS\.semana_nueva/.test(APP));
+  // EN FECHAS, no en claves. Decía «Comparando 2026-W37 con 2026-W40», que
+  // son dos números que hay que descifrar: nadie sabe de memoria en qué cae
+  // la semana 37. Y es justo lo que explica por qué el texto habla de hace
+  // un mes y no de esta semana.
+  check('y en fechas, no en claves de semana',
+    /Compara tus fotos del ' \+ enPalabras\(ANALISIS\.semana_vieja\)/.test(APP),
+    'con «2026-W37» no se ve de cuándo son las fotos que se comparan');
+
+  // PLEGADO. Son quince o veinte líneas que se escriben UNA VEZ AL MES, y
+  // abiertas ocupaban la pantalla entera cada vez que se entra a Fotos,
+  // empujando abajo lo que se viene a hacer aquí: subir las de esta semana.
+  check('nace plegado, no abierto',
+    /<details[^>]*id="analisisCard"/.test(HTML) && !/id="analisisCard"[^>]*\sopen[\s>]/.test(HTML),
+    'con `details` se abre y se cierra solo, se llega con el teclado, y el ' +
+    'estado vive en `open`, que sobrevive a que `pintarAnalisis` reescriba el texto');
+  check('y su cabecera dice cada cuánto cambia',
+    /'Una vez al mes · '/.test(APP),
+    'decía «2026-10»: ni se entiende, ni dice que esto no se reescribe hasta ' +
+    'el mes que viene');
   check('una vez al mes', /localStorage\.getItem\(CLAVE_ANALISIS\) === mes/.test(APP));
 
   // LA MARCA DEL MES SE PONE CUANDO EL SERVIDOR CONTESTA, NO ANTES.

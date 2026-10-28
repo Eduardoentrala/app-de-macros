@@ -1145,6 +1145,17 @@
    dedo no es un puntero. Va con relleno de verdad y no con un ::after, que
    aqui chocaria con la flecha. */
 .ts-plegable summary{min-height:44px;}
+
+/* El analisis de fotos reusa ese mismo plegable, pero es una tarjeta
+   entera y no un trozo dentro de otra: su summary lleva dos lineas
+   -el titulo y el cuando- en vez de una sola en negrita. */
+.analisis-card{padding:14px 16px;}
+.analisis-card summary{align-items:flex-start;}
+.analisis-card .goal-hint{display:block;margin-top:4px;}
+.analisis-card .analisis-txt{margin:10px 0 0;}
+/* Cerrado no se ve nada de dentro, asi que el pie tampoco necesita
+   separarse: solo cuando esta abierto. */
+.analisis-card[open] .calc-note{margin-top:10px;}
 /* Sin respuesta del coach queda solo la firma, y una firma sola no necesita
    una raya encima separandola de nada. */
 .ts-firma{border-top:none;padding-top:0;margin-top:18px;}
