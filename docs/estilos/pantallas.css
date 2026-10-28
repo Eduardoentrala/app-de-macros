@@ -546,10 +546,38 @@
 [data-view="rutina"] .day-actions button:active{opacity:.5;}
 .btn-rename{border:1.5px solid var(--line);color:var(--ink);}
 .btn-delete-day{border:1.5px solid var(--red);color:var(--red);}
+
+/* MAS DISCRETOS, Y ALCANZABLES.
+   Eran dos textos de 12,5 px flotando encima de las tarjetas, uno de ellos
+   en rojo pleno, y median 15 px de alto: muy por debajo de los 44 que pide
+   un dedo, para una accion que borra el dia entero. El alto ya lo
+   arregla la regla de `#deleteDayBtn::after` en componentes.css -lleva id,
+   asi que gana a cualquier cosa que se escriba aqui- y el ancho natural
+   de los dos pasa de 44 de sobra.
+   Bajan a gris -el de borrar incluido- porque ahora la pregunta la hace el
+   propio boton al primer toque: el rojo ya no es lo unico que protege, asi
+   que no tiene que gritar desde el principio. Y al preguntar SI se pone
+   rojo, que es cuando de verdad hay algo que mirar. */
+[data-view="rutina"] .day-actions button{
+  color:var(--ink-faint);font-weight:600;position:relative;
+}
+/* Armado: aqui si. Y el fondo tenue lo separa de «Renombrar», que sigue
+   siendo gris, para que no se conteste al vuelo pensando que es el otro. */
+/* Pegado a `.btn-delete-day` y no suelto: la regla del color gris lleva
+   las mismas tres clases y va mas abajo en el fichero, asi que empataba
+   y ganaba ella. El boton se ponia rosa y el texto seguia gris. */
+[data-view="rutina"] .day-actions .btn-delete-day.confirmando{
+  color:var(--red);background:var(--red-soft);
+  border-radius:9px;padding:4px 9px;
+}
 /* Dentro de la fila del día mandan estos: sin recuadro, y el de borrar en
    rojo porque es lo único ahí que no se deshace. */
-[data-view="rutina"] .day-actions .btn-rename{color:var(--ink-soft);}
-[data-view="rutina"] .day-actions .btn-delete-day{color:var(--red);}
+[data-view="rutina"] .day-actions .btn-rename{color:var(--ink-faint);}
+/* En gris, no en rojo. La pregunta la hace ahora el propio boton al
+   primer toque, asi que el rojo ya no es lo unico que protege de un
+   dedo que se equivoca: se guarda para cuando de verdad hay algo que
+   contestar -ver `.confirmando` arriba-. */
+[data-view="rutina"] .day-actions .btn-delete-day{color:var(--ink-faint);}
 .sheet input.name-input{
   border:1.5px solid var(--line);background:var(--app-bg);border-radius:12px;padding:14px;
   font:700 16px/1 sans-serif;color:var(--ink);width:100%;

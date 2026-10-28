@@ -281,6 +281,8 @@
     if(typeof volcarRutina === 'function') volcarRutina();
   }
   function loadDay(tab){
+    // Y cambiar de dia tambien: la pregunta era sobre el dia anterior.
+    if(typeof reposarBorrado === 'function') reposarBorrado();
     exList.innerHTML = dayContent[tab.dataset.day] || '';
     // Repone la referencia: cambiar de día rehace las tarjetas desde cero.
     if(typeof ponerReferencias === 'function') ponerReferencias(); else recalcAll();
@@ -338,6 +340,9 @@
   });
 
   document.getElementById('renameDayBtn').addEventListener('click', function(){
+    // Tocar cualquier otra cosa desarma la pregunta: una que quedo armada en
+    // otra pestaña borraria la que no es.
+    reposarBorrado();
     var t = activeTab();
     if(!t) return;
     openNameSheet({title:'Renombrar día', value:t.textContent.trim()});
@@ -394,11 +399,44 @@
     if(e.target === nameSheet) closeNameSheet();
   });
 
+  // PREGUNTA ANTES DE BORRAR, y no lo hacía.
+  //
+  //  Un toque y el día entero desaparecía: la pestaña, sus ejercicios y sus
+  //  series, sin avisar y sin forma de recuperarlo desde la app. Y el botón
+  //  medía quince píxeles de alto, al lado de «Renombrar», en una fila que
+  //  flota encima de las tarjetas. El rojo era lo único que lo protegía.
+  //
+  //  Dos toques y no una hoja aparte: la pregunta cabe en el propio botón,
+  //  se responde donde está el dedo, y no responder -tocar otra cosa, o
+  //  esperar- ya es decir que no. Una hoja para esto son dos pantallas para
+  //  una decisión de un segundo.
+  var volverABorrar = null;
+  function reposarBorrado(){
+    var b = document.getElementById('deleteDayBtn');
+    if(!b) return;
+    clearTimeout(volverABorrar);
+    volverABorrar = null;
+    b.classList.remove('confirmando');
+    b.textContent = 'Borrar día';
+  }
+
   document.getElementById('deleteDayBtn').addEventListener('click', function(){
+    var btn = this;
     var tabs = Array.from(dayTabs.querySelectorAll('.day-tab:not(.add)'));
     if(tabs.length <= 1){ toast('toastRutina', 'Debe quedar al menos un día'); return; }
     var active = activeTab();
     if(!active) return;
+
+    // Primer toque: preguntar. Se vuelve solo a los cuatro segundos, que es
+    // de sobra para decidir y poco para quedarse armado sin que nadie mire.
+    if(!btn.classList.contains('confirmando')){
+      btn.classList.add('confirmando');
+      btn.textContent = '¿Borrar «' + active.textContent.trim() + '»?';
+      clearTimeout(volverABorrar);
+      volverABorrar = setTimeout(reposarBorrado, 4000);
+      return;
+    }
+    reposarBorrado();
     var i = tabs.indexOf(active);
     var idBorrado = active.dataset.id;
     delete dayContent[active.dataset.day];
@@ -615,7 +653,12 @@
   // Set completion checkboxes
   document.getElementById('exerciseList').addEventListener('click', function(e){
     var chk = e.target.closest('.set-check');
-    if(chk){ chk.classList.toggle('done'); return; }
+    if(chk){
+      var marcada = chk.classList.toggle('done');
+      // Solo al MARCAR. Desmarcar es corregirse, no empezar a entrenar.
+      if(marcada) arrancarCrono();
+      return;
+    }
     var clock = e.target.closest('.clock-btn');
     if(clock){
       var card = clock.closest('.exercise-card');
@@ -633,6 +676,10 @@
       // que programa el guardado pase lo que pase.
       var palomita = row ? row.querySelector('.set-check') : null;
       if(palomita) palomita.classList.add('done');
+      // Poner el descanso tambien es haber hecho la serie, y eso lo dice
+      // el comentario de arriba: si cuenta como marcarla, cuenta como
+      // empezar.
+      arrancarCrono();
 
       startRest(restSeconds, 'Descanso · ' + name + ', set ' + setNo);
       return;
@@ -1514,6 +1561,79 @@
     syncPresets(p.dataset.secs);
   });
   customSecs.addEventListener('input', function(){ syncPresets(customSecs.value); });
+  // ---- Cuánto llevas entrenando ----
+  //
+  //  Arranca al marcar la PRIMERA serie, no al entrar en Rutina: entrar a
+  //  mirar qué toca hoy no es empezar a entrenar, y un cronómetro que
+  //  arranca solo al abrir una pantalla miente en cuanto alguien echa un
+  //  vistazo y se va.
+  //
+  //  Se para al guardar la sesión, que es cuando la persona dice que
+  //  terminó.
+  //
+  //  Y SOBREVIVE A CERRAR LA APP, porque entrenar con el teléfono en el
+  //  bolsillo es lo normal: se guarda el instante de arranque, no los
+  //  segundos contados, así que da igual si la app estuvo abierta o no.
+  var CLAVE_SESION = 'macros.sesionInicio';
+  var TOPE_SESION = 6 * 3600 * 1000;   // nadie entrena seis horas
+  var sesionInicio = null, cronoTick = null;
+
+  function fmtLargo(seg){
+    var h = Math.floor(seg / 3600), m = Math.floor((seg % 3600) / 60), s = seg % 60;
+    return h
+      ? h + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0')
+      : m + ':' + String(s).padStart(2, '0');
+  }
+
+  function pintarCrono(){
+    var c = document.getElementById('cronoSesion');
+    if(!c) return;
+    if(!sesionInicio){ c.hidden = true; return; }
+    var seg = Math.floor((Date.now() - sesionInicio) / 1000);
+    // Pasado el tope se retira solo. Un «llevas 7:12:40» solo puede
+    // significar que se quedó encendido, y seguir enseñándolo convierte el
+    // cronómetro en algo que no te puedes creer.
+    if(seg < 0 || seg * 1000 > TOPE_SESION){ pararCrono(); return; }
+    c.hidden = false;
+    var t = c.querySelector('.t');
+    if(t) t.textContent = fmtLargo(seg);
+  }
+
+  function arrancarCrono(){
+    if(sesionInicio) return;
+    sesionInicio = Date.now();
+    try{ localStorage.setItem(CLAVE_SESION, iso(HOY) + '|' + sesionInicio); }catch(e){}
+    if(!cronoTick) cronoTick = setInterval(pintarCrono, 1000);
+    pintarCrono();
+  }
+
+  function pararCrono(){
+    sesionInicio = null;
+    if(cronoTick){ clearInterval(cronoTick); cronoTick = null; }
+    try{ localStorage.removeItem(CLAVE_SESION); }catch(e){}
+    var c = document.getElementById('cronoSesion');
+    if(c) c.hidden = true;
+  }
+
+  // Al abrir la app, por si cerró a mitad del entrenamiento.
+  //
+  //  SOLO SI ES DE HOY Y CABE EN EL TOPE. Uno de ayer diría «llevas
+  //  diecinueve horas entrenando», que es peor que no enseñar nada.
+  function recuperarCrono(){
+    try{
+      var v = String(localStorage.getItem(CLAVE_SESION) || '').split('|');
+      var t = Number(v[1]);
+      if(v[0] !== iso(HOY) || !(t > 0) || Date.now() - t > TOPE_SESION){
+        localStorage.removeItem(CLAVE_SESION);
+        return;
+      }
+      sesionInicio = t;
+      if(!cronoTick) cronoTick = setInterval(pintarCrono, 1000);
+      pintarCrono();
+    }catch(e){}
+  }
+  recuperarCrono();
+
   // EL DESCANSO SE GUARDA, que es lo que no hacía.
   //
   //  Esto ponía la variable, escribía el chip y avisaba «Descanso: 2:00».
@@ -4122,7 +4242,7 @@
     // que se acaba de guardar.
     recalcAll();
 
-    if(!sesion || !sesion.user){ guardandoSesion = false; toast('toastRutina', 'Sesión guardada'); return; }
+    if(!sesion || !sesion.user){ guardandoSesion = false; pararCrono(); toast('toastRutina', 'Sesión guardada'); return; }
     if(!detalle.length){ guardandoSesion = false; toast('toastRutina', 'No hay series con peso que guardar'); return; }
 
     var tab = activeTab();
@@ -4184,6 +4304,7 @@
         });
       }).then(function(){
       guardandoSesion = false;
+      pararCrono();
       toast('toastRutina', 'Sesión guardada · ' + mil(total) + ' kg de volumen');
     })['catch'](function(e){
       guardandoSesion = false;

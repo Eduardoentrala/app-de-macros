@@ -272,8 +272,13 @@ console.log('\n— El reloj también marca la serie —');
 
   // La palomita por su cuenta sigue alternando: tocarla es corregirse.
   const j = APP.indexOf("var chk = e.target.closest('.set-check');");
+  // Se mira que ALTERNE, no la linea entera: el cuerpo crecio al arrancar
+  // ahi el cronometro de la sesion, y fijar el texto exacto convierte
+  // cualquier añadido en un falso rojo. Lo que no puede cambiar es el
+  // `toggle`: con un `add`, tocarla dos veces no la apaga.
   check('tocar la palomita sigue alternando',
-    /if\(chk\)\{ chk\.classList\.toggle\('done'\); return; \}/.test(APP.slice(j, j + 200)));
+    /chk\.classList\.toggle\('done'\)/.test(APP.slice(j, j + 400)) &&
+    !/chk\.classList\.add\('done'\)/.test(APP.slice(j, j + 400)));
 }
 
 console.log('\n— Y no se toca el de al lado sin querer —');
@@ -308,8 +313,12 @@ console.log('\n— Y no se toca el de al lado sin querer —');
   const arranques = (APP.match(/startRest\(/g) || []).length;
   check('startRest se llama en pocos sitios y controlados', arranques <= 3, `${arranques} veces`);
   const i = APP.indexOf("var chk = e.target.closest('.set-check');");
+  // El `return` tiene que estar DENTRO del if de la palomita y ANTES de
+  // que empiece el del reloj. Se mide por posicion y no por una linea
+  // literal, que es lo que se rompio al meter el cronometro.
+  const finChk = APP.indexOf("var clock = e.target.closest('.clock-btn');", i);
   check('el camino de la palomita corta antes del reloj',
-    /if\(chk\)\{ chk\.classList\.toggle\('done'\); return; \}/.test(APP.slice(i, i + 200)),
+    finChk > i && /return;/.test(APP.slice(i, finChk)),
     'sin ese return, tocar la palomita seguiría al reloj');
 }
 
