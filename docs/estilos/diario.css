@@ -9,7 +9,14 @@
 }
 .header-row{display:flex;align-items:center;justify-content:space-between;}
 .greeting{font-size:22px;font-weight:800;letter-spacing:-.01em;margin:0;display:flex;align-items:center;gap:6px;}
-.greeting .streak{font-size:14px;font-weight:600;color:var(--ink-soft);}
+.greeting .streak{
+  font-size:14px;font-weight:600;color:var(--ink-soft);
+  display:inline-flex;align-items:center;gap:3px;
+}
+.greeting .streak svg{width:15px;height:15px;flex:none;}
+/* Sin racha no hay llama: el texto dice «sin racha» y una llama al lado lo
+   contradice. */
+.greeting .streak.sin-racha svg{display:none;}
 .subdate{font:700 11px/1 -apple-system,sans-serif;letter-spacing:.06em;color:var(--ink-faint);margin-top:4px;}
 .icon-btn{
   width:32px;height:32px;border-radius:50%;border:none;
@@ -92,9 +99,10 @@
 .quick-item:active{background:var(--pill-bg);}
 .quick-circle{
   width:32px;height:32px;border-radius:50%;background:var(--pill-bg);
-  display:flex;align-items:center;justify-content:center;flex:none;font-size:16px;
+  display:flex;align-items:center;justify-content:center;flex:none;
 }
-/* Solo la etiqueta: si no, la regla también encogería el emoji del círculo */
+.quick-circle svg{width:22px;height:22px;}
+/* Solo la etiqueta: si no, la regla le metería un font-size al círculo */
 .quick-item > span:not(.quick-circle){font:700 13px/1.15 sans-serif;color:var(--ink);}
 
 /* ---- En qué día se apunta ----
@@ -167,7 +175,8 @@
   padding:14px 6px 14px 16px;text-align:left;font:inherit;
 }
 .rec-cuerpo:active{opacity:.72;}
-.rec-ico{font-size:26px;flex:none;line-height:1;}
+.rec-ico{flex:none;}
+.rec-ico svg{width:25px;height:25px;}
 /* min-width:0 o un texto largo estira la caja y empuja la × fuera. */
 .rec-txt{flex:1;min-width:0;}
 .rec-txt b{display:block;font:800 15px/1.25 sans-serif;}
@@ -236,7 +245,8 @@
   margin:0 16px 10px;border-radius:15px;padding:12px 16px;
   background:var(--pill-bg);color:var(--pill-ink);
 }
-.pend-ico{font-size:22px;flex:none;line-height:1;}
+.pend-ico{flex:none;}
+.pend-ico svg{width:22px;height:22px;}
 .pend-txt{flex:1;min-width:0;}
 .pend-txt b{display:block;font:800 14.5px/1.25 sans-serif;}
 .pend-txt span{
@@ -259,7 +269,8 @@
      cuando son la misma. */
   background:var(--rec-fotos-bg);color:var(--rec-fotos-ink);
 }
-.af-ico{font-size:26px;flex:none;line-height:1;}
+.af-ico{flex:none;}
+.af-ico svg{width:25px;height:25px;}
 /* min-width:0 o el texto largo estira la caja y empuja la × fuera. */
 .af-texto{flex:1;min-width:0;}
 .af-texto b{display:block;font:800 15px/1.25 sans-serif;}
@@ -401,7 +412,8 @@
 .meal-row:first-of-type{border-radius:16px 16px 0 0;}
 .meal-row:last-of-type{border-radius:0 0 16px 16px;border-bottom:none;}
 .meal-left{display:flex;align-items:center;gap:12px;}
-.meal-emoji{width:34px;height:34px;border-radius:50%;background:var(--pill-bg);display:flex;align-items:center;justify-content:center;font-size:16px;}
+.meal-emoji{width:34px;height:34px;border-radius:50%;background:var(--pill-bg);display:flex;align-items:center;justify-content:center;}
+.meal-emoji svg{width:19px;height:19px;}
 .meal-name{font:700 15px/1 sans-serif;}
 .meal-cal{font:600 14px/1 sans-serif;color:var(--ink-faint);font-variant-numeric:tabular-nums;}
 .meals-wrap{margin:0 16px 20px;box-shadow:var(--shadow);border-radius:16px;overflow:hidden;}
@@ -418,6 +430,9 @@
   padding:8px 0 2px;color:var(--ink-faint);font:600 10.5px/1 sans-serif;cursor:pointer;
 }
 .bottom-tabs button.active{color:var(--ink);}
+/* 22px al lado de una etiqueta de 10.5px: la proporcion de una pestaña
+   nativa. */
+.bottom-tabs button svg{width:22px;height:22px;flex:none;}
 
 /* ---- Flujo de agregar comida ---- */
 .meal-title-row{display:flex;align-items:center;justify-content:space-between;gap:10px;}
@@ -549,7 +564,8 @@
      que mirar en esa pantalla cuando está. */
   box-shadow:0 6px 18px rgba(0,0,0,.16);
 }
-.cp-ico{font-size:24px;flex:none;line-height:1;}
+.cp-ico{flex:none;}
+.cp-ico svg{width:23px;height:23px;}
 /* min-width:0 o el texto largo estira la caja y empuja la flecha fuera. */
 .cp-texto{flex:1;min-width:0;}
 .cp-texto b{display:block;font:800 15px/1.25 sans-serif;}

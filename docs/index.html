@@ -112,7 +112,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '7b968dd00d';
+    var SELLO = 'ac95ebba7c';
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -126,6 +126,121 @@
   })();
 </script>
 
+<!-- ---- LOS ICONOS, DIBUJADOS Y EN UN SOLO SITIO ----
+
+     Antes esto eran emojis. Un emoji no es un icono: cada sistema lo pinta
+     a su manera -el plato de iOS es gris y el de Android naranja-, trae su
+     propio color dentro de una app en blanco y negro, y no hay forma de
+     ajustarle el grosor ni el tamaño. Al lado del resto de la pantalla se
+     veía como pegado.
+
+     Van aquí y no dentro de cada botón porque los mismos dibujos los usa
+     el HTML quieto -la barra de abajo son TRES copias- y los usa la app
+     con innerHTML en el plan de comidas. Dos copias de un dibujo se
+     separan: se cambia una y la otra se queda vieja. Esto es lo mismo que
+     tener los rangos en la base y no repetidos en el JS.
+
+     El tamaño NO va aquí: lo pone el CSS de cada sitio, que es quien sabe
+     si está al lado de una etiqueta de 10.5px o dentro de un círculo de
+     34px. Aquí solo va la forma y `currentColor`, que hereda el gris o el
+     negro de donde se use. -->
+<svg class="iconos" aria-hidden="true" focusable="false"><defs>
+  <symbol id="i-diario" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="4.5" y="3" width="15" height="18" rx="2.5"/>
+    <path d="M8.5 3v18"/>
+    <path d="M11.5 8.5h5"/>
+    <path d="M11.5 12.5h5"/>
+  </symbol>
+  <symbol id="i-plan" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M7 3v5a2 2 0 0 0 4 0V3"/>
+    <path d="M9 10v11"/>
+    <path d="M16.8 3c1.4 1.8 2.2 4 2.2 6.2 0 1.8-.8 3-2.2 3.8-1.4-.8-2.2-2-2.2-3.8C14.6 7 15.4 4.8 16.8 3Z"/>
+    <path d="M16.8 12.8V21"/>
+  </symbol>
+  <symbol id="i-peso" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3.5 18.5a8.5 8.5 0 1 1 17 0"/>
+    <path d="M12 18.5 16.4 11"/>
+    <circle cx="12" cy="18.5" r="1.2"/>
+  </symbol>
+  <symbol id="i-fotos" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 9.5a2 2 0 0 1 2-2h2.2l1.4-2.2h6.8l1.4 2.2H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>
+    <circle cx="12" cy="13.5" r="3.4"/>
+  </symbol>
+  <symbol id="i-perfil" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="8" r="3.6"/>
+    <path d="M5 20.2c0-3.4 3.1-5.7 7-5.7s7 2.3 7 5.7"/>
+  </symbol>
+  <symbol id="i-rutinas" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3.5 9v6"/>
+    <path d="M7.5 6.5v11"/>
+    <path d="M16.5 6.5v11"/>
+    <path d="M20.5 9v6"/>
+    <path d="M7.5 12h9"/>
+  </symbol>
+  <symbol id="i-progreso" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3.5 17 9.5 11 13 14.5 20.5 7"/>
+    <path d="M15.5 7h5v5"/>
+  </symbol>
+  <symbol id="i-desayuno" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M17 17.5a5 5 0 0 0-10 0"/>
+    <path d="M12 3.5V7"/>
+    <path d="M5.6 7.6 8 10"/>
+    <path d="M18.4 7.6 16 10"/>
+    <path d="M2.5 21h19"/>
+  </symbol>
+  <symbol id="i-comida" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="4"/>
+    <path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.4 5.4l1.4 1.4M17.2 17.2l1.4 1.4M18.6 5.4l-1.4 1.4M6.8 17.2l-1.4 1.4"/>
+  </symbol>
+  <symbol id="i-cena" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+  </symbol>
+  <symbol id="i-snack" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 20.9c1.5 0 2.7 1.1 4 1.1 3 0 6-8 6-12.2A4.9 4.9 0 0 0 17 5c-2.2 0-4 1.4-5 2-1-.6-2.8-2-5-2a4.9 4.9 0 0 0-5 4.8C2 14 5 22 8 22c1.2 0 2.5-1.1 4-1.1Z"/>
+    <path d="M10 2c1 .5 2 2 2 5"/>
+  </symbol>
+  <symbol id="i-racha" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.4-.5-2-1-3-1.1-2.1-.2-4.1 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.2.4-2.3 1-3a2.5 2.5 0 0 0 2.5 2.5Z"/>
+  </symbol>
+  <symbol id="i-chequeo" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="5" y="4.5" width="14" height="16.5" rx="2.5"/>
+    <path d="M9 4.5V3.6a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v.9"/>
+    <path d="m9.3 13 2.1 2.1 3.8-4.7"/>
+  </symbol>
+  <symbol id="i-nube" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2"/>
+    <path d="M12 21v-8"/>
+    <path d="m8 17 4-4 4 4"/>
+  </symbol>
+  <symbol id="i-cinta" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21.3 8.7 8.7 21.3a1 1 0 0 1-1.4 0l-4.6-4.6a1 1 0 0 1 0-1.4L15.3 2.7a1 1 0 0 1 1.4 0l4.6 4.6a1 1 0 0 1 0 1.4Z"/>
+    <path d="m7.5 10.5 2 2"/>
+    <path d="m10.5 7.5 2 2"/>
+    <path d="m13.5 4.5 2 2"/>
+    <path d="m4.5 13.5 2 2"/>
+  </symbol>
+  <symbol id="i-super" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3.2 4h2.2l2.3 10.2a1.7 1.7 0 0 0 1.7 1.3h7.6a1.7 1.7 0 0 0 1.6-1.2L20.4 7.6H6.1"/>
+    <circle cx="9.6" cy="19.4" r="1.3"/>
+    <circle cx="17" cy="19.4" r="1.3"/>
+  </symbol>
+</defs></svg>
 <div class="stage">
   <div class="phone">
     <div class="phone-screen" id="phoneScreen">
@@ -136,7 +251,7 @@
           <div class="header">
             <div class="header-row">
               <div>
-                <p class="greeting">Hola, <span id="saludoNombre">Eduardo</span> <span class="streak" id="racha">🔥 1 día</span></p>
+                <p class="greeting">Hola, <span id="saludoNombre">Eduardo</span> <span class="streak" id="racha"><svg><use href="#i-racha"/></svg><span id="rachaDias">1 día</span></span></p>
                 <div class="subdate" id="subDate">—</div>
               </div>
             </div>
@@ -149,7 +264,7 @@
                Es un <button> y no un div con onclick: así se alcanza con
                teclado y un lector de pantalla lo anuncia como pulsable. -->
           <button class="chq-pend" id="chequeoPend" hidden>
-            <span class="cp-ico">📋</span>
+            <span class="cp-ico"><svg><use href="#i-chequeo"/></svg></span>
             <span class="cp-texto">
               <b>Tu semana nueva está lista</b>
               <span>Contesta tres cosas y te doy tus calorías. Un minuto.</span>
@@ -181,8 +296,8 @@
           </div>
 
           <div class="quickrow">
-            <button class="quick-item" data-push="rutina"><span class="quick-circle">💪</span><span>Rutinas</span></button>
-            <button class="quick-item" data-push="ejercicio"><span class="quick-circle">📈</span><span>Progreso</span></button>
+            <button class="quick-item" data-push="rutina"><span class="quick-circle"><svg><use href="#i-rutinas"/></svg></span><span>Rutinas</span></button>
+            <button class="quick-item" data-push="ejercicio"><span class="quick-circle"><svg><use href="#i-progreso"/></svg></span><span>Progreso</span></button>
           </div>
 
           <div id="pane-hoy">
@@ -209,7 +324,7 @@
                  No lleva botón de cerrar, al revés que los recordatorios:
                  esto no se calla, se va solo cuando sube lo que falta. -->
             <div class="pendientes" id="avisoPendientes" hidden>
-              <span class="pend-ico" aria-hidden="true">☁️</span>
+              <span class="pend-ico"><svg><use href="#i-nube"/></svg></span>
               <span class="pend-txt">
                 <b>Faltan subir 0 apuntes</b>
                 <span>Están guardados en el teléfono. Se suben solos al volver la señal.</span>
@@ -219,7 +334,7 @@
             <div class="recordatorios">
               <div class="rec rec-peso" id="recPeso" hidden>
                 <button class="rec-cuerpo" data-rec-ir="peso">
-                  <span class="rec-ico">⚖️</span>
+                  <span class="rec-ico"><svg><use href="#i-peso"/></svg></span>
                   <span class="rec-txt">
                     <b>Aún no registras tu peso</b>
                     <span>Pésate en ayunas, antes de desayunar.</span>
@@ -230,7 +345,7 @@
 
               <div class="rec rec-fotos" id="recFotos" hidden>
                 <button class="rec-cuerpo" data-rec-ir="fotos">
-                  <span class="rec-ico">📸</span>
+                  <span class="rec-ico"><svg><use href="#i-fotos"/></svg></span>
                   <span class="rec-txt">
                     <b id="recFotosTit">Hoy toca subir tus 4 fotos</b>
                     <span>Frente, espalda y los dos perfiles.</span>
@@ -241,7 +356,7 @@
 
               <div class="rec rec-cintura" id="recCintura" hidden>
                 <button class="rec-cuerpo" data-rec-ir="cintura">
-                  <span class="rec-ico">📏</span>
+                  <span class="rec-ico"><svg><use href="#i-cinta"/></svg></span>
                   <span class="rec-txt">
                     <b>Toca medir tu cintura</b>
                     <span>En el ombligo, soltando el aire.</span>
@@ -254,7 +369,7 @@
                    arriba: dos avisos de fotos en dos sitios distintos de la
                    misma pantalla. Se sube aquí con los demás. -->
               <div class="aviso-fotos" id="avisoFotos" hidden>
-                <span class="af-ico">📸</span>
+                <span class="af-ico"><svg><use href="#i-fotos"/></svg></span>
                 <div class="af-texto">
                   <b>Prepara tus fotos para mañana</b>
                   <span>Cierras semana — mañana toca subir tus 4 fotos de progreso.</span>
@@ -294,15 +409,15 @@
             <div class="section-label">Mis comidas</div>
             <div class="meals-wrap">
               <div class="meal-row" data-push="mealadd" data-meal="Desayuno">
-                <div class="meal-left"><span class="meal-emoji">🌅</span><span class="meal-name">Desayuno</span></div>
+                <div class="meal-left"><span class="meal-emoji"><svg><use href="#i-desayuno"/></svg></span><span class="meal-name">Desayuno</span></div>
                 <span class="meal-cal" data-cal="Desayuno">0 cal ›</span>
               </div>
               <div class="meal-row" data-push="mealadd" data-meal="Comida">
-                <div class="meal-left"><span class="meal-emoji">🍽️</span><span class="meal-name">Comida</span></div>
+                <div class="meal-left"><span class="meal-emoji"><svg><use href="#i-comida"/></svg></span><span class="meal-name">Comida</span></div>
                 <span class="meal-cal" data-cal="Comida">0 cal ›</span>
               </div>
               <div class="meal-row" data-push="mealadd" data-meal="Cena">
-                <div class="meal-left"><span class="meal-emoji">🌙</span><span class="meal-name">Cena</span></div>
+                <div class="meal-left"><span class="meal-emoji"><svg><use href="#i-cena"/></svg></span><span class="meal-name">Cena</span></div>
                 <span class="meal-cal" data-cal="Cena">0 cal ›</span>
               </div>
             </div>
@@ -333,11 +448,11 @@
         </div>
 
         <div class="bottom-tabs">
-          <button class="active" data-tabbar="diario"><span>▦</span>Diario</button>
-          <button data-tabbar="plan"><span>🍽️</span>Plan</button>
-          <button data-tabbar="peso"><span>⚖️</span>Peso</button>
-          <button data-tabbar="fotos"><span>📸</span>Fotos</button>
-          <button data-tabbar="perfil"><span>👤</span>Perfil</button>
+          <button class="active" data-tabbar="diario"><svg><use href="#i-diario"/></svg>Diario</button>
+          <button data-tabbar="plan"><svg><use href="#i-plan"/></svg>Plan</button>
+          <button data-tabbar="peso"><svg><use href="#i-peso"/></svg>Peso</button>
+          <button data-tabbar="fotos"><svg><use href="#i-fotos"/></svg>Fotos</button>
+          <button data-tabbar="perfil"><svg><use href="#i-perfil"/></svg>Perfil</button>
         </div>
       </div>
 
@@ -954,11 +1069,11 @@
         </div>
 
         <div class="bottom-tabs">
-          <button data-tabbar="diario"><span>▦</span>Diario</button>
-          <button class="active" data-tabbar="plan"><span>🍽️</span>Plan</button>
-          <button data-tabbar="peso"><span>⚖️</span>Peso</button>
-          <button data-tabbar="fotos"><span>📸</span>Fotos</button>
-          <button data-tabbar="perfil"><span>👤</span>Perfil</button>
+          <button data-tabbar="diario"><svg><use href="#i-diario"/></svg>Diario</button>
+          <button class="active" data-tabbar="plan"><svg><use href="#i-plan"/></svg>Plan</button>
+          <button data-tabbar="peso"><svg><use href="#i-peso"/></svg>Peso</button>
+          <button data-tabbar="fotos"><svg><use href="#i-fotos"/></svg>Fotos</button>
+          <button data-tabbar="perfil"><svg><use href="#i-perfil"/></svg>Perfil</button>
         </div>
         <!-- BUSCAR A QUIEN INSCRIBIR
              Se escribe el nombre y van saliendo. El correo va debajo de
@@ -1785,11 +1900,11 @@
           <button class="borrar-cuenta" id="borrarCuentaBtn">Eliminar mi cuenta</button>
         </div>
         <div class="bottom-tabs">
-          <button data-tabbar="diario"><span>▦</span>Diario</button>
-          <button data-tabbar="plan"><span>🍽️</span>Plan</button>
-          <button data-tabbar="peso"><span>⚖️</span>Peso</button>
-          <button data-tabbar="fotos"><span>📸</span>Fotos</button>
-          <button class="active" data-tabbar="perfil"><span>👤</span>Perfil</button>
+          <button data-tabbar="diario"><svg><use href="#i-diario"/></svg>Diario</button>
+          <button data-tabbar="plan"><svg><use href="#i-plan"/></svg>Plan</button>
+          <button data-tabbar="peso"><svg><use href="#i-peso"/></svg>Peso</button>
+          <button data-tabbar="fotos"><svg><use href="#i-fotos"/></svg>Fotos</button>
+          <button class="active" data-tabbar="perfil"><svg><use href="#i-perfil"/></svg>Perfil</button>
         </div>
 
 
@@ -2141,7 +2256,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '7b968dd00d';
+    var SELLO = 'ac95ebba7c';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que

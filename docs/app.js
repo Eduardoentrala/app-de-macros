@@ -5157,7 +5157,12 @@
     var n = calcularRacha();
     var el = document.getElementById('racha');
     if(!el) return;
-    el.textContent = n === 0 ? 'sin racha' : '🔥 ' + n + (n === 1 ? ' día' : ' días');
+    // El número va en su propio hueco porque al lado vive la llama dibujada.
+    // Escribiendo sobre el padre se la llevaría el primer repintado, y eso
+    // pasa cada vez que se apunta una comida.
+    var hueco = document.getElementById('rachaDias') || el;
+    hueco.textContent = n === 0 ? 'sin racha' : n + (n === 1 ? ' día' : ' días');
+    el.classList.toggle('sin-racha', n === 0);
     el.title = n === 0
       ? 'Registra comida hoy para empezar tu racha'
       : n + (n === 1 ? ' día seguido' : ' días seguidos') + ' registrando comida';
@@ -8795,12 +8800,23 @@
   // líneas antes de su declaración es una trampa esperando a alguien.
   var DIAS_SEMANA = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
 
+  // `ico` no es un emoji: es a qué dibujo del <defs> de index.html apunta.
+  // El dibujo está en un solo sitio y lo comparten esta pantalla, el editor
+  // del entrenador y las tres comidas del Diario.
   var MOMENTOS = [
-    { k:'Desayuno', emoji:'🌅' },
-    { k:'Comida',   emoji:'🍽️' },
-    { k:'Cena',     emoji:'🌙' },
-    { k:'Snack',    emoji:'🍎' }
+    { k:'Desayuno', ico:'desayuno' },
+    { k:'Comida',   ico:'comida'   },
+    { k:'Cena',     ico:'cena'     },
+    { k:'Snack',    ico:'snack'    }
   ];
+
+  // Un momento que no esté en la tabla -se renombró, o llegó de una versión
+  // más nueva- no se queda sin nada: se le pone un punto.
+  function iconoMomento(m){
+    return m && m.ico
+      ? '<svg class="ico-momento"><use href="#i-' + m.ico + '"/></svg>'
+      : '<span class="ico-momento">•</span>';
+  }
   var MI_PLAN = null;        // el plan propio, si alguien me lo escribió
   var PLAN_CLIENTES = [];    // a quiénes les escribo yo
   var planEditando = null;   // { userId, nombre, plan }
@@ -8954,7 +8970,7 @@
     cont.innerHTML = tiraDeMetas(leerMetas()) + tabs + delDia.map(function(c){
       var m = MOMENTOS.filter(function(x){ return x.k === c.momento; })[0];
       return '<div class="plan-comida">' +
-        '<div class="plan-momento"><span>' + (m ? m.emoji : '•') + '</span>' + c.momento + '</div>' +
+        '<div class="plan-momento">' + iconoMomento(m) + c.momento + '</div>' +
         '<div class="plan-texto">' + escapar(c.texto) + '</div></div>';
     }).join('') +
     (MI_PLAN.nota ? '<div class="plan-nota">' + escapar(MI_PLAN.nota) + '</div>' : '');
@@ -9458,7 +9474,8 @@
       var c = planComidas.filter(function(x){
         return x.momento === m.k && x.dia === planDia; })[0];
       return '<div class="card">' +
-        '<div class="field-label" style="margin-top:0;">' + m.emoji + ' ' + m.k + '</div>' +
+        '<div class="field-label fila-ico" style="margin-top:0;">' +
+          iconoMomento(m) + m.k + '</div>' +
         '<textarea class="notas-input" rows="3" maxlength="400" data-momento="' + m.k + '" ' +
         'placeholder="Ej. 2 huevos, pan integral y café">' +
         escapar(c ? c.texto : '') + '</textarea></div>';
@@ -11145,26 +11162,16 @@
   var IA_MSGS = [];           // { rol:'yo'|'el', texto, foto?, alimentos? }
   var iaOcupado = false;
 
-  // LOS ICONOS VAN DIBUJADOS, no son emojis.
-  //
-  //  Un 🛒 o un 🍽️ los pinta cada teléfono a su manera —el de iOS es gris y
-  //  con brillos, el de Android plano y de color— y no se pueden teñir, así
-  //  que eran lo único de estas tarjetas que no seguía el color del texto.
-  //  Dibujados se tiñen con `currentColor`, quedan del mismo peso que la
-  //  letra y cambian solos con el tema oscuro.
-  var iconoSVG = function(trazos){
-    return '<svg class="ia-atajo-icono" viewBox="0 0 24 24" fill="none" ' +
-           'stroke="currentColor" stroke-width="1.6" stroke-linecap="round" ' +
-           'stroke-linejoin="round" aria-hidden="true" focusable="false">' +
-           trazos + '</svg>';
+  // Los dos atajos del asistente apuntan al mismo almacén de dibujos que
+  // el resto de la app, el <defs> de index.html. Tenían su cubierto propio
+  // escrito aquí y no era el de la pestaña Plan: dos tenedores distintos
+  // en la misma app, que es justo lo que un sitio único evita.
+  var iconoSVG = function(id){
+    return '<svg class="ia-atajo-icono"><use href="#i-' + id + '"/></svg>';
   };
   var IA_ATAJOS = [
-    { icono: iconoSVG('<path d="M3.2 4h2.2l2.3 10.2a1.7 1.7 0 0 0 1.7 1.3h7.6a1.7 1.7 0 0 0 1.6-1.2L20.4 7.6H6.1"/>' +
-                      '<circle cx="9.6" cy="19.4" r="1.3"/><circle cx="17" cy="19.4" r="1.3"/>'),
-      texto:'Hazme la lista del súper' },
-    { icono: iconoSVG('<path d="M6.6 3v4.6a2 2 0 0 0 4 0V3"/><path d="M8.6 9.6V21"/>' +
-                      '<path d="M16.6 3c1.7 1.2 2.2 3.3 2.2 5.2 0 1.6-.9 2.7-2.2 3V21"/>'),
-      texto:'¿Qué me recomiendas comer hoy?' }
+    { icono: iconoSVG('super'), texto:'Hazme la lista del súper' },
+    { icono: iconoSVG('plan'),  texto:'¿Qué me recomiendas comer hoy?' }
   ];
 
   // Lo que su entrenador le dejó encendido. Nace vacío y VACÍO SIGNIFICA

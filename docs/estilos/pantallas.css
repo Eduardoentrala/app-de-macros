@@ -101,6 +101,9 @@
   font:700 11.5px/1 sans-serif;color:var(--ink-faint);
   text-transform:uppercase;letter-spacing:.08em;margin-bottom:9px;
 }
+/* Al lado de una etiqueta de 11.5px en mayúsculas. Lo usan la pantalla
+   del cliente y el editor del entrenador, que es la misma comida. */
+.ico-momento{width:15px;height:15px;flex:none;}
 .plan-texto{
   font:500 16.5px/1.5 sans-serif;color:var(--ink);white-space:pre-wrap;
 }

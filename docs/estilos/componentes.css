@@ -98,6 +98,9 @@ table.week-table tr.today td{font-weight:800;}
 .empty-note b{display:block;font-size:14px;margin-bottom:3px;}
 .empty-note span{font:500 12.5px/1.4 sans-serif;color:var(--ink-faint);}
 .field-label{font:700 12.5px/1 sans-serif;color:var(--ink-soft);margin:14px 0 8px;}
+/* Una etiqueta con un dibujo delante. En fila, para que el icono quede
+   centrado con el texto y no colgando de la línea base. */
+.field-label.fila-ico{display:flex;align-items:center;gap:7px;}
 .field-value{background:var(--app-bg);border-radius:12px;padding:14px;font:700 16px/1 sans-serif;text-align:center;}
 .field-value.big{font-size:26px;text-align:left;padding:16px;}
 .chart-title-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;}
