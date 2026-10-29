@@ -60,7 +60,7 @@ console.log('\nCada <use> apunta a un dibujo que existe');
 
 // Los símbolos, con sus atributos, para poder mirarlos luego.
 const SIMBOLOS = new Map();
-for (const m of HTML.matchAll(/<symbol id="(i-[a-z]+)"([^>]*)>([\s\S]*?)<\/symbol>/g)) {
+for (const m of HTML.matchAll(/<symbol id="(i-[a-z-]+)"([^>]*)>([\s\S]*?)<\/symbol>/g)) {
   SIMBOLOS.set(m[1], { attrs: m[2], dentro: m[3] });
 }
 ok(SIMBOLOS.size > 10, 'se encuentran los símbolos', 'salieron ' + SIMBOLOS.size);
@@ -71,12 +71,14 @@ const apunta = (id, donde) => {
   if (!USOS.has(id)) USOS.set(id, new Set());
   USOS.get(id).add(donde);
 };
-for (const m of HTML.matchAll(/href="#(i-[a-z]+)"/g)) apunta(m[1], 'index.html');
+for (const m of HTML.matchAll(/href="#(i-[a-z-]+)"/g)) apunta(m[1], 'index.html');
+// app.js escribe el mismo `href="#i-..."` dentro de sus cadenas.
+for (const m of APP.matchAll(/href="#(i-[a-z-]+)"/g)) apunta(m[1], 'app.js');
 for (const m of APP.matchAll(/href="#i-' \+ ([A-Za-z.]+) \+ '"/g)) apunta('(variable: ' + m[1] + ')', 'app.js');
-for (const m of APP.matchAll(/iconoSVG\('([a-z]+)'\)/g)) apunta('i-' + m[1], 'app.js');
+for (const m of APP.matchAll(/iconoSVG\('([a-z-]+)'\)/g)) apunta('i-' + m[1], 'app.js');
 // La tabla de momentos del plan: ahí el id no se escribe junto al <use>,
 // se guarda en `ico` y se compone al pintar.
-for (const m of APP.matchAll(/ico:'([a-z]+)'/g)) apunta('i-' + m[1], 'app.js (MOMENTOS)');
+for (const m of APP.matchAll(/ico:'([a-z-]+)'/g)) apunta('i-' + m[1], 'app.js (MOMENTOS)');
 
 for (const [id, donde] of USOS) {
   if (id.startsWith('(')) continue;           // las variables se miran abajo
@@ -173,46 +175,65 @@ console.log('\nY ninguno se queda sin tamaño');
   const CSS = ['base', 'maqueta', 'vistas', 'diario', 'cuenta', 'pantallas',
                'componentes', 'modo-app'].map((h) => leer('docs/estilos/' + h + '.css')).join('\n');
 
-  // Los huecos donde hoy se mete un icono, y qué regla le da tamaño a cada
-  // uno. La lista está escrita a mano A PROPÓSITO: si mañana alguien mete
-  // un icono en un sitio nuevo, esta prueba se pone roja y le obliga a
-  // pasar por aquí a decir con qué regla lo está midiendo. Adivinarlo
-  // leyendo la cascada no se puede: quién gana solo se sabe midiendo.
-  const HUECOS = {
-    'span.streak': '.greeting .streak svg',
-    'span.cp-ico': '.cp-ico svg',
-    'span.quick-circle': '.quick-circle svg',
-    'span.pend-ico': '.pend-ico svg',
-    'span.rec-ico': '.rec-ico svg',
-    'span.af-ico': '.af-ico svg',
-    'span.meal-emoji': '.meal-emoji svg',
-    'button[data-tabbar]': '.bottom-tabs button svg',
-    // Y los dos que escribe app.js, que llevan su clase puesta en el <svg>.
-    'svg.ico-momento': '.ico-momento',
-    'svg.ia-atajo-icono': '.ia-atajo-icono',
-  };
-  for (const [hueco, selector] of Object.entries(HUECOS)) {
-    const regla = new RegExp(selector.replace(/[.[\]]/g, (c) => '\\' + c) + '\\s*\\{([^}]*)\\}');
+  // Las reglas que miden un icono, escritas a mano A PROPÓSITO: si mañana
+  // alguien mete uno en un sitio nuevo, esta prueba se pone roja y le
+  // obliga a pasar por aquí a decir con qué regla lo está midiendo.
+  // Adivinarlo leyendo la cascada no se puede: quién gana solo se sabe
+  // midiendo en un navegador, y así se midió cada uno de estos.
+  const REGLAS = [
+    '.greeting .streak svg', '.cp-ico svg', '.quick-circle svg', '.pend-ico svg',
+    '.rec-ico svg', '.af-ico svg', '.meal-emoji svg', '.bottom-tabs button svg',
+    '.searchbox svg', '.btn-ico svg', '.tabrow .ia-btn svg', '.tema-sol svg',
+    '.avatar svg', '.plan-armar button svg', '.plan-vacio .ico svg',
+    '.empty-day .ico svg', '.ia-icono svg, .ia-enviar svg', '.clock-btn svg',
+    '.nota-badge svg', '.chip svg', '.icon-mini button svg',
+    // Estos dos llevan la clase en el propio <svg>, no en el hueco.
+    '.ico-momento', '.ia-atajo-icono',
+  ];
+  const marcas = new Set();      // clases e ids que sabemos que miden algo
+  for (const sel of REGLAS) {
+    const regla = new RegExp(sel.replace(/[.#[\]]/g, (c) => '\\' + c) + '\\s*\\{([^}]*)\\}');
     const m = CSS.match(regla);
-    ok(m && /width\s*:/.test(m[1]), `«${hueco}» tiene su regla de ancho (${selector})`,
+    ok(m && /width\s*:/.test(m[1]), `«${sel}» mide lo que hay dentro`,
        m ? 'la regla existe pero no pone ancho: ' + m[1] : 'no existe esa regla');
+    for (const c of sel.matchAll(/[.#]([\w-]+)/g)) marcas.add(c[1]);
   }
 
-  // Y que no haya ningún icono colgando de un hueco que no esté en la lista.
-  for (const m of HTML.matchAll(/<svg><use href="#(i-[a-z]+)"/g)) {
-    const antes = HTML.slice(Math.max(0, m.index - 120), m.index);
-    const abre = antes.slice(antes.lastIndexOf('<'));
-    const clase = (/<(\w+)[^>]*class="([^"]*)"/.exec(abre) || []);
-    const dato = /<(\w+)[^>]*(data-tabbar)/.exec(abre);
-    // El `data-tabbar` manda sobre la clase: el botón de la pestaña abierta
-    // lleva además `class="active"`, y eso no es un hueco distinto.
-    const llave = dato ? dato[1] + '[' + dato[2] + ']'
-                : clase[1] ? clase[1] + '.' + clase[2].split(/\s+/)[0]
-                : '¿? ' + abre.slice(0, 40);
-    ok(llave in HUECOS, `«${m[1]}» cuelga de un hueco conocido (${llave})`,
+  // Y de qué cuelga cada icono. Se sube por los padres de verdad —contando
+  // etiquetas abiertas y cerradas— y no por una ventana de caracteres: los
+  // botones de la barra no llevan clase propia y cuelgan de `.bottom-tabs`,
+  // que queda muy por encima.
+  const VACIAS = new Set(['meta', 'link', 'input', 'br', 'img', 'hr', 'source', 'col',
+                          'area', 'base', 'embed', 'param', 'track', 'wbr']);
+  const limpio = HTML.replace(/<!--[\s\S]*?-->/g, '');
+  const etiquetas = [...limpio.matchAll(/<(\/?)([a-z]+)([^<>]*)>/g)];
+
+  function deQuienCuelga(pos) {
+    const marcas = [];
+    let hondo = 0;
+    for (let i = etiquetas.length - 1; i >= 0; i--) {
+      const e = etiquetas[i];
+      if (e.index >= pos) continue;
+      const [, cierre, nombre, attrs] = e;
+      if (VACIAS.has(nombre) || /\/$/.test(attrs)) continue;
+      if (cierre) { hondo++; continue; }
+      if (hondo > 0) { hondo--; continue; }
+      const cl = /class="([^"]*)"/.exec(attrs);
+      const id = /id="([^"]*)"/.exec(attrs);
+      if (cl) marcas.push(...cl[1].split(/\s+/));
+      if (id) marcas.push(id[1]);
+      marcas.push(nombre);
+    }
+    return marcas;
+  }
+
+  for (const m of limpio.matchAll(/<svg><use href="#(i-[a-z-]+)"/g)) {
+    const cadena = deQuienCuelga(m.index);
+    ok(cadena.some((c) => marcas.has(c)),
+       `«${m[1]}» cuelga de algo que lo mide (${cadena.slice(0, 3).join(' < ')})`,
        'un <svg> sin regla de ancho no sale pequeño: sale de 300x150 y parte ' +
-       'la fila entera. Si el hueco es nuevo, añádelo arriba con su regla. ' +
-       'Hay: ' + Object.keys(HUECOS).join(', '));
+       'la fila entera. Si el hueco es nuevo, añade su regla arriba. ' +
+       'Las que hay miden: ' + [...marcas].join(' '));
   }
 }
 

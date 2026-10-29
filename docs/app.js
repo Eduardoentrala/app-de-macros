@@ -596,11 +596,11 @@
     var card = document.createElement('div');
     card.className = 'exercise-card';
     card.innerHTML = '<div class="ex-head"><div class="ex-top">'+
-      '<div><div class="ex-name">'+escapar(name)+' <span class="nota-badge" hidden title="Tiene notas" aria-label="Tiene notas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5.5 4.2h8.2L18.5 9v10.8h-13Z"/><path d="M13.5 4.2V9h5"/></svg></span></div>'+
+      '<div><div class="ex-name">'+escapar(name)+' <span class="nota-badge" hidden title="Tiene notas" aria-label="Tiene notas"><svg><use href="#i-hoja"/></svg></span></div>'+
       '<div class="nota-previa" hidden title="Toca «notas» para verla entera"></div><div class="ex-delta"></div></div>'+
       '<div class="ex-vol"><span class="rot">vol</span> <b class="vol-num">0</b><span class="prev"></span></div></div>'+
       '<div class="ex-pills">'+
-      '<button class="chip" data-act="grafica"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 4.5v15h16"/><path d="M7.5 15.6 11 11.2l2.9 2.3 4.3-6"/></svg>gráfica</button>'+
+      '<button class="chip" data-act="grafica"><svg><use href="#i-grafica"/></svg>gráfica</button>'+
       '<button class="chip" data-act="notas">notas</button>'+
       '<span class="icon-mini">'+
       '<button data-act="subir" title="Subir ejercicio">▲</button>'+
@@ -608,7 +608,7 @@
       '<button class="danger" data-act="quitar" title="Quitar ejercicio">×</button></span></div></div>'+
       '<table class="sets-table"><tr><th>set</th><th class="num">reps</th><th class="num">peso</th><th></th></tr>'+
       '<tr><td>1</td><td class="num"><input class="set-input" type="number" inputmode="decimal" step="any" value="10"></td><td class="num"><input class="set-input" type="number" inputmode="decimal" step="any" value="0"></td>'+
-      '<td><div class="set-row-actions"><div class="set-check">✓</div><button class="clock-btn" aria-label="Descanso"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="13.6" r="7.4"/><path d="M12 10v3.6h2.5"/><path d="M9.4 2.9h5.2"/><path d="M12 2.9v2.3"/></svg></button><button class="rm-set">×</button></div></td></tr></table>'+
+      '<td><div class="set-row-actions"><div class="set-check">✓</div><button class="clock-btn" aria-label="Descanso"><svg><use href="#i-reloj"/></svg></button><button class="rm-set">×</button></div></td></tr></table>'+
       '<div class="add-set-row"><button class="add-set">+ set</button></div>';
     return card;
   }
@@ -705,7 +705,7 @@
         '<td class="num"><input class="set-input" type="number" inputmode="decimal" step="any" value="'+reps+'"></td>'+
         '<td class="num"><input class="set-input" type="number" inputmode="decimal" step="any" value="'+peso+'"></td>'+
         '<td><div class="set-row-actions"><div class="set-check">✓</div>'+
-        '<button class="clock-btn" aria-label="Descanso"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="13.6" r="7.4"/><path d="M12 10v3.6h2.5"/><path d="M9.4 2.9h5.2"/><path d="M12 2.9v2.3"/></svg></button><button class="rm-set">×</button></div></td>';
+        '<button class="clock-btn" aria-label="Descanso"><svg><use href="#i-reloj"/></svg></button><button class="rm-set">×</button></div></td>';
       table.appendChild(tr);
       recalcCard(c);
       return;
@@ -880,7 +880,7 @@
     if(badge) badge.hidden = !tiene;
     if(pill){
       pill.classList.toggle('con-nota', tiene);
-      pill.textContent = tiene ? '📝 notas' : 'notas';
+      pill.innerHTML = (tiene ? '<svg><use href="#i-lapiz"/></svg>' : '') + 'notas';
     }
   }
   function marcarTodasLasNotas(){
@@ -993,7 +993,7 @@
       '<td class="num"><input class="set-input" type="number" inputmode="decimal" step="any" value="' + s.reps + '"></td>' +
       '<td class="num"><input class="set-input" type="number" inputmode="decimal" step="any" value="' + s.peso + '"></td>' +
       '<td><div class="set-row-actions"><div class="set-check' + (s.hecho ? ' done' : '') + '">✓</div>' +
-      '<button class="clock-btn" aria-label="Descanso"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="13.6" r="7.4"/><path d="M12 10v3.6h2.5"/><path d="M9.4 2.9h5.2"/><path d="M12 2.9v2.3"/></svg></button><button class="rm-set">×</button></div></td></tr>';
+      '<button class="clock-btn" aria-label="Descanso"><svg><use href="#i-reloj"/></svg></button><button class="rm-set">×</button></div></td></tr>';
   }
 
   function htmlEjercicio(ej){
@@ -1003,21 +1003,18 @@
     return '<div class="exercise-card" data-id="' + ej.id + '">' +
       '<div class="ex-head"><div class="ex-top">' +
       '<div><div class="ex-name">' + escapar(ej.nombre) +
-        ' <span class="nota-badge" hidden title="Tiene notas" aria-label="Tiene notas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5.5 4.2h8.2L18.5 9v10.8h-13Z"/><path d="M13.5 4.2V9h5"/></svg></span></div>' +
+        ' <span class="nota-badge" hidden title="Tiene notas" aria-label="Tiene notas"><svg><use href="#i-hoja"/></svg></span></div>' +
         '<div class="nota-previa" hidden title="Toca «notas» para verla entera"></div><div class="ex-delta"></div></div>' +
       '<div class="ex-vol"><span class="rot">vol</span> <b class="vol-num">0</b><span class="prev"></span></div></div>' +
       '<div class="ex-pills">' +
-      '<button class="chip" data-act="grafica"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 4.5v15h16"/><path d="M7.5 15.6 11 11.2l2.9 2.3 4.3-6"/></svg>gráfica</button>' +
+      '<button class="chip" data-act="grafica"><svg><use href="#i-grafica"/></svg>gráfica</button>' +
       '<button class="chip" data-act="notas">notas</button>' +
       '<span class="icon-mini">' +
       // CAMBIAR EL NOMBRE. No estaba: el nombre se escribía al crear el
       // ejercicio y para corregir una falta había que borrarlo y volver a
       // crearlo —perdiendo su nota y su gráfica por el camino—.
       '<button data-act="nombre" aria-label="Cambiar el nombre" title="Cambiar el nombre">' +
-      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" ' +
-      'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' +
-      '<path d="M4.6 19.4h3.3L19 8.3a1.9 1.9 0 0 0-2.7-2.7L5.3 16.7Z"/>' +
-      '<path d="M14.9 7.1 17.6 9.8"/></svg></button>' +
+      '<svg><use href="#i-lapiz"/></svg></button>' +
       '<button data-act="subir" title="Subir ejercicio">▲</button>' +
       '<button data-act="bajar" title="Bajar ejercicio">▼</button>' +
       '<button class="danger" data-act="quitar" title="Quitar ejercicio">×</button></span></div></div>' +
@@ -7473,6 +7470,58 @@
   var ANALISIS = null;         // el último guardado, para pintarlo
   var ANALISIS_INTENTADO = false;   // solo un intento por apertura de la app
 
+  // ---- QUE SE SEPA QUE HAY UNO NUEVO ----
+  //
+  //  Esto se escribe una vez al mes y la tarjeta se ve EXACTAMENTE IGUAL
+  //  con el de octubre que con el de noviembre: va plegada, con su titulo
+  //  y su fecha en gris. Para enterarse habia que entrar a Fotos, abrirla
+  //  y leer la fecha. Es decir: no habia forma de enterarse.
+  //
+  //  Se guarda en el telefono y no en la base a proposito: «lo he leido»
+  //  es de este aparato, igual que los recordatorios que se cierran. Y
+  //  lleva dentro el id de quien lo leyo, para que al entrar con otra
+  //  cuenta en el mismo telefono no salga como visto algo que no ha visto
+  //  nadie.
+  var CLAVE_VISTO = 'macros.analisisVisto';
+
+  function marcaDeVisto(){
+    return (sesion && sesion.user ? sesion.user.id : '') + ':' +
+           (ANALISIS && ANALISIS.mes ? ANALISIS.mes : '');
+  }
+  function analisisSinLeer(){
+    if(!ANALISIS || !ANALISIS.mensaje || !ANALISIS.mes) return false;
+    try{ return localStorage.getItem(CLAVE_VISTO) !== marcaDeVisto(); }
+    catch(e){ return false; }
+    // Sin localStorage no se puede saber si ya lo leyo. Entonces NO se
+    // avisa: un «Nuevo» que no se apaga nunca es peor que no avisar.
+  }
+  function darPorLeido(){
+    try{ localStorage.setItem(CLAVE_VISTO, marcaDeVisto()); }catch(e){}
+    pintarAvisoDeAnalisis();
+  }
+
+  // El punto va en la pestaña de Fotos, no solo en la tarjeta: la tarjeta
+  // esta DENTRO de Fotos, asi que para verla ya hay que haber entrado, y
+  // entonces el aviso llega tarde. Son tres barras, una por pantalla.
+  function pintarAvisoDeAnalisis(){
+    var hay = analisisSinLeer();
+    var tag = document.getElementById('analisisNuevo');
+    if(tag) tag.hidden = !hay;
+    var caja = document.getElementById('analisisCard');
+    if(caja) caja.classList.toggle('sin-leer', hay);
+    var pes = document.querySelectorAll('[data-tabbar="fotos"]');
+    for(var i = 0; i < pes.length; i++) pes[i].classList.toggle('con-aviso', hay);
+  }
+
+  // Abrirla ES haberla leido. No hay boton de «marcar como leido» porque
+  // seria pedir dos gestos para lo que uno ya dice.
+  (function(){
+    var caja = document.getElementById('analisisCard');
+    if(caja) caja.addEventListener('toggle', function(){
+      if(caja.open) darPorLeido();
+    });
+  })();
+
   function pintarAnalisis(){
     var caja = document.getElementById('analisisCard');
     if(!caja) return;
@@ -7492,6 +7541,17 @@
       ? 'Una vez al mes · ' + MESES_LARGO[Number(m[2]) - 1] + ' de ' + m[1]
       : (ANALISIS.mes || '');
 
+    // Y CUANDO TOCA EL SIGUIENTE. «Una vez al mes» dice el ritmo pero no
+    // la fecha, y la pregunta que queda es siempre la misma: ¿cuando sale
+    // el proximo? Sale el mes que viene, la primera vez que abra la app
+    // ese mes -eso es literalmente lo que hace `revisarAnalisisDeFotos`-.
+    var siguiente = '';
+    if(m){
+      var mes = Number(m[2]) === 12 ? 1 : Number(m[2]) + 1;
+      siguiente = ' El siguiente, en ' + MESES_LARGO[mes - 1] +
+        ': se escribe solo la primera vez que abras la app ese mes.';
+    }
+
     // Y LAS SEMANAS, también en palabras. «Comparando 2026-W37 con
     // 2026-W40» son dos claves que no dicen nada: hay que saber de memoria
     // en qué cae la semana 37. Con las fechas se ve de un vistazo de cuándo
@@ -7505,8 +7565,10 @@
     document.getElementById('analisisPie').textContent =
       ANALISIS.semana_vieja && ANALISIS.semana_nueva
         ? 'Compara tus fotos del ' + enPalabras(ANALISIS.semana_vieja) +
-          ' con las del ' + enPalabras(ANALISIS.semana_nueva) + '.'
-        : '';
+          ' con las del ' + enPalabras(ANALISIS.semana_nueva) + '.' + siguiente
+        : siguiente.replace(/^ /, '');
+
+    pintarAvisoDeAnalisis();
   }
 
   // Lo último guardado, que es lo que se enseña. No cuesta una llamada a la
@@ -8001,7 +8063,7 @@
       return !t || u.n.toLowerCase().indexOf(t) >= 0 || u.c.toLowerCase().indexOf(t) >= 0;
     });
     return '<div class="adm-busca">'+
-      '<div class="searchbox"><span>🔍</span><input id="admBuscar" placeholder="Buscar por nombre o correo…" value="'+escapar(admFiltro)+'"></div>'+
+      '<div class="searchbox"><svg><use href="#i-lupa"/></svg><input id="admBuscar" placeholder="Buscar por nombre o correo…" value="'+escapar(admFiltro)+'"></div>'+
       '<button class="btn-primary" id="admInvitar" style="width:100%;margin-top:10px;">+ Agregar a alguien por correo</button>'+
       '<button class="btn-rename" id="admCrear" style="width:100%;margin-top:7px;">Crear entrenador con contraseña</button>'+
     '</div>'+
@@ -8021,10 +8083,10 @@
           // mano pero deja de gastar. Es el caso más común, así que va
           // primero y con su estado a la vista.
           '<button class="'+(u.ia?'b-on':'b-off')+'" data-ia="'+USUARIOS.indexOf(u)+'" '+
-            'title="'+(u.ia?'Apagarle la IA':'Encenderle la IA')+'">'+(u.ia?'✨ on':'✨ off')+'</button>'+
+            'title="'+(u.ia?'Apagarle la IA':'Encenderle la IA')+'">'+(u.ia ? '<svg><use href="#i-chispa"/></svg>on' : '<svg><use href="#i-chispa"/></svg>off')+'</button>'+
           '<button class="'+(u.estado==='suspendido'?'b-on':'b-off')+'" data-susp="'+USUARIOS.indexOf(u)+'">'+
             (u.estado==='suspendido'?'Reactivar':'Suspender')+'</button>'+
-          '<button class="b-key" data-pass="'+USUARIOS.indexOf(u)+'">🔑</button>'+
+          '<button class="b-key" data-pass="'+USUARIOS.indexOf(u)+'"><svg><use href="#i-llave"/></svg></button>'+
         '</div></div>';
     }).join('')
       : (USUARIOS.length ? '<p class="cmp-aviso">Nadie coincide con esa búsqueda.</p>'
@@ -8099,7 +8161,7 @@
   function pintarAlimentos(){
     var filas = CATALOGO;
     return '<div class="adm-busca">' +
-      '<div class="searchbox"><span>🔍</span>' +
+      '<div class="searchbox"><svg><use href="#i-lupa"/></svg>' +
       '<input id="catBuscar" placeholder="Buscar en el catálogo…" value="' + escapar(catFiltro) + '"></div>' +
       '<button class="btn-primary" id="catNuevo" style="width:100%;margin-top:10px;">+ Agregar alimento</button>' +
     '</div>' +
@@ -8804,10 +8866,10 @@
   // El dibujo está en un solo sitio y lo comparten esta pantalla, el editor
   // del entrenador y las tres comidas del Diario.
   var MOMENTOS = [
-    { k:'Desayuno', ico:'desayuno' },
-    { k:'Comida',   ico:'comida'   },
-    { k:'Cena',     ico:'cena'     },
-    { k:'Snack',    ico:'snack'    }
+    { k:'Desayuno', ico:'amanecer' },
+    { k:'Comida',   ico:'sol'   },
+    { k:'Cena',     ico:'luna'     },
+    { k:'Snack',    ico:'manzana'    }
   ];
 
   // Un momento que no esté en la tabla -se renombró, o llegó de una versión
@@ -8932,11 +8994,11 @@
     var cont = document.getElementById('planMio');
     if(!tengoPlan()){
       cont.innerHTML = sinRed
-        ? '<div class="plan-vacio"><div class="ico">📡</div>' +
+        ? '<div class="plan-vacio"><div class="ico"><svg><use href="#i-sin-senal"/></svg></div>' +
           '<b>Sin conexión</b>' +
           '<span>No pude comprobar si tienes un plan. Vuelve a abrir esta ' +
           'pestaña cuando tengas señal.</span></div>'
-        : '<div class="plan-vacio"><div class="ico">🍽️</div>' +
+        : '<div class="plan-vacio"><div class="ico"><svg><use href="#i-cubierto"/></svg></div>' +
           '<b>Todavía no tienes un plan</b>' +
           '<span>Cuando tu entrenador te escriba uno, aparecerá aquí: qué desayunar, ' +
           'qué comer y qué cenar. Sin pesar ni apuntar nada.</span></div>';
@@ -11170,8 +11232,8 @@
     return '<svg class="ia-atajo-icono"><use href="#i-' + id + '"/></svg>';
   };
   var IA_ATAJOS = [
-    { icono: iconoSVG('super'), texto:'Hazme la lista del súper' },
-    { icono: iconoSVG('plan'),  texto:'¿Qué me recomiendas comer hoy?' }
+    { icono: iconoSVG('carrito'), texto:'Hazme la lista del súper' },
+    { icono: iconoSVG('cubierto'),  texto:'¿Qué me recomiendas comer hoy?' }
   ];
 
   // Lo que su entrenador le dejó encendido. Nace vacío y VACÍO SIGNIFICA
@@ -13883,10 +13945,10 @@
   function tarjetaDeSemana(f, m){
     var logro = logroSusMacros(m);
     var sello = logro === null
-      ? '<div class="ts-sello ts-gris">⚪ No hay datos suficientes</div>'
+      ? '<div class="ts-sello ts-gris">No hay datos suficientes</div>'
       : logro
-        ? '<div class="ts-sello ts-verde">🟢 Logró sus macros</div>'
-        : '<div class="ts-sello ts-rojo">🔴 No logró sus macros</div>';
+        ? '<div class="ts-sello ts-verde">Logró sus macros</div>'
+        : '<div class="ts-sello ts-rojo">No logró sus macros</div>';
 
     // ---- Cuerpo ----
     //
@@ -13951,8 +14013,8 @@
     // Lo que le dijo su coach. Ya estaba guardado y no se enseñaba en ningún
     // sitio: es la parte que convierte una tabla de números en algo que se lee.
     var coach = f.motivo
-      ? plegado('ts-plegable ts-coach', 'Tu coach de Macros 💪', f.motivo)
-      : '<div class="ts-coach ts-firma"><b>Tu coach de Macros 💪</b></div>';
+      ? plegado('ts-plegable ts-coach', 'Tu coach de Macros', f.motivo)
+      : '<div class="ts-coach ts-firma"><b>Tu coach de Macros</b></div>';
     var tuyo = f.nota
       ? plegado('ts-plegable ts-tuyo', 'Lo que dijiste', f.nota) : '';
 

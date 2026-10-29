@@ -128,8 +128,8 @@ console.log('\n— Y se ve como se pidió —');
   // El dibujo, no un emoji. Y que el <use> apunte a un <symbol> que exista:
   // un href mal escrito no deja hueco ni da error, solo no se ve nada.
   check('con su cámara dibujada',
-    HTML.includes('class="af-ico"><svg><use href="#i-fotos"/></svg>') &&
-    HTML.includes('<symbol id="i-fotos"'));
+    HTML.includes('class="af-ico"><svg><use href="#i-camara"/></svg>') &&
+    HTML.includes('<symbol id="i-camara"'));
   check('el título', /Prepara tus fotos para mañana/.test(HTML));
   check('y el detalle', /mañana toca subir tus 4 fotos de progreso/.test(HTML));
   check('tiene tache para cerrar', /id="avisoFotosCerrar"/.test(HTML));

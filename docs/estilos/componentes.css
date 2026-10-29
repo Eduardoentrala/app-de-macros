@@ -141,6 +141,7 @@ table.week-table tr.today td{font-weight:800;}
 /* El sol se va al extremo, separado del nombre y la foto: es el único
    control de esta fila y no compite con los datos de la persona. */
 .tema-sol{margin-left:auto;align-self:flex-start;}
+.tema-sol svg{width:17px;height:17px;display:block;}
 
 /* Discreto de verdad: sin fondo ni borde, en gris claro y con el peso de
    letra bajo. Lo que hay detrás es un borrado que no se deshace, así que no
@@ -355,6 +356,7 @@ table.week-table tr.today td{font-weight:800;}
 .week-goal span{display:block;font:600 11px/1.2 sans-serif;color:var(--ink-faint);margin-top:5px;}
 .avatar{overflow:hidden;cursor:pointer;}
 .avatar img{width:100%;height:100%;object-fit:cover;display:block;}
+.avatar svg{width:34px;height:34px;color:var(--ink-faint);}
 
 .signout{margin:6px 16px 30px;padding:14px;border-radius:14px;background:none;border:1.5px solid var(--line);color:var(--red);font:700 13.5px/1 sans-serif;width:calc(100% - 32px);cursor:pointer;}
 
