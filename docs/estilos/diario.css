@@ -13,7 +13,12 @@
   font-size:14px;font-weight:600;color:var(--ink-soft);
   display:inline-flex;align-items:center;gap:3px;
 }
-.greeting .streak svg{width:15px;height:15px;flex:none;}
+/* La llama se queda naranja, y el «12 dias» en gris. El color era medio
+   significado: es lo unico de la cabecera que premia algo, y en trazo gris
+   se perdia entre el saludo y la fecha. Va con `--amber`, que es el
+   destacado que ya usa la app -la estrella de los alimentos guardados- y
+   que ya tiene su tono para el modo oscuro. */
+.greeting .streak svg{width:15px;height:15px;flex:none;color:var(--amber);}
 /* Sin racha no hay llama: el texto dice «sin racha» y una llama al lado lo
    contradice. */
 .greeting .streak.sin-racha svg{display:none;}
