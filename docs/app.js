@@ -4655,8 +4655,11 @@
     // que se acaba de guardar.
     recalcAll();
 
-    if(!sesion || !sesion.user){ guardandoSesion = false; pararCrono(); toast('toastRutina', 'Sesión guardada'); return; }
+    // PRIMERO si hay algo que guardar, y después con quién. Al revés, sin
+    // sesión se decía «Sesión guardada» y se paraba el cronómetro sobre una
+    // rutina vacía, mientras que con sesión se decía la verdad.
     if(!detalle.length){ guardandoSesion = false; toast('toastRutina', 'No hay series con peso que guardar'); return; }
+    if(!sesion || !sesion.user){ guardandoSesion = false; pararCrono(); toast('toastRutina', 'Sesión guardada'); return; }
 
     // CUANTO DURO, que la columna existe desde la 0001 y no la llenaba
     // nadie. Ahora hay cronometro, asi que hay dato.
@@ -4706,11 +4709,22 @@
                 (diaId ? '&routine_day_id=eq.' + diaId : '&routine_day_id=is.null') +
                 '&limit=1';
 
-    //  Y si la consulta falla, se guarda igual. Preguntar es una mejora y no
-    //  puede convertirse en un motivo para perder la sesión: peor un volumen
-    //  duplicado que un entrenamiento que no queda registrado.
+    //  UN FALLO DE LA BÚSQUEDA NO ES «NO HAY FILA», ES «NO LO SÉ».
+    //
+    //  Aquí se daba por hecho que no la había y se insertaba, con el
+    //  razonamiento de que es peor perder el entrenamiento que duplicarlo.
+    //  Lo segundo es verdad, pero la elección era falsa: hay una tercera
+    //  salida, que es aplazarlo. La cola ya guarda CÓMO buscarse y busca
+    //  antes de insertar, así que no se pierde nada y no se duplica nada.
+    //
+    //  Duplicar no es un empate: la pantalla se ve igual con una fila que
+    //  con dos, y el cierre del lunes cuenta filas. Ese día saldría como
+    //  dos sesiones, con el volumen sumado dos veces y la duración también.
+    //  Es la misma distinción que ya se hace con el plan: null es «no
+    //  tiene» y se cree; un fallo es «no se pudo preguntar» y no se cree.
+    var APLAZAR = new Error('no se pudo preguntar si ya había fila');
     sbFetch(busca)
-      ['catch'](function(){ return null; })
+      ['catch'](function(){ throw APLAZAR; })
       .then(function(hay){
         var id = hay && hay[0] && hay[0].id;
         if(id){
@@ -4753,7 +4767,7 @@
       //  Y NO SE DESHACE NADA: la sesión cuenta desde ya. Es lo mismo que
       //  hace el diario con la comida apuntada sin señal, y lo contrario
       //  sería castigar a quien entrena donde no hay cobertura.
-      if(sinConexion(e) || esperaMejorMomento(e)){
+      if(e === APLAZAR || sinConexion(e) || esperaMejorMomento(e)){
         encolar({
           ruta: '/rest/v1/workout_sessions',
           buscar: busca,
@@ -6380,9 +6394,13 @@
       //  buscarse, y se busca al subir, que es cuando por fin hay red. El
       //  resto —el orden, los reintentos, qué error espera y cuál se tira—
       //  es el mismo de siempre.
+      // Y si la búsqueda falla, NO se inserta: el item se queda en la cola
+      // y se reintenta entero la próxima vez. Insertar a ciegas es lo que
+      // deja dos filas del mismo día.
+      var APLAZAR = new Error('no se pudo preguntar si ya había fila');
       var envio = item.buscar
         ? sbFetch(item.buscar)
-            ['catch'](function(){ return null; })   // si falla, se inserta
+            ['catch'](function(){ throw APLAZAR; })
             .then(function(hay){
               var id = hay && hay[0] && hay[0].id;
               if(!id) return sbFetch(item.ruta, item.op);
@@ -6400,7 +6418,7 @@
           // Las dos formas de "ahora no": sin red, o el servidor de mal día.
           // Cortan la vuelta entera, porque seguir con los siguientes los
           // adelantaría y un alta podría llegar después de su borrado.
-          if(sinConexion(e) || esperaMejorMomento(e)) throw e;
+          if(e === APLAZAR || sinConexion(e) || esperaMejorMomento(e)) throw e;
           // 409 es la clave primaria repitiéndose: este apunte YA estaba
           // guardado, la petición de antes sí llegó. No es un fallo.
           if(/duplicate key|already exists|409/i.test(String(e.message || ''))) subidos++;
@@ -8867,23 +8885,17 @@
       return;
     }
 
-    var tg = e.target.closest('[data-toggle]');
-    if(tg){
-      var u = USUARIOS[Number(tg.dataset.toggle)];
-      u.on = !u.on;
-      pintarAdmin();
-      toast('toastAdmin', u.n + (u.on ? ' activado' : ' desactivado'));
-
-      // admin_activar() comprueba en la base que quien llama es super admin
-      // y deja anotado el cambio en la bitácora.
-      if(u.id){
-        sbRpc('admin_activar', { p_usuario: u.id, p_activo: u.on })['catch'](function(err){
-          u.on = !u.on; pintarAdmin();
-          toast('toastAdmin', 'No se pudo guardar: ' + traducirError(err.message));
-        });
-      }
-      return;
-    }
+    // AQUÍ VIVÍA EL INTERRUPTOR DE ACTIVAR/DESACTIVAR, y no lo pulsaba
+    // nadie: la fila de usuario pinta `data-ia`, `data-susp` y `data-pass`,
+    // y ninguna lleva `data-toggle`. Suspender hizo el mismo trabajo mejor
+    // -deja estado en la fila, no un booleano- y este se quedó atrás
+    // llamando a `admin_activar()`, que sigue creada en la base y a la que
+    // ya no llega nadie desde la app.
+    //
+    // La función SQL se deja estar: quitarla es una migración que no
+    // arregla nada, y el día que haga falta un apagado sin suspender está
+    // ahí. Lo que se va es el manejador, que solo servía para que leerlo
+    // diera la impresión de que el botón existe.
     // --- Mandar enlace para recuperar la contraseña ---
     //
     // ESTO NO MANDABA NADA. Solo sacaba el aviso de "enlace enviado" y se

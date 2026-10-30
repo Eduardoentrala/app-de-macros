@@ -115,7 +115,13 @@ console.log('\n— Lo que se miró y estaba bien —');
   for (const [n, marca] of [
     ['encender la IA de alguien', "sbRpc('admin_ia'"],
     ['suspender una cuenta', "sbRpc('admin_estado'"],
-    ['activar o desactivar', "sbRpc('admin_activar'"],
+    // Aqui estaba «activar o desactivar», que llamaba a `admin_activar`.
+    // No se quito por molestar: es que no lo pulsaba NADIE. La fila de
+    // usuario pinta `data-ia`, `data-susp` y `data-pass`, y el manejador
+    // esperaba un `data-toggle` que no existe en ninguna parte. Suspender
+    // hace el mismo trabajo mejor —deja estado en la fila, no un
+    // booleano—, asi que el manejador muerto se fue y la funcion SQL se
+    // quedo por si un dia hace falta apagar sin suspender.
   ]) {
     const j = APP.indexOf(marca);
     const t = APP.slice(j, j + 320);

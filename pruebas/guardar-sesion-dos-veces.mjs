@@ -238,15 +238,23 @@ console.log('\nY sin día de rutina se busca la fila sin día, no cualquiera');
      (q && q.ruta));
 }
 
-console.log('\nSi la consulta falla, se guarda igual: no se pierde la sesión');
+console.log('\nSi la consulta falla, se APLAZA: ni se pierde ni se duplica');
 {
-  // Preguntar «¿ya hay una?» es una mejora, y no puede convertirse en un
-  // motivo para perder el entrenamiento: peor un volumen duplicado que una
-  // sesión que no queda registrada.
+  // Aqui se insertaba a ciegas, con este razonamiento: preguntar «¿ya hay
+  // una?» es una mejora y no puede ser el motivo de perder el
+  // entrenamiento, asi que peor un volumen duplicado que una sesion sin
+  // registrar. Lo segundo es verdad; la eleccion era falsa. Hay una
+  // tercera salida —aplazarlo— y la cola ya sabe buscarse antes de
+  // insertar, asi que no hace falta elegir.
   //
-  // La primera versión de esta comprobación solo miraba que la consulta
-  // SALIERA —nunca la hacía fallar— y pasaba en verde con el `catch`
-  // quitado. Lo enseñó una mutación.
+  // Y duplicar no era un empate: la pantalla se ve igual con una fila que
+  // con dos, pero el cierre del lunes cuenta filas y suma volumenes. Ese
+  // dia salia como dos sesiones, con el volumen contado dos veces y la
+  // duracion media torcida.
+  //
+  // La primera version de esta comprobacion solo miraba que la consulta
+  // SALIERA —nunca la hacia fallar— y pasaba en verde con el `catch`
+  // quitado. Lo enseño una mutacion.
   const ctx = montar({ fallaLaConsulta: true });
   const clic = pulsar(ctx);
   clic();
@@ -259,11 +267,14 @@ console.log('\nSi la consulta falla, se guarda igual: no se pierde la sesión');
   ok(q && /limit=1/.test(q.ruta), 'la consulta pide una sola fila',
      'traerse el historial entero para saber si hay una es caro y lento');
   const escrituras = ctx.peticiones.filter((p) => p.metodo !== 'GET');
-  ok(escrituras.length === 1, 'y aunque falle, la sesión se guarda igual',
-     'salieron ' + escrituras.length + ' escrituras: con la consulta caída el ' +
-     'entrenamiento no queda registrado, y eso es peor que duplicarlo');
-  ok(escrituras[0] && escrituras[0].metodo === 'POST',
-     'creando fila, que es lo prudente cuando no se sabe si hay una');
+  ok(escrituras.length === 0, 'y si falla, NO se escribe nada',
+     'salio ' + JSON.stringify(escrituras.map((e) => e.metodo)) + ': con la ' +
+     'consulta caida no se sabe si ya hay fila, y un POST a ciegas deja dos');
+  ok(ctx.encolados.length === 1, 'se encola, que es lo que no pierde nada',
+     'encolados: ' + ctx.encolados.length);
+  ok(ctx.encolados[0] && ctx.encolados[0].buscar,
+     'y lleva COMO buscarse, para preguntarlo cuando el servidor conteste',
+     'sin `buscar` la cola inserta a ciegas y volvemos al principio');
 }
 
 console.log('\nY si el guardado falla, se puede reintentar');

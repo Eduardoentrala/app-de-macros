@@ -47,10 +47,12 @@ function sacar(cab) {
 console.log('\nSin señal se encola en vez de deshacerse');
 {
   const guardar = sacar('function guardarSesionAhora(opciones){');
-  const iQueue = guardar.indexOf('if(sinConexion(e) || esperaMejorMomento(e))');
+  // Y ahora tambien aplaza cuando no pudo PREGUNTAR si ya habia fila:
+  // insertar a ciegas es lo que dejaba dos filas del mismo dia.
+  const iQueue = guardar.indexOf('if(e === APLAZAR || sinConexion(e) || esperaMejorMomento(e))');
   const iDeshacer = guardar.indexOf('delete SESIONES[fecha];', iQueue > 0 ? iQueue : 0);
 
-  ok(iQueue > 0, 'el fallo de red se distingue del rechazo del servidor',
+  ok(iQueue > 0, 'el fallo de red, el aplazado y el rechazo son tres cosas',
      'un «no hay red» y un «ese dato no vale» son cosas opuestas y se trataban igual');
   ok(iQueue > 0 && iDeshacer > iQueue, 'y se encola ANTES de deshacer nada',
      'la sesión cuenta desde ya, igual que la comida apuntada sin señal');
