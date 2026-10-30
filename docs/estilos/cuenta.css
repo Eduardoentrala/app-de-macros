@@ -325,7 +325,15 @@
 }
 
 .usr-acc{display:flex;gap:5px;flex:none;}
-.usr-acc button{border:none;border-radius:9px;padding:7px 9px;font:700 10.5px/1 sans-serif;cursor:pointer;}
+.usr-acc button{
+  border:none;border-radius:9px;padding:7px 9px;font:700 10.5px/1 sans-serif;
+  cursor:pointer;display:inline-flex;align-items:center;gap:5px;
+}
+/* SIN ESTO LA CHISPA SALE DE 300x150, que es lo que da el navegador a un
+   <svg> sin medidas, y la lista de usuarios se llena de estrellas verdes
+   del tamaño de la pantalla. Pasó al cambiar los emojis por dibujos: el
+   `✨ on` de antes se medía con la letra y estos no. */
+.usr-acc button svg{width:13px;height:13px;flex:none;}
 .usr-acc .b-on{background:var(--green-soft);color:var(--green);}
 .usr-susp{color:var(--red);font-weight:800;}
 

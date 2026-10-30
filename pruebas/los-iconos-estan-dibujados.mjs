@@ -188,7 +188,7 @@ console.log('\nY ninguno se queda sin tamaño');
     '.empty-day .ico svg', '.ia-icono svg, .ia-enviar svg', '.clock-btn svg',
     '.nota-badge svg', '.chip svg', '.icon-mini button svg',
     // Estos dos llevan la clase en el propio <svg>, no en el hueco.
-    '.ico-momento', '.ia-atajo-icono',
+    '.ico-momento', '.ia-atajo-icono', '.usr-acc button svg',
   ];
   const marcas = new Set();      // clases e ids que sabemos que miden algo
   for (const sel of REGLAS) {
@@ -234,6 +234,48 @@ console.log('\nY ninguno se queda sin tamaño');
        'un <svg> sin regla de ancho no sale pequeño: sale de 300x150 y parte ' +
        'la fila entera. Si el hueco es nuevo, añade su regla arriba. ' +
        'Las que hay miden: ' + [...marcas].join(' '));
+  }
+
+  // ---- Y LOS QUE ESCRIBE app.js, que es por donde se coló uno ----
+  //
+  //  Esto solo miraba index.html, y la mitad de los iconos de la app los
+  //  escribe `app.js` dentro de cadenas. Por ahí pasaron tres sin regla de
+  //  ancho —la chispa y la llave de la lista de usuarios del panel— y
+  //  salieron de 300x150: estrellas verdes del tamaño de la pantalla, una
+  //  por persona. Se vio en una captura, no aquí.
+  //
+  //  AQUÍ NO HAY ÁRBOL QUE SUBIR: son trozos de texto, y el hueco puede
+  //  construirse al vuelo —`class="'+(u.ia?'b-on':'b-off')+'"`—. Así que se
+  //  miran las clases escritas CERCA, por encima del icono, y basta con que
+  //  una de ellas esté medida.
+  //
+  //  HASTA DÓNDE LLEGA, dicho sin adornos: caza el caso de verdad —el que
+  //  pasó, una zona entera sin regla— y se le escapa meter un hueco nuevo
+  //  sin medidas AL LADO de otro que sí las tiene, porque la clase del
+  //  vecino le vale. Para eso haría falta el árbol, y aquí no hay árbol:
+  //  hay cadenas de texto. Lo que cierra ese resto es mirar la pantalla.
+  // El único que no se puede resolver leyendo: `pill.innerHTML`, donde el
+  // hueco sale de `card.querySelector('[data-act="notas"]')` y su clase
+  // -`chip`- está a cien líneas, en la plantilla de la tarjeta. Se anota a
+  // mano y con la regla que lo mide, que se comprobó en un navegador: 13px.
+  const A_MANO = { 'i-lapiz': '.chip svg' };
+
+  for (const m of APP.matchAll(/<svg(?: class="[^"]*")?><use href="#(i-[a-z-]+)"/g)) {
+    const antes = APP.slice(Math.max(0, m.index - 1400), m.index);
+    const propia = /<svg class="([^"]*)"/.exec(m[0]);
+    const cerca = [...new Set([
+      ...(propia ? propia[1].split(/\s+/) : []),
+      // Las de `class="..."` y las que se arman con un ternario dentro.
+      ...[...antes.matchAll(/class="([^"]*)"/g)].flatMap((c) => c[1].split(/\s+/)),
+      ...[...antes.matchAll(/class="[^"]*'\s*\+\s*\([^)]*\)/g)]
+        .flatMap((c) => [...c[0].matchAll(/'([a-z][\w-]*)'/g)].map((x) => x[1])),
+    ])].filter(Boolean);
+    const medido = cerca.some((c) => marcas.has(c)) || !!A_MANO[m[1]];
+    ok(medido,
+       `«${m[1]}» de app.js cuelga de algo medido (${cerca.slice(-3).join(', ') || 'nada'})`,
+       'sale de 300x150 y parte la fila entera. Lo escribe app.js, así que ' +
+       'no se ve hasta que alguien abre esa pantalla. Las clases medidas ' +
+       'son: ' + [...marcas].join(' '));
   }
 }
 
