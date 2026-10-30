@@ -1473,7 +1473,10 @@
     return Math.max(0, Math.ceil((finRest - Date.now()) / 1000));
   }
 
-  function startRest(secs, label){
+  // `callado` es para cuando esto no lo ha pulsado nadie: al recuperar un
+  // descanso que ya venía de antes, el tono de arranque diría que acaba de
+  // empezar, y lo que pasó es justo lo contrario.
+  function startRest(secs, label, callado){
     stopTick();
     finRest = Date.now() + secs * 1000;
     total = secs; remaining = secs; paused = false;
@@ -1482,7 +1485,8 @@
     restWho.textContent = label;
     restBar.classList.add('open');
     paintRest();
-    tono(523.25, 0.22, 0, 0.18);   // confirma que arrancó
+    guardarDescanso();
+    if(!callado) tono(523.25, 0.22, 0, 0.18);   // confirma que arrancó
     ticking = setInterval(function(){
       if(paused) return;
       var antes = remaining;
@@ -1502,8 +1506,71 @@
     }, 1000);
   }
 
+  // ---- EL DESCANSO SOBREVIVE A CERRAR LA APP ----
+  //
+  //  El cronómetro de la sesión ya lo hacía y este no, así que cerrar la
+  //  app a media serie dejaba el tiempo de entrenamiento corriendo y se
+  //  llevaba por delante el descanso. Entrenar con el teléfono en el
+  //  bolsillo es lo normal, y el teléfono cierra apps cuando le parece.
+  //
+  //  SE GUARDA EL INSTANTE EN QUE TERMINA, no los segundos que faltan: así
+  //  da igual cuánto estuviera la app cerrada, igual que con la sesión.
+  //  Pausado no hay instante de fin -está parado-, así que entonces se
+  //  guardan los segundos que quedaban.
+  var CLAVE_DESCANSO = 'macros.descanso';
+
+  function guardarDescanso(){
+    try{
+      localStorage.setItem(CLAVE_DESCANSO, JSON.stringify(paused
+        ? { restan: remaining, total: total, quien: restWho.textContent, pausado: true }
+        : { fin: finRest, total: total, quien: restWho.textContent }));
+    }catch(e){}
+  }
+  function olvidarDescanso(){
+    try{ localStorage.removeItem(CLAVE_DESCANSO); }catch(e){}
+  }
+
+  function recuperarDescanso(){
+    var g;
+    try{ g = JSON.parse(localStorage.getItem(CLAVE_DESCANSO) || 'null'); }
+    catch(e){ return; }
+    if(!g || !(g.total > 0)){ olvidarDescanso(); return; }
+
+    if(g.pausado){
+      // Pausado se queda pausado, con lo que tenía. El tiempo parado no
+      // corre: eso es lo que significa pausar.
+      if(!(g.restan > 0)){ olvidarDescanso(); return; }
+      startRest(g.restan, g.quien || '', true);
+      total = g.total;
+      paused = true;
+      restPause.textContent = 'Seguir';
+      paintRest();
+      guardarDescanso();
+      return;
+    }
+
+    // Un fin más lejos de lo que puede durar un descanso no es un descanso
+    // larguísimo: es un reloj que se movió.
+    if(!(g.fin > 0) || g.fin - Date.now() > DESCANSO_MAX * 1000){
+      olvidarDescanso(); return;
+    }
+
+    var restan = Math.ceil((g.fin - Date.now()) / 1000);
+    if(restan <= 0){
+      // SE ACABÓ MIENTRAS LA APP ESTABA CERRADA, y nadie lo vio. Abrir la
+      // barra en verde y pitar ahora sería avisar de algo que pasó hace
+      // rato: o ya volvió a la serie, o no. No se enseña nada.
+      olvidarDescanso(); return;
+    }
+    startRest(restan, g.quien || '', true);
+    total = g.total;            // la barra se llena contra el descanso entero
+    paintRest();
+    guardarDescanso();
+  }
+
   function terminarRest(){
     stopTick();
+    olvidarDescanso();
     restBar.classList.add('done');
     restWho.textContent = '¡Descanso terminado! A la siguiente serie';
     restTime.textContent = '0:00';
@@ -1526,6 +1593,7 @@
     // seguido corriendo por dentro y volvería con menos del que dejó.
     if(!paused) finRest = Date.now() + remaining * 1000;
     restPause.textContent = paused ? 'Seguir' : 'Pausar';
+    guardarDescanso();
   });
   document.getElementById('restPlus').addEventListener('click', function(){
     remaining += 30; total = Math.max(total, remaining);
@@ -1533,9 +1601,10 @@
     restBar.classList.remove('done');
     if(!ticking) startRest(remaining, restWho.textContent);
     paintRest();
+    guardarDescanso();
   });
   document.getElementById('restClose').addEventListener('click', function(){
-    stopTick(); restBar.classList.remove('open');
+    stopTick(); restBar.classList.remove('open'); olvidarDescanso();
   });
 
   // Panel de configuración del cronómetro
@@ -1728,6 +1797,12 @@
     if(!(v >= DESCANSO_MIN && v <= DESCANSO_MAX)) return;
     ponerDescanso(v);
   }
+
+  // Y AQUÍ, no donde se define: `recuperarDescanso` mira `DESCANSO_MAX`
+  // para descartar un reloj movido, y esa línea está más abajo que el
+  // cronómetro. Llamarlo allí lo compararía contra `undefined`, que es
+  // falso siempre: se tiraría cualquier descanso recuperado.
+  recuperarDescanso();
 
   document.getElementById('timerSave').addEventListener('click', function(){
     var v = Math.min(DESCANSO_MAX, Math.max(DESCANSO_MIN, Number(customSecs.value) || 180));

@@ -325,8 +325,35 @@ console.log('\n— Y no se toca el de al lado sin querer —');
 
   // Y que solo el reloj arranque el cronómetro. Es la mitad de la queja:
   // que la palomita NO lo dispare.
-  const arranques = (APP.match(/startRest\(/g) || []).length;
-  check('startRest se llama en pocos sitios y controlados', arranques <= 3, `${arranques} veces`);
+  //
+  // SE MIRA QUIÉN LLAMA, no cuántas veces. Antes esto contaba las
+  // apariciones de `startRest(` y exigía tres o menos, y eso se puso rojo
+  // al hacer que el descanso sobreviviera a cerrar la app -que añade dos
+  // llamadas que no arrancan nada, lo recuperan-. Un número no distingue
+  // una llamada buena de una mala, que es justo lo que hay que vigilar.
+  // De cada llamada se busca el marcador de su sitio MAS CERCANO hacia
+  // atras. Una ventana de caracteres no vale: en `recuperarDescanso` hay
+  // dos llamadas y la segunda queda lejisimos de la cabecera.
+  const MARCAS = [
+    ["var clock = e.target.closest('.clock-btn');", 'el reloj de la serie'],
+    ["document.getElementById('restPlus')", 'el boton de +30 s'],
+    ['function recuperarDescanso(){', 'recuperar el descanso guardado'],
+  ];
+  const sitios = [];
+  for (const m of APP.matchAll(/startRest\(/g)) {
+    if (APP.slice(m.index - 9, m.index) === 'function ') continue;   // la definicion
+    let mejor = -1, quien = '??? ' + APP.slice(m.index - 90, m.index).replace(/\s+/g, ' ');
+    for (const [marca, nombre] of MARCAS) {
+      const i = APP.lastIndexOf(marca, m.index);
+      if (i > mejor) { mejor = i; quien = nombre; }
+    }
+    sitios.push(quien);
+  }
+  const PERMITIDOS = MARCAS.map((m) => m[1]);
+  check('solo arrancan el descanso los sitios de siempre',
+    sitios.length > 0 && sitios.every((s) => PERMITIDOS.includes(s)),
+    'llaman: ' + sitios.join(' | ') + '. Si hay uno nuevo, mira que no sea ' +
+    'la palomita: tocar el cuadro de la serie no puede arrancar el descanso');
   const i = APP.indexOf("var chk = e.target.closest('.set-check');");
   // El `return` tiene que estar DENTRO del if de la palomita y ANTES de
   // que empiece el del reloj. Se mide por posicion y no por una linea
