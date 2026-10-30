@@ -52,7 +52,7 @@ const CORS = {
 //
 // Ahora lo dice: un GET sin sesión devuelve este sello y nada más.
 // `pruebas/funciones-vivas.mjs` lo compara con el del repo.
-const SELLO = '8fe667697f';
+const SELLO = '230df5b019';
 
 // Tope diario por persona. Es la única defensa contra que un solo usuario
 // -o un token robado- vacíe la cuenta en una noche con un bucle.
@@ -357,13 +357,6 @@ Sé honesto sobre lo que tuviste que suponer. Quien lo lea está contando
 macros y necesita saber de qué se fía.
 `;
 
-const SISTEMA_APUNTAR = `
-Conviertes en alimentos con sus macros lo que alguien comió, ya te lo
-cuente por escrito, con una foto del plato, o las dos cosas a la vez.
-
-Escribe en español de México. En "nota" va lo que tuviste que suponer.
-Si de plano no hay comida, devuelve la lista vacía y explica qué falta.
-` + SISTEMA_APUNTAR_REGLAS;
 
 const SISTEMA_CHAT = `
 Eres el asistente de una app de conteo de macros. Hablas español de
@@ -1393,7 +1386,7 @@ Deno.serve(async (req) => {
   //
   //  Misma regla que las llaves apagadas y que el JSON ilegible, que ya se
   //  contestan antes de cobrar. Esta se quedó atrás.
-  const ACCIONES = ['apuntar', 'chat', 'aviso', 'semana', 'fotos', 'plan', 'cliente'];
+  const ACCIONES = ['chat', 'aviso', 'semana', 'fotos', 'plan', 'cliente'];
   if (!ACCIONES.includes(accion)) return json({ error: 'Acción desconocida.' }, 400);
 
   // --- ¿Le dejan ESTO en concreto? ---
@@ -1506,12 +1499,10 @@ Deno.serve(async (req) => {
   //  dejaban a alguien sin asistente hasta el día siguiente sin haber
   //  recibido una sola respuesta.
   //
-  //  Solo para las dos acciones que miran imágenes. Las otras las ignoran, y
+  //  Solo para la acción que mira imágenes. Las otras las ignoran, y
   //  rechazar por una foto que de todos modos no se iba a leer sería inventar
   //  un error donde no lo había.
-  const fotosPedidas = (accion === 'apuntar' || accion === 'chat')
-    ? leerImagenes(cuerpo)
-    : [];
+  const fotosPedidas = accion === 'chat' ? leerImagenes(cuerpo) : [];
   if (typeof fotosPedidas === 'string') return json({ error: fotosPedidas }, 400);
 
   const TOPE_DIARIO = TOPES[nivel as keyof typeof TOPES] ?? TOPES.normal;
@@ -1631,56 +1622,21 @@ Deno.serve(async (req) => {
       },
     };
 
-    if (accion === 'apuntar') {
-      const texto = String(cuerpo.texto || '').trim().slice(0, 500);
-      // Ya se leyeron y se validaron antes del tope: si hubieran estado mal,
-      // aquí no se llega. Se reutiliza en vez de decodificar otra vez varios
-      // megas de base64.
-      const fotos = fotosPedidas as Array<{ datos: string; tipo: string }>;
-
-      if (!texto && !fotos.length) {
-        return json({ error: 'Escribe qué comiste o toma una foto.' }, 400);
-      }
-
-      const partes: unknown[] = [];
-      for (const f of fotos) {
-        partes.push({
-          type: 'image',
-          source: { type: 'base64', media_type: f.tipo, data: f.datos },
-        });
-      }
-      partes.push({
-        type: 'text',
-        text: texto || (fotos.length > 1
-          ? 'Esto es lo que me comí, en varias fotos del MISMO plato o comida. ' +
-            'No lo cuentes varias veces: son distintos ángulos de lo mismo, ' +
-            'salvo que se vea claramente que son platos distintos.'
-          : 'Esto es lo que me comí. Dime qué lleva y sus macros.'),
-      });
-      const imagen = fotos.length ? '1' : '';   // solo para decidir el esfuerzo
-
-      const r = await ia.messages.create({
-        model: MODELO,
-        max_tokens: 4000,
-        system: SISTEMA_APUNTAR,
-        // Con foto hay que mirar, calcular porciones y dudar de lo que no
-        // se ve: ahí sí conviene que piense. El texto solo es extracción.
-        ...(imagen ? { thinking: { type: 'adaptive' as const } } : {}),
-        output_config: {
-          effort: imagen ? 'medium' : 'low',
-          format: { type: 'json_schema', schema: ESQUEMA_ALIMENTOS },
-        },
-        messages: [{ role: 'user', content: partes }],
-      });
-
-      const salida = leerJson(r);
-      salida.alimentos = await afinarConCatalogo(admin, salida.alimentos || []);
-      return json({ ...salida, quedan });
-    }
+    // AQUÍ VIVÍA LA ACCIÓN `apuntar`, que no la mandaba nadie.
+    //
+    //  Apuntar comida desde una foto lo hace el chat, que es por donde se
+    //  entra desde la app. Esta rama se quedó de cuando eran dos caminos
+    //  distintos: seguía aceptándose en `ACCIONES`, seguía pidiendo
+    //  imágenes y seguía gastando sitio en una función que se despliega a
+    //  mano. Las REGLAS de cómo se convierte comida en macros no se van
+    //  -`SISTEMA_APUNTAR_REGLAS` lo usa el chat-; lo que se va es el
+    //  camino que no recorría nadie.
 
     if (accion === 'chat') {
       const historial = Array.isArray(cuerpo.mensajes) ? cuerpo.mensajes : [];
-      // Igual que en `apuntar`: leídas y validadas antes del tope.
+      // Leídas y validadas antes de cobrar el tope: si hubieran estado
+      // mal, aquí no se llega. Se reutilizan en vez de decodificar otra
+      // vez varios megas de base64.
       const fotos = fotosPedidas as Array<{ datos: string; tipo: string }>;
       const imagen = fotos.length ? '1' : '';   // solo para decidir el esfuerzo
 

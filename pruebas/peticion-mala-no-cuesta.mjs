@@ -37,6 +37,7 @@ import { fileURLToPath } from 'node:url';
 
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
 const FN = readFileSync(join(RAIZ, 'supabase', 'functions', 'asistente', 'index.ts'), 'utf8');
+const APP = readFileSync(join(RAIZ, 'docs', 'app.js'), 'utf8');
 
 let pasan = 0, fallan = 0;
 const ok = (c, q, extra = '') => {
@@ -83,7 +84,22 @@ console.log('\nLa acción que no existe se rechaza antes de cobrar');
 
   // Y que la lista sea la de verdad: las siete ramas que se atienden.
   const atendidas = [...FN.matchAll(/\n\s{4}if \(accion === '([a-z]+)'\)/g)].map((m) => m[1]);
-  ok(atendidas.length >= 7, 'se atienden ' + atendidas.length + ' acciones');
+  // UN NUMERO A PELO NO DICE NADA. Aqui ponia `>= 7` y se puso rojo al
+  // quitar una rama muerta, que es justo lo contrario de lo que se quiere
+  // vigilar. Lo que importa es el contrato con la app: todo lo que el
+  // telefono manda tiene que tener rama, y toda rama tiene que mandarla
+  // alguien. La accion `apuntar` vivio meses con su rama entera sin que
+  // nadie la llamase, y ninguna prueba lo notaba.
+  const mandadas = [...new Set([...APP.matchAll(/accion: '([a-z_]+)'/g)].map((m) => m[1]))];
+  ok(mandadas.length > 0, 'se encuentra lo que manda la app', JSON.stringify(mandadas));
+  const sinRama = mandadas.filter((a) => !atendidas.includes(a));
+  ok(sinRama.length === 0, 'todo lo que manda la app tiene rama que lo atienda',
+     'sin rama: ' + sinRama.join(', ') + ' — la app pide algo y la funcion cobra ' +
+     'la consulta para acabar en el final sin contestar');
+  const nadieLaPide = atendidas.filter((a) => !mandadas.includes(a));
+  ok(nadieLaPide.length === 0, 'y toda rama la manda alguien',
+     'no la pide nadie: ' + nadieLaPide.join(', ') + ' — codigo muerto en una ' +
+     'funcion que se despliega a mano, que ademas sigue aceptandose en ACCIONES');
 
   const listadas = [...arr.matchAll(/'([a-z]+)'/g)].map((m) => m[1]);
   const faltan = atendidas.filter((a) => !listadas.includes(a));
