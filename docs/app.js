@@ -4828,6 +4828,52 @@
   // Igual que el diario: vacío hasta que lleguen los pesos de la persona.
   var PESOS = {};
 
+  // ---- EL PESO QUE MANDA ES EL DE LA BÁSCULA, NO EL DEL REGISTRO ----
+  //
+  //  `weight_kg` se escribía al darse de alta y no se volvía a tocar.
+  //  El perfil enseñaba ese número para siempre, y lo de la pantalla es
+  //  lo de menos: la proteína es `peso * 2` y el peso va dentro del
+  //  metabolismo basal. Con cuatro kilos de menos, la meta de proteína
+  //  se queda ocho gramos alta TODOS LOS DÍAS, y el suelo de calorías
+  //  -que nunca baja del basal- se calcula sobre un cuerpo que ya no es.
+  //
+  //  EL PROMEDIO DE LA SEMANA, NO EL ÚLTIMO PESAJE. El peso de un día
+  //  se mueve un kilo largo por agua, sal y lo que haya en el estómago:
+  //  poner eso en el perfil haría que la proteína bailara a diario por
+  //  razones que no son grasa ni músculo. La media de siete días solo se
+  //  mueve cuando cambia algo de verdad, y es la misma idea que ya usa
+  //  `peso_medio` en el cierre del lunes.
+  var DIAS_PESO = 7;
+
+  function pesoDeLaSemana(){
+    var desde = isoDe(haceDias(DIAS_PESO - 1)), hasta = isoDe(HOY);
+    var ks = Object.keys(PESOS || {}).filter(function(k){
+      return k >= desde && k <= hasta && Number(PESOS[k]) > 0;
+    });
+    if(!ks.length) return null;        // sin pesajes esta semana, manda lo que había
+    var suma = 0;
+    ks.forEach(function(k){ suma += Number(PESOS[k]); });
+    return Math.round(suma / ks.length * 10) / 10;
+  }
+
+  function ponerPesoDeLaBascula(){
+    var kg = pesoDeLaSemana();
+    // El rango es el de la columna. Fuera de él la fila rebota ENTERA, y
+    // entonces no se guarda el peso ni lo que fuera con él.
+    if(kg == null || !(kg >= 20 && kg <= 400)) return;
+    var campo = document.getElementById('regPeso');
+    if(!campo) return;
+    var antes = Number(campo.value) || 0;
+    if(Math.abs(antes - kg) < 0.05) return;    // ya estaba puesto
+    campo.value = kg;
+    var el = document.getElementById('profPeso');
+    if(el) el.textContent = kg.toFixed(1) + ' kg';
+    // Y al perfil, que es de donde lo lee su entrenador y de donde sale
+    // al volver a entrar. En silencio: la pantalla y la cuenta ya están
+    // bien, y si no sube se vuelve a intentar en la próxima apertura.
+    sbActualizarPerfil({ weight_kg: kg })['catch'](function(){});
+  }
+
   var RANGO = '14';
   var DIAS_RANGO = {'14': 14, 'mes': 30, 'anio': 365};
   var NOMBRE_RANGO = {'14': '14 días', 'mes': 'el mes', 'anio': 'el año'};
@@ -11088,6 +11134,7 @@
         // arriba todavía no está.
         if(MI_NIVEL_IA === 'plus'){
           revisarChequeoPendiente();
+          guardarSemanaSinCierre();
           revisarAvisoDelCoach();
         }
         // Fuera del `if` de Plus a propósito: las fotos de progreso las sube
@@ -11122,6 +11169,8 @@
         // arranque vacío: los recordatorios de peso y cintura pueden confiar
         // en lo que digan.
         PESO_CINTURA_LISTOS = true;
+        // Con los pesajes de verdad delante, el perfil se pone al día.
+        ponerPesoDeLaBascula();
         pintarCintura();
         // Se declara AQUÍ y no arriba. Antes venía del bloque del diario,
         // que compartía este `hoy`; al sacar ese bloque a `llenarDiario()`
@@ -12672,6 +12721,62 @@
     if(b) b.hidden = !pendiente;
   }
 
+  // ---- LA FILA DE LA SEMANA SE GUARDA AUNQUE LA IA ESTÉ APAGADA ----
+  //
+  //  Esa fila es la ÚNICA memoria de lo que pasó pasados 60 días: el
+  //  diario solo se descarga de dos meses atrás, así que de más atrás no
+  //  queda nada que recomponer. Y se escribía DENTRO del `then` del
+  //  cierre del lunes, que es una llamada a la IA. Apagada la IA no hay
+  //  llamada, no hay fila, y esas semanas desaparecen para siempre.
+  //
+  //  Quien apaga la IA unos meses y la vuelve a encender ha seguido
+  //  apuntando su comida y pesándose todo ese tiempo: los datos están.
+  //  Lo único que faltaba era guardarlos.
+  //
+  //  LOS NÚMEROS NO NECESITAN A LA IA: `fotoDeLaSemana()` ya se calcula
+  //  en el teléfono ANTES de llamarla. Lo único que la IA pone en esa
+  //  fila es el texto del motivo y si ajustó. Así que se guarda lo que
+  //  hay y se marca `auto`, que es lo que la distingue de un cierre de
+  //  verdad —y lo que hace que el bloque vuelva a salir el día que la
+  //  enciendan, en vez de darse por contestado con una fila que nadie
+  //  contestó—.
+  //
+  //  La encuesta NO se inventa: hambre, energía y sueño se quedan nulos
+  //  porque nadie los preguntó. Un tres de relleno sería peor que el
+  //  hueco, que al menos se lee como lo que es.
+  function cierreApagado(){
+    return MI_NIVEL_IA === 'apagada' ||
+           !!(MIS_LLAVES && MIS_LLAVES.semanal === false);
+  }
+
+  function guardarSemanaSinCierre(){
+    if(!sesion || !sesion.user || !cierreApagado()) return;
+    var semana = isoDe(anclaSemana);
+    return sbFetch('/rest/v1/chequeos_semanales?select=semana' +
+            '&user_id=eq.' + sesion.user.id +
+            '&semana=eq.' + semana + '&limit=1')
+      .then(function(filas){
+        if(filas && filas.length) return;      // ya hay algo de esa semana
+        return datosDeEntreno().then(function(ent){
+          var foto = fotoDeLaSemana(datosDeLaSemana(true), resumenDeSemanas(4), ent);
+          return sbFetch('/rest/v1/chequeos_semanales?on_conflict=user_id,semana', {
+            method: 'POST',
+            headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+            body: JSON.stringify(Object.assign({
+              user_id: sesion.user.id,
+              semana: semana,
+              ajusto: false,
+              auto: true
+            }, foto))
+          });
+        });
+      })['catch'](function(){
+        // En silencio: nadie pidió esto y no hay nada que la persona pueda
+        // hacer al respecto. Se reintenta en la siguiente apertura, y
+        // mientras la semana siga siendo esta, llega a tiempo.
+      });
+  }
+
   function revisarChequeoPendiente(){
     if(!sesion || !sesion.user) return;
 
@@ -12691,7 +12796,13 @@
     return sbFetch('/rest/v1/chequeos_semanales?select=semana' +
             '&user_id=eq.' + sesion.user.id +
             '&semana=gte.' + semana +
-            '&semana=lt.' + isoDe(finSemana) + '&limit=1')
+            '&semana=lt.' + isoDe(finSemana) +
+            // Una fila `auto` la escribió esta misma función porque la
+            // IA estaba apagada: guarda los números y no contesta nada.
+            // Si contara como contestada, el día que la enciendan se
+            // quedarían sin su primer cierre, que es el que más falta
+            // hace. El cierre de verdad la sobrescribe por `on_conflict`.
+            '&auto=is.false' + '&limit=1')
       .then(function(filas){
         // Lo ÚNICO que lo apaga es que exista la fila. Que se haya visto, que
         // se haya abierto o que se haya cerrado no cuenta.
@@ -13614,7 +13725,7 @@
         '?select=semana,hambre,energia,sueno,dias_apuntados,dias_con_peso,media_cal,cal_antes,cal_despues,' +
         'media_p,media_c,media_g,meta_p,meta_c,meta_g,' +
         'peso_medio,peso_medio_antes,volumen,volumen_antes,sesiones,cintura,' +
-        'ajusto,motivo,nota' +
+        'ajusto,motivo,nota,auto' +
         '&user_id=eq.' + sesion.user.id +
         '&order=semana.desc&limit=520')
       .then(function(filas){ return filas || []; });

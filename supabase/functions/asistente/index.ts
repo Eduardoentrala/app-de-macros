@@ -52,7 +52,7 @@ const CORS = {
 //
 // Ahora lo dice: un GET sin sesión devuelve este sello y nada más.
 // `pruebas/funciones-vivas.mjs` lo compara con el del repo.
-const SELLO = '230df5b019';
+const SELLO = '0e4605bbf9';
 
 // Tope diario por persona. Es la única defensa contra que un solo usuario
 // -o un token robado- vacíe la cuenta en una noche con un bucle.
@@ -2132,7 +2132,14 @@ Deno.serve(async (req) => {
               (p.volumen != null ? ` (${p.volumen} kg)` : '') +
               `\n  hambre ${p.hambre ?? '—'}, energía ${p.energia ?? '—'}, ` +
               `sueño ${p.sueno ?? '—'}` +
-              (p.ajusto ? ` · se le ajustó a ${p.cal_despues} cal` : ' · no se tocó');
+              // UNA SEMANA SIN CIERRE NO ES UNA SEMANA EN LA QUE SE DECIDIÓ
+              // NO TOCAR NADA. `auto` quiere decir que la IA estaba apagada:
+              // la app guardó los números sola y no hubo ni encuesta ni
+              // decisión. Leer eso como «no se tocó» le haría creer que
+              // alguien miró la semana y la dio por buena.
+              (p.auto ? ' · sin cierre (la IA estaba apagada esa semana)'
+                : p.ajusto ? ` · se le ajustó a ${p.cal_despues} cal`
+                : ' · no se tocó');
           }).join('\n') + `\n`
         : '';
 

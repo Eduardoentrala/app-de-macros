@@ -62,9 +62,21 @@ console.log('\n— Cada silencio lleva su porqué —');
   // alternativa era un aviso rojo encima del mensaje del cierre, justo
   // mientras la persona está leyendo sus calorías nuevas.
   //
+  // SUBIÓ A NUEVE el 30 de octubre de 2026, y los dos nuevos son de la
+  // misma familia: cosas que la app hace sola, que nadie pidió, y que no
+  // tienen arreglo posible por parte de quien las sufre.
+  //
+  //   · El peso del perfil puesto al día desde la báscula. La pantalla y
+  //     la cuenta ya están bien cuando esto corre; lo único que puede
+  //     fallar es la copia al servidor, y se reintenta en la siguiente
+  //     apertura sin que nadie tenga que hacer nada.
+  //   · La fila de la semana guardada con la IA apagada. Nadie la pidió,
+  //     nadie la está esperando y la semana sigue siendo esta hasta el
+  //     lunes: hay seis días de reintentos por delante.
+  //
   // El número se sube A MANO y con el motivo escrito a propósito: es lo que
   // obliga a que añadir un silencio sea una decisión y no un descuido.
-  check('y son pocos y contados', vacios.length <= 7,
+  check('y son pocos y contados', vacios.length <= 9,
     `hay ${vacios.length}; cada uno nuevo es un fallo que nadie va a ver`);
 }
 
