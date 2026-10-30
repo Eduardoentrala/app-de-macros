@@ -44,10 +44,27 @@
 --    pudiera, dejarlas sería dejar el cierre del lunes mintiendo sobre las
 --    semanas pasadas.
 --
---    SE QUEDA LA MÁS COMPLETA: mayor volumen, y a igualdad de volumen la
---    más reciente. Las duplicadas son la MISMA sesión guardada dos veces
---    —la app nunca crea dos a propósito—, así que la que tiene menos
---    volumen es un guardado a medias de ese mismo entrenamiento.
+--    SE QUEDA LA MÁS RECIENTE, y a igualdad de hora la de más volumen.
+--
+--    La primera versión de esto se quedaba con la de MÁS VOLUMEN, con el
+--    razonamiento de que las copias son guardados a medias del mismo
+--    entrenamiento y la más gorda es la completa. Mirar los datos de
+--    verdad antes de borrar lo desmintió. Hay de los dos tipos:
+--
+--      3 de agosto, PIERNA, seis copias en hora y cuarto:
+--        1200 (1 ejercicio) → 1480 (2) → 1480 → 1480 → 1240 → 1840 (3)
+--        Aquí sí: fue añadiendo ejercicios y le dio a guardar cada vez.
+--
+--      8 de agosto, SABADO, cinco copias:
+--        1920 (1 ejercicio) → 1440 → 1440 → 1440 → 1440
+--        Aquí NO: el primero es el más gordo y es el equivocado. Corrigió
+--        un peso hacia abajo y volvió a guardar. Quedarse con el mayor
+--        sería quedarse justo con el error que fue a arreglar.
+--
+--    La más reciente acierta en los dos, y además es lo que hace la app
+--    arreglada: el PATCH escribe lo que hay en pantalla, así que el último
+--    guardado manda. Una limpieza que contradiga a la app de hoy deja dos
+--    reglas distintas para la misma pregunta.
 --
 --    Antes de ejecutar esto conviene mirar qué hay, con el SELECT de
 --    abajo: si no devuelve nada, no hay nada que borrar.
@@ -63,7 +80,7 @@ with ordenadas as (
   select id,
          row_number() over (
            partition by user_id, session_date, routine_day_id
-           order by total_volume desc, created_at desc, id
+           order by created_at desc, total_volume desc, id
          ) as puesto
     from public.workout_sessions
 )

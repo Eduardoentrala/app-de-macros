@@ -63,21 +63,28 @@ await db.exec(`insert into public.routine_days (id, user_id, name, sort_order)
                values ('${DIA_A}', '${YO}', 'Empuje', 1),
                       ('${DIA_B}', '${YO}', 'Tirón', 2);`);
 
+// Con hora a mano: la limpieza se queda con la MÁS RECIENTE, así que sin
+// controlar `created_at` no se prueba la regla, se prueba el azar.
+let reloj = 0;
 const meter = (u, fecha, dia, vol, nota) => db.query(
-  `insert into public.workout_sessions (user_id, session_date, routine_day_id, total_volume, note)
-   values ($1, $2, $3, $4, $5) returning id`, [u, fecha, dia, vol, nota]);
+  `insert into public.workout_sessions (user_id, session_date, routine_day_id, total_volume, note, created_at)
+   values ($1, $2, $3, $4, $5, now() + ($6 || ' seconds')::interval) returning id`,
+  [u, fecha, dia, vol, nota, ++reloj]);
 
 // ------------------------------------------------------------------
 console.log('\n— Lo que había antes de la migración —');
 
 // Tres filas del mismo día y el mismo día de rutina: el caso de la cola
 // que sube lo suyo mientras el teléfono ya había guardado.
-await meter(YO, '2026-10-05', DIA_A, 8000, 'a medias');
-await meter(YO, '2026-10-05', DIA_A, 21500, 'la buena');
-await meter(YO, '2026-10-05', DIA_A, 12000, 'otra a medias');
+// Y el orden importa: la de MÁS volumen va en medio y la última es más
+// pequeña, que es el caso de corregir un peso hacia abajo. Quedándose
+// con la mayor se guardaría justo el error que fue a arreglar.
+await meter(YO, '2026-10-05', DIA_A, 8000, 'primera, a medias');
+await meter(YO, '2026-10-05', DIA_A, 21500, 'el peso equivocado');
+await meter(YO, '2026-10-05', DIA_A, 12000, 'la corregida, y la última');
 // Y dos sin día de rutina, que es quien entrena sin rutina guardada.
-await meter(YO, '2026-10-06', null, 5000, 'suelta a medias');
-await meter(YO, '2026-10-06', null, 9400, 'suelta buena');
+await meter(YO, '2026-10-06', null, 5000, 'suelta, primera');
+await meter(YO, '2026-10-06', null, 9400, 'suelta, la última');
 // Lo que SÍ puede repetirse y no se puede tocar:
 await meter(YO, '2026-10-07', DIA_A, 10000, 'mañana');
 await meter(YO, '2026-10-07', DIA_B, 11000, 'tarde');
@@ -99,14 +106,15 @@ check('quedan cinco filas', r.length === 5,
 
 const d5 = r.filter((x) => x.u === YO && x.f === '2026-10-05');
 check('del día con tres, queda una', d5.length === 1, JSON.stringify(d5));
-check('y es la más completa, no una al azar', d5[0] && d5[0].v === 21500,
+check('y es la ÚLTIMA, aunque no sea la más gorda', d5[0] && d5[0].v === 12000,
   'quedó «' + (d5[0] && d5[0].n) + '» con ' + (d5[0] && d5[0].v) +
-  ': las duplicadas son el MISMO entrenamiento guardado dos veces, así que ' +
-  'la de menos volumen es un guardado a medias');
+  ': quedarse con la mayor es quedarse con el peso que la persona fue a ' +
+  'corregir. El último guardado es lo que dijo al final, y es lo mismo ' +
+  'que hace la app arreglada: el PATCH escribe lo que hay en pantalla');
 
 const d6 = r.filter((x) => x.u === YO && x.f === '2026-10-06');
 check('y con el día de rutina NULO también se limpia', d6.length === 1, JSON.stringify(d6));
-check('y también queda la más completa', d6[0] && d6[0].v === 9400,
+check('y también la última', d6[0] && d6[0].v === 9400,
   'en SQL dos NULL no son iguales: sin tratarlo aparte, estas dos se ' +
   'escapaban y son justo las de quien entrena sin rutina guardada');
 
