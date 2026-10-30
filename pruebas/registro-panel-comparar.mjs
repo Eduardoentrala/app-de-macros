@@ -36,10 +36,29 @@ const check = (n, cond, extra = '') => {
   else { mal++; console.log(`  FALLA ${n}${extra ? '\n        ' + extra : ''}`); }
 };
 
+const NL_PRUEBA = String.fromCharCode(10);
 console.log('\n— Si la cuenta se creó, se entra —');
 {
+  // POR LLAVES, NO POR UNA VENTANA DE 2600 CARACTERES. La había, y se
+  // puso roja al sacar la cadena del alta a su propia función para poder
+  // preguntar antes si las altas están abiertas: el código no se rompió,
+  // se movió fuera de la ventana. Es el mismo fallo que ya se arregló en
+  // `chequeo`.
+  const sacar = (cab) => {
+    const i = APP.indexOf(cab);
+    if (i < 0) throw new Error('no encuentro: ' + cab);
+    let n = 0, j = APP.indexOf('{', i);
+    for (; j < APP.length; j++) {
+      if (APP[j] === '{') n++;
+      else if (APP[j] === '}') { n--; if (!n) return APP.slice(i, j + 1); }
+    }
+    throw new Error('llaves sin cerrar en ' + cab);
+  };
   const i = APP.indexOf("btnEmpezar.addEventListener('click'");
-  const fn = APP.slice(i, i + 2600);
+  // El botón y la función que hace el trabajo, juntos: lo que se
+  // comprueba abajo está repartido entre los dos.
+  const fn = sacar("btnEmpezar.addEventListener('click'") + NL_PRUEBA +
+             sacar('function crearLaCuenta(correo, pass){');
   check('existe el alta', i > 0);
 
   // El guardado del perfil tiene SU PROPIO catch. Sin él, el fallo cae en

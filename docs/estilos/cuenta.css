@@ -156,6 +156,10 @@
   padding:13px 15px;border-radius:14px;box-shadow:var(--shadow);
 }
 .flag-row .txt{flex:1;min-width:0;}
+/* Lo que todavía no enciende nada: se ve, se lee, y se nota que no se
+   puede tocar. Apagado del todo sería esconder la intención. */
+.flag-row.dormido{opacity:.55;}
+.flag-row.dormido .switch{cursor:default;}
 .flag-row b{display:block;font:700 13.5px/1.2 sans-serif;}
 .flag-row span{display:block;font:500 11.5px/1.4 sans-serif;color:var(--ink-faint);margin-top:4px;}
 .flag-row.peligro{border:1.5px solid var(--red);}

@@ -6836,7 +6836,24 @@
     var correo = campoCorreo.value.trim(), pass = campoPass.value;
     ocupado(btnEmpezar, true, 'Creando tu cuenta…');
 
-    sbRegistrar(correo, pass, campoNombre.value.trim())
+    // ¿ESTÁN ABIERTAS LAS ALTAS? Se pregunta aquí y no al pintar la
+    // pantalla: entre que alguien abre la app y rellena el formulario
+    // pueden pasar minutos, y lo que importa es si están abiertas cuando
+    // se pulsa. Preguntarlo antes dejaría entrar a quien tuviera la
+    // pantalla ya abierta cuando se cerraron.
+    flagActiva('registro_clientes').then(function(abiertas){
+      if(!abiertas){
+        ocupado(btnEmpezar, false);
+        goto('login', false);
+        avisarLogin('Las altas están cerradas ahora mismo. Si ya tienes cuenta, entra con ella.');
+        return;
+      }
+      return crearLaCuenta(correo, pass);
+    });
+  });
+
+  function crearLaCuenta(correo, pass){
+    return sbRegistrar(correo, pass, campoNombre.value.trim())
       .then(function(r){
         // Si el proyecto NO exige confirmar el correo, el alta ya devuelve
         // la sesión y se entra directo. Si la exige, no hay sesión todavía:
@@ -6876,7 +6893,7 @@
       })
       ['catch'](function(e){ marcarError(campoCorreo, avisoCorreo, traducirError(e.message)); })
       .then(function(){ ocupado(btnEmpezar, false); });
-  });
+  }
 
   // "Ya tengo cuenta" ahora lleva de verdad a iniciar sesión
   document.getElementById('regSaltar').addEventListener('click', function(){
@@ -8204,7 +8221,7 @@
     return '<div class="adm-busca">'+
       '<div class="searchbox"><svg><use href="#i-lupa"/></svg><input id="admBuscar" placeholder="Buscar por nombre o correo…" value="'+escapar(admFiltro)+'"></div>'+
       '<button class="btn-primary" id="admInvitar" style="width:100%;margin-top:10px;">+ Agregar a alguien por correo</button>'+
-      '<button class="btn-rename" id="admCrear" style="width:100%;margin-top:7px;">Crear entrenador con contraseña</button>'+
+      '<button class="btn-rename" id="admCrear" style="width:100%;margin-top:7px;">+ Agregar a un entrenador por correo</button>'+
     '</div>'+
     '<div class="panel-seccion">Usuarios <small>'+lista.length+' de '+USUARIOS.length+'</small></div>'+
     (lista.length ? lista.map(function(u, i){
@@ -8230,7 +8247,12 @@
     }).join('')
       : (USUARIOS.length ? '<p class="cmp-aviso">Nadie coincide con esa búsqueda.</p>'
                          : '<p class="cmp-aviso">Cargando usuarios…</p>'))+
-    '<p class="cmp-aviso">Crear cuentas y reiniciar contraseñas pasan por una Edge Function que verifica tu rol en el servidor: la clave de servicio nunca viaja en el teléfono.</p>';
+    // La frase decía que crear cuentas pasa por una Edge Function. No
+    // existe tal función, y el botón que lo prometía tampoco hacía nada.
+    // Ahora dice lo que de verdad ocurre.
+    '<p class="cmp-aviso">Agregar a alguien deja su correo apuntado con el rol ' +
+    'que le toca: entra con ese rol al registrarse. Quién puede hacerlo lo comprueba ' +
+    'PostgreSQL, no el teléfono.</p>';
   }
 
   function pintarConfig(){
@@ -8239,13 +8261,28 @@
     FLAGS.forEach(function(f){ (grupos[f.g] = grupos[f.g] || []).push(f); });
     return Object.keys(grupos).map(function(g){
       return '<div class="panel-seccion">'+g+'</div>'+ grupos[g].map(function(f){
-        return '<div class="flag-row'+(f.k==='modo_mantenimiento'&&f.on?' peligro':'')+'">'+
-          '<div class="txt"><b>'+escapar(f.t)+'</b><span>'+escapar(f.d)+'</span></div>'+
-          '<button class="switch'+(f.on?' on':'')+'" data-flag="'+f.k+'" role="switch" aria-checked="'+f.on+'"><i></i></button>'+
+        // LO QUE TODAVÍA NO ENCIENDE NADA SE DICE, NO SE DEJA MOVER.
+        //
+        //  `chat`, `notificaciones` y `suscripciones` prometen funciones
+        //  que no existen —no hay tabla de mensajes, ni una línea de
+        //  `PushManager`, ni cobros— y `registro_entrenadores` tampoco:
+        //  a los coach los crea el super admin, no se dan de alta solos.
+        //  Un interruptor que se mueve y no mueve nada es peor que uno
+        //  que dice que todavía no.
+        var listo = f.listo !== false;
+        return '<div class="flag-row'+(f.k==='modo_mantenimiento'&&f.on?' peligro':'')+(listo?'':' dormido')+'">'+
+          '<div class="txt"><b>'+escapar(f.t)+
+            (listo?'':' <em class="soon-tag">Próximamente</em>')+
+          '</b><span>'+escapar(f.d)+'</span></div>'+
+          '<button class="switch'+(f.on&&listo?' on':'')+'" data-flag="'+f.k+'"'+
+            (listo?'':' disabled')+' role="switch" aria-checked="'+(f.on&&listo)+'"><i></i></button>'+
         '</div>';
       }).join('');
     }).join('')+
-    '<p class="cmp-aviso">Estos interruptores viven en la tabla <b>feature_flags</b>. Se aplican al instante para todos, sin publicar una versión nueva de la app.</p>';
+    '<p class="cmp-aviso">Estos interruptores viven en la tabla <b>feature_flags</b> y ' +
+    'se aplican al instante para todos, sin publicar una versión nueva de la app. ' +
+    '<b>Mantenimiento</b> lo aplica la propia base de datos: con él encendido nadie ' +
+    'salvo tú puede leer ni escribir nada.</p>';
   }
 
   // ---- El catálogo de alimentos, solo para el super admin ----
@@ -8849,6 +8886,10 @@
     var fl = e.target.closest('[data-flag]');
     if(fl){
       var f = FLAGS.filter(function(x){ return x.k === fl.dataset.flag; })[0];
+      // El `disabled` del botón ya lo impide, pero esto va por delegación:
+      // un clic en el <i> de dentro llega igual. Y mover uno que no
+      // enciende nada escribiría en la base un «sí» que no significa nada.
+      if(!f || f.listo === false) return;
       f.on = !f.on;
       pintarAdmin();
       toast('toastAdmin', f.t + (f.on ? ': encendido' : ': apagado'));
@@ -8971,8 +9012,37 @@
       }).then(function(){ boton.disabled = false; });
       return;
     }
+    // CREAR ENTRENADOR. Esto era un aviso en condicional -«se enviaría la
+    // invitación por correo»- y nada más: ni una llamada en toda la app.
+    // El mismo fallo que el botón de recuperar contraseña, que decía «ya
+    // te lo mandé» sobre un correo que no existía.
+    //
+    // Se invita, que es lo que el propio botón decía que hacía, y por el
+    // mismo camino que «Agregar a alguien por correo»: una fila en
+    // `invitaciones` con el rol puesto. Al registrarse con ese correo
+    // entra ya como entrenador.
+    //
+    // NO se crea la cuenta con una contraseña que elija el admin: eso
+    // necesita la clave de servicio, que nunca puede viajar al teléfono, y
+    // la Edge Function que haría falta no existe. Prometerlo en el texto
+    // del botón era la otra mitad de la mentira, así que el botón pasa a
+    // llamarse por lo que hace.
     if(e.target.closest('#admCrear')){
-      toast('toastAdmin', 'Se enviaría la invitación por correo');
+      var correoCoach = (prompt('Correo de quien quieres que entre como entrenador:') || '').trim();
+      if(!correoCoach) return;
+      if(correoCoach.indexOf('@') < 0){ toast('toastAdmin', 'Ese correo no parece válido'); return; }
+      sbFetch('/rest/v1/invitaciones', {
+        method: 'POST',
+        headers: { 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ correo: correoCoach, rol: 'coach', invitado_por: sesion.user.id })
+      }).then(function(){
+        toast('toastAdmin', 'Apuntado. Entrará como entrenador al registrarse.');
+      })['catch'](function(err){
+        var m2 = err.message || '';
+        toast('toastAdmin', m2.indexOf('duplicate') >= 0 || m2.indexOf('unique') >= 0
+          ? 'Ese correo ya está invitado'
+          : 'No se pudo: ' + traducirError(m2));
+      });
       return;
     }
     // Va al final: los botones de la fila ya devolvieron antes, así que
@@ -9070,6 +9140,39 @@
   //  Se quita con `hidden` y no con una clase: `[hidden]` lleva
   //  `display:none !important` en base.css y gana al `display:flex` de
   //  `.bottom-tabs button`, que si no lo dejaría visible.
+  // ---- LAS FOTOS SE PUEDEN APAGAR PARA TODOS ----
+  //
+  //  Mismo patrón que la pestaña de Plan: con `hidden`, que lleva
+  //  `display:none !important` en base.css y gana al `display:flex` de
+  //  `.bottom-tabs button`.
+  //
+  //  Y si está dentro cuando se apaga, se le saca: quedarse en una
+  //  pantalla sin pestaña encendida es la peor mitad de las dos.
+  //
+  //  ESTO ES UN INTERRUPTOR DE OPERACIÓN, NO UNA CERRADURA. Esconde la
+  //  pantalla; no impide que alguien que sepa lo que hace escriba en
+  //  `progress_photos`. El que sí cierra de verdad es `modo_mantenimiento`,
+  //  que lo aplica la base en sus 73 políticas. Dicho para que nadie lo
+  //  confunda con seguridad.
+  var FOTOS_ENCENDIDAS = true;
+
+  function refrescarPestanaFotos(){
+    var bs = document.querySelectorAll('[data-tabbar="fotos"]');
+    for(var i = 0; i < bs.length; i++) bs[i].hidden = !FOTOS_ENCENDIDAS;
+    if(!FOTOS_ENCENDIDAS){
+      var dentro = document.querySelector('.app-view.active');
+      if(dentro && (dentro.dataset.view === 'fotos' || dentro.dataset.view === 'comparar')){
+        goto('diario', false);
+      }
+      // Y los recordatorios que llevan allí: mandar a una pantalla que ya
+      // no está es peor que no avisar.
+      ['recFotos', 'avisoFotos'].forEach(function(id){
+        var e = document.getElementById(id);
+        if(e) e.hidden = true;
+      });
+    }
+  }
+
   function refrescarPestanaPlan(){
     var suya = ROL === 'coach' || ROL === 'org_admin' || ROL === 'super_admin';
     var hay = suya || tengoPlan();
@@ -10415,6 +10518,24 @@
   // ---- Los paneles, con datos reales ----
   // Se cargan al ABRIR el panel, no al arrancar la app: son consultas caras
   // y la inmensa mayoría de la gente es cliente y nunca las va a ver.
+  // ---- LOS INTERRUPTORES DEL PANEL, LEÍDOS DESDE AQUÍ ----
+  //
+  //  Se pregunta por `flag(clave)` y no leyendo `feature_flags`: la
+  //  función contesta un sí o un no sobre UNA clave y nada más. Leer la
+  //  tabla desde la pantalla de alta -donde todavía no hay sesión- sería
+  //  enseñarle a cualquiera el panel de ajustes entero.
+  //
+  //  Y ANTE LA DUDA, ABIERTO. Si la consulta falla -sin red, la migración
+  //  por detrás del despliegue- se devuelve `true`. Un interruptor que no
+  //  se pudo leer no puede dejar a la gente fuera de su propia app: el
+  //  mantenimiento, que es el que de verdad cierra, lo aplica la base por
+  //  su cuenta y no depende de esto.
+  function flagActiva(clave){
+    return sbRpc('flag', { p_clave: clave })
+      .then(function(v){ return v !== false; })
+      ['catch'](function(){ return true; });
+  }
+
   function sbRpc(nombre, args){
     return sbFetch('/rest/v1/rpc/' + nombre, { method:'POST', body: JSON.stringify(args || {}) });
   }
@@ -10437,7 +10558,7 @@
       aparte('el uso de la IA', sbRpc('admin_uso_ia_hoy'), []),
       aparte('los usuarios', sbRpc('admin_buscar_usuarios', { p_texto: '', p_limite: 200 }), []),
       aparte('los ajustes',
-        sbFetch('/rest/v1/feature_flags?select=clave,activo,titulo,descripcion,grupo&order=grupo.asc,clave.asc'), [])
+        sbFetch('/rest/v1/feature_flags?select=clave,activo,titulo,descripcion,grupo,listo&order=grupo.asc,clave.asc'), [])
     ]).then(function(r){
       var s = r[0] || {}, uso = (r[1] || [])[0] || null, us = r[2] || [], fl = r[3] || [];
       USO_IA = uso;
@@ -10454,7 +10575,13 @@
           c: u.correo,
           r: u.rol,
           on: u.activo,
-          ia: u.ia_habilitada !== false,
+          // LAS DOS FORMAS DE APAGARLA CUENTAN. Hay dos: el chip de la
+          // lista (`ia_habilitada`) y el nivel de la ficha (`nivel_ia`).
+          // El chip miraba solo la primera, así que a quien tuviera el
+          // nivel en «apagada» la lista le decía «on» mientras el servidor
+          // le contestaba que no. Las dos apagan; el chip enseña si está
+          // apagada por cualquiera de las dos.
+          ia: u.ia_habilitada !== false && u.nivel_ia !== 'apagada',
           nivel: u.nivel_ia || (u.ia_habilitada === false ? 'apagada' : 'normal'),
           estado: u.estado || 'activo',
           extra: (u.coach ? 'Coach: ' + u.coach : 'Sin coach') +
@@ -10464,7 +10591,7 @@
 
       FLAGS.length = 0;
       fl.forEach(function(f){
-        FLAGS.push({ k:f.clave, on:f.activo, t:f.titulo,
+        FLAGS.push({ k:f.clave, on:f.activo, listo:f.listo, t:f.titulo,
                      d:f.descripcion || '', g:f.grupo || 'general' });
       });
 
@@ -11015,12 +11142,22 @@
         // tienen que estar antes de que nadie le pregunte cuánto gasta.
         // Si fallan, lista vacía: se mide con lo que el diario alcance, que
         // es lo que se hacía siempre.
-        sbSemanasGuardadas()['catch'](function(){ return []; })
+        sbSemanasGuardadas()['catch'](function(){ return []; }),
+        // Los dos interruptores globales del panel. En la MISMA tanda y no
+        // en una petición aparte: llegando tarde, la pestaña de Fotos se
+        // pintaría y se quitaría sola delante de la persona. Y ante la
+        // duda, encendidos: un bache de red no puede apagarle funciones a
+        // nadie.
+        flagActiva('fotografias'),
+        flagActiva('ia')
       ])
       .then(function(res){
         var p = res[0], filas = res[1] || [], pesos = res[2] || [],
             alimentos = res[3] || [], recetas = res[4] || [], eventos = res[5] || [];
         MIS_LLAVES = res[6] || null;
+        FOTOS_ENCENDIDAS = res[9] !== false;
+        IA_ENCENDIDA = res[10] !== false;
+        refrescarPestanaFotos();
         aplicarLlavesIa();
 
         // El descanso que eligió. Va aquí y no al abrir Rutina porque el
@@ -11448,9 +11585,16 @@
   //  El asistente es UNA pantalla con dos cosas dentro: la camara apunta
   //  comida y el texto pregunta. Por eso se apagan por separado y solo
   //  desaparece entero cuando no queda ninguna de las dos.
+  // El interruptor global del panel. Nace encendido: si no se pudo
+  // preguntar, la IA sigue como estaba.
+  var IA_ENCENDIDA = true;
+
   function aplicarLlavesIa(){
     var l = MIS_LLAVES || {};
-    var foto = l.foto !== false, chat = l.chat !== false;
+    // El interruptor global manda sobre las llaves de cada persona: si la
+    // IA está apagada para todos, da igual lo que le dejara su entrenador.
+    var foto = IA_ENCENDIDA && l.foto !== false;
+    var chat = IA_ENCENDIDA && l.chat !== false;
 
     var mostrar = function(id, si){
       var e = document.getElementById(id);

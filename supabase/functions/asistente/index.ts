@@ -52,7 +52,7 @@ const CORS = {
 //
 // Ahora lo dice: un GET sin sesión devuelve este sello y nada más.
 // `pruebas/funciones-vivas.mjs` lo compara con el del repo.
-const SELLO = '0e4605bbf9';
+const SELLO = '142b5383e0';
 
 // Tope diario por persona. Es la única defensa contra que un solo usuario
 // -o un token robado- vacíe la cuenta en una noche con un bucle.
@@ -1359,6 +1359,19 @@ Deno.serve(async (req) => {
     return json({ error: 'El asistente está desactivado en tu cuenta.' }, 403);
   }
 
+  // EL INTERRUPTOR GLOBAL DEL PANEL. La app también lo mira y esconde los
+  // botones, pero eso es presentación: lo que impide gastar dinero tiene
+  // que estar aquí, que es donde se paga. Una llamada con `curl` esquiva
+  // la pantalla; esto no.
+  //
+  // Ante un fallo al preguntarlo se DEJA PASAR: `flag()` caída no puede
+  // dejar sin asistente a todo el mundo. Apagarlo es una decisión que
+  // alguien toma en el panel, no algo que ocurra por un bache.
+  const { data: iaGlobal, error: errFlag } = await admin.rpc('flag', { p_clave: 'ia' });
+  if (!errFlag && iaGlobal === false) {
+    return json({ error: 'El asistente está apagado ahora mismo.' }, 403);
+  }
+
   // Tres niveles: apagada / normal / plus. Lo que sigue a partir de aquí se
   // reparte entre los dos últimos.
   //
@@ -1366,6 +1379,18 @@ Deno.serve(async (req) => {
   // la migración va por detrás del despliegue- el asistente tiene que seguir
   // funcionando como antes en vez de dejar a todo el mundo fuera.
   const nivel = String(perfil?.nivel_ia ?? 'normal');
+
+  // Y `apagada` SE RECHAZA AQUÍ, con su motivo.
+  //
+  //  Antes se colaba hasta el tope diario, que para este nivel vale 0, y
+  //  la persona recibía «Llegaste a las 0 consultas de hoy. Mañana se
+  //  reinicia». Ni había llegado a nada ni se reiniciaba mañana: se lo
+  //  habían apagado. Dos formas de apagar la IA que decían cosas
+  //  distintas, y una de las dos mentía.
+  if (nivel === 'apagada') {
+    return json({ error: 'El asistente está desactivado en tu cuenta.' }, 403);
+  }
+
   const esPlus = nivel === 'plus';
 
   // --- Qué pide ---
