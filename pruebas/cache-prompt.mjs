@@ -71,9 +71,22 @@ console.log('\nY LO QUE CAMBIA VA DETRÁS DE LOS CORTES');
      'lo que cambia va después del último corte' +
      (donde > ultimoCorte ? '' : ' — delante invalidaría la caché en cada petición'));
 
-  // Y que sean las tres cosas, no una: moverlas detrás no puede perderlas.
-  ok(/const loQueCambia = hoyEs \+ contexto \+ loQueSe;/.test(CHAT),
-     'y son las tres: la fecha, sus macros y lo que se recuerda de ella');
+  // Y que estén TODAS, no una: moverlas detrás del corte no puede perderlas.
+  //
+  // Se miran una a una y no la línea escrita tal cual. Eran tres y ahora son
+  // cuatro —entró el progreso, para que el chat pueda decirle a alguien cómo
+  // va; ver el-chat-sabe-como-voy— y fijar la línea exacta ponía esto rojo
+  // sin que nada estuviera mal.
+  const linea = (CHAT.match(/const loQueCambia = [^;]+;/) || [''])[0];
+  ok(linea.length > 20, 'se encuentra lo que se arma', CHAT.slice(0, 200));
+  for (const [qué, cómo] of [
+    ['la fecha de hoy', 'hoyEs'],
+    ['sus macros del día', 'contexto'],
+    ['lo que se recuerda de ella', 'loQueSe'],
+    ['y cómo le va', 'progreso'],
+  ]) {
+    ok(linea.includes(cómo), 'va ' + qué, 'quedó fuera del bloque: ' + linea);
+  }
 }
 
 // ------------------------------------------------------------------

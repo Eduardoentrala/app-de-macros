@@ -11895,7 +11895,7 @@
     iaOcupado = true;
     document.getElementById('iaEnviar').disabled = true;
 
-    iaLlamar({
+    var pedido = {
       accion: 'chat',
       mensajes: IA_MSGS.filter(function(m){ return !m.pensando; })
                        .map(function(m){ return { rol:m.rol, texto:m.texto }; }),
@@ -11919,6 +11919,13 @@
         try{ return Intl.DateTimeFormat().resolvedOptions().timeZone; }
         catch(e){ return 'America/Mexico_City'; }
       })()
+    };
+
+    // Sus números se montan antes de llamar porque el gimnasio se pide a la
+    // base. Si no llegan, se manda igual: el chat sigue siendo el de antes.
+    progresoDelChat().then(function(p){
+      if(p) pedido.progreso = p;
+      return iaLlamar(pedido);
     }).then(function(r){
       IA_MSGS.pop();                       // quitar el "pensando"
       IA_MSGS.push({
@@ -14661,6 +14668,41 @@
 
   // Lo que lleva y lo que le queda hoy. Sin esto, recomendar sería a
   // ciegas: no es lo mismo con 1.400 calorías libres que con 200.
+  // ---- Sus números, para que el chat pueda decirle cómo va ----
+  //
+  //  Las MISMAS funciones que usa el cierre de los lunes. No se recalcula
+  //  nada aquí: dos cuentas de lo mismo son dos verdades que un día dejan de
+  //  coincidir, y la que ve la IA tiene que ser la del cierre.
+  //
+  //  SOLO NÚMEROS. Ni la nota del chequeo ni los motivos de los ajustes: eso
+  //  lo teclea gente y viajaría en el cuerpo de la petición, que es justo la
+  //  puerta que `memoria_ia` evita leyéndose de la base. Lo cualitativo entra
+  //  por ahí, en el servidor.
+  //
+  //  Y NUNCA IMPIDE MANDAR EL MENSAJE. Si algo de esto falla —sin red, sin
+  //  sesiones guardadas— se manda el chat sin progreso, que es exactamente
+  //  como funcionaba antes. Preguntar la cena no puede romperse porque no se
+  //  pudo leer el gimnasio.
+  function progresoDelChat(){
+    var base = {
+      objetivo: (reg && reg.objetivo) || undefined,
+      gasto: null, semanas: [], entreno: null, cinturas: []
+    };
+    try{
+      base.gasto = gastoMedido();
+      base.semanas = resumenDeSemanas(4);
+    }catch(e){ /* lo que se pueda; el resto va vacío */ }
+
+    return Promise.all([
+      Promise.resolve().then(datosDeEntreno)['catch'](function(){ return null; }),
+      Promise.resolve().then(cinturasRecientes)['catch'](function(){ return []; })
+    ]).then(function(x){
+      base.entreno = x[0];
+      base.cinturas = x[1] || [];
+      return base;
+    })['catch'](function(){ return base; });
+  }
+
   function macrosDeHoy(){
     var r = REGISTRO[isoDe(HOY)] || {P:0, C:0, G:0};
     var meta = leerMetas();

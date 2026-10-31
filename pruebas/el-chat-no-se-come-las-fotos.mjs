@@ -67,7 +67,8 @@ function correr({ fotos = [], falla = false, texto = 'esto qué es' } = {}) {
   const f = new Function('__fotos', 'document', 'iaOcupado', 'IA_MSGS', 'iaTexto',
     'sesion', 'toast', 'pintarFotoIA', 'pintarChat', 'iaLlamar', 'macrosDeHoy',
     'prepararAlimento', 'pintarQuedanIA', 'guardarEventoSiEstaCompleto',
-    'guardarMemoriaIA', 'traducirError', 'Intl', 'Number', 'fuente_no_usada',
+    'guardarMemoriaIA', 'traducirError', 'Intl', 'Number', 'progresoDelChat',
+    'fuente_no_usada',
     fuente);
 
   const mirar = f(
@@ -80,7 +81,12 @@ function correr({ fotos = [], falla = false, texto = 'esto qué es' } = {}) {
       return falla ? Promise.reject(new Error('sin red'))
                    : Promise.resolve({ respuesta: 'ok', alimentos: [] });
     },
-    () => ({}), (a) => a, () => {}, () => {}, () => {}, (m) => m, Intl, Number, null);
+    () => ({}), (a) => a, () => {}, () => {}, () => {}, (m) => m, Intl, Number,
+    // El envio espera sus numeros antes de llamar —para poder decirle a
+    // alguien como va, ver el-chat-sabe-como-voy—. Aqui no se prueba eso:
+    // basta con que resuelva para que el envio siga su camino.
+    () => Promise.resolve(null),
+    null);
 
   return { ctx, fotosAhora: mirar };
 }
