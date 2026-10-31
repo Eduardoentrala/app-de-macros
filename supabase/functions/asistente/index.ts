@@ -52,7 +52,7 @@ const CORS = {
 //
 // Ahora lo dice: un GET sin sesión devuelve este sello y nada más.
 // `pruebas/funciones-vivas.mjs` lo compara con el del repo.
-const SELLO = '142b5383e0';
+const SELLO = 'b21d704725';
 
 // Tope diario por persona. Es la única defensa contra que un solo usuario
 // -o un token robado- vacíe la cuenta en una noche con un bucle.
