@@ -5725,6 +5725,30 @@
     if(p.sexo){ reg.sexo = p.sexo; marcarUno('regSexo', p.sexo); }
     if(p.dias_entreno != null){ reg.dias = p.dias_entreno; marcarUno('regDias', p.dias_entreno); }
 
+    // Y EL OBJETIVO, que faltaba y era el que más daño hacía.
+    //
+    //  `reg.objetivo` arranca en 'mantener' y ahí se quedaba aunque la base
+    //  dijera 'bajar'. Tres cosas se rompían con eso:
+    //
+    //  1. La pantalla mentía: `pintarObjetivoPerfil()` lee `reg.objetivo`, así
+    //     que Perfil le decía «Mantener peso» a quien está bajando.
+    //
+    //  2. Y PEOR, el guard que protege los macros dejaba de proteger. Al
+    //     elegir objetivo hay un `if(objElegido === reg.objetivo) return;`
+    //     puesto para que entrar a mirar no borre lo que el cierre de los
+    //     lunes llevaba ajustado. Comparando contra 'mantener', tocar TU
+    //     PROPIO objetivo —el que ya tenías— no coincidía, el guard no
+    //     saltaba, y se recalculaba desde la fórmula del registro: meses de
+    //     ajuste fino tirados de un toque.
+    //
+    //  3. Y cualquier recálculo usaba el factor de 'mantener' (×1) en vez del
+    //     de 'bajar' (×0,80): un 25 % más de calorías, al revés de lo que esa
+    //     persona busca.
+    //
+    //  Si la base no lo trae se deja el que haya, como los demás campos:
+    //  inventar un objetivo movería las calorías de alguien por un hueco.
+    if(p.goal){ reg.objetivo = p.goal; marcarUno('regObjetivo', p.goal); }
+
     // Las condiciones son parte del cálculo, no un adorno del alta: si no
     // vuelven, un diabético que cambie de objetivo recibe los macros de
     // alguien sano y nadie se entera.
