@@ -2,7 +2,7 @@
 --  INSTALACIÓN COMPLETA — pega este archivo entero en el editor SQL
 --  de Supabase y pulsa Run. Una sola vez.
 --
---  Son las 62 migraciones de supabase/migrations/ unidas en orden.
+--  Son las 65 migraciones de supabase/migrations/ unidas en orden.
 --  Se ejecutan como una sola transacción: si algo fallara, no queda nada
 --  a medias — se deshace todo y la base se queda como estaba.
 --
@@ -9688,3 +9688,383 @@ comment on column public.feature_flags.activo is
   'está apagada como si la fila NO EXISTE, así que un flag que la app lee y '
   'que nadie sembró apaga esa función en silencio. Si añades un interruptor '
   'nuevo, siémbralo en la misma migración que lo empieza a leer.';
+
+
+-- ============================ 0063_la_app_no_sabia_avisar.sql ============================
+
+-- ---------------------------------------------------------------------
+--  LA APP NO TENÍA FORMA DE DECIR QUE ALGO LE SALIÓ MAL
+--
+--  Todos los fallos encontrados hasta hoy se encontraron igual: alguien
+--  mirando su teléfono y diciéndolo. El interruptor `ia` llevaba MESES
+--  apagado. La cintura se descartaba en silencio cuando el peso estaba
+--  vacío. «Guardar sesión» se quedaba muerto por un candado que no se
+--  soltaba. El objetivo no volvía al iniciar sesión, y eso borraba meses
+--  de ajuste. La comparación de fotos se guardó cortada a media frase.
+--
+--  Ninguno levantó la mano en ningún sitio, porque NO HAY SITIO DONDE
+--  LEVANTARLA. No es que los errores se traguen —los `catch` mudos de la
+--  app son sondeos de `localStorage` y están bien puestos—: es que cuando
+--  algo falla de verdad, lo único que pasa es que no pasa nada.
+--
+--  Esta tabla es ese sitio. No arregla ningún fallo: hace que el
+--  siguiente se encuentre en días en vez de en meses.
+--
+--  QUÉ NO LLEVA. Ni comida, ni pesos, ni medidas, ni nada que alguien
+--  teclee. Lleva DÓNDE se rompió y QUÉ dijo el error, los dos recortados.
+--  Un registro de fallos que acaba guardando datos personales es un
+--  problema nuevo, no una herramienta.
+--
+--  QUIÉN LA LEE. Solo el super admin. Una persona no puede hacer nada con
+--  esto y enseñárselo solo preocupa; el valor está en que alguien pueda
+--  mirar la lista y ver que hay treinta iguales de esta semana.
+-- ---------------------------------------------------------------------
+
+create table if not exists public.errores (
+  id        uuid primary key default gen_random_uuid(),
+  user_id   uuid not null references auth.users(id) on delete cascade,
+
+  -- Un nombre corto y estable del sitio: 'guardar_sesion', 'subir_foto'.
+  -- Es lo que permite contar «van treinta de estos», que es la señal.
+  donde     text not null check (length(donde) between 1 and 60),
+
+  -- El mensaje del error, recortado. 300 caracteres es de sobra para
+  -- saber qué pasó y poco para que quepa algo que alguien escribió.
+  que       text not null check (length(que) between 1 and 300),
+
+  -- El sello de la app. Sin esto, «esto ya lo arreglé» no se puede
+  -- comprobar: un error de hace una semana y uno de ahora se leen igual.
+  version   text check (version is null or length(version) <= 40),
+
+  creado_en timestamptz not null default now()
+);
+
+-- Se lee siempre igual: lo último primero.
+create index if not exists idx_errores_recientes
+  on public.errores (creado_en desc);
+
+alter table public.errores enable row level security;
+
+-- VER: solo el super admin. A quien le pasó no le sirve de nada.
+drop policy if exists "errores: ver" on public.errores;
+create policy "errores: ver" on public.errores
+  for select using (public.es_super_admin());
+
+-- Y NADIE ESCRIBE DIRECTO. Se entra por `apuntar_error()`, que es donde
+-- está el freno. Sin política de insert, un cliente no puede meter filas
+-- aunque lo intente: la función `security definer` sí.
+
+-- EL GRANT, que no es lo mismo que la política. Sin él, `authenticated` ni
+-- llega a que se evalúe RLS: Postgres corta antes con «permission denied».
+-- Solo `select` — el insert va por la función de arriba.
+grant select on public.errores to authenticated;
+
+
+-- ---------------------------------------------------------------------
+--  APUNTAR UNO, CON FRENO
+--
+--  Un fallo que se repite en bucle —un reintento dentro de un bucle, una
+--  pantalla que repinta— escribiría miles de filas iguales en un minuto.
+--  Y sería justo el fallo más grave el que llenara la tabla.
+--
+--  Tope de 50 al día por persona. Pasado eso se descarta en silencio y
+--  se devuelve `false`: ya hay cincuenta diciendo lo mismo, el cincuenta
+--  y uno no añade nada. Lo que no puede hacer esta función es fallar y
+--  romper por encima lo que estaba fallando por debajo.
+-- ---------------------------------------------------------------------
+
+create or replace function public.apuntar_error(
+  p_donde   text,
+  p_que     text,
+  p_version text default null
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  hoy_van integer;
+begin
+  if auth.uid() is null then
+    return false;
+  end if;
+
+  select count(*) into hoy_van
+    from public.errores
+   where user_id = auth.uid()
+     and creado_en >= current_date;
+
+  if hoy_van >= 50 then
+    return false;
+  end if;
+
+  insert into public.errores (user_id, donde, que, version)
+  values (
+    auth.uid(),
+    left(coalesce(nullif(trim(p_donde), ''), 'sin_sitio'), 60),
+    left(coalesce(nullif(trim(p_que),   ''), 'sin mensaje'), 300),
+    left(nullif(trim(p_version), ''), 40)
+  );
+  return true;
+end;
+$$;
+
+revoke all on function public.apuntar_error(text, text, text) from public;
+grant execute on function public.apuntar_error(text, text, text) to authenticated;
+
+
+-- ---------------------------------------------------------------------
+--  Y QUE NO CREZCA PARA SIEMPRE
+--
+--  Un error de hace cuatro meses no se va a investigar. Igual que
+--  `limpiar_fotos_viejas()`: se llama cuando se quiera, no hay nada
+--  programado que dependa de esto.
+-- ---------------------------------------------------------------------
+
+create or replace function public.limpiar_errores_viejos()
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  n integer;
+begin
+  delete from public.errores where creado_en < now() - interval '90 days';
+  get diagnostics n = row_count;
+  return n;
+end;
+$$;
+
+comment on table public.errores is
+  'Dónde y qué falló, sin datos de nadie. Solo lo lee el super admin: '
+  'sirve para ver que hay treinta iguales esta semana, no para enseñárselo '
+  'a quien le pasó. Se escribe por apuntar_error(), que topa a 50 al día.';
+
+
+-- ---------------------------------------------------------------------
+--  COMPROBAR
+--
+--    select public.apuntar_error('prueba', 'esto es una prueba', 'x');
+--    select donde, que, version, creado_en
+--      from public.errores order by creado_en desc limit 20;
+--
+--    -- Y que nadie más los vea: con la clave anónima, esto da 0 filas.
+--    select count(*) from public.errores;
+-- ---------------------------------------------------------------------
+
+
+-- ============================ 0064_reemplazar_una_foto_sin_perderla.sql ============================
+
+-- ---------------------------------------------------------------------
+--  REEMPLAZAR UNA FOTO PODÍA PERDERLA
+--
+--  Cambiar la foto de un hueco son tres pasos:
+--
+--    1. subir el archivo nuevo al bucket (ruta nueva, con marca de tiempo)
+--    2. BORRAR la ficha de la vieja  → un trigger la archiva (0007)
+--    3. INSERTAR la ficha de la nueva
+--
+--  Entre el 2 y el 3 no hay nada. Si el 3 no llega —se cae la red, se
+--  cierra la app, la base contesta un error— la vieja ya está archivada,
+--  o sea invisible, y la nueva no tiene ficha. El hueco queda VACÍO y el
+--  archivo nuevo, huérfano en el bucket.
+--
+--  Y es un hueco de los que no se repone: una foto de progreso de hace
+--  tres meses no se vuelve a tomar.
+--
+--  La app ya sabía que esto podía pasar —marca el error con
+--  `laAnteriorSeAparto` para no decirle a nadie que no perdió nada— pero
+--  saberlo no era arreglarlo.
+--
+--  AQUÍ LOS DOS PASOS SON UNO. Una función de Postgres corre dentro de
+--  una transacción: o se hacen el borrado y la inserción, o no se hace
+--  ninguno. No hay estado intermedio que pueda quedarse.
+--
+--  LA SUBIDA AL BUCKET SE QUEDA FUERA, y no es un descuido: el
+--  almacenamiento es otro servicio y no entra en esta transacción. Pero
+--  un archivo sin ficha es inofensivo —no se enseña, no se cuenta, y
+--  `limpiar_fotos_viejas()` acaba llevándoselo—. Lo que no era inofensivo
+--  era el par de fichas.
+-- ---------------------------------------------------------------------
+
+create or replace function public.reemplazar_foto(
+  p_semana text,
+  p_pose   text,
+  p_ruta   text,
+  p_bytes  bigint  default 0,
+  p_ancho  integer default null,
+  p_alto   integer default null
+)
+returns public.progress_photos
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  fila public.progress_photos;
+begin
+  if auth.uid() is null then
+    raise exception 'Hace falta una sesión para guardar una foto.';
+  end if;
+
+  -- SOLO LAS SUYAS. La función es `security definer`, o sea que corre con
+  -- permisos que se saltan RLS: si el usuario viniera de un parámetro en
+  -- vez de `auth.uid()`, cualquiera borraría las fotos de otro cambiando
+  -- una cadena. Es la misma puerta que ya se cerró en la función del
+  -- asistente al no aceptar rutas del cliente.
+  delete from public.progress_photos
+   where user_id  = auth.uid()
+     and week_key = p_semana
+     and pose     = p_pose;
+
+  insert into public.progress_photos
+    (user_id, week_key, pose, storage_path, bytes, width, height)
+  values
+    (auth.uid(), p_semana, p_pose, p_ruta, coalesce(p_bytes, 0), p_ancho, p_alto)
+  returning * into fila;
+
+  -- Si la inserción revienta —una pose que no existe, una clave de semana
+  -- mal formada, una ruta repetida— la excepción deshace también el
+  -- borrado de arriba. La vieja sigue donde estaba.
+  return fila;
+end;
+$$;
+
+revoke all on function public.reemplazar_foto(text, text, text, bigint, integer, integer) from public;
+grant execute on function public.reemplazar_foto(text, text, text, bigint, integer, integer) to authenticated;
+
+comment on function public.reemplazar_foto(text, text, text, bigint, integer, integer) is
+  'Archiva la foto que hubiera en ese hueco y mete la nueva, las dos en la '
+  'misma transacción. Por separado, un fallo entre medias dejaba el hueco '
+  'vacío: la vieja archivada y la nueva sin ficha.';
+
+
+-- ---------------------------------------------------------------------
+--  COMPROBAR
+--
+--    -- Con sesión de alguien que ya tenga una foto en ese hueco:
+--    select id, storage_path from public.progress_photos
+--     where week_key = '2026-W44' and pose = 'frente';
+--
+--    select public.reemplazar_foto('2026-W44', 'frente', 'prueba/x.jpg');
+--
+--    -- La vieja archivada, la nueva viva, y ni un hueco vacío en medio:
+--    select storage_path, archivado_en from public.progress_photos
+--     where week_key = '2026-W44' and pose = 'frente';
+--
+--    -- Y que una mala no se lleve la buena por delante:
+--    select public.reemplazar_foto('esto-no-es-una-semana', 'frente', 'y.jpg');
+--    -- ...falla, y la de antes tiene que seguir ahí.
+-- ---------------------------------------------------------------------
+
+
+-- ============================ 0065_la_app_sabe_cuando_cumples.sql ============================
+
+-- ---------------------------------------------------------------------
+--  LA APP SABE CUÁNDO CUMPLES, Y TE DICE ALGO
+--
+--  La app guardaba `age`, un número suelto que se tecleó una vez. Con eso
+--  se calcula la fórmula y no se puede hacer nada más: no se sabe qué día
+--  es, no se sabe cuándo llega, y además envejece mal —quien se registró
+--  con 40 sigue teniendo 40 tres años después—.
+--
+--  Aquí se guarda la FECHA. Solo para felicitar: el cálculo sigue usando
+--  `age` exactamente igual que hasta ahora, porque cambiar de dónde sale
+--  la edad movería las calorías de todo el mundo, y eso no es un regalo
+--  de cumpleaños. Esa deuda queda apuntada aparte.
+--
+--  Es opcional, y de verdad: quien no la ponga no recibe nada y no se le
+--  vuelve a preguntar. Un dato que solo sirve para una cosa bonita no se
+--  cobra a la fuerza.
+-- ---------------------------------------------------------------------
+
+alter table public.profiles
+  add column if not exists nacimiento date;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'profiles_nacimiento_sensata'
+  ) then
+    -- Sin `current_date`: un CHECK no admite nada que cambie con el
+    -- tiempo, y una fila válida hoy no puede dejar de serlo mañana sola.
+    -- El límite de arriba lo pone la app, que sí sabe qué día es.
+    alter table public.profiles
+      add constraint profiles_nacimiento_sensata
+      check (nacimiento is null or nacimiento > date '1900-01-01');
+  end if;
+end;
+$$;
+
+comment on column public.profiles.nacimiento is
+  'Fecha de nacimiento, opcional. SOLO para felicitar: la fórmula sigue '
+  'usando age. Si está en nulo, no se felicita y no se vuelve a preguntar.';
+
+
+-- ---------------------------------------------------------------------
+--  Y LO QUE SE LE DIJO CADA AÑO
+--
+--  Dos razones para guardarlo, y las dos importan:
+--
+--  1. UNA POR AÑO. El mensaje lo escribe el modelo, y abrir la app cuatro
+--     veces el día de tu cumpleaños no puede costar cuatro felicitaciones
+--     distintas —ni cuatro llamadas—. El `unique (user_id, anio)` es el
+--     freno, en la base y no en el navegador.
+--
+--  2. PARA QUE NO SE REPITA. Al escribir la del año que viene se le pasan
+--     las de los años anteriores con el encargo de no parecerse. Sin
+--     guardarlas, el modelo escribiría la misma felicitación genérica
+--     cada año y dejaría de ser una sorpresa al segundo.
+-- ---------------------------------------------------------------------
+
+create table if not exists public.felicitaciones (
+  id        uuid primary key default gen_random_uuid(),
+  user_id   uuid not null references auth.users(id) on delete cascade,
+  anio      integer not null check (anio between 2020 and 2200),
+  mensaje   text not null check (length(mensaje) between 1 and 1200),
+  creado_en timestamptz not null default now(),
+
+  unique (user_id, anio)
+);
+
+create index if not exists idx_felicitaciones_mias
+  on public.felicitaciones (user_id, anio desc);
+
+alter table public.felicitaciones enable row level security;
+
+-- Cada quien ve las suyas, y las de antes también: son un recuerdo.
+drop policy if exists "felicitaciones: ver" on public.felicitaciones;
+create policy "felicitaciones: ver" on public.felicitaciones
+  for select using (public.puede_ver(user_id));
+
+-- El grant, que no es la política: sin él `authenticated` ni llega a que
+-- se evalúe RLS. Solo `select`.
+grant select on public.felicitaciones to authenticated;
+
+-- NADIE LAS ESCRIBE DESDE EL NAVEGADOR. Las escribe la función del
+-- asistente con la clave de servicio, que se salta RLS. Sin política de
+-- insert, un cliente no puede meterse una felicitación a mano — y el
+-- `unique` de arriba no serviría de nada si pudiera.
+
+comment on table public.felicitaciones is
+  'Una por persona y año. Guardadas para que no se repitan: al escribir la '
+  'del año que viene se le pasan las anteriores con el encargo de no '
+  'parecerse a ninguna.';
+
+
+-- ---------------------------------------------------------------------
+--  COMPROBAR
+--
+--    -- Ponte la tuya (la app también lo hace desde Perfil):
+--    update public.profiles set nacimiento = date '1990-11-05'
+--     where id = auth.uid();
+--
+--    select id, nacimiento from public.profiles where nacimiento is not null;
+--
+--    -- Y que no quepan dos del mismo año:
+--    insert into public.felicitaciones (user_id, anio, mensaje)
+--    values (auth.uid(), 2026, 'una'), (auth.uid(), 2026, 'otra');
+--    -- ...tiene que fallar por el unique.
+-- ---------------------------------------------------------------------

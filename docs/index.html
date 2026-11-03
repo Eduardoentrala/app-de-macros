@@ -112,7 +112,11 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '3dc8310a41';
+    var SELLO = 'b730c317ae';
+    // Y a la vista de app.js, que lo manda con cada fallo que apunta. Sin
+    // la versión, un error de hace una semana y uno de ahora se leen igual
+    // y «eso ya lo arreglé» no se puede comprobar.
+    window.SELLO_APP = SELLO;
     var HOJAS = ['base', 'maqueta', 'vistas', 'diario',
                  'cuenta', 'pantallas', 'componentes', 'modo-app'];
     var suelto = location.protocol === 'file:';
@@ -317,6 +321,16 @@
                 <div class="subdate" id="subDate">—</div>
               </div>
             </div>
+          </div>
+          <!-- LA FELICITACIÓN. Lo primero de la pantalla ese día, encima
+               incluso del chequeo: es lo único de toda la app que no te
+               pide nada, y si va debajo de algo que sí, ya no es un regalo.
+               Lleva × porque el mensaje queda guardado y se puede volver a
+               leer; cerrarlo no lo pierde. -->
+          <div class="felicita-card" id="felicitaCard" hidden>
+            <button class="felicita-x" id="felicitaCerrar" aria-label="Cerrar">×</button>
+            <div class="felicita-tit" id="felicitaTit">Felicidades</div>
+            <p class="felicita-txt" id="felicitaTxt">—</p>
           </div>
           <!-- EL CHEQUEO DE LA SEMANA.
                Va aquí arriba y no en una ventana que salta al abrir. La
@@ -1855,6 +1869,19 @@
               <span>Objetivo</span>
               <span class="v" id="profObjetivo">Mantener peso<i>›</i></span>
             </button>
+            <!-- Se podía poner UNA VEZ, al registrarse, y nunca más: el
+                 control vivía solo en la pantalla de registro. Quien pasó de
+                 tres días a cinco no tenía dónde decirlo, y a quien se
+                 registró antes de que existiera la columna le quedó en nulo
+                 para siempre. -->
+            <button class="info-row info-btn" id="profDiasBtn">
+              <span>Días de gimnasio</span>
+              <span class="v" id="profDias">—<i>›</i></span>
+            </button>
+            <button class="info-row info-btn" id="profCumpleBtn">
+              <span>Tu cumpleaños</span>
+              <span class="v" id="profCumple">—<i>›</i></span>
+            </button>
             <button class="info-row info-btn" id="profSaludBtn">
               <span>Salud</span>
               <span class="v" id="profSalud">Ninguna<i>›</i></span>
@@ -2008,6 +2035,41 @@
             </label>
             <button class="btn-primary" id="saludGuardar">Guardar</button>
             <button class="btn-ghost-text" id="saludCancelar">Cancelar</button>
+          </div>
+        </div>
+
+        <!-- Los días de gimnasio. NO recalcula los macros, y es a propósito:
+             lo que decide las calorías desde hace meses es el gasto medido,
+             y rehacer la fórmula aquí tiraría ese ajuste de un toque. Esto
+             solo guarda el número para que el cierre y el asistente lo
+             sepan. -->
+        <div class="sheet-backdrop" id="diasSheet">
+          <div class="sheet">
+            <h4>¿Cuántos días entrenas por semana?</h4>
+            <p class="hint">Es lo que esperas hacer, no lo que llevas esta semana.
+              No te cambia las calorías: eso se decide en el cierre del lunes.</p>
+            <div class="dias-ej" id="diasOpts">
+              <button>0</button><button>1</button><button>2</button><button>3</button>
+              <button>4</button><button>5</button><button>6</button><button>7</button>
+            </div>
+            <button class="btn-primary" id="diasGuardar">Guardar</button>
+            <button class="btn-ghost-text" id="diasCancelar">Cancelar</button>
+          </div>
+        </div>
+
+        <!-- El cumpleaños. Opcional de verdad: quien no lo ponga no recibe
+             nada y no se le vuelve a preguntar. Y se dice para qué sirve,
+             porque pedir una fecha de nacimiento sin decir para qué es pedir
+             un dato personal a cambio de nada. -->
+        <div class="sheet-backdrop" id="cumpleSheet">
+          <div class="sheet">
+            <h4>¿Cuándo es tu cumpleaños?</h4>
+            <p class="hint">Solo para felicitarte ese día. No se usa para
+              calcular nada y puedes quitarlo cuando quieras.</p>
+            <input class="big-input reg-input" id="cumpleFecha" type="date">
+            <button class="btn-primary" id="cumpleGuardar">Guardar</button>
+            <button class="btn-ghost-text" id="cumpleQuitar">Quitar mi fecha</button>
+            <button class="btn-ghost-text" id="cumpleCancelar">Cancelar</button>
           </div>
         </div>
 
@@ -2316,7 +2378,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '3dc8310a41';
+    var SELLO = 'b730c317ae';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que

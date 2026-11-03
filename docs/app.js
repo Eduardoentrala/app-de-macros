@@ -2440,6 +2440,136 @@
     // semana es de lunes a domingo y cambiar el objetivo no la corta.
   }
 
+  // ---- Días de gimnasio ----
+  //
+  //  Se podía poner UNA VEZ, al registrarse, y nunca más: el control vivía
+  //  solo en la pantalla de registro. Quien pasaba de tres días a cinco no
+  //  tenía dónde decirlo, y a quien se registró antes de que existiera la
+  //  columna le quedó en nulo para siempre — y en nulo, el cierre de los
+  //  lunes recibe `dias_previstos: null` y el asistente dice «2 días» sin
+  //  poder decir «de cuántos».
+  //
+  //  NO RECALCULA LOS MACROS, y es la decisión que importa de todo esto.
+  //  La fórmula del registro es un punto de partida; lo que decide las
+  //  calorías desde hace meses es el gasto medido. Rehacer la fórmula aquí
+  //  tiraría de un toque lo que el cierre lleva ajustado — que es
+  //  exactamente el fallo que tenía el botón del objetivo.
+  var diasSheet = document.getElementById('diasSheet');
+  var diasElegidos = null;
+
+  function pintarDiasPerfil(){
+    var el = document.getElementById('profDias');
+    if(!el) return;
+    var d = (MI_PERFIL && MI_PERFIL.dias_entreno);
+    el.innerHTML = (d == null ? 'Sin poner' : d + (d === 1 ? ' día' : ' días')) + '<i>›</i>';
+  }
+
+  document.getElementById('profDiasBtn').addEventListener('click', function(){
+    diasElegidos = (MI_PERFIL && MI_PERFIL.dias_entreno != null)
+      ? Number(MI_PERFIL.dias_entreno) : null;
+    Array.from(diasSheet.querySelectorAll('#diasOpts button')).forEach(function(b){
+      b.classList.toggle('active', Number(b.textContent) === diasElegidos);
+    });
+    diasSheet.classList.add('open');
+  });
+  document.getElementById('diasOpts').addEventListener('click', function(e){
+    var b = e.target.closest('button');
+    if(!b) return;
+    diasElegidos = Number(b.textContent);
+    Array.from(this.querySelectorAll('button')).forEach(function(x){
+      x.classList.toggle('active', x === b);
+    });
+  });
+  function cerrarDias(){ diasSheet.classList.remove('open'); diasElegidos = null; }
+  document.getElementById('diasCancelar').addEventListener('click', cerrarDias);
+  diasSheet.addEventListener('click', function(e){ if(e.target === diasSheet) cerrarDias(); });
+
+  document.getElementById('diasGuardar').addEventListener('click', function(){
+    if(diasElegidos == null){ cerrarDias(); return; }
+    var d = diasElegidos;
+    sbActualizarPerfil({ dias_entreno: d }).then(function(){
+      if(MI_PERFIL) MI_PERFIL.dias_entreno = d;
+      // Y en `reg` también, que es de donde sale si alguien recalcula de
+      // verdad más tarde. Sin esto, volver a la pantalla de registro
+      // enseñaría el número viejo.
+      reg.dias = d;
+      pintarDiasPerfil();
+      cerrarDias();
+      toast('toastPeso', 'Guardado · ' + d + (d === 1 ? ' día' : ' días') + ' por semana');
+    })['catch'](function(e){
+      apuntarFallo('guardar_dias', e);
+      toast('toastPeso', 'No se pudo guardar: ' + traducirError(e && e.message));
+    });
+  });
+
+  // ---- El cumpleaños ----
+  //
+  //  Opcional de verdad: quien no lo ponga no recibe nada y no se le vuelve
+  //  a preguntar. Un dato que solo sirve para algo bonito no se cobra a la
+  //  fuerza, y por eso la hoja dice para qué es antes de pedirlo.
+  //
+  //  Se guarda la FECHA y no solo el día: con ella se sabe qué edad cumple.
+  //  La fórmula sigue usando `age` tal cual, que es un número que se tecleó
+  //  una vez y no envejece — esa deuda está apuntada aparte, y arreglarla
+  //  movería las calorías de todo el mundo.
+  var cumpleSheet = document.getElementById('cumpleSheet');
+  var MESES = ['enero','febrero','marzo','abril','mayo','junio','julio',
+               'agosto','septiembre','octubre','noviembre','diciembre'];
+
+  function pintarCumplePerfil(){
+    var el = document.getElementById('profCumple');
+    if(!el) return;
+    var n = MI_PERFIL && MI_PERFIL.nacimiento;
+    if(!n){ el.innerHTML = 'Sin poner<i>›</i>'; return; }
+    // Partida a mano y NO con `new Date(n)`: una fecha suelta se
+    // interpreta en UTC y en México sale el día anterior.
+    var p = String(n).slice(0, 10).split('-');
+    el.innerHTML = Number(p[2]) + ' de ' + MESES[Number(p[1]) - 1] + '<i>›</i>';
+  }
+
+  document.getElementById('profCumpleBtn').addEventListener('click', function(){
+    document.getElementById('cumpleFecha').value =
+      (MI_PERFIL && MI_PERFIL.nacimiento) ? String(MI_PERFIL.nacimiento).slice(0, 10) : '';
+    cumpleSheet.classList.add('open');
+  });
+  function cerrarCumple(){ cumpleSheet.classList.remove('open'); }
+  document.getElementById('cumpleCancelar').addEventListener('click', cerrarCumple);
+  cumpleSheet.addEventListener('click', function(e){ if(e.target === cumpleSheet) cerrarCumple(); });
+
+  function guardarCumple(valor){
+    sbActualizarPerfil({ nacimiento: valor }).then(function(){
+      if(MI_PERFIL) MI_PERFIL.nacimiento = valor;
+      pintarCumplePerfil();
+      cerrarCumple();
+      toast('toastPeso', valor ? 'Guardado' : 'Quitado');
+      // Por si hoy es el día: no hacerle esperar a mañana por haberlo
+      // puesto hoy.
+      if(valor) revisarCumple();
+    })['catch'](function(e){
+      apuntarFallo('guardar_cumple', e);
+      toast('toastPeso', 'No se pudo guardar: ' + traducirError(e && e.message));
+    });
+  }
+
+  document.getElementById('cumpleGuardar').addEventListener('click', function(){
+    var v = document.getElementById('cumpleFecha').value;
+    if(!v) return;
+    // Una fecha futura o de hace dos siglos no es un cumpleaños. La base
+    // rechaza lo imposible; esto evita el viaje y lo explica.
+    var anio = Number(v.slice(0, 4));
+    var hoyISO = isoDe(HOY);
+    if(v >= hoyISO || anio < 1900){
+      toast('toastPeso', 'Esa fecha no puede ser.');
+      return;
+    }
+    guardarCumple(v);
+  });
+  // Quitarlo es inmediato y no pregunta, igual que el permiso de las fotos:
+  // poner trabas para retirar un dato es la forma educada de no dejarlo.
+  document.getElementById('cumpleQuitar').addEventListener('click', function(){
+    guardarCumple(null);
+  });
+
   document.getElementById('profObjetivoBtn').addEventListener('click', function(){
     objElegido = reg.objetivo;
     pintarPreviaObjetivo();
@@ -4579,6 +4709,11 @@
     catch(e){
       guardandoSesion = false;
       toast('toastRutina', 'No se pudo guardar: ' + traducirError(e && e.message));
+      // Y que quede apuntado. Este es EL caso: un candado que no se
+      // soltaba dejó «Guardar sesión» muerto, sin aviso, y se tardó
+      // semanas en saberlo porque lo único que se veía era que la
+      // semana decía cero días de fuerza.
+      apuntarFallo('guardar_sesion', e);
       throw e;              // que siga saliendo en la consola: es un fallo
     }
   });
@@ -4871,7 +5006,12 @@
     // Y al perfil, que es de donde lo lee su entrenador y de donde sale
     // al volver a entrar. En silencio: la pantalla y la cuenta ya están
     // bien, y si no sube se vuelve a intentar en la próxima apertura.
-    sbActualizarPerfil({ weight_kg: kg })['catch'](function(){});
+    sbActualizarPerfil({ weight_kg: kg })['catch'](function(e){
+      // Callado para quien lo usa —la pantalla ya está bien y se
+      // reintenta al abrir— pero no callado del todo: si esto falla
+      // siempre, su entrenador ve un peso viejo y nadie se entera.
+      apuntarFallo('perfil_peso', e);
+    });
   }
 
   var RANGO = '14';
@@ -7391,27 +7531,29 @@
     }).then(function(r){
       if(!r.ok) return r.text().then(function(t){ throw new Error(t.slice(0,140)); });
 
-      // Archiva la que hubiera en ese hueco: el índice único de
-      // (user_id, week_key, pose) solo cuenta las no archivadas, así que hay
-      // que apartarla antes de meter la nueva.
-      return sbFetch('/rest/v1/progress_photos?user_id=eq.' + sesion.user.id +
-                     '&week_key=eq.' + clave + '&pose=eq.' + pose, { method:'DELETE' });
-    }).then(function(){
-      // DE AQUÍ EN ADELANTE LA ANTERIOR YA NO ESTÁ.
+      // APARTAR LA VIEJA Y METER LA NUEVA, EN UN SOLO PASO.
       //
-      // Si esto falla, ese hueco se queda vacío en el servidor: la vieja
-      // apartada y la nueva sin ficha. Quien recoge el error tiene que
-      // saberlo, porque si repone la de antes en pantalla -que es lo
-      // razonable cuando no ha pasado nada- le está diciendo a la persona
-      // que no perdió nada, y se entera al recargar.
-      return sbFetch('/rest/v1/progress_photos', {
-        method:'POST', headers:{ 'Prefer':'return=representation' },
-        body: JSON.stringify({
-          user_id: sesion.user.id, week_key: clave, pose: pose,
-          storage_path: ruta, bytes: res.bytes, width: res.w, height: res.h
-        })
+      // Antes eran dos viajes: un DELETE —que un trigger convierte en
+      // archivado— y un INSERT. Entre los dos no había nada. Si el
+      // segundo no llegaba, la vieja ya estaba archivada, o sea
+      // invisible, y la nueva no tenía ficha: EL HUECO QUEDABA VACÍO. Y
+      // es un hueco de los que no se reponen, porque una foto de
+      // progreso de hace tres meses no se vuelve a tomar.
+      //
+      // `reemplazar_foto()` hace los dos dentro de una transacción: o
+      // los dos, o ninguno. Si la inserción revienta, el archivado se
+      // deshace y la de antes sigue donde estaba.
+      //
+      // Y el dueño lo pone la base con `auth.uid()`, no este navegador.
+      return sbRpc('reemplazar_foto', {
+        p_semana: clave,
+        p_pose:   pose,
+        p_ruta:   ruta,
+        p_bytes:  res.bytes,
+        p_ancho:  res.w,
+        p_alto:   res.h
       })['catch'](function(e){
-        e.laAnteriorSeAparto = true;
+        apuntarFallo('reemplazar_foto', e);
         throw e;
       });
     });
@@ -7592,16 +7734,18 @@
         // Si no subió, se quita: una foto que solo existe en este teléfono
         // y desaparece al recargar es peor que no haberla puesto.
         //
-        // Y la de antes se repone SOLO si de verdad sigue guardada. Cuando
-        // falla el último paso, la anterior ya está apartada en el servidor:
-        // reponerla aquí sería enseñar una foto que ya no existe y dar por
-        // hecho que no se perdió nada.
-        if(antes && !(e && e.laAnteriorSeAparto)) FOTOS[c][pose] = antes;
+        // Y LA DE ANTES SE REPONE SIEMPRE, que ahora es verdad.
+        //
+        // Aquí había que distinguir: si fallaba el último de los dos
+        // pasos, la anterior ya estaba apartada en el servidor y
+        // reponerla en pantalla era decirle a la persona que no había
+        // perdido nada cuando sí. Ese caso ya no existe —los dos pasos
+        // son uno y se deshacen juntos—, así que si falla, lo que hay
+        // guardado es exactamente lo que había antes de empezar.
+        if(antes) FOTOS[c][pose] = antes;
         else delete FOTOS[c][pose];
         pintarFotos(); llenarSelectores();
-        toast('toastFotos', (e && e.laAnteriorSeAparto)
-          ? 'No se pudo guardar, y la anterior quedó apartada. Ese hueco está vacío: vuelve a poner una.'
-          : 'No se pudo subir: ' + traducirError(e.message));
+        toast('toastFotos', 'No se pudo subir: ' + traducirError(e.message));
       });
     });
   });
@@ -7760,8 +7904,9 @@
       .then(function(filas){
         ANALISIS = (filas && filas[0]) || null;
         pintarAnalisis();
-      })['catch'](function(){});
-    // CALLA A PROPÓSITO: si no se puede leer, la tarjeta se queda oculta,
+      })['catch'](function(e){ apuntarFallo('cargar_analisis', e); });
+    // CALLA A PROPÓSITO PARA QUIEN MIRA: si no se puede leer, la tarjeta
+    // se queda oculta,
     // que es lo mismo que se ve cuando todavía no hay ninguna comparación.
     // No hay nada que la persona pueda hacer al respecto y nadie lo pidió.
   }
@@ -7828,6 +7973,62 @@
       }
     });
   })();
+
+  // ---- La felicitación de cumpleaños ----
+  //
+  //  LA APP NO DICE CUÁNDO ES. Solo pregunta «¿hay algo para mí?». La fecha
+  //  está en la base y el día lo pone el reloj del servidor, por lo mismo
+  //  que el mes de las fotos — y aquí con más razón: esta llamada NO gasta
+  //  tope diario, porque felicitar a alguien no se le cobra. Si el cliente
+  //  pudiera decir qué día es, sería una llamada al modelo gratis y sin
+  //  ningún freno.
+  //
+  //  Una al año la garantiza la base con un `unique (user_id, anio)`, no
+  //  una marca de aquí: las marcas del navegador se vacían, y son dos
+  //  teléfonos. Lo de abajo solo evita repetir la pregunta en una misma
+  //  apertura y recordar que ya se cerró.
+  var CUMPLE_PEDIDO = false;
+  var CLAVE_CUMPLE = 'macros.cumpleCerrado';
+
+  function revisarCumple(){
+    if(!sesion || !sesion.user) return;
+    // Sin fecha no hay nada que pedir, y no se insiste: ponerla es
+    // opcional de verdad.
+    if(!MI_PERFIL || !MI_PERFIL.nacimiento) return;
+    if(CUMPLE_PEDIDO) return;
+    CUMPLE_PEDIDO = true;
+
+    iaLlamar({ accion: 'cumple' }).then(function(r){
+      if(r && r.estado === 'ok' && r.mensaje) mostrarCumple(r.anio, r.mensaje);
+    })['catch'](function(e){
+      // Callado para quien mira: nadie pidió esto y un fallo no puede
+      // interrumpir a quien entró a apuntar el desayuno. Pero apuntado,
+      // porque si falla siempre, alguien se queda sin su felicitación y la
+      // única forma de enterarse sería que lo dijera.
+      apuntarFallo('cumple', e);
+    });
+  }
+
+  function mostrarCumple(anio, mensaje){
+    var caja = document.getElementById('felicitaCard');
+    if(!caja) return;
+    // Si ya la cerró, no se la volvemos a poner delante cada vez que abre
+    // la app durante los tres días de la ventana.
+    try{
+      if(localStorage.getItem(CLAVE_CUMPLE) === String(anio)) return;
+    }catch(e){}
+
+    var nom = (MI_PERFIL && String(MI_PERFIL.full_name || '').trim().split(' ')[0]) || '';
+    document.getElementById('felicitaTit').textContent =
+      nom ? 'Felicidades, ' + nom : 'Felicidades';
+    document.getElementById('felicitaTxt').textContent = mensaje;
+    caja.hidden = false;
+
+    document.getElementById('felicitaCerrar').onclick = function(){
+      caja.hidden = true;
+      try{ localStorage.setItem(CLAVE_CUMPLE, String(anio)); }catch(e){}
+    };
+  }
 
   // ---- Cuándo se pide el análisis ----
   //
@@ -10579,6 +10780,59 @@
     return sbFetch('/rest/v1/rpc/' + nombre, { method:'POST', body: JSON.stringify(args || {}) });
   }
 
+  // ---- CUANDO ALGO SALE MAL, QUE SE SEPA ----
+  //
+  //  Todos los fallos de esta app se encontraron de la misma manera:
+  //  alguien mirando su teléfono y diciéndolo. El interruptor de la IA
+  //  llevaba MESES apagado. La cintura se descartaba en silencio si el
+  //  peso estaba vacío. «Guardar sesión» se quedaba muerto. El objetivo no
+  //  volvía al entrar, y eso borraba meses de ajuste.
+  //
+  //  Ninguno levantó la mano, porque no había dónde levantarla. Esto es
+  //  ese sitio. No arregla ningún fallo: hace que el siguiente se
+  //  encuentre en días en vez de en meses.
+  //
+  //  TRES REGLAS, y las tres salen de lo mismo —esto se llama desde dentro
+  //  de un `catch`, o sea en el peor momento posible—:
+  //
+  //  1. NO PUEDE FALLAR HACIA FUERA. Devuelve siempre una promesa que se
+  //     resuelve, pase lo que pase. Un registro de errores que rompe por
+  //     encima lo que ya estaba fallando por debajo es peor que no tenerlo.
+  //  2. NO REPITE. El mismo sitio con el mismo mensaje, una vez por
+  //     apertura. Una pantalla que repinta en bucle llamaría cien veces, y
+  //     el freno de la base —50 al día— se gastaría en una sola tarde.
+  //  3. NO LLEVA DATOS DE NADIE. Dónde se rompió y qué dijo el error, los
+  //     dos recortados por la base. Ni comida, ni pesos, ni medidas. Un
+  //     registro de fallos que acaba guardando datos personales es un
+  //     problema nuevo, no una herramienta.
+  var FALLOS_DICHOS = {};
+  function apuntarFallo(donde, e){
+    try{
+      // Sin sesión no hay a quién apuntárselo y la función de la base lo
+      // rechaza igual: ahorrarse el viaje es ahorrárselo.
+      if(!sesion || !sesion.user) return Promise.resolve();
+
+      var que = (e && e.message) ? String(e.message) : String(e || 'sin mensaje');
+      var clave = donde + '|' + que.slice(0, 80);
+      if(FALLOS_DICHOS[clave]) return Promise.resolve();
+      FALLOS_DICHOS[clave] = true;
+
+      return sbRpc('apuntar_error', {
+        p_donde: String(donde).slice(0, 60),
+        p_que: que.slice(0, 300),
+        // Para poder decir «eso ya está arreglado» y comprobarlo. Sin la
+        // versión, un error de hace una semana y uno de ahora se leen
+        // igual. Lo pone el index al cargar las hojas de estilo.
+        p_version: (window.SELLO_APP || null)
+      })['catch'](function(){});   // en silencio: ver arriba, regla 1
+    }catch(x){
+      // Ni esto puede escaparse. Si `sesion` no existe todavía, si
+      // `sbRpc` no está definida aún, si lo que llega no es un error:
+      // nada de eso puede convertirse en el fallo que se ve.
+      return Promise.resolve();
+    }
+  }
+
   function cargarPanelAdmin(){
     if(!sesion || !sesion.user) return Promise.resolve();
     // Cada parte va por su cuenta. Con Promise.all, que una sola fallara
@@ -11251,6 +11505,12 @@
           if(p.height_cm != null) document.getElementById('profAltura').textContent = Number(p.height_cm).toFixed(1) + ' cm';
           if(p.age != null)       document.getElementById('profEdad').textContent   = p.age + ' años';
           pintarObjetivoPerfil();
+          pintarDiasPerfil();
+          pintarCumplePerfil();
+          // Y por si hoy es el día. Va aquí, en cuanto el perfil está, y no
+          // con las fotos: no depende de nada más que de la fecha, y es lo
+          // primero que debería ver esa mañana.
+          revisarCumple();
 
           // Los <span> de arriba son solo para leer. Lo que hace falta para
           // volver a calcular vive en los campos del registro, y hasta ahora

@@ -52,7 +52,7 @@ const CORS = {
 //
 // Ahora lo dice: un GET sin sesión devuelve este sello y nada más.
 // `pruebas/funciones-vivas.mjs` lo compara con el del repo.
-const SELLO = 'ace86bae99';
+const SELLO = 'f8546ea3be';
 
 // Tope diario por persona. Es la única defensa contra que un solo usuario
 // -o un token robado- vacíe la cuenta en una noche con un bucle.
@@ -78,6 +78,26 @@ const SELLO = 'ace86bae99';
 const TOPES = { apagada: 0, normal: 3, plus: 15 } as const;
 
 const MODELO = 'claude-opus-5';
+
+// ---------------------------------------------------------------------
+//  Y UNO MÁS BARATO PARA CHARLAR
+//
+//  El chat es el 79% de la factura, y la mayoría de lo que pasa por él es
+//  «¿cuántas calorías tiene esto?» o «¿qué ceno?». Eso no necesita el
+//  modelo más caro, y la diferencia en la respuesta no se nota.
+//
+//  DÓNDE SÍ SE NOTA, y por eso esto no se aplica a todo:
+//
+//  - Mirar un plato en una foto y estimar sus gramos es lo que luego
+//    cuenta en el diario durante meses. Ahí se queda el de siempre: un
+//    arroz mal medido se arrastra hasta el cierre.
+//  - El cierre de los lunes mueve calorías de verdad.
+//  - La comparación de fotos mira ocho imágenes.
+//  - El plan tiene que cuadrar aritmética con criterio.
+//
+//  O sea: lo que se dice se abarata, lo que se decide no.
+// ---------------------------------------------------------------------
+const MODELO_CHARLA = 'claude-sonnet-5';
 
 // ¿PUEDE ESTA PERSONA ACTUAR EN NOMBRE DE OTRA?
 //
@@ -1253,6 +1273,64 @@ const ESQUEMA_CLIENTE = {
   additionalProperties: false,
 } as const;
 
+// ---------------------------------------------------------------------
+//  LA FELICITACIÓN DE CUMPLEAÑOS
+//
+//  Es lo único de toda la app que no sirve para nada. Ese es el punto.
+//
+//  Y por eso el prompt es casi todo prohibiciones: la tentación del
+//  modelo —y la de quien escribe el prompt— es aprovechar que tiene a
+//  alguien leyendo para colarle un consejo. Un «felicidades, y este año a
+//  por esos 80 kg» convierte el regalo en una tarea. El día que la app te
+//  pide algo por tu cumpleaños, deja de ser tuyo.
+//
+//  LO QUE NO SE ESCRIBE AQUÍ ES EL MENSAJE. Se dice qué evitar, se le da
+//  lo que sabe de esa persona y se le pide que no se parezca a los años
+//  anteriores. Si el mensaje estuviera escrito aquí sería el mismo
+//  siempre, y una sorpresa que se repite deja de serlo al segundo año.
+// ---------------------------------------------------------------------
+const SISTEMA_CUMPLE = `
+Hoy es el cumpleaños de esta persona y le escribes tú, su entrenador, sin
+que te haya preguntado nada. Español de México, de tú.
+
+DOS O TRES FRASES. Como un mensaje de alguien que se acordó, no como una
+tarjeta. Sin listas, sin emojis, sin encabezados. Devuelve solo el mensaje.
+
+HOY NO SE HABLA DE MACROS. Es la regla que manda sobre todas las demás:
+
+- Ni calorías, ni proteína, ni peso, ni cintura, ni metas, ni la semana.
+- Ningún consejo. Ninguna tarea. Nada de "este año vas a". Nada de
+  "aprovecha para".
+- Ni siquiera en bonito. "Disfruta hoy, que mañana seguimos" sigue siendo
+  recordarle que mañana hay trabajo. No se lo recuerdes.
+
+Si se te ocurre una frase que sirve para algo, bórrala. Hoy no sirves
+para nada y ese es el regalo.
+
+LO QUE SÍ PUEDES HACER
+Te paso lo que sabes de esta persona de todo este tiempo: lo que te ha
+contado, lo que fuiste aprendiendo de ella. Úsalo para que se note que es
+a ella a quien le escribes y no a cualquiera. Lo que tiene valor no es lo
+que ha conseguido: es lo que le ha costado, y que tú lo viste.
+
+Eso sí se puede decir, y es lo único que de verdad suena a alguien que
+estuvo ahí. Reconocer a una persona no es felicitarle el resultado.
+
+Si no sabes casi nada de ella —acaba de llegar— no lo disimules con
+palabras grandes. Una felicitación corta y sincera es mejor que una larga
+que suena a formulario.
+
+QUE NO SE PAREZCA A LAS DE OTROS AÑOS
+Abajo van las que le escribiste antes, si las hay. No repitas su forma, ni
+cómo empiezan, ni de qué tiran. Si el año pasado tiraste de constancia,
+este no. Esto lo lee la misma persona cada año y se acuerda.
+
+NUNCA
+- Ni consejo médico, ni nada sobre su cuerpo o su aspecto.
+- Ni le preguntes la edad ni te asombres de ella.
+- Ni prometas nada de parte de la app.
+`.trim();
+
 const SISTEMA_CLIENTE = `
 Le escribes a un ENTRENADOR sobre una de las personas que lleva. No le
 escribes a esa persona: ella no va a leer esto.
@@ -1548,7 +1626,7 @@ Deno.serve(async (req) => {
   //
   //  Misma regla que las llaves apagadas y que el JSON ilegible, que ya se
   //  contestan antes de cobrar. Esta se quedó atrás.
-  const ACCIONES = ['chat', 'aviso', 'semana', 'fotos', 'plan', 'cliente'];
+  const ACCIONES = ['chat', 'aviso', 'semana', 'fotos', 'plan', 'cliente', 'cumple'];
   if (!ACCIONES.includes(accion)) return json({ error: 'Acción desconocida.' }, 400);
 
   // --- ¿Le dejan ESTO en concreto? ---
@@ -1669,7 +1747,12 @@ Deno.serve(async (req) => {
 
   const TOPE_DIARIO = TOPES[nivel as keyof typeof TOPES] ?? TOPES.normal;
   let quedan: number | null = null;
-  if (accion !== 'fotos' || cuerpo.rehacer === true) {
+  //
+  // Y EL CUMPLEAÑOS TAMPOCO SE COBRA. Es una al año, la pide la app sola y
+  // su freno es el `unique (user_id, anio)` de la base, que es más duro que
+  // cualquier tope. Gastarle a alguien su consulta del día en felicitarle
+  // sería cobrarle el regalo.
+  if ((accion !== 'fotos' || cuerpo.rehacer === true) && accion !== 'cumple') {
     const { data: q, error: errTope } = await admin.rpc('gastar_consulta_ia', {
       usuario: userId,
       tope: TOPE_DIARIO,
@@ -1958,7 +2041,9 @@ Deno.serve(async (req) => {
         SISTEMA_APUNTAR_REGLAS + loQueCambia;
 
       const pedirChat = (sistema: unknown) => ia.messages.create({
-        model: MODELO,
+        // Charlar con el barato; mirar un plato, con el de siempre. Lo que
+        // se estima de una foto acaba en el diario y se arrastra meses.
+        model: imagen ? MODELO : MODELO_CHARLA,
         max_tokens: imagen ? 4000 : 2000,
         system: sistema,
         ...(imagen ? { thinking: { type: 'adaptive' as const } } : {}),
@@ -2981,6 +3066,120 @@ Deno.serve(async (req) => {
 
       const r = await flujo.finalMessage();
       return json({ ...leerJson(r), quedan });
+    }
+
+    // ---------------------------------------------------------------
+    //  EL CUMPLEAÑOS
+    //
+    //  LA APP NO DICE CUÁNDO ES. Ni la fecha, ni el año, ni «hoy toca».
+    //  Solo pregunta «¿hay algo para mí?». Todo lo demás sale de la base
+    //  y del reloj del servidor, por lo mismo que el mes de las fotos:
+    //  quien pudiera decir qué día es, podría pedir su felicitación las
+    //  veces que quisiera — y aquí ni siquiera hay tope diario que lo
+    //  pare, porque felicitar a alguien no se le cobra.
+    // ---------------------------------------------------------------
+    if (accion === 'cumple') {
+      const { data: p } = await admin
+        .from('profiles')
+        .select('nacimiento, full_name, memoria_ia, aprendido_cierre')
+        .eq('id', userId)
+        .single();
+
+      // Sin fecha no hay nada que celebrar, y no se pregunta por ella
+      // desde aquí: es opcional a propósito.
+      if (!p?.nacimiento) return json({ estado: 'sin_fecha' });
+
+      // EL DÍA, EN LA ZONA DE LA APP Y NO EN UTC. Desde las 18:00 de
+      // México ya es mañana en UTC, así que con `toISOString()` el
+      // cumpleaños empezaría la tarde de antes y se acabaría la tarde
+      // misma. Ya se pagó una vez por esto (0038, la racha).
+      const hoy = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Mexico_City',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+      }).format(new Date());
+
+      const anio = Number(hoy.slice(0, 4));
+      const nacio = String(p.nacimiento).slice(0, 10);
+
+      // CUÁNTOS DÍAS HAN PASADO DESDE SU CUMPLEAÑOS DE ESTE AÑO. Se
+      // comparan fechas de calendario a mediodía UTC para que ningún
+      // cambio de horario mueva el resultado un día.
+      const aMedioDia = (iso: string) => Date.parse(iso + 'T12:00:00Z');
+      const suDia = `${anio}-${nacio.slice(5)}`;
+      const pasados = Math.round((aMedioDia(hoy) - aMedioDia(suDia)) / 86400000);
+
+      // El día, y tres días más. Quien no abre la app ese día no se queda
+      // sin la suya — y pasada esa ventana no se felicita con retraso, que
+      // es peor que no felicitar.
+      if (!isFinite(pasados) || pasados < 0 || pasados > 3) {
+        return json({ estado: 'hoy_no' });
+      }
+
+      // ¿Ya está la de este año? Es el freno de verdad: abrir la app
+      // cuatro veces ese día no puede costar cuatro llamadas.
+      const { data: ya } = await admin
+        .from('felicitaciones').select('anio, mensaje')
+        .eq('user_id', userId).eq('anio', anio).maybeSingle();
+      if (ya && textoCompleto(ya.mensaje)) {
+        return json({ estado: 'ok', ...ya, guardado: true });
+      }
+
+      // Las de los años anteriores, para que esta no se les parezca. Sin
+      // esto, el modelo escribe la misma felicitación genérica cada año.
+      const { data: antes } = await admin
+        .from('felicitaciones').select('anio, mensaje')
+        .eq('user_id', userId).order('anio', { ascending: false }).limit(5);
+
+      const cumple = anio - Number(nacio.slice(0, 4));
+      const nombre = String(p.full_name ?? '').trim().split(' ')[0];
+      const memoria = String(p.memoria_ia ?? '').trim();
+      const aprendido = String(p.aprendido_cierre ?? '').trim();
+
+      const suyo =
+        (nombre ? `\n\nSe llama ${nombre}.` : '') +
+        (cumple > 0 && cumple < 120 ? `\nCumple ${cumple}.` : '') +
+        (pasados > 0
+          ? `\nSu cumpleaños fue hace ${pasados} día(s): no finjas que es hoy.`
+          : `\nEs hoy.`) +
+        (memoria
+          ? `\n\nLO QUE SABES DE ELLA (notas tuyas de otras conversaciones, ` +
+            `NO mediciones):\n${memoria.slice(0, 1200)}`
+          : '') +
+        (aprendido
+          ? `\n\nY LO QUE FUISTE APRENDIENDO EN LOS CIERRES:\n${aprendido.slice(0, 800)}`
+          : '') +
+        ((antes ?? []).length
+          ? `\n\nLO QUE LE ESCRIBISTE OTROS AÑOS. No te parezcas a ninguna:\n` +
+            (antes ?? []).map((f: Record<string, unknown>) =>
+              `- ${f.anio}: "${String(f.mensaje).slice(0, 400)}"`).join('\n')
+          : '\n\nEs la primera que le escribes.');
+
+      const r = await ia.messages.create({
+        // Con el de siempre. Es una vez al año por persona: lo que se
+        // ahorraría aquí no se nota en la factura, y esto lo va a leer
+        // una persona en un día en el que se acuerda de lo que lee.
+        model: MODELO,
+        max_tokens: 3000,
+        system: SISTEMA_CUMPLE + comoHablarle(perfil?.sexo) + suyo,
+        thinking: { type: 'adaptive' as const },
+        messages: [{ role: 'user', content: 'Escríbele.' }],
+      });
+
+      const { texto: mensaje, cortada } = textoDe(r);
+      if (!mensaje || cortada) {
+        // Sin guardar: la app no marca nada y lo vuelve a pedir al abrir.
+        // Dentro de la ventana de tres días da tiempo de sobra.
+        return json({ error: 'No me salió. Lo intento otra vez.' }, 500);
+      }
+
+      // `upsert` y no `insert`: si quedó una cortada de un intento
+      // anterior, esta la sustituye. El `unique (user_id, anio)` sigue
+      // siendo el que impide que haya dos.
+      await admin.from('felicitaciones').upsert({
+        user_id: userId, anio, mensaje,
+      }, { onConflict: 'user_id,anio' });
+
+      return json({ estado: 'ok', anio, mensaje });
     }
 
     return json({ error: 'Acción desconocida.' }, 400);

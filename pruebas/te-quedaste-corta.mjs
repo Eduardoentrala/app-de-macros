@@ -130,7 +130,8 @@ console.log('\nY llega a todo lo que le escribe a esa persona');
     ['chat', 'el chat'],
     ['fotos', 'la comparación de fotos'],
     ['aviso', 'el mensaje que escribe él solo'],
-    ['plan', 'y el plan de comidas'],
+    ['plan', 'el plan de comidas'],
+    ['cumple', 'y la felicitación de cumpleaños'],
   ]) {
     ok(/comoHablarle\(/.test(bloqueDeAccion(accion)), qué);
   }

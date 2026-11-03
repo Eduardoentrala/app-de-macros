@@ -1253,3 +1253,41 @@
   font:600 12px/1 sans-serif;color:var(--ink-faint);
 }
 .crono-sesion b{font-weight:800;color:var(--ink-soft);font-variant-numeric:tabular-nums;}
+
+/* LA FELICITACIÓN DE CUMPLEAÑOS
+   ---------------------------------------------------------------
+   Lo único de toda la app que no pide nada, así que no se parece a
+   nada de lo demás: fondo ámbar suave en vez de blanco, y ni un
+   número dentro.
+
+   Sin confeti, sin globos y sin emojis. El resto de la app habla
+   seco y honesto; una tarjeta disfrazada de tarjeta de felicitación
+   sonaría a plantilla justo el día en que lo que importa es que no
+   lo parezca. */
+.felicita-card{
+  position:relative;
+  margin:0 0 12px;padding:18px 44px 18px 18px;
+  background:var(--amber-soft);border-radius:var(--r-card, 18px);
+  box-shadow:var(--shadow);
+}
+.felicita-tit{
+  font:800 16px/1.25 sans-serif;color:var(--amber);
+  margin-bottom:6px;letter-spacing:-.01em;
+}
+.felicita-txt{
+  margin:0;font:500 14.5px/1.6 sans-serif;color:var(--ink);
+  white-space:pre-wrap;overflow-wrap:break-word;
+}
+/* La × va holgada y con su área de dedo, como el resto: el ::after
+   centrado le da los 44 px sin agrandar el dibujo. */
+.felicita-x{
+  position:absolute;top:10px;right:10px;
+  width:28px;height:28px;border:0;border-radius:50%;
+  background:transparent;color:var(--amber);
+  font:400 22px/1 sans-serif;cursor:pointer;
+}
+.felicita-x::after{
+  content:'';position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  min-width:44px;min-height:44px;
+}

@@ -65,8 +65,13 @@ console.log('\nEl candado se suelta aunque algo reviente');
   // candado y cerrarlo— y luego lanza, que es exactamente lo que pasaba
   // cuando reventaba leyendo una tarjeta de ejercicio.
   const avisos = [];
+  const apuntados = [];
   const boton = { addEventListener: (_, fn) => { boton.pulsar = fn; } };
-  const api = new Function('document', 'toast', 'traducirError', `
+  // `apuntarFallo` entra como doble, igual que `toast`: el manejador lo
+  // llama ahora para dejar constancia del fallo. Sin el doble, lo que
+  // saldría del `catch` sería un ReferenceError suyo y no el error de
+  // verdad — y esta prueba existe justo para vigilar cuál sale.
+  const api = new Function('document', 'toast', 'traducirError', 'apuntarFallo', `
     var guardandoSesion = false;
     var intentos = 0;
     function guardarSesionAhora(opciones){
@@ -78,7 +83,8 @@ console.log('\nEl candado se suelta aunque algo reviente');
     ${fuente}
     return { intentos: function(){ return intentos; },
              candado: function(){ return guardandoSesion; } };
-  `)({ getElementById: () => boton }, (_, m) => avisos.push(m), (m) => String(m));
+  `)({ getElementById: () => boton }, (_, m) => avisos.push(m), (m) => String(m),
+      (donde, e) => apuntados.push({ donde, e }));
 
   ok(typeof boton.pulsar === 'function', 'el botón queda enganchado');
   const intentos = () => api.intentos();
@@ -89,6 +95,13 @@ console.log('\nEl candado se suelta aunque algo reviente');
   ok(intentos() === 1, 'el primer toque intenta guardar');
   ok(salio instanceof TypeError, 'y el error sigue saliendo, no se traga',
      'tragárselo dejaría el fallo invisible también en la consola');
+  // Y QUEDA APUNTADO. Esto es el fallo que tardó semanas en salir, y lo
+  // único que se veía era que la semana decía cero días de fuerza: nadie
+  // mira la consola de un teléfono.
+  ok(apuntados.length === 1 && apuntados[0].donde === 'guardar_sesion',
+     'y se apunta en el registro de fallos', JSON.stringify(apuntados));
+  ok(apuntados[0] && apuntados[0].e === salio,
+     'con el error de verdad, no con otro');
   ok(avisos.length === 1 && /No se pudo guardar/.test(avisos[0]),
      'y se avisa en pantalla', 'salió: ' + JSON.stringify(avisos));
 
