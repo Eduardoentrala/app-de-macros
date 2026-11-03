@@ -52,7 +52,7 @@ const CORS = {
 //
 // Ahora lo dice: un GET sin sesión devuelve este sello y nada más.
 // `pruebas/funciones-vivas.mjs` lo compara con el del repo.
-const SELLO = 'c64be8a9fe';
+const SELLO = 'ace86bae99';
 
 // Tope diario por persona. Es la única defensa contra que un solo usuario
 // -o un token robado- vacíe la cuenta en una noche con un bucle.
@@ -1482,7 +1482,10 @@ Deno.serve(async (req) => {
   // cuenta: sigue apuntando comida a mano, pero deja de gastar.
   const { data: perfil } = await admin
     .from('profiles')
-    .select('ia_habilitada, activo, nivel_ia')
+    // `sexo` viaja aquí, en el `select` que ya corre para todas las
+    // acciones, y no en uno suyo: sería un viaje más en cada petición para
+    // traer una letra. Lo usa `comoHablarle()`.
+    .select('ia_habilitada, activo, nivel_ia, sexo')
     .eq('id', userId)
     .single();
 
@@ -1929,7 +1932,11 @@ Deno.serve(async (req) => {
       // cacheado: sus números se mueven cada día que apunta algo, así que
       // cacheados serían los de ayer. Y delante de los dos cortes
       // invalidaría las once mil de `SISTEMA_CHAT` en cada mensaje.
-      const loQueCambia = hoyEs + contexto + progreso + loQueSe;
+      // Y CÓMO HABLARLE va aquí y no en el primer bloque: es de esta persona,
+      // y en el bloque compartido partiría las once mil de `SISTEMA_CHAT` en
+      // una caché por género. Son quince tokens; la caché son once mil.
+      const loQueCambia = hoyEs + contexto + progreso +
+        comoHablarle(perfil?.sexo) + loQueSe;
       const sistemaEnBloques = [
         { type: 'text', text: SISTEMA_CHAT,
           cache_control: { type: 'ephemeral' } },
@@ -2035,6 +2042,7 @@ Deno.serve(async (req) => {
         model: MODELO,
         max_tokens: 600,
         system: SISTEMA_AVISO +
+          comoHablarle(perfil?.sexo) +
           (nombre ? `\n\nSe llama ${nombre}.` : '') +
           numeros +
           (notas ? `\n\nLO QUE SABES DE ELLA (notas tuyas de otras conversaciones, ` +
@@ -2565,7 +2573,8 @@ Deno.serve(async (req) => {
         // problema según hacia dónde quiera ir. Y la memoria va DETRÁS,
         // porque lo que decide son los datos y lo que él recuerda es solo el
         // contexto que los explica.
-        system: SISTEMA_SEMANA + haciaDonde + contexto + loQueSe,
+        system: SISTEMA_SEMANA + comoHablarle(perfil?.sexo) +
+                haciaDonde + contexto + loQueSe,
         thinking: { type: 'adaptive' as const },
         output_config: {
           effort: 'medium',
@@ -2836,7 +2845,7 @@ Deno.serve(async (req) => {
         // No lo era: el pensamiento sale de este mismo tope y se lo llevó
         // casi entero. El mensaje de noviembre se acabó en «El peso».
         max_tokens: 3000,
-        system: SISTEMA_FOTOS_DECIR + numeros,
+        system: SISTEMA_FOTOS_DECIR + comoHablarle(perfil?.sexo) + numeros,
         thinking: { type: 'adaptive' as const },
         messages: [{ role: 'user', content: 'Cuéntame mi comparación de este mes.' }],
       });
@@ -2888,7 +2897,7 @@ Deno.serve(async (req) => {
         // Siete días son siete veces más texto. Con el tope de un día se
         // cortaría a mitad del jueves.
         max_tokens: semana ? 24000 : 8000,
-        system: SISTEMA_PLAN,
+        system: SISTEMA_PLAN + comoHablarle(perfil?.sexo),
         // Cuadrar las comidas con las calorías es aritmética con criterio:
         // aquí sí conviene que piense antes de contestar.
         thinking: { type: 'adaptive' },
@@ -3135,6 +3144,40 @@ async function afinarConCatalogo(
     a.catalogo  = mejor.nombre;           // para que la app lo pueda decir
   }
   return alimentos;
+}
+
+// ---------------------------------------------------------------------
+//  CÓMO HABLARLE
+//
+//  En español no se puede escribir «te quedaste cort_» sin decidir. Cada
+//  adjetivo obliga a elegir, así que un modelo sin el dato no se queda
+//  callado: acierta o falla, y la mitad de las veces falla.
+//
+//  Y EL DATO ESTABA. `profiles.sexo` se guarda desde la 0022 porque
+//  Mifflin-St Jeor suma +5 a un hombre y -161 a una mujer. Pero no salía de
+//  la fórmula: la palabra «sexo» no aparecía en ninguna otra parte de este
+//  fichero. Así que el cierre de los lunes le dijo a un hombre «te quedaste
+//  corta de proteína».
+//
+//  No es un detalle de estilo. Es la app hablándole a otra persona, y quien
+//  lo lee entiende —con razón— que esto no lo escribió nadie mirándole a él.
+//  Lo siguiente que le digas, aunque sea cierto, ya se lee distinto. Es el
+//  mismo daño que el «se te notó parejo hasta el sábado» que costó media
+//  SISTEMA_AVISO, por otro camino.
+//
+//  SIN DATO NO SE ADIVINA. La columna admite nulo y hay perfiles sin
+//  rellenar. Adivinar con un 50% es escribirle a la mitad de la gente en el
+//  género de otra, y además es la mitad que no eligió decirlo. Se escribe
+//  sin género — pero diciendo CÓMO, porque hacerlo en español cuesta y sin
+//  una salida concreta el modelo acaba eligiendo igual.
+// ---------------------------------------------------------------------
+function comoHablarle(sexo: unknown): string {
+  const s = String(sexo ?? '').trim().toLowerCase();
+  if (s === 'h') return '\n\nES UN HOMBRE: háblale en masculino.';
+  if (s === 'm') return '\n\nES UNA MUJER: háblale en femenino.';
+  return '\n\nNO SABES SI ES HOMBRE O MUJER Y NO LO ADIVINES. Escribe sin ' +
+         'adjetivos con género: en vez de «te quedaste corto de proteína», ' +
+         '«te faltó proteína». Siempre hay una forma de decirlo.';
 }
 
 // ---------------------------------------------------------------------

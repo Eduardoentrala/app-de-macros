@@ -120,7 +120,13 @@ console.log('\n— La primera lectura es a ciegas —');
                           ACC.indexOf('const mensaje ='));
   check('la segunda llamada ya no manda fotos', !/imgs|type: 'image'/.test(paso2),
     'volver a mandarlas dejaria retocar lo que se vio para que cuadre con los numeros');
-  check('lleva lo visto y los numeros', /system: SISTEMA_FOTOS_DECIR \+ numeros/.test(ACC));
+  // Lo que tiene que llevar, no la linea literal: fijar la concatenacion
+  // entera se pone roja en cuanto entra un termino mas -como hablarle, en
+  // masculino o femenino- sin que haya nada roto.
+  const sys = paso2.slice(paso2.indexOf('system:'));
+  check('lleva lo visto y los numeros',
+    /SISTEMA_FOTOS_DECIR/.test(sys) && /\bnumeros\b/.test(sys),
+    'quedo: ' + sys.replace(/\s+/g, ' ').slice(0, 140));
   check('el orden es mirar y luego contar',
     ACC.indexOf('SISTEMA_FOTOS_VER') < ACC.indexOf('SISTEMA_FOTOS_DECIR'));
 }

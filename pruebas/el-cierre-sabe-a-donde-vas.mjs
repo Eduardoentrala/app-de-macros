@@ -81,8 +81,16 @@ console.log('\nEl objetivo llega, y sale de la base');
 
 console.log('\nY entra en el prompt DELANTE de los números');
 {
-  ok(/system: SISTEMA_SEMANA \+ haciaDonde \+ contexto \+ loQueSe/.test(CIERRE),
+  // POR ORDEN, NO POR LA LÍNEA EXACTA. Esto fijaba la concatenación entera y
+  // se puso rojo el día que entró un término más (cómo hablarle, en
+  // masculino o femenino) sin que hubiera nada roto. Lo que importa es el
+  // orden relativo de los tres, no quién más viaje con ellos.
+  const sys = CIERRE.slice(CIERRE.indexOf('system:'), CIERRE.indexOf('messages:'));
+  const dónde = (x) => sys.indexOf(x);
+  ok(dónde('SISTEMA_SEMANA') >= 0 && dónde('haciaDonde') > dónde('SISTEMA_SEMANA') &&
+     dónde('contexto') > dónde('haciaDonde') && dónde('loQueSe') > dónde('contexto'),
      'el orden es objetivo → datos → memoria',
+     'quedó: ' + sys.replace(/\s+/g, ' ').slice(0, 160) + '\n         ' +
      'el objetivo va delante porque decide cómo se leen los números: el mismo ' +
      'peso plano es un éxito o un problema según hacia dónde quiera ir');
 

@@ -163,8 +163,14 @@ console.log('\nY se le entrega marcada por lo que es');
   // —el objetivo de la persona— y entrará lo que haga falta. Lo que esta
   // prueba vigila es que la memoria llegue al `system:` y que llegue LA
   // ÚLTIMA, detrás de los números, que es donde tiene que ir.
-  ok(/system: SISTEMA_SEMANA\b[^,\n]*\+ loQueSe,/.test(SEMANA),
-     'y se le pasa de verdad en el prompt del sistema',
+  // Y SIN `[^,\n]*`, que no cruza saltos de línea: la concatenación creció y
+  // se partió en dos renglones, y esto se puso rojo sin que nada estuviera
+  // mal. Se mira el trozo entero y que `loQueSe` sea lo ÚLTIMO que entra.
+  const sys = SEMANA.slice(SEMANA.indexOf('system:'), SEMANA.indexOf('messages:'));
+  const resto = sys.slice(sys.indexOf('loQueSe') + 7);
+  ok(sys.includes('SISTEMA_SEMANA') && sys.includes('loQueSe') && !/\+/.test(resto),
+     'y se le pasa de verdad en el prompt del sistema, la última',
+     'quedó: ' + sys.replace(/\s+/g, ' ').slice(0, 160) + '\n         ' +
      'sin esto se lee la memoria de la base y se tira');
 }
 
