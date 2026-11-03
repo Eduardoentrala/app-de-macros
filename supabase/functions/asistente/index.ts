@@ -52,7 +52,7 @@ const CORS = {
 //
 // Ahora lo dice: un GET sin sesión devuelve este sello y nada más.
 // `pruebas/funciones-vivas.mjs` lo compara con el del repo.
-const SELLO = 'b21d704725';
+const SELLO = 'c64be8a9fe';
 
 // Tope diario por persona. Es la única defensa contra que un solo usuario
 // -o un token robado- vacíe la cuenta en una noche con un bucle.
@@ -2556,7 +2556,10 @@ Deno.serve(async (req) => {
 
       const r = await ia.messages.create({
         model: MODELO,
-        max_tokens: 2000,
+        // Mismo motivo que en las fotos: el pensamiento sale de este tope, y
+        // aquí encima la respuesta es un JSON con esquema. Cortado no se lee
+        // a medias: `JSON.parse` revienta y el lunes se queda sin cierre.
+        max_tokens: 4000,
         // EL ORDEN IMPORTA. El objetivo va DELANTE de los números porque es
         // lo que decide cómo se leen: el mismo peso plano es un éxito o un
         // problema según hacia dónde quiera ir. Y la memoria va DETRÁS,
@@ -2683,7 +2686,12 @@ Deno.serve(async (req) => {
       const { data: yaEsta } = await admin
         .from('analisis_fotos').select('mes, mensaje, semana_nueva, semana_vieja')
         .eq('user_id', userId).eq('mes', mes).maybeSingle();
-      if (yaEsta && cuerpo.rehacer !== true) {
+      // Y UNA GUARDADA A MEDIAS NO CUENTA COMO HECHA. Las de antes de este
+      // arreglo se guardaron cortadas, y la caché del mes las serviría tal
+      // cual: sin esta condición, arreglar el tope no le devuelve su
+      // comparación a quien ya tiene una media frase en la base — le
+      // seguiría saliendo la misma hasta el mes que viene.
+      if (yaEsta && textoCompleto(yaEsta.mensaje) && cuerpo.rehacer !== true) {
         return json({ estado: 'ok', ...yaEsta, guardado: true });
       }
 
@@ -2725,7 +2733,10 @@ Deno.serve(async (req) => {
       // ---- PASO 1: mirar, a ciegas ----
       const verR = await ia.messages.create({
         model: MODELO,
-        max_tokens: 1200,
+        // Mirar ocho fotos y decir qué cambió es casi todo pensamiento, y el
+        // pensamiento sale de aquí. Con 1200 lo que quedaba para escribir la
+        // observación era un resto.
+        max_tokens: 4000,
         system: SISTEMA_FOTOS_VER,
         thinking: { type: 'adaptive' as const },
         messages: [{
@@ -2739,9 +2750,15 @@ Deno.serve(async (req) => {
           ],
         }],
       });
-      const visto = verR.content
-        .filter((b: Record<string, unknown>) => b.type === 'text')
-        .map((b: Record<string, string>) => b.text).join('\n').trim();
+      // Esta observación NO SE ENSEÑA EN NINGUNA PANTALLA: su texto alimenta
+      // la segunda llamada y ahí se acaba. O sea que un corte aquí es
+      // invisible — el coach escribiría su mensaje encima de media
+      // observación y sonaría igual de seguro. Por eso se para aquí.
+      const mirada = textoDe(verR);
+      if (!mirada.texto || mirada.cortada) {
+        return json({ error: 'No pude mirar bien tus fotos. Lo intento más tarde.' }, 500);
+      }
+      const visto = mirada.texto;
 
       // ---- PASO 2: contarlo, ya con los números y SIN las fotos ----
       const p = (cuerpo.pesos ?? []) as Record<string, unknown>[];
@@ -2815,16 +2832,24 @@ Deno.serve(async (req) => {
 
       const decirR = await ia.messages.create({
         model: MODELO,
-        max_tokens: 1000,
+        // El prompt pide tres o cuatro frases, así que mil parecía de sobra.
+        // No lo era: el pensamiento sale de este mismo tope y se lo llevó
+        // casi entero. El mensaje de noviembre se acabó en «El peso».
+        max_tokens: 3000,
         system: SISTEMA_FOTOS_DECIR + numeros,
         thinking: { type: 'adaptive' as const },
         messages: [{ role: 'user', content: 'Cuéntame mi comparación de este mes.' }],
       });
-      const mensaje = decirR.content
-        .filter((b: Record<string, unknown>) => b.type === 'text')
-        .map((b: Record<string, string>) => b.text).join('\n').trim();
-
+      const { texto: mensaje, cortada } = textoDe(decirR);
       if (!mensaje) return json({ error: 'No pude armar tu comparación.' }, 500);
+
+      // CORTADA NO SE GUARDA. Es la línea que importa de todo esto: guardar y
+      // avisar después deja la media frase en la base, y como esto es una
+      // caché mensual ahí se queda hasta el mes que viene. Sin guardar, la
+      // app no marca el mes y lo vuelve a pedir la próxima vez que abra.
+      if (cortada) {
+        return json({ error: 'Tu comparación salió a medias. La vuelvo a intentar.' }, 500);
+      }
 
       // Se guarda el TEXTO. Nunca las imágenes ni nada que las reconstruya.
       await admin.from('analisis_fotos').upsert({
@@ -3112,10 +3137,64 @@ async function afinarConCatalogo(
   return alimentos;
 }
 
+// ---------------------------------------------------------------------
+//  EL TEXTO DE UNA RESPUESTA, Y SI LLEGÓ ENTERO
+//
+//  `max_tokens` NO es el tope del texto: es el tope de todo lo que sale, y
+//  el pensamiento va dentro. Con `thinking: adaptive` es el modelo quien
+//  decide cuánto piensa, así que un tope ajustado a lo que se espera leer
+//  se lo come el pensamiento y para escribir queda lo que sobre.
+//
+//  Pasó con la comparación mensual de fotos: mil de tope, y el mensaje se
+//  acabó en «El peso». A media frase, sin puntos suspensivos ni aviso. Y el
+//  prompt empuja justo en esa dirección —pide «tres o cuatro frases» sobre
+//  un trabajo que es comparar ocho fotos contra un mes de números—: cuanto
+//  más corta se pide la respuesta, más desproporcionado queda el tope.
+//
+//  Lo que convirtió el tropiezo en un mes de bug fue que ESO SE GUARDÓ. La
+//  comparación es una al mes y se cachea a propósito —son ocho imágenes al
+//  modelo, no se pagan dos veces—, así que la media frase se quedó en su
+//  pantalla hasta diciembre. `stop_reason` es donde la API dice «no acabé,
+//  me quedé sin sitio», y no lo miraba nadie.
+//
+//  Subir los topes también se hizo, pero subir un tope es adivinar. Esto es
+//  no depender de haber adivinado bien.
+// ---------------------------------------------------------------------
+function textoDe(
+  r: { stop_reason?: string | null; content: Array<{ type: string; text?: string }> },
+) {
+  return {
+    // Solo los bloques de texto. Con el pensamiento activado el primero no
+    // lo es, y colarlo aquí le enseñaría a alguien el razonamiento del
+    // modelo en vez de su mensaje.
+    texto: r.content
+      .filter((b) => b.type === 'text')
+      .map((b) => b.text ?? '').join('\n').trim(),
+    cortada: r.stop_reason === 'max_tokens',
+  };
+}
+
+//  Y PARA LO QUE YA ESTÁ GUARDADO, donde `stop_reason` se perdió al
+//  guardarlo: lo único que queda es el texto, y un texto que no cierra la
+//  frase no acabó. No es una prueba, es la mejor pista que hay — y basta
+//  para no volver a servir media frase como el mensaje del mes.
+function textoCompleto(t: unknown): boolean {
+  return /[.!?…"»')\]]\s*$/.test(String(t ?? ''));
+}
+
 // Con el pensamiento activado el primer bloque no es el texto, así que se
 // busca por tipo en vez de dar por hecho que es content[0].
-function leerJson(r: { content: Array<{ type: string; text?: string }> }) {
+function leerJson(
+  r: { stop_reason?: string | null; content: Array<{ type: string; text?: string }> },
+) {
   const bloque = r.content.find((b) => b.type === 'text');
   if (!bloque?.text) throw new Error('respuesta sin texto');
+  // Un JSON cortado revienta con «Unexpected end of JSON input», y eso no le
+  // dice a nadie que lo que pasó fue quedarse sin tokens. Esto corre una vez
+  // por semana —el cierre de los lunes—, así que sin esta línea el error
+  // llega solo, sin contexto y sin nada que lo relacione con un tope corto.
+  if (r.stop_reason === 'max_tokens') {
+    throw new Error('respuesta cortada: se acabaron los tokens antes de cerrar el JSON');
+  }
   return JSON.parse(bloque.text);
 }

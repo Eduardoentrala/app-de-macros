@@ -84,8 +84,18 @@ console.log('\n— Series completas, y separadas —');
   // sostiene a alguien en el mes cuatro.
   check('guarda tambien contra la primera serie', /semanaBase/.test(ACC));
   check('una vez al mes y persona', /unique \(user_id, mes\)/.test(SQL));
+  // LO QUE IMPORTA ES QUE SALGA ANTES DE BAJAR LAS FOTOS, no cómo esté
+  // escrita la condición. Esto fijaba la línea entera —`if (yaEsta &&
+  // cuerpo.rehacer !== true)`— y se puso roja el día que a la condición le
+  // entró un término más (que lo guardado esté completo, no cortado a media
+  // frase). No había nada roto: fijaba la forma del código en vez de lo que
+  // hace.
+  const iYa = ACC.indexOf('yaEsta &&');
+  const iBajar = ACC.indexOf('storage.from(');
   check('si ya esta hecho no se vuelve a pagar',
-    /if \(yaEsta && cuerpo\.rehacer !== true\)/.test(ACC));
+    iYa > 0 && iBajar > iYa && /rehacer !== true/.test(ACC),
+    'tiene que salir con lo guardado ANTES de bajar las ocho imagenes, y ' +
+    'solo `rehacer` puede pasar de largo');
 }
 
 console.log('\n— La primera lectura es a ciegas —');

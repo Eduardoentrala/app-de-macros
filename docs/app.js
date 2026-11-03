@@ -7835,7 +7835,22 @@
   // pidió. El freno de verdad está en el servidor -uno por mes y persona,
   // y solo con dos series completas separadas por tres semanas-, así que
   // aquí basta con no llamar cuando es evidente que no toca.
-  var CLAVE_ANALISIS = 'macros.analisisPedido';
+  // LA MARCA DEL MES, Y POR QUÉ LLEVA UN 2 DETRÁS.
+  //
+  //  Esta marca dice «este mes ya se preguntó» y vive en el teléfono. El
+  //  problema es que también se puso los meses en que el servidor contestó
+  //  con una comparación CORTADA a media frase —el tope de tokens incluía el
+  //  pensamiento del modelo y se lo comía—, y esas quedaron guardadas.
+  //
+  //  El servidor ya no las guarda, y ya no sirve de la caché una que esté a
+  //  medias. Pero con la marca puesta este teléfono no volvería a preguntar
+  //  hasta el mes que viene, así que el arreglo no llegaría a quien le pasó.
+  //  Cambiarle el nombre a la clave es olvidar la marca una vez: se pregunta
+  //  otra vez, el servidor ve que lo guardado está cortado y la rehace.
+  //
+  //  No hace falta volver a tocarlo nunca. Si algún día hay que olvidarla
+  //  otra vez, el 3.
+  var CLAVE_ANALISIS = 'macros.analisisPedido2';
 
   function mesDeHoy(){ return isoDe(HOY).slice(0, 7); }
 
