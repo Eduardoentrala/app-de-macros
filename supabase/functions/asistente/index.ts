@@ -52,7 +52,7 @@ const CORS = {
 //
 // Ahora lo dice: un GET sin sesión devuelve este sello y nada más.
 // `pruebas/funciones-vivas.mjs` lo compara con el del repo.
-const SELLO = 'f8546ea3be';
+const SELLO = '469a7c9fd0';
 
 // Tope diario por persona. Es la única defensa contra que un solo usuario
 // -o un token robado- vacíe la cuenta en una noche con un bucle.
@@ -1648,6 +1648,10 @@ Deno.serve(async (req) => {
     semana:  'semanal',   // el cierre de los lunes
     fotos:   'semanal',   // comparar fotos de progreso
     cliente: 'analisis',  // el resumen para el entrenador
+    // `cumple` NO LLEVA LLAVE, y es a propósito: felicitar a alguien por su
+    // cumpleaños no es una función que un entrenador vaya a querer apagarle
+    // a nadie, y es una al año. Si algún día se apaga, se apagará con la
+    // llave general o quitando la fecha, que es de quien la puso.
   };
   // LA FOTO DE COMIDA VIAJA COMO `chat`, NO COMO `apuntar`.
   //
@@ -3098,20 +3102,17 @@ Deno.serve(async (req) => {
         year: 'numeric', month: '2-digit', day: '2-digit',
       }).format(new Date());
 
-      const anio = Number(hoy.slice(0, 4));
       const nacio = String(p.nacimiento).slice(0, 10);
 
-      // CUÁNTOS DÍAS HAN PASADO DESDE SU CUMPLEAÑOS DE ESTE AÑO. Se
-      // comparan fechas de calendario a mediodía UTC para que ningún
-      // cambio de horario mueva el resultado un día.
-      const aMedioDia = (iso: string) => Date.parse(iso + 'T12:00:00Z');
-      const suDia = `${anio}-${nacio.slice(5)}`;
-      const pasados = Math.round((aMedioDia(hoy) - aMedioDia(suDia)) / 86400000);
+      // El año DE SU CUMPLEAÑOS, que no siempre es el de hoy: ver
+      // `cumpleDeQueAnio`. Quien nació el 31 de diciembre y abre la app el 2
+      // de enero cumplió hace dos días, no dentro de 363.
+      const { anio, pasados } = cumpleDeQueAnio(hoy, nacio);
 
       // El día, y tres días más. Quien no abre la app ese día no se queda
       // sin la suya — y pasada esa ventana no se felicita con retraso, que
       // es peor que no felicitar.
-      if (!isFinite(pasados) || pasados < 0 || pasados > 3) {
+      if (!isFinite(pasados) || pasados > 3) {
         return json({ estado: 'hoy_no' });
       }
 
@@ -3422,6 +3423,56 @@ function textoDe(
 //  para no volver a servir media frase como el mensaje del mes.
 function textoCompleto(t: unknown): boolean {
   return /[.!?…"»')\]]\s*$/.test(String(t ?? ''));
+}
+
+// ---------------------------------------------------------------------
+//  DE QUÉ AÑO ES SU CUMPLEAÑOS, Y CUÁNTOS DÍAS HAN PASADO
+//
+//  Parece que basta con pegarle el año de hoy al día que nació. No basta,
+//  y falla justo donde más duele: QUIEN NACIÓ A FINAL DE DICIEMBRE.
+//
+//  Alguien del 31 de diciembre que abre la app el 2 de enero cumplió hace
+//  dos días. Con el año de hoy, su día sale el 31 de diciembre del año que
+//  viene —363 días en el futuro—, así que la ventana de tres días decía
+//  «hoy no» y se quedaba sin felicitación. Y es la peor fecha para
+//  perderla: en año nuevo la gente viaja y no abre la app ese día, que es
+//  para lo que existe la ventana.
+//
+//  Y había un segundo fallo encima del primero: el año se usa también para
+//  la fila única de la base. Si se felicitara el 31 y otra vez el 1, serían
+//  dos filas y dos felicitaciones para el MISMO cumpleaños.
+//
+//  Así que el año se busca: el de hoy, y si ese día todavía no ha llegado,
+//  el anterior. `pasados` nunca sale negativo, y el año que se devuelve es
+//  el del cumpleaños, no el de la fecha en que se abrió la app.
+//
+//  El 29 de febrero se resuelve solo y bien: `Date.parse('2027-02-29')` cae
+//  en el 1 de marzo, así que en los años normales se felicita ese día.
+// ---------------------------------------------------------------------
+function cumpleDeQueAnio(hoy: string, nacimiento: string) {
+  // A mediodía, y conviene ser honesto sobre por qué: AQUÍ NO HACE FALTA.
+  // Las dos fechas son cadenas de calendario que se leen en UTC, así que a
+  // medianoche saldría exactamente lo mismo —se comprobó con una mutación,
+  // y no la caza ninguna prueba porque no hay nada que cazar—.
+  //
+  // Se escribe así porque es la regla de este fichero: ninguna fecha de
+  // calendario se compara en los bordes del día. Donde SÍ importa es en
+  // cuanto una de las dos deje de ser UTC pura, y eso ya se pagó una vez
+  // (la 0038, con la racha). Una regla con excepciones que hay que razonar
+  // caso por caso deja de ser una regla.
+  const aMedioDia = (iso: string) => Date.parse(iso + 'T12:00:00Z');
+  const diaDe = (a: number) => `${a}-${String(nacimiento).slice(5, 10)}`;
+
+  let anio = Number(String(hoy).slice(0, 4));
+  if (!isFinite(aMedioDia(hoy)) || !isFinite(aMedioDia(diaDe(anio)))) {
+    return { anio, pasados: NaN };
+  }
+  if (aMedioDia(hoy) < aMedioDia(diaDe(anio))) anio -= 1;
+
+  return {
+    anio,
+    pasados: Math.round((aMedioDia(hoy) - aMedioDia(diaDe(anio))) / 86400000),
+  };
 }
 
 // Con el pensamiento activado el primer bloque no es el texto, así que se

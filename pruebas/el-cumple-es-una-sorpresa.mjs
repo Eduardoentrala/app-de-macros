@@ -21,6 +21,7 @@
 //    gratis y sin límite.
 
 import { readFileSync } from 'node:fs';
+import { stripTypeScriptTypes } from 'node:module';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -47,6 +48,25 @@ function bloqueDeAccion(nombre) {
     else if (FN[j] === '}') { n--; if (!n) return sinComentarios(FN.slice(i, j + 1)); }
   }
   throw new Error('llaves sin cerrar en ' + nombre);
+}
+
+// El cuerpo empieza DESPUÉS de los paréntesis y no en la primera llave:
+// los tipos de los parámetros llevan llaves dentro.
+function sacar(cabecera) {
+  const i = FN.indexOf(cabecera);
+  if (i < 0) throw new Error('no encuentro: ' + cabecera);
+  let n = 0, j = FN.indexOf('(', i);
+  for (; j < FN.length; j++) {
+    if (FN[j] === '(') n++;
+    else if (FN[j] === ')') { n--; if (!n) break; }
+  }
+  n = 0;
+  let k = FN.indexOf('{', j);
+  for (; k < FN.length; k++) {
+    if (FN[k] === '{') n++;
+    else if (FN[k] === '}') { n--; if (!n) return FN.slice(i, k + 1); }
+  }
+  throw new Error('llaves sin cerrar en ' + cabecera);
 }
 
 function prompt(nombre) {
@@ -80,20 +100,71 @@ console.log('\nY el día es el suyo, en su zona horaria');
      'y no con `toISOString()`, que va en UTC',
      'desde las 18:00 de México ya es mañana en UTC: el cumpleaños ' +
      'empezaría la tarde de antes y se acabaría esa misma tarde');
-  ok(/T12:00:00Z/.test(CUMPLE),
-     'y las fechas se comparan a mediodía',
-     'a medianoche, un cambio de horario mueve el resultado un día entero');
+  // La cuenta de días ya no vive aquí: se extrajo a `cumpleDeQueAnio` para
+  // poder ejecutarla, y más abajo se ejecuta con los casos de fin de año y
+  // del 29 de febrero. Aquí solo se vigila que el bloque siga delegando.
+  ok(/cumpleDeQueAnio\(/.test(CUMPLE),
+     'y la cuenta de días la hace la función que sí se puede probar');
 }
 
 // ------------------------------------------------------------------
 console.log('\nY se felicita el día, o poco después, pero no un mes tarde');
 {
-  ok(/pasados < 0/.test(CUMPLE), 'antes de tiempo no');
-  ok(/pasados > 3/.test(CUMPLE), 'y con más de tres días de retraso tampoco',
+  ok(/pasados > 3/.test(CUMPLE), 'con más de tres días de retraso no',
      'quien no abre la app ese día no se queda sin la suya, pero felicitar ' +
      'con un mes de retraso es peor que no felicitar');
   ok(/estado: 'sin_fecha'/.test(CUMPLE), 'y quien no puso su fecha no recibe nada',
      'es opcional de verdad: no se insiste ni se adivina');
+}
+
+// ------------------------------------------------------------------
+console.log('\nY el año del cumpleaños no es siempre el de hoy');
+{
+  // SE EJECUTA, que es la única forma de ver esto. Leer el código daba la
+  // impresión de que estaba bien: pegarle el año de hoy al día que naciste
+  // parece obvio. Falla justo en fin de año, y quien lo sufre es quien
+  // nació a final de diciembre — el peor momento para perderse la
+  // felicitación, porque en año nuevo nadie abre la app ese día, que es
+  // para lo que existe la ventana de tres días.
+  const js = stripTypeScriptTypes(sacar('function cumpleDeQueAnio('));
+  const cumpleDeQueAnio = new Function(js + '; return cumpleDeQueAnio;')();
+
+  const casos = [
+    ['el mismo día',            '2026-11-05', '1990-11-05', 2026, 0,  true],
+    ['tres días después',       '2026-11-08', '1990-11-05', 2026, 3,  true],
+    ['cuatro, ya no',           '2026-11-09', '1990-11-05', 2026, 4,  false],
+    ['meses antes',             '2026-03-01', '1990-11-05', 2025, null, false],
+    ['NACIÓ EL 31-DIC, HOY 2-ENE', '2027-01-02', '1990-12-31', 2026, 2, true],
+    ['NACIÓ EL 29-DIC, HOY 1-ENE', '2027-01-01', '1990-12-29', 2026, 3, true],
+    ['nació el 1-ene, hoy 1-ene',  '2027-01-01', '1990-01-01', 2027, 0, true],
+    ['29 de febrero, año normal',  '2027-03-01', '1992-02-29', 2027, 0, true],
+    ['29 de febrero, bisiesto',    '2028-02-29', '1992-02-29', 2028, 0, true],
+  ];
+
+  for (const [qué, hoy, nacio, anio, pasados, felicita] of casos) {
+    const r = cumpleDeQueAnio(hoy, nacio);
+    const entra = isFinite(r.pasados) && r.pasados <= 3;
+    ok(entra === felicita,
+       (felicita ? 'se felicita' : 'no se felicita') + ': ' + qué,
+       `hoy=${hoy} nació=${nacio} → año=${r.anio} pasados=${r.pasados}`);
+    ok(r.anio === anio, `  y es el cumpleaños de ${anio}`,
+       'salió ' + r.anio + '. El año es el de la FILA ÚNICA de la base: con ' +
+       'el de hoy, felicitar el 31 y otra vez el 1 serían dos felicitaciones ' +
+       'para el mismo cumpleaños');
+    if (pasados !== null) {
+      ok(r.pasados === pasados, `  y han pasado ${pasados} día(s)`,
+         'salió ' + r.pasados);
+    }
+  }
+
+  // Nunca negativo: si lo fuera, la ventana `pasados > 3` dejaría pasar un
+  // cumpleaños que todavía no ha llegado.
+  let algunoNegativo = false;
+  for (let d = 1; d <= 365; d++) {
+    const hoy = new Date(Date.UTC(2027, 0, 1) + d * 86400000).toISOString().slice(0, 10);
+    if (cumpleDeQueAnio(hoy, '1990-07-14').pasados < 0) algunoNegativo = true;
+  }
+  ok(!algunoNegativo, 'y en 365 días seguidos nunca sale negativo');
 }
 
 // ------------------------------------------------------------------

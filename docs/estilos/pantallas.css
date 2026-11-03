@@ -1266,8 +1266,12 @@
    lo parezca. */
 .felicita-card{
   position:relative;
-  margin:0 0 12px;padding:18px 44px 18px 18px;
-  background:var(--amber-soft);border-radius:var(--r-card, 18px);
+  /* La misma geometría que `.card`: 16 px a los lados y radio 20. Nació con
+     `var(--r-card, 18px)` —una variable que no existe— y sin margen, así
+     que salía pegada a los bordes y con una esquina distinta a la de todas
+     las tarjetas de debajo. */
+  margin:0 16px 14px;padding:18px 44px 18px 18px;
+  background:var(--amber-soft);border-radius:20px;
   box-shadow:var(--shadow);
 }
 .felicita-tit{
