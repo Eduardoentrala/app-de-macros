@@ -67,10 +67,21 @@ function volcar(perfil) {
   //  y  se llaman al final y tocan el
   // DOM entero. Aqui no se prueban: se pasan como dobles para que la
   // funcion llegue hasta el final y se pueda mirar que dejo en `reg`.
+  //
+  // `esFecha` y `edadDeNacimiento` van DE VERDAD, no como dobles: la
+  // funcion las usa ahora para sacar la edad del cumpleanos en vez del
+  // `age` guardado, y con un doble no se veria si eso sigue pasando.
+  // `sbActualizarPerfil` si es doble —toca la red— y devuelve algo con
+  // `catch` para que la cadena no reviente.
+  const sinRed = { ['catch']: () => {} };
   new Function('p', 'reg', 'document', 'cajaCond', 'marcarUno', 'Array', 'Number',
     'calcularMacros', 'pintarSaludPerfil', 'CONSENTIMIENTO_SALUD',
+    'isoDe', 'HOY', 'Date', 'sesion', 'sbActualizarPerfil', 'apuntarFallo',
+    sacar('function esFecha(') + ';' +
+    sacar('function edadDeNacimiento(') + ';' +
     sacar('function volcarPerfilEnRegistro(p){') + '; volcarPerfilEnRegistro(p);')(
-    perfil, reg, doc, caja, () => {}, Array, Number, () => ({}), () => {}, null);
+    perfil, reg, doc, caja, () => {}, Array, Number, () => ({}), () => {}, null,
+    () => '2026-11-03', null, Date, { user: { id: 'u1' } }, () => sinRed, () => {});
   return { reg, campos };
 }
 

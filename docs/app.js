@@ -2477,7 +2477,15 @@
   document.getElementById('profDatosBtn').addEventListener('click', function(){
     var p = MI_PERFIL || {};
     document.getElementById('datNombre').value = p.full_name || '';
-    document.getElementById('datEdad').value   = (p.age != null) ? p.age : '';
+    // CON FECHA DE NACIMIENTO, LA EDAD NO SE TECLEA: se calcula. Dos
+    // fuentes para el mismo dato acaban siempre en que una miente, y aquí
+    // la que miente sería la tecleada, que no envejece.
+    var edadHoy = edadDeNacimiento(p.nacimiento, isoDe(HOY));
+    var campoEdad = document.getElementById('datEdad');
+    campoEdad.value = (edadHoy != null) ? edadHoy : ((p.age != null) ? p.age : '');
+    campoEdad.disabled = (edadHoy != null);
+    var notaEdad = document.getElementById('datEdadNota');
+    if(notaEdad) notaEdad.hidden = (edadHoy == null);
     document.getElementById('datAltura').value = (p.height_cm != null) ? p.height_cm : '';
     datSexo = p.sexo || null;
     Array.from(datosSheet.querySelectorAll('#datSexo button')).forEach(function(b){
@@ -2515,7 +2523,12 @@
     var cambios = {};
     if(nombre) cambios.full_name = nombre;
     if(datSexo) cambios.sexo = datSexo;
-    if(edad) cambios.age = Math.round(edad);
+    // La edad solo viaja si se tecleó. Con fecha de nacimiento la escribe
+    // `volcarPerfilEnRegistro` al entrar, y mandarla desde aquí sería el
+    // segundo escritor del mismo dato.
+    if(edad && !edadDeNacimiento(MI_PERFIL && MI_PERFIL.nacimiento, isoDe(HOY))){
+      cambios.age = Math.round(edad);
+    }
     if(alt)  cambios.height_cm = Math.round(alt * 10) / 10;
     if(!Object.keys(cambios).length){ cerrarDatos(); return; }
 
@@ -5969,9 +5982,71 @@
     });
   }
 
+  // LA EDAD, SACADA DE LA FECHA Y NO DE UN NÚMERO GUARDADO
+  //
+  //  `profiles.age` es un número que se tecleó una vez y no envejece: quien
+  //  se registró con 40 sigue teniendo 40 tres años después, y con él la
+  //  fórmula de Mifflin-St Jeor —y el suelo que sale de ella— se van
+  //  quedando viejos sin que nada lo diga.
+  //
+  //  Con la fecha de nacimiento ya no hace falta adivinar. Esto la convierte
+  //  en la edad de HOY, y `age` pasa a ser lo que siempre debió ser: una
+  //  copia que se refresca sola, no la fuente.
+  //
+  //  SIN FECHA NO CAMBIA NADA. Quien no la haya puesto sigue con su `age`
+  //  tal cual: esto no puede dejar a nadie sin edad por un dato opcional.
+  //  Y LA FORMA NO BASTA: «1997-13-45» la cumple y no es un día del
+  //  calendario. Lo cazó la prueba, devolviendo una edad tan tranquila. Se
+  //  comprueba que la fecha EXISTA, lo que de paso descarta un 30 de
+  //  febrero. El `Date.UTC` es solo para eso: no se hace ninguna cuenta con
+  //  él, así que ningún huso horario entra aquí.
+  function esFecha(iso){
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
+    var y = Number(iso.slice(0, 4)), m = Number(iso.slice(5, 7)), d = Number(iso.slice(8, 10));
+    var x = new Date(Date.UTC(y, m - 1, d));
+    return x.getUTCFullYear() === y && x.getUTCMonth() === m - 1 && x.getUTCDate() === d;
+  }
+
+  function edadDeNacimiento(nacimiento, hoyIso){
+    var n = String(nacimiento || '').slice(0, 10);
+    var h = String(hoyIso || '').slice(0, 10);
+    if(!esFecha(n) || !esFecha(h)) return null;
+
+    var a = Number(h.slice(0, 4)) - Number(n.slice(0, 4));
+    // Si su día todavía no ha llegado este año, aún no los ha cumplido.
+    // Se comparan los «MM-DD» como texto, que en ISO ordena igual que la
+    // fecha y no necesita construir ningún `Date` — ni sufrir su huso.
+    if(h.slice(5) < n.slice(5)) a -= 1;
+    return (a >= 0 && a <= 120) ? a : null;
+  }
+
+  function miEdad(){
+    var p = MI_PERFIL || {};
+    var deLaFecha = edadDeNacimiento(p.nacimiento, isoDe(HOY));
+    return (deLaFecha != null) ? deLaFecha : ((p.age != null) ? Number(p.age) : null);
+  }
+
   function volcarPerfilEnRegistro(p){
     if(!p) return;
-    if(p.age       != null) document.getElementById('regEdad').value   = p.age;
+    // LA DE LA FECHA MANDA. Va antes del `age` guardado a propósito: si
+    // hay fecha de nacimiento, el número guardado es una copia vieja.
+    var edadHoy = edadDeNacimiento(p.nacimiento, isoDe(HOY));
+    if(edadHoy != null){
+      document.getElementById('regEdad').value = edadHoy;
+      // Y SE DEVUELVE A LA BASE cuando ya no coincide. `age` lo leen otras
+      // cosas —las métricas que ve su entrenador, entre ellas— y dejarlo
+      // viejo sería arreglarlo solo en esta pantalla. Pasa una vez al año
+      // por persona, el día que cumple.
+      if(p.age !== edadHoy && sesion && sesion.user){
+        p.age = edadHoy;
+        sbActualizarPerfil({ age: edadHoy })['catch'](function(e){
+          // En silencio: la pantalla y la fórmula ya usan la buena, y si no
+          // sube se vuelve a intentar la próxima vez que abra.
+          apuntarFallo('refrescar_edad', e);
+        });
+      }
+    }
+    else if(p.age != null) document.getElementById('regEdad').value = p.age;
     if(p.height_cm != null) document.getElementById('regAltura').value = p.height_cm;
     if(p.weight_kg != null) document.getElementById('regPeso').value   = p.weight_kg;
 
@@ -11616,7 +11691,11 @@
           if(p.goal) reg.objetivo = p.goal;
           if(p.weight_kg != null) document.getElementById('profPeso').textContent   = Number(p.weight_kg).toFixed(1) + ' kg';
           if(p.height_cm != null) document.getElementById('profAltura').textContent = Number(p.height_cm).toFixed(1) + ' cm';
-          if(p.age != null)       document.getElementById('profEdad').textContent   = p.age + ' años';
+          // LA DE HOY, no la guardada: con fecha de nacimiento, `age` es una
+          // copia que puede llevar años sin refrescarse.
+          var _e = edadDeNacimiento(p.nacimiento, isoDe(HOY));
+          if(_e == null && p.age != null) _e = p.age;
+          if(_e != null) document.getElementById('profEdad').textContent = _e + ' años';
           pintarObjetivoPerfil();
           pintarDatosPerfil();
           pintarDiasPerfil();

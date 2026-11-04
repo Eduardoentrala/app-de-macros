@@ -107,8 +107,11 @@ console.log('\nSe guarda solo lo que de verdad escribió');
     APP.indexOf('// ---- Días de gimnasio ----')));
 
   ok(/sbActualizarPerfil\(cambios\)/.test(g), 'se manda al perfil');
+  // La edad lleva una condición más desde que sale del cumpleaños: con
+  // fecha de nacimiento no viaja desde aquí, para no ser el segundo
+  // escritor del mismo dato. Ver `la-edad-no-se-queda-quieta`.
   ok(/if\(nombre\)/.test(g) && /if\(datSexo\)/.test(g) &&
-     /if\(edad\)/.test(g) && /if\(alt\)/.test(g),
+     /if\(edad &&/.test(g) && /if\(alt\)/.test(g),
      'y solo los campos que rellenó',
      'mandar `null` por un campo que dejó vacío borraría lo que ya hubiera');
 
