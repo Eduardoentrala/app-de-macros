@@ -462,3 +462,26 @@ table.week-table tr.today td{font-weight:800;}
   content:'';position:absolute;top:0;left:0;
   width:100%;height:100%;min-height:44px;
 }
+
+/* CUÁNTO TE SERVISTE, dentro de la hoja de una receta.
+   ---------------------------------------------------------------
+   Una receta se cocina entera y se come en varias veces. Esto es lo
+   que convierte «apuntar la receta» en «apuntar mi plato», y por eso
+   va ARRIBA de la lista de ingredientes: lo que se elige aquí cambia
+   lo que dice esa lista. */
+.rp-porcion{
+  background:var(--app-bg);border-radius:14px;padding:12px;margin:12px 0 4px;
+}
+.rp-botones{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+/* Los de fracción son más estrechos que los de `.opt-row`: cuatro en
+   una fila de móvil. Se baja el relleno lateral, no el vertical, que
+   es el que da el área de dedo. */
+.rp-botones .opt{padding:12px 4px;}
+.rp-gramos{display:flex;align-items:center;gap:10px;margin-top:8px;}
+.rp-gramos .mini-field{flex:1;background:var(--card-bg);}
+.rp-de{font:600 12.5px/1 sans-serif;color:var(--ink-soft);flex:none;}
+/* La cuenta de lo que va a entrar. Es lo que se mira antes de pulsar,
+   así que no es una nota al pie: va en el color del texto normal. */
+#recetaPreview{
+  margin:9px 0 0;font:700 13px/1.4 sans-serif;color:var(--ink);text-align:left;
+}

@@ -4014,20 +4014,58 @@
   //  que sabe apuntar bien: suma al dia, repinta, persiste y deshace si
   //  falla. Lo unico que se le pide es que se calle, para dar UN aviso al
   //  final en vez de uno por alimento.
-  function apuntarReceta(r){
+  // ---- Lo que pesa una receta entera ----
+  //
+  //  Solo si TODOS sus ingredientes van en gramos. Con uno en piezas el
+  //  peso de la fuente no se sabe —media pieza de qué— y devolver un número
+  //  a medias sería peor que no devolver ninguno: se usa para repartir, y
+  //  repartir mal es apuntar mal.
+  //
+  //  Y NO HACE FALTA PESAR LA FUENTE. Sale de lo que lleva dentro, que ya
+  //  está apuntado. Pesarla además mide el recipiente, y eso se olvida.
+  function pesoDeReceta(r){
+    var ing = (r && r.ing) || [];
+    if(!ing.length) return null;
+    var total = 0;
+    for(var i = 0; i < ing.length; i++){
+      if((ing[i].u || 'Gramos') !== 'Gramos') return null;
+      var c = Number(ing[i].cant);
+      if(!(c > 0)) return null;
+      total += c;
+    }
+    return Math.round(total);
+  }
+
+  // Un ingrediente, escalado. Los macros y la cantidad se mueven juntos:
+  // escalar unos sin la otra deja el diario diciendo «600 g · 128 cal».
+  function escalarIngrediente(x, f){
+    var k = Number(f);
+    if(!(k > 0)) k = 1;
+    // A un decimal, como todo lo demás que se apunta. Redondear a entero
+    // haría que tres tercios no sumaran la receta entera.
+    var red = function(v){ return Math.round((Number(v) || 0) * k * 10) / 10; };
+    return { n:x.n, u:x.u || 'Gramos', cant:red(x.cant),
+             P:red(x.P), C:red(x.C), G:red(x.G) };
+  }
+
+  function apuntarReceta(r, factor){
     var ing = (r && r.ing) || [];
     if(!ing.length){
       toast('toastComida', 'Esa receta no tiene alimentos dentro');
       return;
     }
+    var f = Number(factor);
+    if(!(f > 0)) f = 1;
     var comida = comidaActual;
     ing.forEach(function(x){
-      agregarAlimento({ n:x.n, u:x.u || 'Gramos', cant:Number(x.cant) || 0,
-                        P:Number(x.P) || 0, C:Number(x.C) || 0, G:Number(x.G) || 0 },
-                      { calla: true });
+      agregarAlimento(escalarIngrediente(x, f), { calla: true });
     });
     volverA('mealadd', 'diario');
-    toast('toastComida', r.n + ' · ' + ing.length +
+    // Se dice CUÁNTO entró, no solo que entró. Si se apuntó un tercio y el
+    // aviso dice lo mismo que al apuntarlo entero, no hay forma de saber
+    // cuál de los dos pasó.
+    var cuanto = (f === 1) ? '' : ' · ' + Math.round(f * 100) + '%';
+    toast('toastComida', r.n + cuanto + ' · ' + ing.length +
           (ing.length === 1 ? ' alimento' : ' alimentos') + ' en ' + comida);
   }
 
@@ -4046,11 +4084,67 @@
     reposarBorradoReceta();
   }
 
+  // Cuánto de la receta se va a apuntar. 1 = la fuente entera, que es lo
+  // que hacía antes de que esto existiera: quien no toque nada apunta lo
+  // mismo de siempre.
+  var factorReceta = 1;
+
+  function pintarPorcionReceta(){
+    var r = recetaAbierta;
+    if(!r) return;
+    var ing = r.ing || [];
+    var peso = pesoDeReceta(r);
+
+    // Los gramos solo si se sabe lo que pesa entera.
+    var caja = document.getElementById('recetaGramosCaja');
+    if(caja){
+      caja.hidden = (peso == null);
+      if(peso != null){
+        document.getElementById('recetaDeTotal').textContent = 'de ' + mil(peso) + ' g';
+        var campo = document.getElementById('recetaGramos');
+        // Se reescribe salvo mientras se teclea: si no, escribir «25» para
+        // llegar a 250 se convertiría en 25 redondeado y de vuelta.
+        if(document.activeElement !== campo){
+          campo.value = Math.round(peso * factorReceta);
+        }
+      }
+    }
+
+    Array.from(document.querySelectorAll('#recetaFrac button')).forEach(function(b){
+      // Con tolerancia: ⅓ es 0.3333 y los gramos dan 0.33333…
+      b.classList.toggle('active', Math.abs(Number(b.dataset.f) - factorReceta) < 0.005);
+    });
+
+    var esc = ing.map(function(x){ return escalarIngrediente(x, factorReceta); });
+    var tot = esc.reduce(function(t, x){
+      t.P += x.P; t.C += x.C; t.G += x.G; return t;
+    }, { P:0, C:0, G:0 });
+    var cal = Math.round(tot.P * 4 + tot.C * 4 + tot.G * 9);
+
+    var prev = document.getElementById('recetaPreview');
+    if(prev){
+      prev.textContent = 'Se apunta: ' + mil(cal) + ' cal · ' +
+        un(tot.P) + ' P · ' + un(tot.C) + ' C · ' + un(tot.G) + ' G';
+    }
+
+    // Y LA LISTA, con lo que de verdad va a entrar. Enseñar los 600 g de
+    // la receta mientras se apuntan 200 sería enseñar otra receta.
+    document.getElementById('recetaIng').innerHTML = esc.length
+      ? '<div class="food-list">' + esc.map(function(x){
+          return '<div class="food-card"><div class="fc-main">' +
+            '<div class="fc-name">' + escapar(x.n) + '</div>' +
+            '<div class="fc-sub">' + un(x.cant) + ' ' + escapar(textoUnidad(x.cant, x.u)) +
+            ' · ' + mil(Math.round(x.P*4 + x.C*4 + x.G*9)) + ' cal</div></div></div>';
+        }).join('') + '</div>'
+      : '';
+  }
+
   function abrirReceta(r){
     recetaAbierta = r;
     var h = document.getElementById('recetaSheet');
     if(!h) return;
     reposarBorradoReceta();
+    factorReceta = 1;              // cada vez que se abre, la fuente entera
     document.getElementById('recetaNombre').textContent = r.n;
 
     var ing = r.ing || [];
@@ -4065,19 +4159,12 @@
         mil(cal) + ' cal · ' + un(tot.P) + ' P · ' + un(tot.C) + ' C · ' + un(tot.G) + ' G'
       : 'Esta receta no tiene alimentos dentro.';
 
-    // Uno por línea, con lo que se apuntó. Es lo que se va a meter en la
-    // comida: enseñar otra cosa sería enseñar una receta distinta.
-    document.getElementById('recetaIng').innerHTML = ing.length
-      ? '<div class="food-list">' + ing.map(function(x){
-          return '<div class="food-card"><div class="fc-main">' +
-            '<div class="fc-name">' + escapar(x.n) + '</div>' +
-            // `textoUnidad` y no `abreviarUnidad`: la segunda devuelve el
-            // singular siempre y salia «2 pieza».
-            '<div class="fc-sub">' + un(x.cant) + ' ' + escapar(textoUnidad(x.cant, x.u || 'Gramos')) +
-            ' · ' + mil(Math.round((Number(x.P)||0)*4 + (Number(x.C)||0)*4 + (Number(x.G)||0)*9)) +
-            ' cal</div></div></div>';
-        }).join('') + '</div>'
-      : '';
+    // La lista y la cuenta las pinta `pintarPorcionReceta`, que las escala
+    // por lo que se haya servido. `textoUnidad` y no `abreviarUnidad` allí:
+    // la segunda devuelve el singular siempre y salía «2 pieza».
+    var cajaPorcion = document.getElementById('recetaPorcion');
+    if(cajaPorcion) cajaPorcion.hidden = !ing.length;
+    pintarPorcionReceta();
 
     var btn = document.getElementById('recetaAgregar');
     // Dice A DÓNDE va. Desde aquí no se ve la comida, y «Agregar» a secas
@@ -4105,10 +4192,36 @@
     h.addEventListener('click', function(e){ if(e.target === h) cerrarReceta(); });
     document.getElementById('recetaCerrar').addEventListener('click', cerrarReceta);
 
+    // Las fracciones. Van siempre, haya gramos o no: «me comí la mitad» se
+    // sabe sin pesar nada, y es como se sirve la gente de verdad.
+    document.getElementById('recetaFrac').addEventListener('click', function(e){
+      var b = e.target.closest('button');
+      if(!b) return;
+      factorReceta = Number(b.dataset.f) || 1;
+      pintarPorcionReceta();
+    });
+
+    // Y los gramos, para quien sí pesa su plato. OJO AL PESAR: la báscula
+    // tiene que estar en cero CON el plato encima, o se apunta también el
+    // plato. Aquí no se puede comprobar; en la cuenta de arriba sí se ve si
+    // el número tiene sentido.
+    var campoG = document.getElementById('recetaGramos');
+    if(campoG){
+      campoG.addEventListener('input', function(){
+        var peso = pesoDeReceta(recetaAbierta);
+        var g = Number(this.value);
+        if(!peso || !(g > 0)) return;
+        // Sin tope por arriba a propósito: repetir una receta es normal
+        // —dos platos— y bloquearlo obligaría a apuntarla dos veces.
+        factorReceta = g / peso;
+        pintarPorcionReceta();
+      });
+    }
+
     document.getElementById('recetaAgregar').addEventListener('click', function(){
-      var r = recetaAbierta;
+      var r = recetaAbierta, f = factorReceta;
       cerrarReceta();
-      if(r) apuntarReceta(r);
+      if(r) apuntarReceta(r, f);
     });
 
     document.getElementById('recetaBorrar').addEventListener('click', function(){

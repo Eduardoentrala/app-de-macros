@@ -122,12 +122,16 @@ console.log('\nY se vuelve a apuntar de un toque');
      'y se guardan en memoria con guarda',
      'una fila vieja sin `ingredients` no puede tumbar el listado');
 
-  const apuntar = sacar('function apuntarReceta(r){');
-  ok(/agregarAlimento\(\{[\s\S]{0,260}?\{ calla: true \}\)/.test(apuntar),
+  // La firma creció —ahora lleva el factor de cuánto se sirvió, ver
+  // `la-receta-se-come-en-porciones`— así que se busca por el nombre y no
+  // por la lista de parámetros, que es lo que va a seguir cambiando.
+  const apuntar = sacar('function apuntarReceta(');
+  ok(/agregarAlimento\(escalarIngrediente\(x, f\), \{ calla: true \}\)/.test(apuntar),
      'cada ingrediente pasa por el camino de siempre',
      '`agregarAlimento` es el único que suma al día, repinta, persiste y ' +
      'deshace si falla: escribir eso otra vez es escribir los mismos fallos otra vez');
-  ok(/toast\('toastComida', r\.n \+ ' · ' \+ ing\.length/.test(apuntar),
+  ok((apuntar.match(/toast\(/g) || []).length === 2 &&
+     /toast\('toastComida', r\.n \+ cuanto \+ ' · ' \+ ing\.length/.test(apuntar),
      'y se avisa UNA vez, no una por alimento',
      'cinco «agregado a Desayuno» seguidos tapan la pantalla');
   ok(/if\(!ing\.length\)\{/.test(apuntar), 'una receta vacía lo dice y no hace nada');
@@ -193,9 +197,15 @@ console.log('\nTocarla ENSEÑA lo que lleva; apuntarla es el segundo toque');
   // Tocarla la apuntaba de golpe. Una receta son VARIOS alimentos a la vez,
   // y apuntar cinco cosas sin haberlas visto es exactamente lo que luego
   // hay que deshacer una por una.
-  const abrir = sacar('function abrirReceta(r){');
-  ok(/recetaIng'\)\.innerHTML/.test(abrir), 'se pintan sus alimentos');
-  ok(/textoUnidad\(x\.cant, x\.u \|\| 'Gramos'\)/.test(abrir),
+  // El pintado de la lista se mudó a `pintarPorcionReceta`, que la escala
+  // por lo que se sirvió: enseñar los 600 g de la receta mientras se
+  // apuntan 200 sería enseñar otra cosa. Ver
+  // `la-receta-se-come-en-porciones`.
+  const abrir = sacar('function abrirReceta(');
+  const pintar = sacar('function pintarPorcionReceta(');
+  ok(/pintarPorcionReceta\(\)/.test(abrir) && /recetaIng'\)\.innerHTML/.test(pintar),
+     'se pintan sus alimentos');
+  ok(/textoUnidad\(x\.cant, x\.u\)/.test(pintar),
      'con la unidad en plural cuando toca',
      '`abreviarUnidad` devuelve el singular siempre y salía «2 pieza»');
   ok(/btn\.textContent = 'Agregar a ' \+ comidaActual;/.test(abrir),
@@ -206,8 +216,15 @@ console.log('\nTocarla ENSEÑA lo que lleva; apuntarla es el segundo toque');
      'y no deja apuntar una receta vacía');
 
   const h = APP.slice(APP.indexOf("document.getElementById('recetaAgregar').addEventListener"));
-  ok(/cerrarReceta\(\);\n      if\(r\) apuntarReceta\(r\);/.test(h.slice(0, 400)),
-     'y al confirmar se cierra y se apunta');
+  // Con el factor de cuánto se sirvió, y LEÍDO ANTES DE CERRAR:
+  // `cerrarReceta` suelta `recetaAbierta`, así que leerlo después apuntaría
+  // lo de la vez anterior. Ver `la-receta-se-come-en-porciones`.
+  const trozo = h.slice(0, 400);
+  ok(/var r = recetaAbierta, f = factorReceta;/.test(trozo) &&
+     /cerrarReceta\(\);/.test(trozo) &&
+     /apuntarReceta\(r, f\);/.test(trozo),
+     'y al confirmar se cierra y se apunta lo que se sirvió',
+     trozo.replace(/\s+/g, ' ').slice(0, 200));
 
   // La hoja, FUERA de las vistas. Es la lección que acaba de costar que el
   // botón de guardar no hiciera nada.

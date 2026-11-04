@@ -112,7 +112,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = 'ae07b89c7d';
+    var SELLO = '2769efd87e';
     // Y a la vista de app.js, que lo manda con cada fallo que apunta. Sin
     // la versión, un error de hace una semana y uno de ahora se leen igual
     // y «eso ya lo arreglé» no se puede comprobar.
@@ -2377,6 +2377,33 @@
         <div class="sheet">
           <h4 id="recetaNombre">Receta</h4>
           <p class="hint" id="recetaResumen">—</p>
+
+          <!-- CUÁNTO SE SIRVIÓ.
+               Una receta se cocina entera y se come en varias veces. Hasta
+               ahora apuntarla metía la fuente completa de un golpe, así que
+               quien hacía un postre de kilo y pico tenía que apuntarla y
+               luego corregir los cinco alimentos a mano, uno por uno.
+               Los gramos solo salen si TODOS los ingredientes van en gramos:
+               con uno en piezas, el peso de la fuente no se sabe y ponerlo
+               sería inventárselo. Las fracciones funcionan siempre. -->
+          <div class="rp-porcion" id="recetaPorcion" hidden>
+            <div class="field-label" style="margin-top:0;">¿Cuánto te serviste?</div>
+            <div class="rp-botones" id="recetaFrac">
+              <button class="opt active" data-f="1">Todo</button>
+              <button class="opt" data-f="0.5">½</button>
+              <button class="opt" data-f="0.3333">⅓</button>
+              <button class="opt" data-f="0.25">¼</button>
+            </div>
+            <div class="rp-gramos" id="recetaGramosCaja" hidden>
+              <div class="mini-field">
+                <input id="recetaGramos" type="number" inputmode="decimal" min="1" step="1">
+                <span>g</span>
+              </div>
+              <span class="rp-de" id="recetaDeTotal">de —</span>
+            </div>
+            <p class="calc-note" id="recetaPreview">—</p>
+          </div>
+
           <div id="recetaIng"></div>
           <button class="btn-primary" id="recetaAgregar">Agregar</button>
           <button class="btn-ghost-text" id="recetaBorrar">Borrar receta</button>
@@ -2439,7 +2466,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = 'ae07b89c7d';
+    var SELLO = '2769efd87e';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que
