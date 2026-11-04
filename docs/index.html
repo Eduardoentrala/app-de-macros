@@ -112,7 +112,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '1eb7b87af0';
+    var SELLO = 'cddbb1056c';
     // Y a la vista de app.js, que lo manda con cada fallo que apunta. Sin
     // la versión, un error de hace una semana y uno de ahora se leen igual
     // y «eso ya lo arreglé» no se puede comprobar.
@@ -2063,8 +2063,14 @@
             <input class="big-input reg-input" id="datNombre" maxlength="24"
               placeholder="Tu nombre">
             <div class="field-label">Sexo</div>
+            <!-- `class="opt"` NO ES DECORACIÓN. El estilo de «esto está
+                 elegido» vive en `.opt.active`, así que sin la clase el
+                 botón se marcaba por dentro —y se guardaba bien— pero no lo
+                 enseñaba: se tocaba, no pasaba nada a la vista, y no había
+                 forma de saber si había quedado puesto. -->
             <div class="opt-row" id="datSexo">
-              <button data-v="h">Hombre</button><button data-v="m">Mujer</button>
+              <button class="opt" data-v="h">Hombre</button>
+              <button class="opt" data-v="m">Mujer</button>
             </div>
             <!-- `opt-row` y no `tres-campos`: son dos, no tres. Las dos
                  clases ya existen; inventar una tercera para esto sería
@@ -2430,7 +2436,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '1eb7b87af0';
+    var SELLO = 'cddbb1056c';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que
