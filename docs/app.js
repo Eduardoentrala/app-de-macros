@@ -13950,6 +13950,16 @@
       laFoto = fotoDeLaSemana(d, sem, extra[0]);
       return iaLlamar({
         accion: 'semana',
+        // SU SUELO, en la raíz y no dentro de `datos`: el servidor lo lee
+        // de `cuerpo.suelo`. Nació metido en `entreno` por un corta y pega
+        // y así no habría llegado nunca — lo cazó la prueba, que mira el
+        // envío y no la línea.
+        //
+        // Se le manda para que el modelo no escriba un número que la app va
+        // a cambiar por debajo. La app lo fuerza igual —de eso no se fía
+        // nadie— pero forzarlo sin decírselo hace que el mensaje del lunes
+        // prometa «te bajo a 1500» y la pantalla acabe en otro sitio.
+        suelo: sueloDeAhora(),
         // La semana que se CIERRA, no la que acaba de empezar: cuando esto
         // salta, la nueva no tiene ni un día apuntado todavía.
         datos: d,
@@ -14021,10 +14031,77 @@
 
   // Se cambian las calorías manteniendo el reparto que ya tenía: subir 150
   // no es motivo para rehacerle los macros a nadie.
+  // ---- EL SUELO: POR AQUÍ YA NO SE BAJA ----
+  //
+  //  El cierre mueve 100-200 cada lunes, y eso está bien pensado. Lo que
+  //  faltaba era un fondo. Ciento cincuenta calorías no asustan una semana;
+  //  en dos meses son mil doscientas.
+  //
+  //  Y SE LLEGA AHÍ SIN QUE NADIE MIENTA. El gasto medido sale de restar lo
+  //  comido de lo pesado, o sea que vive en las mismas unidades que lo que
+  //  esa persona apunta: quien apunta de menos de forma parecida siempre se
+  //  corrige solo, y el prompt ya lo dice. Pero si lo que falta por apuntar
+  //  CRECE —entra el estrés, el fin de semana se descontrola y no se
+  //  escribe— el peso se para, la medición se hunde y cada lunes recorta
+  //  otro escalón sobre una cifra cada vez menos real.
+  //
+  //  EL SUELO ES SU METABOLISMO BASAL, lo que gasta en reposo. No es un
+  //  número elegido a ojo ni el mismo para todos: sale de su edad, su
+  //  altura, su peso y su sexo, igual que la fórmula del registro. Dejar a
+  //  alguien por debajo de eso semana tras semana no es una decisión que
+  //  pueda tomar una app sola.
+  //
+  //  SIN DATOS NO HAY SUELO. Devuelve `null` y no un número de relleno: un
+  //  suelo inventado frenaría ajustes que sí tocaban.
+  //  RECIBE EL BASAL YA CALCULADO, no la edad y la altura. Nació
+  //  recalculando Mifflin-St Jeor aquí dentro y `gasto-medido` lo cazó:
+  //  hay una comprobación puesta a propósito para que esa fórmula exista
+  //  UNA sola vez en toda la app. Copiada, un día se corrige una y la otra
+  //  no, y entonces el suelo frena contra un número que ya no es el que
+  //  usa el resto. Esto solo decide si ese basal sirve como freno.
+  function sueloDeCalorias(tmb){
+    var n = Math.round(Number(tmb));
+    // Un cuerpo imposible no puede producir un suelo imposible: si el
+    // número no cae en lo que un metabolismo basal humano puede ser, no se
+    // usa como freno de nada. Y sin dato, `null`: un suelo inventado
+    // frenaría ajustes que sí tocaban.
+    return (isFinite(n) && n >= 800 && n <= 2600) ? n : null;
+  }
+
+  function sueloDeAhora(){
+    return sueloDeCalorias(gastoEstimado().tmb);
+  }
+
+  // El recorte, aparte y sin tocar nada: así se puede ejecutar en una
+  // prueba con números de mentira. Estuvo un rato dentro de
+  // `aplicarCaloriasNuevas` y la prueba tenía que mirar cómo estaba
+  // escrito el `if` — que es como una mutación («if(false && ...)») se
+  // escapó sin que saltara nada.
+  function conSuelo(nuevas, suelo){
+    var cal = Number(nuevas);
+    if(!(cal > 0)) return { cal: cal, mordio: false };
+    if(!(Number(suelo) > 0)) return { cal: cal, mordio: false };
+    return cal < suelo
+      ? { cal: Number(suelo), mordio: true }
+      : { cal: cal, mordio: false };
+  }
+
   function aplicarCaloriasNuevas(nuevas){
     var m = leerMetas();
     var antes = calDe(m);
     if(!antes) return;
+
+    // EL SUELO SE FUERZA AQUÍ, no solo se le pide al modelo. Es la lección
+    // que ya costó una vez en este mismo sitio: pedirlo sin forzarlo deja
+    // la decisión en manos de un texto, y forzarlo sin decirlo hace que el
+    // mensaje del lunes diga un número y la pantalla enseñe otro.
+    var suelo = sueloDeAhora();
+    var r = conSuelo(nuevas, suelo);
+    nuevas = r.cal;
+    if(r.mordio){
+      toast('toastPeso', 'No te bajo de ' + mil(suelo) + ' cal: es lo que ' +
+            'gastas en reposo. Por debajo de ahí, pregúntale a un profesional.');
+    }
     var f = nuevas / antes;
     var P = Math.round(m.P * f), C = Math.round(m.C * f), G = Math.round(m.G * f);
 

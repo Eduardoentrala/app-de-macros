@@ -112,7 +112,12 @@ console.log('\n— La IA ve las semanas de antes, no una suelta —');
   check('sin historial se decide igual', /\['catch'\]\(function\(\)\{ return \[\]; \}\)/.test(trozo));
 
   const j = APP.indexOf("accion: 'semana'");
-  const envio = APP.slice(j, j + 1600);
+  // HASTA DONDE ACABA EL ENVÍO, no 1600 caracteres. Estaba fijado a una
+  // ventana y se puso rojo el día que al cuerpo le entró un campo más con
+  // su comentario: `historial` quedó fuera de la ventana sin haberse movido
+  // de sitio. Una ventana de N caracteres mide la longitud de los
+  // comentarios, no lo que se manda.
+  const envio = APP.slice(j, APP.indexOf('}).then(', j));
   check('y se le manda', /historial: extra\[1\]/.test(envio));
   // Tres consultas en paralelo: en fila, la persona miraría "Revisando…"
   // el triple de tiempo.

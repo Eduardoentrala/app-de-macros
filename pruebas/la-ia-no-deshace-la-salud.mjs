@@ -143,18 +143,27 @@ console.log('\nY el cierre llama a la salud de verdad');
   function aplicarCon(condiciones, metaVigente, loQuePideLaIa) {
     const campo = () => ({ value: 0 });
     const goalP = campo(), goalC = campo(), goalG = campo();
+    // EL SUELO DEL BASAL VA DE VERDAD, no como doble. Son dos frenos
+    // distintos sobre la misma función —uno por la salud declarada y otro
+    // por el metabolismo basal— y lo que hay que ver es que conviven. Con
+    // un basal de 1600 el de abajo no muerde aquí, que es justo lo que se
+    // quiere comprobar: no se come al de la salud.
     const f = new Function(
       'leerMetas', 'calDe', 'condicionesElegidas', 'gastoEstimado',
       'ajustarPorSalud', 'goalP', 'goalC', 'goalG', 'actualizarMetas',
-      'sesion', 'metasVigentes',
-      sacar('function aplicarCaloriasNuevas(') + '; return aplicarCaloriasNuevas;');
+      'sesion', 'metasVigentes', 'toast', 'mil',
+      [sacar('function sueloDeCalorias('),
+       sacar('function sueloDeAhora('),
+       sacar('function conSuelo('),
+       sacar('function aplicarCaloriasNuevas(')].join(';\n') +
+      '; return aplicarCaloriasNuevas;');
     f(() => Object.assign({}, metaVigente),
       (m) => m.P * 4 + m.C * 4 + m.G * 9,
       () => condiciones,
       () => ({ gasto: 2200, peso: 70, tmb: 1600, alt: 170, edad: 30 }),
       ajustar, goalP, goalC, goalG, () => {},
       null,                                  // sin sesión: corta antes de la red
-      null)(loQuePideLaIa);
+      null, () => {}, (n) => String(n))(loQuePideLaIa);
     return { P: Number(goalP.value), C: Number(goalC.value), G: Number(goalG.value) };
   }
 

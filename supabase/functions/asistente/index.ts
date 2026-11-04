@@ -52,7 +52,7 @@ const CORS = {
 //
 // Ahora lo dice: un GET sin sesión devuelve este sello y nada más.
 // `pruebas/funciones-vivas.mjs` lo compara con el del repo.
-const SELLO = '469a7c9fd0';
+const SELLO = 'b90ad80f47';
 
 // Tope diario por persona. Es la única defensa contra que un solo usuario
 // -o un token robado- vacíe la cuenta en una noche con un bucle.
@@ -668,6 +668,19 @@ energía" no dice si fue el mes pasado o el año pasado.
 
 QUÉ MIRAS, EN ESTE ORDEN
 
+0. EL SUELO, QUE VA ANTES QUE TODO LO DEMÁS. Si abajo te digo cuál es su
+   suelo, NUNCA pongas un cal_nueva por debajo. No es negociable y no hay
+   semana de números que lo justifique: es lo que esa persona gasta en
+   reposo, y por debajo de ahí ya no es una decisión que se tome mirando
+   una báscula.
+
+   Si al llegar al final te sale un número menor que el suelo, no lo
+   recortes al suelo y sigas como si nada: deja las calorías donde están
+   —ajusto en false— y dile que para bajar más hace falta alguien que le
+   mire la analítica, no otro escalón.
+
+   Lo mismo si ya está EN el suelo y los números piden bajar otra vez: ahí
+   lo que hay que mover no son las calorías.
 1. Si hay material. Si te digo que NO hay material para ajustar, NO
    ajustas. Punto. Pon ajusto en false y cal_nueva en null.
 2. Cómo se siente, Y DESDE CUÁNDO. Esto es lo que más se equivoca.
@@ -2589,9 +2602,29 @@ Deno.serve(async (req) => {
           `Tener mejor información no es razón para dar saltos más grandes.\n`
         : '';
 
+      // SU SUELO. Es su metabolismo basal, lo que gasta en reposo, y viene
+      // calculado de la app con su edad, altura, peso y sexo.
+      //
+      //  Se le dice ADEMÁS de forzarlo en la app, por lo mismo que el «no
+      //  hay material»: forzándolo solo, el mensaje diría «te bajo a 1500»
+      //  y la pantalla acabaría en otro número sin que nadie lo explique.
+      //
+      //  Va como número Y como qué es. Un número suelto se lee como una
+      //  preferencia que se puede discutir; «su metabolismo basal» se lee
+      //  como lo que es.
+      const suelo = Math.round(Number(cuerpo.suelo) || 0);
+      const elSuelo = (suelo >= 800 && suelo <= 2600)
+        ? `\n- SU SUELO SON ${suelo} CAL: es su metabolismo basal, lo que ` +
+          `gasta en reposo. NO bajes de ahí por ningún motivo, ni aunque los ` +
+          `números pidan otro escalón. Si crees que hace falta bajar más, ` +
+          `dile que eso ya es cosa de un profesional, y deja las calorías ` +
+          `donde están.\n`
+        : '';
+
       const contexto =
         `\n\nLA SEMANA QUE SE CIERRA:\n` +
         `- Días que apuntó: ${diasApuntados} de 7\n` +
+        elSuelo +
         `- Meta diaria actual: ${Math.round(Number(d.meta_cal) || 0)} cal · ` +
           `P${Math.round(Number(d.meta_p) || 0)} ` +
           `C${Math.round(Number(d.meta_c) || 0)} ` +
