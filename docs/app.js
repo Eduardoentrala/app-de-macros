@@ -2440,6 +2440,119 @@
     // semana es de lunes a domingo y cambiar el objetivo no la corta.
   }
 
+  // ---- Nombre, sexo, edad y altura ----
+  //
+  //  El mismo agujero que los días de gimnasio, y lo tapé a medias esta
+  //  mañana: estos cuatro vivían SOLO en la pantalla de registro. Quien se
+  //  registró antes de que existieran esas columnas los tiene en nulo para
+  //  siempre, y no había dónde ponerlos.
+  //
+  //  Y en nulo no se nota, que es lo peor. `volcarPerfilEnRegistro` solo
+  //  rellena lo que viene, así que los campos se quedan con el valor por
+  //  defecto de la PANTALLA —28 años, 170 cm— y la fórmula calcula con eso
+  //  tan tranquila. Nadie ve un hueco: ve un número que no es el suyo.
+  //
+  //  NO RECALCULA LOS MACROS, por lo mismo que los días: lo que decide las
+  //  calorías es el gasto medido, y rehacer la fórmula aquí tiraría de un
+  //  toque lo que el cierre lleva meses ajustando. Lo que sí cambian es el
+  //  SUELO —se calcula con la edad y la altura— y cómo le habla el
+  //  asistente, que sin sexo escribe sin género a propósito.
+  var datosSheet = document.getElementById('datosSheet');
+  var datSexo = null;
+
+  function pintarDatosPerfil(){
+    var el = document.getElementById('profDatos');
+    if(!el) return;
+    var p = MI_PERFIL || {};
+    var faltan = [];
+    if(!p.full_name) faltan.push('nombre');
+    if(!p.sexo) faltan.push('sexo');
+    if(p.age == null) faltan.push('edad');
+    if(p.height_cm == null) faltan.push('altura');
+    // Se dice QUÉ falta, no un «incompleto» genérico: con el detalle se
+    // sabe qué toca escribir sin tener que abrir y adivinar.
+    el.innerHTML = (faltan.length ? 'Falta ' + faltan.join(', ') : 'Completos') + '<i>›</i>';
+  }
+
+  document.getElementById('profDatosBtn').addEventListener('click', function(){
+    var p = MI_PERFIL || {};
+    document.getElementById('datNombre').value = p.full_name || '';
+    document.getElementById('datEdad').value   = (p.age != null) ? p.age : '';
+    document.getElementById('datAltura').value = (p.height_cm != null) ? p.height_cm : '';
+    datSexo = p.sexo || null;
+    Array.from(datosSheet.querySelectorAll('#datSexo button')).forEach(function(b){
+      b.classList.toggle('active', b.dataset.v === datSexo);
+    });
+    datosSheet.classList.add('open');
+  });
+  document.getElementById('datSexo').addEventListener('click', function(e){
+    var b = e.target.closest('button');
+    if(!b) return;
+    datSexo = b.dataset.v;
+    Array.from(this.querySelectorAll('button')).forEach(function(x){
+      x.classList.toggle('active', x === b);
+    });
+  });
+  function cerrarDatos(){ datosSheet.classList.remove('open'); }
+  document.getElementById('datCancelar').addEventListener('click', cerrarDatos);
+  datosSheet.addEventListener('click', function(e){ if(e.target === datosSheet) cerrarDatos(); });
+
+  document.getElementById('datGuardar').addEventListener('click', function(){
+    var nombre = document.getElementById('datNombre').value.trim();
+    var edad   = Number(document.getElementById('datEdad').value);
+    var alt    = Number(document.getElementById('datAltura').value);
+
+    // Se comprueba aquí para explicarlo; la base lo rechaza igual.
+    if(edad && !(edad >= 14 && edad <= 99)){
+      toast('toastPeso', 'Esa edad no puede ser.'); return;
+    }
+    if(alt && !(alt >= 120 && alt <= 230)){
+      toast('toastPeso', 'Esa altura no puede ser.'); return;
+    }
+
+    // Solo lo que de verdad puso: mandar `null` por un campo que dejó
+    // vacío borraría lo que ya hubiera guardado.
+    var cambios = {};
+    if(nombre) cambios.full_name = nombre;
+    if(datSexo) cambios.sexo = datSexo;
+    if(edad) cambios.age = Math.round(edad);
+    if(alt)  cambios.height_cm = Math.round(alt * 10) / 10;
+    if(!Object.keys(cambios).length){ cerrarDatos(); return; }
+
+    sbActualizarPerfil(cambios).then(function(){
+      if(MI_PERFIL) Object.keys(cambios).forEach(function(k){ MI_PERFIL[k] = cambios[k]; });
+
+      // Y A LOS CAMPOS DEL REGISTRO, que es de donde los lee la fórmula.
+      // Sin esto, el suelo se seguiría calculando con los 28 años y los
+      // 170 cm de la pantalla hasta que volviera a entrar.
+      // `marcarUno` es para grupos de botones —el sexo—; la edad y la
+      // altura son <input> y se escriben en su `value`. Aquí había un
+      // `marcarUno('regEdad', ...)` que no hacía nada: su `querySelectorAll
+      // ('button')` sobre un input no devuelve nada y la llamada se perdía
+      // en silencio, pareciendo que ponía algo.
+      if(cambios.sexo){ reg.sexo = cambios.sexo; marcarUno('regSexo', cambios.sexo); }
+      if(cambios.age != null) document.getElementById('regEdad').value = cambios.age;
+      if(cambios.height_cm != null) document.getElementById('regAltura').value = cambios.height_cm;
+
+      if(cambios.full_name){
+        document.getElementById('profNombre').textContent = cambios.full_name;
+        document.getElementById('saludoNombre').textContent = cambios.full_name.split(' ')[0];
+      }
+      if(cambios.age != null) document.getElementById('profEdad').textContent = cambios.age + ' años';
+      if(cambios.height_cm != null) {
+        document.getElementById('profAltura').textContent = Number(cambios.height_cm).toFixed(1) + ' cm';
+      }
+      pintarDatosPerfil();
+      cerrarDatos();
+
+      var s = sueloDeAhora();
+      toast('toastPeso', s ? 'Guardado · tu suelo son ' + mil(s) + ' cal' : 'Guardado');
+    })['catch'](function(e){
+      apuntarFallo('guardar_datos', e);
+      toast('toastPeso', 'No se pudo guardar: ' + traducirError(e && e.message));
+    });
+  });
+
   // ---- Días de gimnasio ----
   //
   //  Se podía poner UNA VEZ, al registrarse, y nunca más: el control vivía
@@ -11505,6 +11618,7 @@
           if(p.height_cm != null) document.getElementById('profAltura').textContent = Number(p.height_cm).toFixed(1) + ' cm';
           if(p.age != null)       document.getElementById('profEdad').textContent   = p.age + ' años';
           pintarObjetivoPerfil();
+          pintarDatosPerfil();
           pintarDiasPerfil();
           pintarCumplePerfil();
           // Y por si hoy es el día. Va aquí, en cuanto el perfil está, y no

@@ -112,7 +112,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '2cc11f8314';
+    var SELLO = '1eb7b87af0';
     // Y a la vista de app.js, que lo manda con cada fallo que apunta. Sin
     // la versión, un error de hace una semana y uno de ahora se leen igual
     // y «eso ya lo arreglé» no se puede comprobar.
@@ -1874,6 +1874,16 @@
                  tres días a cinco no tenía dónde decirlo, y a quien se
                  registró antes de que existiera la columna le quedó en nulo
                  para siempre. -->
+            <!-- Edad, altura, sexo y nombre vivían SOLO en la pantalla de
+                 registro, igual que los días de gimnasio: se ponían una vez
+                 y nunca más. A quien se registró antes de que existieran
+                 esas columnas le quedaron en nulo para siempre, y con ellas
+                 en nulo la fórmula usa los valores por defecto de la
+                 pantalla —28 años, 170 cm— sin que nada lo diga. -->
+            <button class="info-row info-btn" id="profDatosBtn">
+              <span>Tus datos</span>
+              <span class="v" id="profDatos">—<i>›</i></span>
+            </button>
             <button class="info-row info-btn" id="profDiasBtn">
               <span>Días de gimnasio</span>
               <span class="v" id="profDias">—<i>›</i></span>
@@ -2035,6 +2045,48 @@
             </label>
             <button class="btn-primary" id="saludGuardar">Guardar</button>
             <button class="btn-ghost-text" id="saludCancelar">Cancelar</button>
+          </div>
+        </div>
+
+        <!-- Nombre, sexo, edad y altura. NO recalcula los macros: lo que
+             decide las calorías es el gasto medido, y rehacer la fórmula
+             aquí tiraría meses de ajuste del cierre. Lo que sí cambian es
+             el SUELO —por debajo del cual el cierre ya no baja— y cómo te
+             habla el asistente, que sin sexo escribe sin género. -->
+        <div class="sheet-backdrop" id="datosSheet">
+          <div class="sheet">
+            <h4>Tus datos</h4>
+            <p class="hint">Con esto se calcula lo que gastas en reposo, que es
+              el suelo por debajo del cual no se te bajan las calorías. No te
+              las cambia ahora.</p>
+            <div class="field-label" style="margin-top:0;">Nombre</div>
+            <input class="big-input reg-input" id="datNombre" maxlength="24"
+              placeholder="Tu nombre">
+            <div class="field-label">Sexo</div>
+            <div class="opt-row" id="datSexo">
+              <button data-v="h">Hombre</button><button data-v="m">Mujer</button>
+            </div>
+            <!-- `opt-row` y no `tres-campos`: son dos, no tres. Las dos
+                 clases ya existen; inventar una tercera para esto sería
+                 una hoja de estilos más larga sin ganar nada. -->
+            <div class="opt-row">
+              <div>
+                <div class="field-label" style="margin-top:0;">Edad</div>
+                <div class="mini-field">
+                  <input id="datEdad" type="number" inputmode="decimal" min="14" max="99">
+                  <span>años</span>
+                </div>
+              </div>
+              <div>
+                <div class="field-label" style="margin-top:0;">Altura</div>
+                <div class="mini-field">
+                  <input id="datAltura" type="number" inputmode="decimal" min="120" max="230">
+                  <span>cm</span>
+                </div>
+              </div>
+            </div>
+            <button class="btn-primary" id="datGuardar">Guardar</button>
+            <button class="btn-ghost-text" id="datCancelar">Cancelar</button>
           </div>
         </div>
 
@@ -2378,7 +2430,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '2cc11f8314';
+    var SELLO = '1eb7b87af0';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que
