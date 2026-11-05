@@ -2440,6 +2440,169 @@
     // semana es de lunes a domingo y cambiar el objetivo no la corta.
   }
 
+  // ---- DESCARGAR MIS DATOS ----
+  //
+  //  El aviso de privacidad promete que cualquiera puede ACCEDER a sus
+  //  datos, y la lista de «para esto no hace falta escribir a nadie» tenía
+  //  borrar la cuenta y quitar las condiciones de salud. Sacarlos no estaba
+  //  ahí ni en ningún otro sitio: una promesa escrita y sin puerta.
+  //
+  //  Y aparte de la promesa: si un día se cae el servidor o se deja de
+  //  pagar, se van meses de pesajes, medidas, entrenos y chequeos sin que
+  //  exista una copia en ninguna parte.
+  //
+  //  CADA TABLA CON SU COLUMNA, Y NO `select=*` A SECAS. RLS ya filtra,
+  //  pero un entrenador ve a sus clientes y el super admin lo ve TODO: sin
+  //  decir por quién se filtra, «descargar mis datos» le bajaría a él la
+  //  base entera con los datos de los demás dentro. Es el mismo fallo que
+  //  una fuga, solo que con un botón bonito.
+  var TABLAS_MIAS = [
+    { t:'profiles',               por:'id' },
+    { t:'diary_entries',          por:'user_id' },
+    { t:'weight_logs',            por:'user_id' },
+    { t:'workout_sessions',       por:'user_id' },
+    { t:'routine_days',           por:'user_id' },
+    { t:'routine_exercises',      por:'user_id' },
+    { t:'exercise_sets',          por:'user_id' },
+    { t:'exercise_notes',         por:'user_id' },
+    { t:'cardio_logs',            por:'user_id' },
+    { t:'recipes',                por:'user_id' },
+    { t:'saved_foods',            por:'user_id' },
+    { t:'progress_photos',        por:'user_id' },
+    { t:'chequeos_semanales',     por:'user_id' },
+    { t:'analisis_fotos',         por:'user_id' },
+    { t:'felicitaciones',         por:'user_id' },
+    { t:'eventos',                por:'user_id' },
+    { t:'metas_macros_versiones', por:'user_id' },
+    { t:'planes',                 por:'user_id' },
+    { t:'ia_permisos',            por:'user_id' },
+    { t:'ia_uso',                 por:'user_id' },
+    { t:'avisos_coach',           por:'user_id' },
+    { t:'ajustes_calorias',       por:'cliente_id' },
+    { t:'analisis_cliente',       por:'cliente_id' },
+    { t:'plan_inscritos',         por:'cliente_id' },
+    { t:'coach_clientes',         por:'cliente_id' }
+  ];
+
+  //  LO QUE NO ENTRA, y por qué, para que no parezca un olvido:
+  //
+  //   · `auditoria` y `errores` son registro técnico, no datos de nadie —y
+  //     los errores ni siquiera los puede leer: son del super admin.
+  //   · `ia_gasto` son los costes de las llamadas al modelo. Es contabilidad
+  //     de la app, no información sobre esa persona.
+  //   · Los catálogos compartidos —`exercise_library`, `alimentos_catalogo`,
+  //     `feature_flags`— son de la app y los mismos para todos.
+  //   · `consentimientos` ESTÁ MUERTA. La 0031 movió el consentimiento de
+  //     salud al propio perfil —`consentimiento_salud_en`, que sí se
+  //     exporta— y la 0034 la va a soltar. Entró aquí por tener `user_id`,
+  //     y meterla habría hecho dos cosas malas: resucitar una tabla que
+  //     nadie escribe, y atar la guarda de la 0034 —que se niega a borrar
+  //     lo que la app todavía usa— a una referencia que no significa nada.
+  //     La cazó `tablas-muertas`, que existe exactamente para esto.
+  var NO_SON_MIOS = ['auditoria', 'errores', 'ia_gasto'];
+
+  //  DE MIL EN MIL. PostgREST corta en mil filas y no avisa: un diario de
+  //  año y medio son más de mil apuntes, y sin paginar la exportación se
+  //  llevaría los primeros mil y diría que ya está. Un respaldo incompleto
+  //  que se cree completo es peor que no tenerlo.
+  function bajarTabla(tabla, columna, id){
+    var filas = [], paso = 1000;
+    function tramo(desde){
+      return sbFetch('/rest/v1/' + tabla + '?select=*' +
+                     '&' + columna + '=eq.' + id +
+                     '&limit=' + paso + '&offset=' + desde)
+        .then(function(r){
+          var lote = Array.isArray(r) ? r : [];
+          filas = filas.concat(lote);
+          // Justo mil puede ser el final o puede haber más: se pregunta.
+          return lote.length < paso ? filas : tramo(desde + paso);
+        });
+    }
+    return tramo(0);
+  }
+
+  function exportarMisDatos(){
+    if(!sesion || !sesion.user) return Promise.reject(new Error('Sin sesión'));
+    var uid = sesion.user.id;
+    var datos = {
+      exportado_en: new Date().toISOString(),
+      app: 'macros',
+      version_app: (window.SELLO_APP || null),
+      cuenta: { id: uid, correo: sesion.user.email || null },
+      // Se dice lo que NO lleva dentro del propio archivo. Quien lo abra
+      // dentro de dos años no va a tener esta conversación a mano.
+      no_incluye: {
+        fotos: 'Las imágenes de progreso no van dentro: aquí están sus datos ' +
+               '(semana, pose, tamaño) pero los archivos se guardan aparte.',
+        tablas: NO_SON_MIOS
+      },
+      tablas: {}
+    };
+
+    // Una detrás de otra y no todas a la vez: son veintitantas consultas y
+    // lanzarlas en paralelo desde un móvil es la forma de que el servidor
+    // empiece a rechazarlas.
+    var porBajar = TABLAS_MIAS.slice();
+    // `siguienteTabla` y no `siguiente`: ya hay otra `siguiente()` en este
+    // fichero, con la misma sangria, y una prueba que la saca por
+    // `indexOf` se llevo esta por delante. Un nombre generico en un
+    // fichero de catorce mil lineas es una colision esperando.
+    function siguienteTabla(){
+      if(!porBajar.length) return Promise.resolve(datos);
+      var x = porBajar.shift();
+      return bajarTabla(x.t, x.por, uid)
+        .then(function(filas){ datos.tablas[x.t] = filas; })
+        ['catch'](function(e){
+          // UNA TABLA QUE FALLA NO TUMBA LA DESCARGA, pero se dice en el
+          // propio archivo. Un respaldo al que le falta algo en silencio
+          // es exactamente lo que no se puede permitir aquí.
+          datos.tablas[x.t] = { error: 'No se pudo leer: ' + (e && e.message) };
+          apuntarFallo('exportar_' + x.t, e);
+        })
+        .then(siguienteTabla);
+    }
+    return siguienteTabla();
+  }
+
+  function guardarArchivo(nombre, texto){
+    var blob = new Blob([texto], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = nombre;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    // Se suelta el objeto, pero no en el mismo turno: Safari todavía no ha
+    // empezado la descarga cuando acaba este, y revocarla ya la cancela.
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+  }
+
+  (function(){
+    var btn = document.getElementById('profExportarBtn');
+    if(!btn) return;
+    var eti = document.getElementById('profExportar');
+    var bajando = false;
+    btn.addEventListener('click', function(){
+      if(bajando) return;
+      bajando = true;
+      if(eti) eti.innerHTML = 'Preparando…<i>›</i>';
+      exportarMisDatos().then(function(datos){
+        var n = Object.keys(datos.tablas).reduce(function(t, k){
+          return t + (Array.isArray(datos.tablas[k]) ? datos.tablas[k].length : 0);
+        }, 0);
+        guardarArchivo('mis-datos-' + isoDe(HOY) + '.json',
+                       JSON.stringify(datos, null, 1));
+        if(eti) eti.innerHTML = 'Un archivo<i>›</i>';
+        toast('toastPeso', 'Descargado · ' + mil(n) + ' registros');
+      })['catch'](function(e){
+        apuntarFallo('exportar', e);
+        if(eti) eti.innerHTML = 'Un archivo<i>›</i>';
+        toast('toastPeso', 'No se pudo descargar: ' + traducirError(e && e.message));
+      }).then(function(){ bajando = false; });
+    });
+  })();
+
   // ---- Nombre, sexo, edad y altura ----
   //
   //  El mismo agujero que los días de gimnasio, y lo tapé a medias esta

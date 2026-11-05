@@ -112,7 +112,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '2769efd87e';
+    var SELLO = '55e9e5f350';
     // Y a la vista de app.js, que lo manda con cada fallo que apunta. Sin
     // la versión, un error de hace una semana y uno de ahora se leen igual
     // y «eso ya lo arreglé» no se puede comprobar.
@@ -1880,6 +1880,15 @@
                  esas columnas le quedaron en nulo para siempre, y con ellas
                  en nulo la fórmula usa los valores por defecto de la
                  pantalla —28 años, 170 cm— sin que nada lo diga. -->
+            <!-- El aviso de privacidad promete que cualquiera puede ACCEDER
+                 a sus datos, y debajo dice «para lo más común no hace falta
+                 escribir a nadie» con borrar la cuenta y quitar condiciones.
+                 Sacarlos no estaba en esa lista ni en ninguna otra: era una
+                 promesa escrita y sin puerta. -->
+            <button class="info-row info-btn" id="profExportarBtn">
+              <span>Descargar mis datos</span>
+              <span class="v" id="profExportar">Un archivo<i>›</i></span>
+            </button>
             <button class="info-row info-btn" id="profDatosBtn">
               <span>Tus datos</span>
               <span class="v" id="profDatos">—<i>›</i></span>
@@ -2466,7 +2475,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '2769efd87e';
+    var SELLO = '55e9e5f350';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que

@@ -128,8 +128,21 @@ console.log('\n— Nada de CASCADE —');
 console.log('\n— Y la app ya no las nombra —');
 {
   // Si la app siguiera pidiéndolas, esto no sería limpieza: sería romperla.
+  //
+  // SIN LOS COMENTARIOS. Esto miraba el fichero entero y se puso rojo el día
+  // que un comentario explicaba por qué `consentimientos` se queda FUERA de
+  // la exportación de datos — o sea, justo al documentar que está muerta.
+  // Un nombre en un comentario no es una llamada, y es la misma lección que
+  // ya costó tres comprobaciones aprobándose a sí mismas en otra prueba.
+  const codigo = (s) => s
+    .replace(/^\s*\/\/.*$/gm, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/<!--[\s\S]*?-->/g, '');
+  const APPC = codigo(APP), HTMLC = codigo(HTML);
   for (const t of MUERTAS)
-    check(`la app no usa ${t}`, !APP.includes(t) && !HTML.includes(t));
+    check(`la app no usa ${t}`, !APPC.includes(t) && !HTMLC.includes(t),
+      'y si sale rojo por un comentario, el comentario no es el problema: ' +
+      'mira si de verdad se pide la tabla');
   check('la app tampoco llama a acepto()', !/rpc\/acepto/.test(APP));
   // Y la rutina sigue guardando el ejercicio por nombre, que es lo que
   // hacía que exercise_id sobrara.
