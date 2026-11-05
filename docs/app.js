@@ -15629,9 +15629,39 @@
     this.style.height = 'auto';
     this.style.height = Math.min(this.scrollHeight, 120) + 'px';
   });
+  // ---- La tecla de retorno ----
+  //
+  //  Esto decía «Enter manda; Shift+Enter hace salto de línea, como en
+  //  cualquier chat». Como en cualquier chat DE ORDENADOR: EN UN TELÉFONO
+  //  NO HAY SHIFT.
+  //
+  //  Así que quien escribía desde el móvil no tenía forma de hacer un salto
+  //  de línea, y peor: le bastaba con tocar la tecla de retorno para que se
+  //  fuera lo que llevara escrito. Pasó con una foto y dos letras —«Me»—,
+  //  de un «Me comí la mitad» que nunca llegó a terminarse: la foto y media
+  //  palabra salieron como mensaje, y ya no se puede recoger.
+  //
+  //  En el móvil manda la flecha, que está al lado y es como se manda en
+  //  cualquier app del teléfono. El atajo de teclado se queda para quien
+  //  teclea con un teclado de verdad.
+  //
+  //  `pointer: coarse` es el dedo. No se mira el ancho de la pantalla: hay
+  //  teléfonos anchos y ventanas estrechas, y lo que decide esto no es el
+  //  tamaño sino con qué se escribe.
+  var conDedo = false;
+  try{ conDedo = window.matchMedia('(pointer: coarse)').matches; }catch(e){}
+
   iaTexto.addEventListener('keydown', function(e){
-    // Enter manda; Shift+Enter hace salto de línea, como en cualquier chat.
-    if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); enviarIA(); }
+    if(e.key !== 'Enter' || e.shiftKey) return;
+    // Con el dedo, retorno es retorno.
+    if(conDedo) return;
+    // Y NI CON TECLADO MIENTRAS SE ESTÁ COMPONIENDO. El retorno que acepta
+    // una sugerencia del corrector o de un teclado de los que componen
+    // llega aquí igual que uno de verdad, y mandaría la frase a medio
+    // escribir — que es justo el fallo de arriba por el otro camino.
+    if(e.isComposing || e.keyCode === 229) return;
+    e.preventDefault();
+    enviarIA();
   });
   document.getElementById('iaEnviar').addEventListener('click', function(){ enviarIA(); });
 

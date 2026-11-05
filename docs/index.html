@@ -112,7 +112,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '7989c94cef';
+    var SELLO = 'b073c656ca';
     // Y a la vista de app.js, que lo manda con cada fallo que apunta. Sin
     // la versión, un error de hace una semana y uno de ahora se leen igual
     // y «eso ya lo arreglé» no se puede comprobar.
@@ -825,7 +825,12 @@
             <!-- Se esconde solo si el teléfono no sabe transcribir, y solo
                  aparece con IA Plus. -->
             <button class="ia-icono" id="iaHablar" title="Dictar" aria-label="Dictar" hidden><svg><use href="#i-micro"/></svg></button>
-            <textarea id="iaTexto" rows="1" maxlength="500"
+            <!-- `enterkeyhint="enter"` para que el teclado del teléfono
+                 dibuje una tecla de RETORNO y no una de «enviar». La tecla
+                 que promete enviar y la que hace salto de línea no pueden
+                 ser la misma: ahí es donde se mandó una foto con dos letras
+                 de un mensaje a medio escribir. -->
+            <textarea id="iaTexto" rows="1" maxlength="500" enterkeyhint="enter"
               placeholder="Escribe tu mensaje…"></textarea>
             <button class="ia-enviar" id="iaEnviar" title="Enviar" aria-label="Enviar"><svg><use href="#i-enviar"/></svg></button>
           </div>
@@ -2475,7 +2480,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '7989c94cef';
+    var SELLO = 'b073c656ca';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que
