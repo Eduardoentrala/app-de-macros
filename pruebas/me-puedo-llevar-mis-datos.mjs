@@ -166,6 +166,14 @@ console.log('\nY lo que falte se dice DENTRO del archivo');
   ok(/no_incluye/.test(e), 'el archivo dice lo que no lleva',
      'quien lo abra dentro de dos años no va a tener esta conversación a mano');
   ok(/fotos:/.test(e), 'las fotos, que son archivos y van aparte');
+  // Y LO BORRADO. En esta base borrar archiva: se esconde al momento y se
+  // elimina de verdad a los seis meses. Se vio al probar la descarga de
+  // verdad: faltaban 33 filas contra la base, y eran exactamente las
+  // archivadas —diez fotos, una receta, cuatro alimentos guardados y el
+  // resto de rutina—. Llevarse lo vivo es lo correcto; no decirlo, no.
+  ok(/borrado:/.test(e), 'y lo que borró, que sigue guardado seis meses',
+     'un archivo que dice «tus datos» y se deja fuera lo que la app todavía ' +
+     'guarda está contando media verdad');
   ok(/error: 'No se pudo leer: '/.test(e),
      'y una tabla que falló queda marcada en su sitio',
      'un respaldo al que le falta algo EN SILENCIO es justo lo que no se ' +

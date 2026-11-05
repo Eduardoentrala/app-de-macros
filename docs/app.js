@@ -2534,6 +2534,18 @@
       no_incluye: {
         fotos: 'Las imágenes de progreso no van dentro: aquí están sus datos ' +
                '(semana, pose, tamaño) pero los archivos se guardan aparte.',
+        // LO BORRADO. En esta base un borrado no borra: archiva, y lo
+        // archivado se esconde solo (0007). O sea que esto se lleva lo
+        // VIVO, que es lo que esa persona ve en la app — pero sus cosas
+        // borradas siguen guardadas seis meses, y un archivo que dice
+        // «tus datos» sin aclararlo estaría contando media verdad.
+        //
+        // Se vio al probarlo: faltaban 33 filas contra lo que hay en la
+        // base, y eran exactamente las archivadas — diez fotos, una
+        // receta, cuatro alimentos guardados y el resto de rutina.
+        borrado: 'Lo que borraste no va aquí. En esta app borrar archiva: ' +
+                 'se esconde al momento y se elimina de verdad a los seis ' +
+                 'meses. Este archivo lleva lo que sigue vivo.',
         tablas: NO_SON_MIOS
       },
       tablas: {}
