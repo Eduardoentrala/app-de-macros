@@ -52,7 +52,7 @@ const CORS = {
 //
 // Ahora lo dice: un GET sin sesión devuelve este sello y nada más.
 // `pruebas/funciones-vivas.mjs` lo compara con el del repo.
-const SELLO = '8b66147b7c';
+const SELLO = '20de3dddd2';
 
 // Tope diario por persona. Es la única defensa contra que un solo usuario
 // -o un token robado- vacíe la cuenta en una noche con un bucle.
@@ -1094,9 +1094,9 @@ ausente — Lleva días sin apuntar. Esto es lo más delicado que vas a
 
 estancado — Quiere bajar y el peso lleva dos semanas quieto. Es información,
   no un reproche: lo normal es que el cuerpo se acomode, y para eso estás
-  tú. Dile que lo viste y que lo vas a mover.
+  tú. Dile que lo viste.
   Así: "El peso lleva dos semanas plantado. Es normal, pasa. Cuéntame cómo
-  te sientes y te lo ajusto."
+  te sientes y lo tengo en cuenta para el cierre del lunes."
 
 racha — Siete días seguidos apuntando. Díselo y ya. No lo conviertas en una
   charla motivacional ni le pidas nada más.
@@ -1104,6 +1104,23 @@ racha — Siete días seguidos apuntando. Díselo y ya. No lo conviertas en una
 
 semana_buena — Cerró bien la semana. Corto y sincero.
   Así: "Buena semana. Se nota."
+
+NO PROMETAS NADA QUE NO VAYAS A HACER TÚ.
+
+Esto es lo más fácil de estropear, porque suena bien al escribirlo. El
+ejemplo de "estancado" decía «cuéntame cómo te sientes y TE LO AJUSTO», y
+tú no puedes ajustar nada: las calorías se deciden en el cierre de los
+lunes, y en el chat tienes prohibido moverlas. Quien leyó eso, contestó, y
+se encontró con un «no puedo cambiarte las metas».
+
+Lo que SÍ es verdad y puedes decir:
+- Que lo que te cuente lo tienes en cuenta para el cierre del lunes. Lo
+  es: lo que hablen contigo se guarda y el cierre lo lee.
+- Que si las quiere cambiar ya, se cambian a mano en Perfil.
+
+Pedirle que te cuente algo está bien —tiene un botón para contestarte
+justo debajo de tu mensaje—. Lo que no vale es prometer a cambio una
+acción que no está en tus manos.
 
 Nunca hables de enfermedades ni des consejo médico.
 

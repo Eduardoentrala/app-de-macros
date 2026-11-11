@@ -108,9 +108,12 @@ uso** de tus datos.
 diciendo qué quieres. Tenemos 20 días hábiles para responderte.
 
 Para lo más común no hace falta escribir a nadie:
+- **Descargar todos tus datos**: Perfil → Descargar mis datos. Baja un
+  archivo con tu diario, tus pesos y medidas, tus entrenos, tus recetas y
+  tus chequeos. Dentro dice qué no incluye y por qué.
 - **Borrar tu cuenta**: Perfil → Eliminar mi cuenta
 - **Quitar tus condiciones de salud**: Perfil → Salud
-- **Corregir tus datos**: Perfil
+- **Corregir tus datos**: Perfil → Tus datos
 
 Si crees que no respetamos tus derechos, puedes acudir al **INAI**
 (inai.org.mx).
