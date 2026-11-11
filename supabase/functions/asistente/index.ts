@@ -52,7 +52,7 @@ const CORS = {
 //
 // Ahora lo dice: un GET sin sesión devuelve este sello y nada más.
 // `pruebas/funciones-vivas.mjs` lo compara con el del repo.
-const SELLO = 'b90ad80f47';
+const SELLO = '8b66147b7c';
 
 // Tope diario por persona. Es la única defensa contra que un solo usuario
 // -o un token robado- vacíe la cuenta en una noche con un bucle.
@@ -555,8 +555,16 @@ const ESQUEMA_SEMANA = {
     mensaje:   { type: 'string' },
     ajusto:    { type: 'boolean' },
     cal_nueva: { anyOf: [{ type: 'null' }, { type: 'integer' }] },
-    // Para el historial, no para la pantalla: por qué se hizo lo que se hizo.
-    motivo:    { type: 'string' },
+    // POR QUÉ SE HIZO LO QUE SE HIZO. Nació «para el historial, no para la
+    // pantalla» y hoy SE ENSEÑA, en Mis semanas, desplegando «Tu coach de
+    // Macros»: es lo que convierte una tabla de números en algo que se lee.
+    //
+    // Y LLEVA TOPE PORQUE LA BASE LO TIENE. Mientras no estuvo aquí, el
+    // modelo escribía lo que hacía falta y la app cortaba al guardar: se vio
+    // un «El margen está en la…» cortado justo en la frase que importaba.
+    // Un tope del que solo se entera un lado es un tope que siempre se pasa.
+    // La columna admite 1000; aquí se piden 700 para que haya holgura.
+    motivo:    { type: 'string', maxLength: 700 },
     // Y lo que quiere seguir sabiendo de esta persona la próxima vez.
     // Puede ser null: no todas las semanas enseñan algo.
     aprendido: { anyOf: [{ type: 'null' }, { type: 'string' }] },
@@ -913,10 +921,14 @@ REGLAS DURAS
 - Nada de listas ni viñetas: se lee como algo que te dice una persona.
   Cuatro frases como mucho.
 - Nunca consejo médico.
-- "motivo" es aparte, para el historial: ahí sí sé concreto y técnico.
-  Máximo 500 caracteres. No es un consejo: lo que pase de ahí se corta, y
-  este motivo te vuelve a ti como historial las próximas veinte semanas.
-  Un motivo cortado lo lees cortado cada lunes.
+- "motivo" es aparte: ahí sí sé concreto y técnico. SE LE ENSEÑA a esa
+  persona, desplegando "Tu coach de Macros" en Mis semanas, y además te
+  vuelve a ti como historial las próximas veinte semanas.
+  Máximo 700 caracteres. No es un consejo: lo que pase de ahí se corta, y
+  un motivo cortado se lee cortado cada lunes. Ya pasó —se cortó en «El
+  margen está en la…», justo en la frase que importaba— con el tope
+  escrito aquí y nada más: ahora también está en el esquema, que sí
+  obliga. Cabe de sobra; si no cabe, sobra algo.
 `.trim();
 
 // El mensaje que la persona NO pidió. Va sin esquema JSON a propósito: son

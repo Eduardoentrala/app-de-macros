@@ -149,12 +149,29 @@
 .aviso-coach p{
   margin:0;font:500 13.5px/1.5 sans-serif;color:var(--ink);
 }
+/* Los dos botones en una fila, y CONTESTAR primero.
+   El coach escribe cosas como «cuéntame cómo te sientes»: la respuesta es
+   la acción principal y «Entendido» es la salida. Al revés, la salida es
+   lo primero que cae bajo el pulgar. */
+.aviso-coach .aviso-botones{
+  display:flex;align-items:center;gap:18px;margin-top:11px;
+}
 /* Discreto: cerrar un mensaje no es la acción principal, leerlo sí. */
 .aviso-coach button{
-  margin-top:9px;padding:0;border:none;background:none;cursor:pointer;
+  padding:0;border:none;background:none;cursor:pointer;
   font:700 12px/1 sans-serif;color:var(--ink-faint);
+  position:relative;
 }
-.aviso-coach button:active{color:var(--ink);}
+/* Contestar sí se ve: es lo que el mensaje está pidiendo. */
+.aviso-coach .aviso-contestar{ color:var(--ink); }
+.aviso-coach button:active{color:var(--ink);opacity:.6;}
+/* El área de dedo, como en el resto: el ::after centrado da los 44 px sin
+   separar los dos botones ni engordar el texto. */
+.aviso-coach button::after{
+  content:'';position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  min-width:44px;min-height:44px;
+}
 
 /* ---- Los recordatorios de arriba ----
    Tres tarjetas de color en una pantalla que por lo demás es blanca y gris.

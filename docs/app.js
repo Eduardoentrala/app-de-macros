@@ -12783,8 +12783,33 @@
     if(!caja) return;
     if(!texto){ caja.hidden = true; caja.innerHTML = ''; return; }
     caja.hidden = false;
+    // Y SE PUEDE CONTESTAR.
+    //
+    //  Aquí solo había «Entendido», y el coach escribe cosas como «cuéntame
+    //  cómo te sientes y le movemos tantito para destrabarlo». Él lo dijo
+    //  mejor que nadie: «¿a quién le digo, cómo le digo?».
+    //
+    //  Una pregunta sin dónde responder es peor que no preguntar: promete
+    //  una conversación y deja a esa persona buscando la puerta. Y la
+    //  puerta existía —el asistente— pero no desde aquí, y sin lo que le
+    //  acababan de decir, así que había que repetírselo todo.
     caja.innerHTML = '<p>' + escapar(texto) + '</p>' +
-                     '<button data-visto="' + id + '">Entendido</button>';
+                     '<div class="aviso-botones">' +
+                       '<button class="aviso-contestar" data-contesta="' + id + '">Contestar</button>' +
+                       '<button data-visto="' + id + '">Entendido</button>' +
+                     '</div>';
+  }
+
+  // Abre el asistente CON LO QUE ACABA DE DECIRLE delante, para que no haya
+  // que repetírselo. Se mete como un turno suyo en la conversación, que es
+  // lo que de verdad fue: lo escribió el mismo modelo.
+  function contestarAviso(texto){
+    var yaEsta = IA_MSGS.some(function(m){ return m.rol === 'el' && m.texto === texto; });
+    if(!yaEsta) IA_MSGS.push({ rol:'el', texto: texto });
+    pintarChat();
+    pintarFotoIA();
+    goto('asistente', true);
+    setTimeout(function(){ iaTexto.focus(); }, 200);
   }
 
   // Marcar como visto es lo único que la app puede hacer con un aviso: el
@@ -12794,6 +12819,17 @@
     var caja = document.getElementById('avisoCoach');
     if(!caja) return;
     caja.addEventListener('click', function(e){
+      // CONTESTAR NO LO MARCA COMO VISTO. El aviso se queda hasta que esa
+      // persona diga que lo leyó: si al abrir el chat desapareciera y luego
+      // cerrara sin escribir, se habría quedado sin la pregunta y sin saber
+      // que la hubo.
+      var c = e.target.closest('[data-contesta]');
+      if(c){
+        var p = caja.querySelector('p');
+        contestarAviso(p ? p.textContent : '');
+        return;
+      }
+
       var b = e.target.closest('[data-visto]');
       if(!b) return;
       pintarAvisoCoach(null);
@@ -15491,7 +15527,11 @@
       hambre: q.hambre || null, energia: q.energia || null, sueno: q.sueno || null,
       nota: document.getElementById('chqNota').value.trim() || null,
       ajusto: !!r.ajusto,
-      motivo: recortarTexto(r.motivo, 500),
+      // 1000, que es lo que acepta la columna desde la 0066. Estaba en 500
+      // —el tope de cuando esto no se enseñaba— y cortaba a media frase el
+      // razonamiento del coach justo en la parte útil. El recorte se queda
+      // igualmente: es la última red si un día el modelo se pasa.
+      motivo: recortarTexto(r.motivo, 1000),
       cal_antes: Math.round(datosDeLaSemana().meta_cal) || null,
       cal_despues: r.ajusto && r.cal_nueva ? Math.round(r.cal_nueva) : null
     }, foto || {}));

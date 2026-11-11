@@ -455,17 +455,46 @@ console.log('\n— El motivo cabe en su columna sin partir palabras —');
   const app = APP.replace(/\r\n/g, '\n');
   const fn = FN.replace(/\r\n/g, '\n');
 
-  const tope = (readFileSync(join(RAIZ, 'supabase', 'migrations',
-    '0024_eventos_y_chequeo_semanal.sql'), 'utf8')
-    .match(/length\(motivo\)\s*<=\s*(\d+)/) || [])[1];
+  // EL TOPE VIGENTE, no el de la migración que lo puso. Esto leía la 0024 a
+  // pelo y se quedó viejo el día que la 0066 lo subió a 1000, porque el
+  // motivo se cortaba a media frase —«El margen está en la…»— ahora que se
+  // ENSEÑA y no solo se guarda. Se lee la última migración que lo toca.
+  const migs = readdirSync(join(RAIZ, 'supabase', 'migrations'))
+    .filter((f) => f.endsWith('.sql')).sort();
+  let tope = null;
+  for (const f of migs) {
+    const m = readFileSync(join(RAIZ, 'supabase', 'migrations', f), 'utf8')
+      .match(/length\(motivo\)\s*<=\s*(\d+)/);
+    if (m) tope = m[1];
+  }
   check('la columna dice su tope', !!tope, 'si no se lee, esto no compara nada');
-  check('y el prompt se lo dice al modelo',
-    new RegExp('Máximo ' + tope + ' caracteres').test(fn),
-    'sin eso escribe lo que quiera y la app lo corta: el tope existe en la ' +
-    'base y el modelo no lo sabe');
+
+  // Y EL PROMPT PIDE MENOS DE LO QUE CABE, no lo mismo. Pedir justo el tope
+  // deja cero holgura: el modelo apunta al límite, se pasa por poco y se
+  // corta igual. Que es exactamente lo que pasó con los 500.
+  const pide = Number((fn.match(/Máximo (\d+) caracteres\. No es un consejo/) || [])[1]);
+  check('y el prompt se lo dice al modelo', !!pide,
+    'sin eso escribe lo que quiera y la app lo corta');
+  check('pidiendo menos de lo que cabe', pide > 0 && pide < Number(tope),
+    `el prompt pide ${pide} y la columna acepta ${tope}: sin holgura, ` +
+    'apuntar al límite es pasarse por poco');
+
+  // Y EL ESQUEMA TAMBIÉN, que es el único que obliga de verdad. El tope
+  // estaba escrito en el prompt desde el principio y el modelo se pasó
+  // igual: una frase no es una restricción.
+  check('y el esquema lo impone', new RegExp('maxLength: ' + pide).test(fn),
+    'un tope solo en prosa es una sugerencia; en el esquema es un límite');
+  // SIN DEPENDER DE DÓNDE PARTA LA LÍNEA. Esto buscaba la frase tal cual y
+  // se puso rojo al reescribir el párrafo: la misma frase, cortada por un
+  // salto de línea distinto. Un prompt se re-envuelve cada dos por tres.
+  const fnPlano = fn.replace(/\s+/g, ' ');
   check('y le dice por qué importa',
-    /te vuelve a ti como historial/.test(fn),
+    /te vuelve a ti como historial/.test(fnPlano),
     'un límite sin motivo se lee como capricho y se ignora');
+  check('y que ahora se le ENSEÑA a esa persona',
+    /SE LE ENSEÑA a esa persona/.test(fnPlano),
+    'nació «para el historial, no para la pantalla» y hoy se despliega en ' +
+    'Mis semanas: el modelo escribe distinto si sabe quién lo va a leer');
 
   check('la app lo recorta con el tope de la columna',
     new RegExp('motivo: recortarTexto\\(r\\.motivo, ' + tope + '\\)').test(app),
