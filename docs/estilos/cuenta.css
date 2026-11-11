@@ -435,3 +435,20 @@
 .gasto-cache.floja{background:var(--amber-soft);border-color:var(--amber);}
 .gasto-cache.floja .txt b,
 .gasto-cache.floja .val b{color:var(--amber);}
+
+/* EL TÍTULO DE CADA GRUPO DE PERFIL.
+   ---------------------------------------------------------------
+   Gris, pequeño y en minúscula alta, como los de Ajustes del
+   teléfono: tiene que separar sin pedir atención. Lo que se lee son
+   las filas; esto solo dice de qué va el bloque de abajo.
+
+   El margen de arriba es el que hace el trabajo: once filas seguidas
+   se leen como un muro y tres bloques de cuatro se leen de un
+   vistazo, aunque las filas sean casi las mismas. */
+.prof-grupo{
+  margin:18px 16px 7px;
+  font:700 11.5px/1 sans-serif;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--ink-faint);
+}
+/* El primero va pegado a la foto y al nombre, que ya separan de sobra. */
+.prof-grupo:first-of-type{margin-top:4px;}

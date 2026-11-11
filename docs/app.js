@@ -2635,19 +2635,40 @@
   var datosSheet = document.getElementById('datosSheet');
   var datSexo = null;
 
+  //  LA FILA ES «ALTURA» Y LA HOJA LLEVA CUATRO COSAS. Antes la fila se
+  //  llamaba «Tus datos» —un nombre que no dice nada rodeado de filas que
+  //  también son sus datos— y la altura salía aparte, de adorno, sin poder
+  //  tocarse. Ahora se toca el dato y se abre donde se cambia, como en los
+  //  ajustes del teléfono.
+  //
+  //  Y si falta algo de lo de dentro, lo dice EN LUGAR de la altura: un
+  //  «170 cm» tranquilo esconde que no hay sexo ni nombre, y esos dos los
+  //  necesitan la fórmula y el asistente.
   function pintarDatosPerfil(){
-    var el = document.getElementById('profDatos');
+    var el = document.getElementById('profAltura');
     if(!el) return;
     var p = MI_PERFIL || {};
     var faltan = [];
     if(!p.full_name) faltan.push('nombre');
     if(!p.sexo) faltan.push('sexo');
-    if(p.age == null) faltan.push('edad');
     if(p.height_cm == null) faltan.push('altura');
-    // Se dice QUÉ falta, no un «incompleto» genérico: con el detalle se
-    // sabe qué toca escribir sin tener que abrir y adivinar.
-    el.innerHTML = (faltan.length ? 'Falta ' + faltan.join(', ') : 'Completos') + '<i>›</i>';
+    // La edad ya no se mira aquí: sale del cumpleaños, que tiene su fila.
+    // Pedirla en dos sitios es como se acaba con dos respuestas distintas.
+    el.innerHTML = (faltan.length
+      ? 'Falta ' + faltan.join(', ')
+      : Number(p.height_cm).toFixed(1) + ' cm') + '<i>›</i>';
   }
+
+  // El peso no se escribe aquí: se pesa uno. La fila lleva a la pestaña
+  // donde se hace, que es lo que la flecha promete — antes era una fila
+  // muerta que invitaba a tocarla y no pasaba nada.
+  //
+  // `volverA` y no `goto`, igual que la barra de abajo: así la pantalla de
+  // Peso conserva su «Regresar» y vuelve al Diario, que es su sitio. Con
+  // `goto` ese botón se quedaría sin a dónde ir.
+  document.getElementById('profPesoBtn').addEventListener('click', function(){
+    volverA('peso', 'diario');
+  });
 
   document.getElementById('profDatosBtn').addEventListener('click', function(){
     var p = MI_PERFIL || {};
@@ -2726,11 +2747,10 @@
         document.getElementById('profNombre').textContent = cambios.full_name;
         document.getElementById('saludoNombre').textContent = cambios.full_name.split(' ')[0];
       }
-      if(cambios.age != null) document.getElementById('profEdad').textContent = cambios.age + ' años';
-      if(cambios.height_cm != null) {
-        document.getElementById('profAltura').textContent = Number(cambios.height_cm).toFixed(1) + ' cm';
-      }
+      // La altura la repinta `pintarDatosPerfil`, que es su fila, y la edad
+      // ya no tiene fila propia: vive con el cumpleaños.
       pintarDatosPerfil();
+      pintarCumplePerfil();
       cerrarDatos();
 
       var s = sueloDeAhora();
@@ -2825,7 +2845,12 @@
     // Partida a mano y NO con `new Date(n)`: una fecha suelta se
     // interpreta en UTC y en México sale el día anterior.
     var p = String(n).slice(0, 10).split('-');
-    el.innerHTML = Number(p[2]) + ' de ' + MESES[Number(p[1]) - 1] + '<i>›</i>';
+    // CON LA EDAD AL LADO. Tenía su propia fila y era la misma cosa dicha
+    // dos veces: la edad SALE de esta fecha. En dos filas, además, podían
+    // acabar diciendo cosas distintas.
+    var anios = edadDeNacimiento(n, isoDe(HOY));
+    el.innerHTML = Number(p[2]) + ' ' + MESES[Number(p[1]) - 1].slice(0, 3) +
+      (anios != null ? ' · ' + anios + ' años' : '') + '<i>›</i>';
   }
 
   document.getElementById('profCumpleBtn').addEventListener('click', function(){
@@ -6622,9 +6647,11 @@
     document.getElementById('saludoNombre').textContent = nombre;
     document.getElementById('profNombre').textContent = nombre;
     if(correo) document.getElementById('profEmail').textContent = correo;
-    document.getElementById('profPeso').textContent = m.peso.toFixed(1) + ' kg';
-    document.getElementById('profAltura').textContent = m.alt.toFixed(1) + ' cm';
-    document.getElementById('profEdad').textContent = m.edad + ' años';
+    document.getElementById('profPeso').innerHTML =
+      m.peso.toFixed(1) + ' kg<i>›</i>';
+    // La altura y la edad las pintan sus propias filas: la altura cuando
+    // se carga el perfil y la edad con el cumpleaños.
+    if(typeof pintarDatosPerfil === 'function') pintarDatosPerfil();
     pintarObjetivoPerfil();
 
     // Las metas del perfil quedan con lo calculado
@@ -11977,13 +12004,14 @@
           pintarAvatarGuardado(p.avatar_url);
 
           if(p.goal) reg.objetivo = p.goal;
-          if(p.weight_kg != null) document.getElementById('profPeso').textContent   = Number(p.weight_kg).toFixed(1) + ' kg';
-          if(p.height_cm != null) document.getElementById('profAltura').textContent = Number(p.height_cm).toFixed(1) + ' cm';
-          // LA DE HOY, no la guardada: con fecha de nacimiento, `age` es una
-          // copia que puede llevar años sin refrescarse.
-          var _e = edadDeNacimiento(p.nacimiento, isoDe(HOY));
-          if(_e == null && p.age != null) _e = p.age;
-          if(_e != null) document.getElementById('profEdad').textContent = _e + ' años';
+          // El peso lleva flecha, así que se escribe con ella dentro y no
+          // con `textContent`, que se la comería.
+          if(p.weight_kg != null){
+            document.getElementById('profPeso').innerHTML =
+              Number(p.weight_kg).toFixed(1) + ' kg<i>›</i>';
+          }
+          // La edad ya no tiene fila propia: va con el cumpleaños, que la
+          // calcula de la fecha. Ver `pintarCumplePerfil`.
           pintarObjetivoPerfil();
           pintarDatosPerfil();
           pintarDiasPerfil();

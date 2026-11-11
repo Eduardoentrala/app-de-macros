@@ -80,23 +80,41 @@ console.log('\nHay dónde ponerlos, y se dice cuáles faltan');
   };
 
   ok(/Falta/.test(texto({})), 'con el perfil vacío dice que falta algo');
+
+  // LA EDAD YA NO SE MIRA AQUÍ. Dejó de tener fila propia: sale del
+  // cumpleaños, que tiene la suya. Pedirla en dos sitios es como se acaba
+  // con dos respuestas distintas para lo mismo.
   for (const [campo, palabra] of [
-    ['full_name', 'nombre'], ['sexo', 'sexo'], ['age', 'edad'], ['height_cm', 'altura'],
+    ['full_name', 'nombre'], ['sexo', 'sexo'], ['height_cm', 'altura'],
   ]) {
-    const completo = { full_name: 'Eduardo', sexo: 'h', age: 29, height_cm: 175 };
+    const completo = { full_name: 'Eduardo', sexo: 'h', height_cm: 175 };
     delete completo[campo];
     ok(texto(completo).includes(palabra),
        'y si falta ' + campo + ' lo nombra',
        'quedó: ' + texto(completo));
   }
-  ok(/Completos/.test(texto({ full_name: 'Eduardo', sexo: 'h', age: 29, height_cm: 175 })),
-     'y con los cuatro puestos, completos');
+  ok(!texto({ full_name: 'E', sexo: 'h', height_cm: 175 }).includes('edad'),
+     'y la edad no se le pide aquí',
+     'quedó: ' + texto({ full_name: 'E', sexo: 'h', height_cm: 175 }));
 
-  // Un cero es un dato, no un hueco. Una edad de 0 no pasa la validación,
-  // pero una altura o una edad no pueden desaparecer por ser falsy.
-  ok(!texto({ full_name: 'E', sexo: 'h', age: 0, height_cm: 0 }).includes('edad'),
+  // CON TODO PUESTO ENSEÑA LA ALTURA, que es de lo que va la fila. Decir
+  // «Completos» sería gastar la fila en no decir nada.
+  const lleno = texto({ full_name: 'Eduardo', sexo: 'h', height_cm: 175 });
+  ok(/175\.0 cm/.test(lleno), 'y con todo puesto enseña la altura', 'quedó: ' + lleno);
+  ok(!/Falta/.test(lleno), 'sin avisar de nada');
+
+  // Y SI FALTA ALGO, LO DICE EN LUGAR DE LA ALTURA. Un «175 cm» tranquilo
+  // escondería que no hay sexo ni nombre, y esos los necesitan la fórmula
+  // y el asistente.
+  const aMedias = texto({ height_cm: 175 });
+  ok(/Falta/.test(aMedias) && !/175/.test(aMedias),
+     'y lo que falta tapa a la altura, no se pone al lado',
+     'quedó: ' + aMedias);
+
+  // Un cero es un dato, no un hueco.
+  ok(!texto({ full_name: 'E', sexo: 'h', height_cm: 0 }).includes('altura'),
      'y un 0 cuenta como puesto, no como que falta',
-     'con `if(!p.age)` un cero se leería como hueco');
+     'con `if(!p.height_cm)` un cero se leería como hueco');
 }
 
 // ------------------------------------------------------------------

@@ -112,7 +112,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = 'a3ac59dd95';
+    var SELLO = 'a8d3f31c4a';
     // Y a la vista de app.js, que lo manda con cada fallo que apunta. Sin
     // la versión, un error de hace una semana y uno de ahora se leen igual
     // y «eso ya lo arreglé» no se puede comprobar.
@@ -1866,50 +1866,55 @@
               <svg><use href="#i-sol"/></svg>
             </button>
           </div>
+          <!-- TRES BLOQUES Y NO UNA LISTA DE ONCE.
+               Esta tarjeta fue creciendo una fila cada vez que hacía falta
+               un ajuste, y acabó en once seguidas mezclando el cuerpo, el
+               objetivo, la IA y la privacidad. Él lo dijo: «es mucha info a
+               la vista».
+
+               Y no era solo cantidad: ALTURA y EDAD salían aquí de adorno y
+               además se editaban dentro de una fila llamada «Tus datos»
+               —un nombre que no dice nada rodeado de filas que también son
+               sus datos—, y EDAD repetía lo que ya decía el cumpleaños.
+               Tres de las once no añadían nada. -->
+          <div class="prof-grupo">Tú</div>
           <div class="card">
-            <div class="info-row"><span>Peso</span><span class="v" id="profPeso">84.0 kg</span></div>
-            <div class="info-row"><span>Altura</span><span class="v" id="profAltura">170.0 cm</span></div>
-            <div class="info-row"><span>Edad</span><span class="v" id="profEdad">28 años</span></div>
+            <!-- El peso se pone en la pestaña Peso, pesándose. Aquí lleva
+                 flecha y lleva allí: era una fila que invitaba a tocarla y
+                 no hacía nada. -->
+            <button class="info-row info-btn" id="profPesoBtn">
+              <span>Peso</span>
+              <span class="v" id="profPeso">84.0 kg<i>›</i></span>
+            </button>
+            <!-- Y ALTURA ABRE LA HOJA de nombre, sexo y altura. Antes había
+                 que encontrarla detrás de «Tus datos»; ahora se toca el dato
+                 que se quiere cambiar, como en los ajustes del teléfono. -->
+            <button class="info-row info-btn" id="profDatosBtn">
+              <span>Altura</span>
+              <span class="v" id="profAltura">—<i>›</i></span>
+            </button>
+            <!-- Cumpleaños y edad en una sola fila: la edad SALE de la
+                 fecha, así que en dos filas eran dos formas de decir lo
+                 mismo que además podían llegar a contradecirse. -->
+            <button class="info-row info-btn" id="profCumpleBtn">
+              <span>Cumpleaños</span>
+              <span class="v" id="profCumple">—<i>›</i></span>
+            </button>
             <button class="info-row info-btn" id="profObjetivoBtn">
               <span>Objetivo</span>
               <span class="v" id="profObjetivo">Mantener peso<i>›</i></span>
             </button>
             <!-- Se podía poner UNA VEZ, al registrarse, y nunca más: el
                  control vivía solo en la pantalla de registro. Quien pasó de
-                 tres días a cinco no tenía dónde decirlo, y a quien se
-                 registró antes de que existiera la columna le quedó en nulo
-                 para siempre. -->
-            <!-- Edad, altura, sexo y nombre vivían SOLO en la pantalla de
-                 registro, igual que los días de gimnasio: se ponían una vez
-                 y nunca más. A quien se registró antes de que existieran
-                 esas columnas le quedaron en nulo para siempre, y con ellas
-                 en nulo la fórmula usa los valores por defecto de la
-                 pantalla —28 años, 170 cm— sin que nada lo diga. -->
-            <!-- El aviso de privacidad promete que cualquiera puede ACCEDER
-                 a sus datos, y debajo dice «para lo más común no hace falta
-                 escribir a nadie» con borrar la cuenta y quitar condiciones.
-                 Sacarlos no estaba en esa lista ni en ninguna otra: era una
-                 promesa escrita y sin puerta. -->
-            <button class="info-row info-btn" id="profExportarBtn">
-              <span>Descargar mis datos</span>
-              <span class="v" id="profExportar">Un archivo<i>›</i></span>
-            </button>
-            <button class="info-row info-btn" id="profDatosBtn">
-              <span>Tus datos</span>
-              <span class="v" id="profDatos">—<i>›</i></span>
-            </button>
+                 tres días a cinco no tenía dónde decirlo. -->
             <button class="info-row info-btn" id="profDiasBtn">
               <span>Días de gimnasio</span>
               <span class="v" id="profDias">—<i>›</i></span>
             </button>
-            <button class="info-row info-btn" id="profCumpleBtn">
-              <span>Tu cumpleaños</span>
-              <span class="v" id="profCumple">—<i>›</i></span>
-            </button>
-            <button class="info-row info-btn" id="profSaludBtn">
-              <span>Salud</span>
-              <span class="v" id="profSalud">Ninguna<i>›</i></span>
-            </button>
+          </div>
+
+          <div class="prof-grupo">El asistente</div>
+          <div class="card">
             <button class="info-row info-btn" id="profPlanIaBtn">
               <span>Tu plan</span>
               <span class="v" id="profPlanIa">IA normal<i>›</i></span>
@@ -1920,6 +1925,22 @@
             <button class="info-row info-btn" id="profFotosIaBtn" hidden>
               <span>Analizar mis fotos</span>
               <span class="v" id="profFotosIa">—<i>›</i></span>
+            </button>
+          </div>
+
+          <div class="prof-grupo">Tu cuenta</div>
+          <div class="card">
+            <button class="info-row info-btn" id="profSaludBtn">
+              <span>Salud</span>
+              <span class="v" id="profSalud">Ninguna<i>›</i></span>
+            </button>
+            <!-- El aviso de privacidad promete que cualquiera puede ACCEDER
+                 a sus datos, y debajo dice «para lo más común no hace falta
+                 escribir a nadie». Sacarlos no estaba en esa lista ni en
+                 ninguna otra: era una promesa escrita y sin puerta. -->
+            <button class="info-row info-btn" id="profExportarBtn">
+              <span>Descargar mis datos</span>
+              <span class="v" id="profExportar">Un archivo<i>›</i></span>
             </button>
           </div>
           <div class="card" id="tarjetaPanel" hidden>
@@ -2480,7 +2501,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = 'a3ac59dd95';
+    var SELLO = 'a8d3f31c4a';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que
