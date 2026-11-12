@@ -163,7 +163,10 @@ console.log('\nY el razonamiento del coach cabe entero');
      'el modelo sabe cuánto tiene',
      'escribía lo que hacía falta y la app cortaba al guardar: un tope del ' +
      'que solo se entera un lado es un tope que siempre se pasa');
-  ok(/recortarTexto\(r\.motivo, 1000\)/.test(APP),
+  // El cuerpo se arma con el tope que se le pase, porque hay un segundo
+  // intento más corto si la columna va por detrás de la función. Lo que
+  // tiene que cuadrar con la columna es el PRIMER intento.
+  ok(/enviar\(1000\)/.test(APP),
      'y la app guarda hasta donde la base acepta');
   ok(/length\(motivo\) <= 1000/.test(MIG), 'y la base acepta mil');
 
@@ -175,7 +178,7 @@ console.log('\nY el razonamiento del coach cabe entero');
   // pidiera más de lo que acepta la base, volveríamos al principio por otro
   // camino: el modelo obedeciendo y Postgres rechazando la fila entera.
   const pide = Number((FN.match(/maxLength: (\d+)/) || [])[1]);
-  const guarda = Number((APP.match(/recortarTexto\(r\.motivo, (\d+)\)/) || [])[1]);
+  const guarda = Number((APP.match(/enviar\((\d+)\)/) || [])[1]);
   const acepta = Number((MIG.match(/length\(motivo\) <= (\d+)/) || [])[1]);
   ok(pide <= guarda && guarda <= acepta,
      `el prompt pide ${pide}, la app guarda ${guarda} y la base acepta ${acepta}`,

@@ -496,9 +496,16 @@ console.log('\n— El motivo cabe en su columna sin partir palabras —');
     'nació «para el historial, no para la pantalla» y hoy se despliega en ' +
     'Mis semanas: el modelo escribe distinto si sabe quién lo va a leer');
 
+  // EL TOPE DEL PRIMER INTENTO. El cuerpo se arma con el que se le pase
+  // —`recortarTexto(r.motivo, tope)`— porque si la columna va por detrás de
+  // la función hay un segundo intento más corto; ver
+  // `el-cierre-se-guarda-aunque-el-motivo-no-quepa`. Lo que tiene que
+  // cuadrar con la columna es el PRIMERO.
+  const primerIntento = Number((app.match(/enviar\((\d+)\)/) || [])[1]);
   check('la app lo recorta con el tope de la columna',
-    new RegExp('motivo: recortarTexto\\(r\\.motivo, ' + tope + '\\)').test(app),
-    'si los dos números se separan, o se pierde texto de más o rebota la fila');
+    primerIntento === Number(tope),
+    'el primer intento manda ' + primerIntento + ' y la columna acepta ' +
+    tope + ': si se separan, o se pierde texto de más o rebota la fila');
 
   // Ejecutado. Un `.slice` también cumpliría el tope.
   const sacar = (cab) => {
