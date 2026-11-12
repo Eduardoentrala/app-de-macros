@@ -15640,26 +15640,49 @@
     //
     // `|| {}` para que un cierre sin foto —una versión vieja, o un fallo al
     // calcularla— siga guardando lo de siempre en vez de no guardar nada.
-    var cuerpo = JSON.stringify(Object.assign({
-      user_id: sesion.user.id,
-      semana: isoDe(anclaSemana),
-      hambre: q.hambre || null, energia: q.energia || null, sueno: q.sueno || null,
-      nota: document.getElementById('chqNota').value.trim() || null,
-      ajusto: !!r.ajusto,
-      // 1000, que es lo que acepta la columna desde la 0066. Estaba en 500
-      // —el tope de cuando esto no se enseñaba— y cortaba a media frase el
-      // razonamiento del coach justo en la parte útil. El recorte se queda
-      // igualmente: es la última red si un día el modelo se pasa.
-      motivo: recortarTexto(r.motivo, 1000),
-      cal_antes: Math.round(datosDeLaSemana().meta_cal) || null,
-      cal_despues: r.ajusto && r.cal_nueva ? Math.round(r.cal_nueva) : null
-    }, foto || {}));
-    var enviar = function(){
+    // 1000, que es lo que acepta la columna desde la 0066. Estaba en 500
+    // —el tope de cuando esto no se enseñaba— y cortaba a media frase el
+    // razonamiento del coach justo en la parte útil.
+    var conMotivo = function(tope){
+      return JSON.stringify(Object.assign({
+        user_id: sesion.user.id,
+        semana: isoDe(anclaSemana),
+        hambre: q.hambre || null, energia: q.energia || null, sueno: q.sueno || null,
+        nota: document.getElementById('chqNota').value.trim() || null,
+        ajusto: !!r.ajusto,
+        motivo: recortarTexto(r.motivo, tope),
+        cal_antes: Math.round(datosDeLaSemana().meta_cal) || null,
+        cal_despues: r.ajusto && r.cal_nueva ? Math.round(r.cal_nueva) : null
+      }, foto || {}));
+    };
+
+    var enviar = function(tope){
       return sbFetch('/rest/v1/chequeos_semanales?on_conflict=user_id,semana', {
         method: 'POST',
         headers: { 'Prefer': 'resolution=merge-duplicates,return=minimal' },
-        body: cuerpo
+        body: conMotivo(tope)
       });
+    };
+
+    // ---- SI EL MOTIVO NO CABE, SE MANDA MÁS CORTO ----
+    //
+    //  La app, la función y la base se despliegan POR SEPARADO, así que hay
+    //  ratos —minutos o días, según cuándo pulse quien despliega— en que la
+    //  función ya pide 700 caracteres de motivo y la columna todavía acepta
+    //  500. Pasó: la función se desplegó y la migración no.
+    //
+    //  Y la columna no se queda a medias: Postgres rechaza LA FILA ENTERA
+    //  por un `check`. O sea que un texto de más tiraba el cierre completo
+    //  —la encuesta, el peso, el ajuste—, y el lunes siguiente el bloque
+    //  volvía a salir como si no se hubiera contestado: otra consulta de IA
+    //  y la posibilidad de ajustar dos veces el mismo periodo.
+    //
+    //  Perder el razonamiento del coach por largo es malo. Perder el cierre
+    //  entero por lo mismo no tiene defensa. Se reintenta con 500, que es lo
+    //  que cualquier versión de la columna ha aceptado siempre.
+    var esMotivoLargo = function(e){
+      var m = String((e && e.message) || '');
+      return /motivo/i.test(m) && /check|constraint|violat/i.test(m);
     };
 
     // ESTA FILA ES LA QUE APAGA EL BLOQUE. Si no se guarda, el lunes que
@@ -15670,15 +15693,27 @@
     // Antes esto era un `.catch(function(){})`: el fallo se tragaba entero y
     // nadie se enteraba de nada. Ahora se reintenta una vez -casi siempre es
     // un tropiezo de red- y si sigue fallando se dice, que es lo mínimo.
-    enviar()
+    var rendirse = function(e){
+      toast('toastPeso', 'Tus calorías sí se aplicaron, pero no pude ' +
+            'guardar el cuestionario: ' + traducirError(e.message));
+      apuntarFallo('guardar_chequeo', e);
+    };
+
+    enviar(1000)
       .then(function(){ pintarChequeoPendiente(false); })
-      ['catch'](function(){
-        return enviar()
+      ['catch'](function(e1){
+        // Si no cabe, no se reintenta lo mismo: se manda recortado.
+        if(esMotivoLargo(e1)){
+          apuntarFallo('motivo_no_cabe', e1);
+          return enviar(500)
+            .then(function(){ pintarChequeoPendiente(false); })
+            ['catch'](rendirse);
+        }
+        // Y si fue otra cosa —casi siempre un tropiezo de red— se repite
+        // igual, que es lo que ya hacía.
+        return enviar(1000)
           .then(function(){ pintarChequeoPendiente(false); })
-          ['catch'](function(e){
-            toast('toastPeso', 'Tus calorías sí se aplicaron, pero no pude ' +
-                  'guardar el cuestionario: ' + traducirError(e.message));
-          });
+          ['catch'](rendirse);
       });
   }
 
