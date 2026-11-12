@@ -49,6 +49,7 @@ function montar({ online = true, respuestas = [], guardado = null } = {}) {
   if (guardado) almacen.set('macros.cola', JSON.stringify(guardado));
   const enviados = [];
   const avisos = [];
+  const fallos = [];
   let turno = 0;
 
   const ctx = vm.createContext({
@@ -71,6 +72,11 @@ function montar({ online = true, respuestas = [], guardado = null } = {}) {
     MIS_ALIMENTOS: [], RECETAS: [], PESOS: {}, CINTURAS: [],
     recalcularFrecuentes: () => {}, pintarListas: () => {},
     toast: (id, m) => { avisos.push(m); },
+    // `encolar` lo llama cuando no cabe más en el teléfono y hay que tirar
+    // apuntes viejos. Sin esto aquí dentro, ese camino revienta con un
+    // ReferenceError en vez de avisar, que es lo contrario de lo que se
+    // buscaba. Ver `la-cola-no-tira-apuntes-en-silencio`.
+    apuntarFallo: (donde, e) => { fallos.push(donde + ': ' + e.message); },
     // El `fetch` de la app pasa por aquí: cada llamada consume una respuesta.
     sbFetch: (ruta, op) => {
       enviados.push({ ruta, metodo: (op && op.method) || 'GET', body: op && op.body });
@@ -83,7 +89,7 @@ function montar({ online = true, respuestas = [], guardado = null } = {}) {
 
   vm.runInContext(BLOQUE, ctx);
   return {
-    ctx, enviados, avisos,
+    ctx, enviados, avisos, fallos,
     cola: () => JSON.parse(almacen.get('macros.cola') || '[]'),
     crudo: () => almacen.get('macros.cola')
   };
@@ -311,7 +317,13 @@ console.log('\n— Se ve que falta subir —');
   check('nace oculto', /id="avisoPendientes"[^>]*hidden/.test(HTML));
   check('y tiene estilo propio', /\.pendientes\{/.test(CSS));
   // No es un recordatorio: no se calla, se va solo cuando sube lo que falta.
-  const caja = HTML.slice(HTML.indexOf('id="avisoPendientes"'), HTML.indexOf('class="recordatorios"'));
+  // SU PROPIA TARJETA, y no "desde aquí hasta los recordatorios". La
+  // ventana larga daba por suyo todo lo que hubiera detrás: al poner el
+  // aviso de «ya es otro día» —que SÍ es un botón, porque se toca para
+  // recargar— esta comprobación se puso roja señalando un botón que no es
+  // el de cerrar y que ni siquiera pertenece a esta caja.
+  const abre = HTML.indexOf('id="avisoPendientes"');
+  const caja = HTML.slice(abre, HTML.indexOf('</div>', abre));
   check('no se puede cerrar', !/<button/.test(caja),
     'un aviso de datos sin guardar que se puede callar no sirve de nada');
   check('dice cuántos faltan', /Faltan subir/.test(APP));

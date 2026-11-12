@@ -2182,6 +2182,68 @@
   }
   function haceDias(n){ var d = new Date(HOY); d.setDate(d.getDate() - n); return d; }
 
+  // ---- EL DÍA SE QUEDABA CONGELADO EN EL QUE ABRISTE LA APP ----
+  //
+  // `HOY` se calcula una sola vez, ahí arriba, al cargar la página, y no se
+  // volvía a tocar NUNCA. Y esto es una app que se instala en el teléfono y
+  // se queda en segundo plano: abres a las once de la noche, guardas el
+  // teléfono, lo sacas al día siguiente. La página sigue viva, así que
+  // `HOY` sigue siendo ayer.
+  //
+  // De `HOY` cuelgan ochenta sitios, y unos cuantos ESCRIBEN:
+  //
+  //   · el desayuno del martes se apunta en el lunes;
+  //   · el peso se guarda con fecha de ayer;
+  //   · el anillo y el reparto cuentan el día de ayer;
+  //   · y el selector de día te dice «hasta hoy» con el tope puesto en
+  //     ayer, o sea que la app se niega a dejarte apuntar en el día en el
+  //     que estás.
+  //
+  // Nada de eso avisa. Es el fallo mudo de siempre, una vez al día.
+  //
+  // Esto ya se había visto a medias: hay dos comentarios en este fichero
+  // que nombran el problema —«quien deja la app abierta pasada la
+  // medianoche tendría un HOY de ayer»— y lo esquivan cada uno en su
+  // rincón. Pero `HOY` seguía quedándose atrás para todos los demás.
+  //
+  // No se parchea sitio por sitio: se vuelve a cargar. Es lo único que pone
+  // al día TODO lo que se deriva de la fecha —`anclaSemana`, el arranque de
+  // la semana, la racha, los eventos— sin ir a buscarlo uno a uno.
+  function elDiaCambio(){ return isoDe(new Date()) !== isoDe(HOY); }
+
+  var recargandoPorElDia = false;
+  function ponerseAlDia(){
+    if(recargandoPorElDia) return;
+    recargandoPorElDia = true;
+    location.reload();
+  }
+
+  // AL VOLVER DEL SEGUNDO PLANO, que es el caso de verdad: pasa todos los
+  // días, a todo el mundo. Y recargar aquí no se lleva nada por delante,
+  // porque si el día cambió fue estando la app guardada: no hay medio plato
+  // escrito que perder.
+  function alVolverALaApp(){
+    if(document.hidden) return;
+    if(elDiaCambio()) ponerseAlDia();
+  }
+  document.addEventListener('visibilitychange', alVolverALaApp);
+  window.addEventListener('focus', alVolverALaApp);
+  // El teléfono puede devolver la página de la caché de atrás/adelante sin
+  // ejecutar nada: ahí tampoco se recalcula `HOY`.
+  window.addEventListener('pageshow', function(e){ if(e.persisted) alVolverALaApp(); });
+
+  // Y SI CAMBIA MIENTRAS MIRAS LA PANTALLA no se recarga por debajo: ahí sí
+  // puede haber algo a medio escribir, y quitárselo de las manos para
+  // arreglar un detalle que no ha visto sería peor que el detalle. Sale un
+  // aviso y lo toca quien quiera.
+  var avisoDiaNuevo = document.getElementById('avisoDiaNuevo');
+  if(avisoDiaNuevo) avisoDiaNuevo.addEventListener('click', ponerseAlDia);
+  function vigilarElDia(){
+    if(!avisoDiaNuevo) return;
+    avisoDiaNuevo.hidden = !elDiaCambio();
+  }
+  setInterval(vigilarElDia, 30000);
+
   // Progreso de ejercicio (se declara aquí porque la semana lo consulta al recalcular)
   // Días con sesión de fuerza guardada. Vacío al empezar: enseñar doce
   // entrenamientos de ejemplo a quien acaba de registrarse le falsea la
@@ -7113,13 +7175,34 @@
     try{ COLA = JSON.parse(localStorage.getItem(COLA_KEY) || '[]'); }catch(e){ COLA = []; }
     if(!Array.isArray(COLA)) COLA = [];
   }
+  // Devuelve CUÁNTOS APUNTES HUBO QUE TIRAR para que cupiera, que casi
+  // siempre son cero. Quien llama decide si eso se dice.
   function colaGuardar(){
-    try{ localStorage.setItem(COLA_KEY, JSON.stringify(COLA)); }
+    try{ localStorage.setItem(COLA_KEY, JSON.stringify(COLA)); return 0; }
     catch(e){
       // Sin sitio en el teléfono. Se tira lo más viejo antes que perder lo
       // que se acaba de apuntar, que es lo que la persona tiene delante.
-      COLA = COLA.slice(-50);
-      try{ localStorage.setItem(COLA_KEY, JSON.stringify(COLA)); }catch(e2){}
+      //
+      // ANTES ESTO CORTABA DE GOLPE A 50. Y el tope de la cola son 400, así
+      // que una sola vez sin sitio podía llevarse por delante trescientos
+      // cincuenta apuntes de los que la app había dicho «se subirá cuando
+      // vuelva la señal». Dos números para lo mismo, y el pequeño ganando.
+      //
+      // Ahora se tira por tandas y se para en cuanto cabe, así se pierde lo
+      // menos posible. Y si al final no cabe ni uno, se deja la cola como
+      // estaba en vez de dejar la memoria diciendo una cosa y el teléfono
+      // otra.
+      var original = COLA.slice();
+      var tirados = 0;
+      while(COLA.length > 1){
+        var quita = Math.max(1, Math.ceil(COLA.length / 10));
+        COLA = COLA.slice(quita);
+        tirados += quita;
+        try{ localStorage.setItem(COLA_KEY, JSON.stringify(COLA)); return tirados; }
+        catch(e2){}
+      }
+      COLA = original;
+      return 0;
     }
   }
 
@@ -7136,9 +7219,21 @@
     item.dueno = (sesion && sesion.user && sesion.user.id) || null;
     if(item.clave) COLA = COLA.filter(function(x){ return x.clave !== item.clave; });
     COLA.push(item);
-    if(COLA.length > COLA_TOPE) COLA = COLA.slice(-COLA_TOPE);
-    colaGuardar();
+    var porElTope = Math.max(0, COLA.length - COLA_TOPE);
+    if(porElTope) COLA = COLA.slice(-COLA_TOPE);
+    var tirados = porElTope + colaGuardar();
     pintarPendientes();
+
+    // Y SE DICE. Acabamos de prometerle a esta persona «se subirá cuando
+    // vuelva la señal», y resulta que de los viejos unos cuantos no. El
+    // mismo razonamiento que ya está escrito en `avisarSubidos`: si se
+    // callan, desaparecen de la pantalla en la siguiente recarga sin
+    // explicación y esa persona cree que su comida está guardada.
+    if(tirados){
+      apuntarFallo('cola_sin_sitio', new Error('se tiraron ' + tirados + ' de ' + COLA_TOPE));
+      toast('toastComida', 'No cabe más sin señal: se perdieron ' + tirados +
+        (tirados === 1 ? ' apunte viejo' : ' apuntes viejos') + ' sin subir');
+    }
   }
 
   // Quita de la cola una escritura que ya no hace falta mandar. Se usa al
@@ -8537,11 +8632,19 @@
     permisoSheet.classList.remove('open');
     pintarPermisoPerfil();
     sbActualizarPerfil({ fotos_ia_ok: si, fotos_ia_fecha: new Date().toISOString() })
-      ['catch'](function(){
+      ['catch'](function(e){
         // Si no se pudo guardar, se vuelve a preguntar la próxima vez. Dar
         // por bueno un sí que no llegó a la base sería mandar fotos con un
         // permiso que no consta en ninguna parte.
         PERMISO_FOTOS = null;
+        // Y SE REPINTA, que es lo que faltaba. Sin esta línea la fila del
+        // Perfil se quedaba enseñando el «Sí» de hace un segundo mientras
+        // la app ya había vuelto a «nadie ha contestado»: la pantalla
+        // diciendo que diste un permiso que no existe en ningún sitio.
+        // Se arregla sola al reabrir la app —el perfil se relee— y eso es
+        // justo lo malo, porque mientras tanto no hay forma de saberlo.
+        pintarPermisoPerfil();
+        apuntarFallo('permiso_fotos', e);
         toast('toastFotos', 'No se pudo guardar tu respuesta. Te lo pregunto otra vez.');
       });
     if(si) revisarAnalisisDeFotos();

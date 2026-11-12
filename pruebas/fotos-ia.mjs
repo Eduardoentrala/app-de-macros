@@ -228,9 +228,53 @@ console.log('\n— El permiso se pide bien y se puede retirar —');
     /if\(PERMISO_FOTOS === true\)\{\s*\r?\n\s*guardarPermisoFotos\(false\);/.test(APP),
     'poner trabas para retirarlo es la forma educada de no dejar retirarlo');
   // Si el guardado falla, NO se da por bueno.
-  check('un si que no se guardo no vale',
-    /PERMISO_FOTOS = null;\s*\r?\n\s*toast\('toastFotos'/.test(APP),
-    'mandar fotos con un permiso que no consta en la base es peor que no mandarlas');
+  //
+  // ESTO SE EJECUTA, y antes no. Era una expresión que exigía que el
+  // `PERMISO_FOTOS = null` y el `toast` fueran dos líneas seguidas, y con
+  // eso daba por bueno un arreglo a medias: el permiso volvía a null por
+  // dentro pero NADIE REPINTABA la fila del Perfil, que se quedaba
+  // enseñando el «Sí» de hacía un segundo. O sea la pantalla diciendo que
+  // diste un permiso que no existe en ningún sitio. Se arreglaba sola al
+  // reabrir la app, y eso es justo lo malo: mientras tanto no hay forma
+  // de saberlo.
+  {
+    const i = APP.indexOf('function guardarPermisoFotos(');
+    let n = 0, k = APP.indexOf('{', APP.indexOf(')', i)), fin = -1;
+    for (let j = k; j < APP.length; j++) {
+      if (APP[j] === '{') n++;
+      else if (APP[j] === '}') { n--; if (!n) { fin = j + 1; break; } }
+    }
+    const correr = (guardadoVa) => {
+      const pintadas = [];
+      let permiso = 'intacto';
+      const api = new Function(
+        'PERMISO_FOTOS', 'permisoSheet', 'pintarPermisoPerfil',
+        'sbActualizarPerfil', 'apuntarFallo', 'toast', 'revisarAnalisisDeFotos', 'avisos',
+        APP.slice(i, fin) +
+        '; return { correr: guardarPermisoFotos, leer: function(){ return PERMISO_FOTOS; } };')(
+        null,
+        { classList: { remove() {} } },
+        function () { pintadas.push(this === undefined ? 1 : 1); },
+        () => (guardadoVa ? Promise.resolve() : Promise.reject(new Error('sin red'))),
+        () => {}, (id, m) => {}, () => {}, []);
+      api.correr(true);
+      return new Promise((res) => setTimeout(() => res({
+        pintadas: pintadas.length, permiso: api.leer(),
+      }), 0));
+    };
+    const bien = await correr(true);
+    const mal_ = await correr(false);
+    check('si el guardado va, el permiso queda en si', bien.permiso === true,
+      'quedo en ' + String(bien.permiso));
+    check('y si no va, vuelve a null', mal_.permiso === null,
+      'mandar fotos con un permiso que no consta en la base es peor que no mandarlas');
+    check('Y SE REPINTA EL PERFIL al deshacerlo', mal_.pintadas === 2,
+      'se pinto ' + mal_.pintadas + ' vez/veces. Sin el segundo repintado, la ' +
+      'fila del Perfil se queda diciendo «Si» mientras la app ya volvio a ' +
+      '«nadie ha contestado»');
+    check('y cuando va bien no se repinta de mas', bien.pintadas === 1,
+      'se pinto ' + bien.pintadas);
+  }
 }
 
 console.log('\n— Y no se enciende antes que el servidor —');

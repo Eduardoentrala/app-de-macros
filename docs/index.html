@@ -112,7 +112,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '42651e964d';
+    var SELLO = '8817fb7026';
     // Y a la vista de app.js, que lo manda con cada fallo que apunta. Sin
     // la versión, un error de hace una semana y uno de ahora se leen igual
     // y «eso ya lo arreglé» no se puede comprobar.
@@ -454,6 +454,18 @@
                 <span>Están guardados en el teléfono. Se suben solos al volver la señal.</span>
               </span>
             </div>
+
+            <!-- Solo si la app se queda abierta y cruza la medianoche
+                 CON LA PANTALLA DELANTE. Volviendo del segundo plano no
+                 hace falta: ahí se recarga sola, que no hay nada a medio
+                 escribir. Ver `elDiaCambio` en app.js. -->
+            <button class="pendientes dia-nuevo" id="avisoDiaNuevo" type="button" hidden>
+              <span class="pend-ico"><svg><use href="#i-amanecer"/></svg></span>
+              <span class="pend-txt">
+                <b>Ya es otro día</b>
+                <span>La app se quedó en el de ayer. Toca para ponerla al día.</span>
+              </span>
+            </button>
 
             <div class="recordatorios">
               <div class="rec rec-peso" id="recPeso" hidden>
@@ -2564,7 +2576,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '42651e964d';
+    var SELLO = '8817fb7026';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que
