@@ -96,7 +96,13 @@ on conflict (alimento_id, termino) do nothing;
 --    group by 1,2 order by 1,2;
 --
 -- Que ninguno tenga macros imposibles (debe dar 0 filas):
+--
+--   El tope eran 900 y NUNCA daba cero: la manteca de cerdo son 902 kcal
+--   por 100 g, que es lo que pesa una grasa pura, y salía marcada desde
+--   el primer día. Una comprobación que siempre enseña la misma fila no
+--   la mira nadie.
+--
 --   select nombre, kcal, proteina, carbos, grasas
 --     from public.alimentos_catalogo
---    where kcal > 900 or proteina > 100 or carbos > 100 or grasas > 100;
+--    where kcal > 920 or proteina > 100 or carbos > 100 or grasas > 100;
 `);
