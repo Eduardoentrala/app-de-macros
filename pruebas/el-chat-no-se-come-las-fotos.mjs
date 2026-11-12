@@ -68,6 +68,12 @@ function correr({ fotos = [], falla = false, texto = 'esto qué es' } = {}) {
     'sesion', 'toast', 'pintarFotoIA', 'pintarChat', 'iaLlamar', 'macrosDeHoy',
     'prepararAlimento', 'pintarQuedanIA', 'guardarEventoSiEstaCompleto',
     'guardarMemoriaIA', 'traducirError', 'Intl', 'Number', 'progresoDelChat',
+    // El envío cierra el aviso del coach cuando se contesta desde él (ver
+    // `el-aviso-se-cierra-al-contestar`). Van como dobles: aquí no se
+    // prueba eso, pero SIN ELLOS un envío que va bien revienta dentro del
+    // `then`, cae en el `catch` y las fotos vuelven como si no hubiera
+    // habido red. Esta prueba lo cazó así, que es justo su trabajo.
+    'avisoEsperandoRespuesta', 'marcarAvisoVisto',
     'fuente_no_usada',
     fuente);
 
@@ -86,6 +92,7 @@ function correr({ fotos = [], falla = false, texto = 'esto qué es' } = {}) {
     // alguien como va, ver el-chat-sabe-como-voy—. Aqui no se prueba eso:
     // basta con que resuelva para que el envio siga su camino.
     () => Promise.resolve(null),
+    null, () => {},
     null);
 
   return { ctx, fotosAhora: mirar };
