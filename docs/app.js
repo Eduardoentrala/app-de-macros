@@ -1232,6 +1232,34 @@
   exList.addEventListener('input', programarGuardado);
   exList.addEventListener('click', programarGuardado);
 
+  // ---- Y SE VACÍA ANTES DE QUE LA PÁGINA SE VAYA ----
+  //
+  // Los 900 ms de espera son para no mandar una petición por cada tecla.
+  // Pero nadie los vaciaba al salir, y esto se usa EN EL GIMNASIO: tecleas
+  // el peso de la última serie y bloqueas el teléfono. Si el navegador
+  // congela o mata la página antes de que salte el reloj, esa petición no
+  // llega a salir nunca; al volver a abrir, la pantalla se arma otra vez
+  // desde la base y los números que escribiste no están.
+  //
+  // `guardarDia` no encola —si falla, falla—, así que la única forma de
+  // que no se pierda es MANDARLO mientras la página sigue viva.
+  //
+  // `visibilitychange` a escondida es el bueno: salta antes de que el
+  // teléfono congele la pestaña y la petición da tiempo a salir. El
+  // `pagehide` es la red de abajo, para cuando se cierra del todo; ahí ya
+  // es a lo que se llegue, pero intentarlo no cuesta nada y no intentarlo
+  // costaba las series.
+  // Un solo nombre para los tres sitios que lo piden —esconderse, cerrar,
+  // y la recarga por cambio de día—. Y SIN GUARDIA PROPIA: aquí había un
+  // `if(relojGuardado)` que no hacía nada, porque `volcarRutina` ya se
+  // protege sola con su `if(!t) return`. Dos guardias para lo mismo es lo
+  // que acaba con una de las dos diciendo que sí y la otra que no.
+  function vaciarGuardadoPendiente(){ volcarRutina(); }
+  document.addEventListener('visibilitychange', function(){
+    if(document.hidden) vaciarGuardadoPendiente();
+  });
+  window.addEventListener('pagehide', vaciarGuardadoPendiente);
+
   // ---- Cargar la rutina al entrar ----
   // Las sesiones guardadas alimentan la racha de fuerza y las gráficas de
   // progresión. Son historial: se leen, no se editan.
@@ -2215,6 +2243,10 @@
   function ponerseAlDia(){
     if(recargandoPorElDia) return;
     recargandoPorElDia = true;
+    // Lo que estuviera esperando sus 900 ms se manda ANTES de recargar.
+    // Recargar sin esto sería arreglar el día de ayer tirando las series
+    // que se acaban de teclear, y eso es peor que el fallo que arregla.
+    if(typeof vaciarGuardadoPendiente === 'function') vaciarGuardadoPendiente();
     location.reload();
   }
 
