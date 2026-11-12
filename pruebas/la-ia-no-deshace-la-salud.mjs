@@ -151,8 +151,15 @@ console.log('\nY el cierre llama a la salud de verdad');
     const f = new Function(
       'leerMetas', 'calDe', 'condicionesElegidas', 'gastoEstimado',
       'ajustarPorSalud', 'goalP', 'goalC', 'goalG', 'actualizarMetas',
-      'sesion', 'metasVigentes', 'toast', 'mil',
-      [sacar('function sueloDeCalorias('),
+      'sesion', 'metasVigentes', 'toast', 'mil', 'apuntarFallo',
+      // Y EL TOPE DE PASO, también de verdad. Son ya TRES frenos sobre la
+      // misma función —la salud, el salto de la semana y el metabolismo
+      // basal— y lo que hay que ver es que el de la salud sigue mandando:
+      // a una embarazada el recorte del salto la deja en 2.290 y la regla
+      // de salud la sube igual por encima de 2.500.
+      ['var PASO_MAXIMO = ' + (APP.match(/var PASO_MAXIMO = (\d+);/) || [])[1] + ';',
+       sacar('function conPaso('),
+       sacar('function sueloDeCalorias('),
        sacar('function sueloDeAhora('),
        sacar('function conSuelo('),
        sacar('function aplicarCaloriasNuevas(')].join(';\n') +
@@ -163,7 +170,7 @@ console.log('\nY el cierre llama a la salud de verdad');
       () => ({ gasto: 2200, peso: 70, tmb: 1600, alt: 170, edad: 30 }),
       ajustar, goalP, goalC, goalG, () => {},
       null,                                  // sin sesión: corta antes de la red
-      null, () => {}, (n) => String(n))(loQuePideLaIa);
+      null, () => {}, (n) => String(n), () => {})(loQuePideLaIa);
     return { P: Number(goalP.value), C: Number(goalC.value), G: Number(goalG.value) };
   }
 
@@ -202,10 +209,17 @@ console.log('\nY el cierre llama a la salud de verdad');
      'y a quien tiene el riñón tocado no se le sube la proteína del tope',
      'se guardó P' + renal.P + ' para 70 kg: el tope son 56');
 
-  // Y sin condiciones, exactamente la regla de tres de siempre.
+  // Y sin condiciones, la regla de tres de siempre — SOBRE LO QUE DEJA EL
+  // TOPE DE PASO. Este caso pide 2.000 desde 1.721, o sea +279, y el tope
+  // del cierre son 250: se aplican 1.971. No es que la salud intervenga,
+  // es que el salto era grande. Ver `el-paso-semanal-tiene-tope`.
+  const PASO = Number((APP.match(/var PASO_MAXIMO = (\d+);/) || [])[1]);
   const normal = aplicarCon([], { P: 140, C: 180, G: 49 }, 2000);
   const antes = 140 * 4 + 180 * 4 + 49 * 9;
-  ok(normal.P === Math.round(140 * (2000 / antes)),
+  const tras = Math.min(2000, antes + PASO);
+  ok(tras === antes + PASO, 'el caso de abajo pide más de un paso',
+     'si deja de pasarse del tope, esta comprobación ya no mide lo que cree');
+  ok(normal.P === Math.round(140 * (tras / antes)),
      'y a quien no marcó nada se le aplica tal cual, como siempre',
      'P' + normal.P + ', esperaba ' + Math.round(140 * (2000 / antes)));
 }

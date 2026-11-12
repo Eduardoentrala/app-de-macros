@@ -52,7 +52,7 @@ const CORS = {
 //
 // Ahora lo dice: un GET sin sesión devuelve este sello y nada más.
 // `pruebas/funciones-vivas.mjs` lo compara con el del repo.
-const SELLO = '20de3dddd2';
+const SELLO = '7707eee4a5';
 
 // Tope diario por persona. Es la única defensa contra que un solo usuario
 // -o un token robado- vacíe la cuenta en una noche con un bucle.
@@ -871,6 +871,12 @@ CUÁNTO MUEVES
 Poco. Entre 100 y 200 calorías. Nadie necesita saltos de 400, y una
 corrección chica se puede repetir la semana que viene; una grande no se
 puede deshacer.
+
+Y ESTO NO ES UN CONSEJO: la app recorta a 250 cualquier salto mayor, en
+la dirección que hayas decidido, y se lo dice a esa persona. Si pides
+2.800 desde 1.950, se aplican 2.200 y lee que la moviste de más. El
+límite está en el código porque uno escrito solo aquí no obliga: el de
+500 caracteres del motivo llevaba meses escrito y se pasó igual.
 
 Si todo va bien y se siente bien, no toques nada. Que algo funcione es
 razón para dejarlo, no para moverlo.

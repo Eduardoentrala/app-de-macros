@@ -14663,6 +14663,39 @@
     return sueloDeCalorias(gastoEstimado().tmb);
   }
 
+  // ---- EL PASO: NO MÁS DE 250 DE GOLPE ----
+  //
+  //  El cierre de los lunes mueve «entre 100 y 200». Eso estaba escrito en
+  //  el prompt y en ningún sitio más, así que `cal_nueva` iba del modelo a
+  //  sus macros sin pasar por nada: si un día devolvía 2.800 en vez de
+  //  2.050, se aplicaban 2.800.
+  //
+  //  Y ESTA SEMANA SE DEMOSTRÓ que un tope escrito en prosa no obliga: el
+  //  «máximo 500 caracteres» del motivo llevaba meses ahí y el modelo se
+  //  pasó igual. Lo único que obliga es el código. En el motivo lo peor
+  //  era una frase cortada; aquí es la comida de una persona.
+  //
+  //  250 y no 200: el prompt pide hasta 200 y un tope clavado en 200
+  //  recortaría un ajuste legítimo por un redondeo. Lo que hay que impedir
+  //  son los saltos de cientos, no discutir la última caloría.
+  //
+  //  SE RECORTA, NO SE TIRA. Un modelo que pide +800 se ha equivocado en
+  //  la cantidad, no necesariamente en la dirección: moverse 250 hacia
+  //  donde decidió es lo conservador. Y se dice, que es la otra mitad.
+  var PASO_MAXIMO = 250;
+
+  function conPaso(nuevas, antes){
+    var cal = Number(nuevas), base = Number(antes);
+    if(!(cal > 0)) return { cal: cal, recortado: false };
+    if(!(base > 0)) return { cal: cal, recortado: false };
+    var salto = cal - base;
+    if(Math.abs(salto) <= PASO_MAXIMO) return { cal: cal, recortado: false };
+    return {
+      cal: base + (salto > 0 ? PASO_MAXIMO : -PASO_MAXIMO),
+      recortado: true
+    };
+  }
+
   // El recorte, aparte y sin tocar nada: así se puede ejecutar en una
   // prueba con números de mentira. Estuvo un rato dentro de
   // `aplicarCaloriasNuevas` y la prueba tenía que mirar cómo estaba
@@ -14681,11 +14714,23 @@
     var m = leerMetas();
     var antes = calDe(m);
     if(!antes) return;
+    var pedidas = Math.round(Number(nuevas)) || 0;   // lo que pidió el cierre
 
     // EL SUELO SE FUERZA AQUÍ, no solo se le pide al modelo. Es la lección
     // que ya costó una vez en este mismo sitio: pedirlo sin forzarlo deja
     // la decisión en manos de un texto, y forzarlo sin decirlo hace que el
     // mensaje del lunes diga un número y la pantalla enseñe otro.
+    // EL PASO PRIMERO Y EL SUELO DESPUÉS, en ese orden: si recortar el
+    // salto deja el número por debajo de su basal, manda el suelo.
+    var paso = conPaso(nuevas, antes);
+    nuevas = paso.cal;
+    if(paso.recortado){
+      toast('toastPeso', 'Te moví ' + PASO_MAXIMO + ' cal como mucho: ' +
+            'el cierre no da saltos más grandes de una semana a otra.');
+      apuntarFallo('salto_recortado',
+                   new Error('pidió ' + pedidas + ' desde ' + Math.round(antes)));
+    }
+
     var suelo = sueloDeAhora();
     var r = conSuelo(nuevas, suelo);
     nuevas = r.cal;
