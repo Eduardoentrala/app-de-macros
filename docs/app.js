@@ -13353,7 +13353,7 @@
   // La versión viaja con el consentimiento: sin ella, "acepto" no significa
   // nada dentro de un año, porque el texto habrá cambiado y no habrá forma
   // de saber qué leyó esa persona. Al tocar legal.md hay que subirla aquí.
-  var VERSION_LEGAL = '1';
+  var VERSION_LEGAL = '2';
   var legalCargado = false;
 
   // Un markdown mínimo, solo lo que legal.md usa. Una librería entera para

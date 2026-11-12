@@ -1,14 +1,13 @@
 # Aviso de privacidad y términos
 
-**Versión 1 · 3 de agosto de 2026**
+**Versión 2 · 12 de noviembre de 2026**
 
 ## Quién es responsable de tus datos
 
-**[NOMBRE COMPLETO O RAZÓN SOCIAL]**, con domicilio en **[DOMICILIO
-COMPLETO]**, es responsable del tratamiento de tus datos personales.
+**Eduardo** es responsable del tratamiento de tus datos personales.
 
 Para cualquier cosa relacionada con tus datos, escribe a
-**[CORREO DE CONTACTO]**.
+**eduardoentralaqrz@gmail.com**.
 
 ## Qué datos recogemos
 
@@ -104,7 +103,7 @@ Puedes pedirnos en cualquier momento:
 También puedes **revocar tu consentimiento** cuando quieras, y **limitar el
 uso** de tus datos.
 
-**Cómo:** escribe a **[CORREO DE CONTACTO]** desde el correo de tu cuenta,
+**Cómo:** escribe a **eduardoentralaqrz@gmail.com** desde el correo de tu cuenta,
 diciendo qué quieres. Tenemos 20 días hábiles para responderte.
 
 Para lo más común no hace falta escribir a nadie:

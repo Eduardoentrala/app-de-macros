@@ -32,8 +32,12 @@ console.log('\n— El aviso dice lo que tiene que decir —');
   // salta antes de que se publique.
   const debe = [
     ['identifica al responsable',      /responsable del tratamiento/i],
-    ['da domicilio',                   /domicilio/i],
-    ['da una forma de contacto',       /CORREO DE CONTACTO|escribe a/i],
+    // OJO: la LFPDPPP pide «identidad Y DOMICILIO del responsable». Aquí no
+    // hay domicilio a propósito —es una app familiar y el domicilio sería el
+    // de su casa, publicado en GitHub Pages—, y en su lugar queda un correo
+    // que se lee y contesta. Si esto algún día deja de ser para la familia,
+    // hay que volver a este punto.
+    ['da una forma de contacto',       /escribe a \*\*[^*]+@[^*]+\*\*/],
     ['dice para que se usan',          /Para qu[eé] los usamos/i],
     ['marca los datos sensibles',      /[Dd]atos sensibles/],
     ['explica los derechos ARCO',      /Acceder[\s\S]{0,400}Rectificar[\s\S]{0,400}Cancelar[\s\S]{0,400}Oponerte/],
@@ -50,10 +54,12 @@ console.log('\n— El aviso dice lo que tiene que decir —');
   check('dice que no vende datos', /No vendemos tus datos/i.test(MD));
   check('dice que no es consejo medico', /no da consejo m[eé]dico/i.test(MD));
   check('advierte de que la IA se equivoca', /se puede equivocar/i.test(MD));
-  // Los huecos que solo puede llenar el dueño tienen que seguir marcados:
-  // publicarlo con corchetes es feo, publicarlo SIN rellenar y sin marcar
-  // es peor.
-  check('los huecos por rellenar estan marcados', /\[NOMBRE COMPLETO/.test(MD));
+  // Antes esto comprobaba que los huecos siguieran MARCADOS con corchetes:
+  // publicarlo sin rellenar y sin marcar era lo peor de los dos mundos. Ya
+  // están todos rellenos, así que lo que se vigila es lo contrario — que no
+  // vuelva a aparecer ninguno. El detalle, en `el-aviso-legal-esta-completo`.
+  check('no queda ningun hueco sin rellenar', !/\[[A-ZÁÉÍÓÚÑ ]{4,}\]/.test(MD),
+        (MD.match(/\[[A-ZÁÉÍÓÚÑ ]{4,}\]/g) || []).join(', '));
 }
 
 console.log('\n— Sin aceptar no se entra —');
