@@ -66,10 +66,23 @@ const APP = readFileSync(JS, 'utf8').replace(/\r\n/g, '\n');
 // ------------------------------------------------------------------
 console.log('\nEl orden importa: la llave, antes de gastar la consulta');
 {
-  const iLlave = FUN.indexOf('¿Le dejan ESTO en concreto?');
-  const iTope = FUN.indexOf("gastar_consulta_ia");
+  // SIN COMENTARIOS, que es la lección de siempre de este proyecto. El
+  // ancla del tope es `gastar_consulta_ia` a secas, y en cuanto la
+  // cabecera del fichero empezó a NOMBRAR ese RPC —para decir la verdad
+  // sobre lo que la función escribe— el `indexOf` lo encontraba arriba
+  // del todo, mil líneas antes que la llave, y esto se ponía rojo con el
+  // código intacto. El orden que importa es el del código.
+  //
+  // Los dos índices salen del MISMO texto sin comentarios: comparar un
+  // índice del fichero entero con otro del fichero pelado no significa
+  // nada. Y el ancla de la llave es la tabla `LLAVE`, que es código.
+  const SIN_COMENTARIOS = FUN.replace(/^\s*\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  const iLlave = SIN_COMENTARIOS.indexOf('const LLAVE: Record<string, string> = {');
+  const iTope = SIN_COMENTARIOS.indexOf('gastar_consulta_ia');
+  ok(iLlave > 0, 'la tabla de llaves sigue ahí');
   ok(iLlave > 0 && iTope > 0 && iLlave < iTope,
-     'se comprueba la llave ANTES de descontar del tope diario');
+     'se comprueba la llave ANTES de descontar del tope diario',
+     'llave en ' + iLlave + ', tope en ' + iTope);
 }
 
 // ------------------------------------------------------------------

@@ -105,14 +105,31 @@ console.log('\n— Y el arreglo no puede tumbar la respuesta —');
   check('nunca se encadena .catch a una consulta de PostgREST',
     !/\.rpc\([^)]*\)\s*\.catch/.test(sinComentar) && !/admin\.[a-z]+\([^)]*\)\s*\.catch/.test(sinComentar),
     'admin.rpc devuelve un constructor de consulta, no una promesa: .catch lanza TypeError');
-  check('la devolución va envuelta en try', /try \{ await admin\.rpc\('devolver_consulta_ia'/.test(FN));
+  // SIN FIJAR LA FORMA DE LA LÍNEA. Esto exigía literalmente
+  // `try { await admin.rpc('devolver_consulta_ia'` en una sola línea, y se
+  // puso rojo en cuanto la devolución pasó a recoger su `{ error }` y
+  // ocupó tres. Lo que importa no es que quepa en un renglón: es que la
+  // llamada esté DENTRO de un try y que contestar venga después.
+  const dev = FN.indexOf("admin.rpc('devolver_consulta_ia'");
+  check('la devolución existe', dev > 0);
+  // El `try {` tiene que abrir JUSTO ANTES de la llamada. Da igual si el
+  // resultado se desestructura o no —hoy se recoge su `{ error }`, porque
+  // `admin.rpc()` no lanza cuando Postgres dice que no— y da igual cómo
+  // esté partida la línea.
+  //
+  // Antes esto exigía literalmente `try { await admin.rpc(...)` en un solo
+  // renglón y se puso rojo al recoger el error. Y el intento siguiente
+  // —mirar que el último `try {` fuera después de la última `}`— también
+  // fallaba, porque la `}` que encontraba era la de `{ error: errDev }`.
+  check('la devolución va envuelta en try',
+    /try \{\s*(?:const \{[^}]*\} = )?await admin\.rpc\('devolver_consulta_ia'/.test(sinComentar),
+    'dentro del catch general, un throw aquí mata la función sin responder');
   check('y su fallo se recoge aquí mismo', /catch \(e2\) \{ console\.error/.test(FN),
     'dentro del catch general no hay nadie mas abajo que lo recoja');
   // Y que el `return json` venga DESPUES, o sea que contestar es lo que
   // manda: devolver la consulta es lo de menos.
   // Buscando DESDE la devolución: hay otros 503 mucho antes en el fichero y
   // comparar contra el primero daba un rojo que no era.
-  const dev = FN.indexOf("try { await admin.rpc('devolver_consulta_ia'");
   check('contestar va después, pase lo que pase',
     dev > 0 && FN.indexOf('}, 503);', dev) > dev,
     'devolver la consulta es lo de menos: lo que no puede fallar es contestar');

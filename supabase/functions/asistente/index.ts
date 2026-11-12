@@ -7,14 +7,40 @@
 //  cuenta. Aquí vive en el servidor, en una variable de entorno que el
 //  navegador nunca ve.
 //
-//  Hace tres cosas:
-//    chat    → conversación: apuntar, recomendar qué comer, lista del súper
-//    apuntar → la versión directa, sin conversación
+//  Siete acciones (`cuerpo.accion`):
+//    chat    → conversación: apuntar comida, recomendar qué comer, lista
+//              del súper, y decirle cómo va con sus propios números
 //    plan    → arma comidas de un día o de una semana
+//    semana  → el cierre de los lunes, que es quien mueve las calorías
+//    fotos   → compara dos series de fotos de progreso, una vez al mes
+//    aviso   → la tarjeta del Diario cuando algo pide decirse
+//    cumple  → la felicitación, una por persona y año
+//    cliente → el resumen de una persona para su entrenador
 //
-//  Lo que NO hace: escribir en la base. Devuelve una propuesta y la app
-//  la guarda por el camino de siempre, con RLS. Así esta función no
-//  necesita permisos de escritura y no puede saltarse ninguna regla.
+//  ESTA CABECERA DECÍA OTRA COSA, Y LAS DOS ERAN MENTIRA.
+//
+//  Decía «hace tres cosas: chat, apuntar, plan». `apuntar` no existe
+//  —nunca llegó, o se fue— y faltaban cuatro de las que sí.
+//
+//  Y decía: «Lo que NO hace: escribir en la base... así esta función no
+//  necesita permisos de escritura y no puede saltarse ninguna regla».
+//  Eso ya no es verdad y es la peor clase de comentario viejo, porque
+//  alguien lo lee para razonar sobre la seguridad y saca la conclusión
+//  contraria a la buena.
+//
+//  LA VERDAD: esta función tiene la clave de servicio (`admin`), que SE
+//  SALTA RLS POR DISEÑO, y escribe. Hoy, en:
+//      · `ia_gasto`        — cuánto costó cada llamada
+//      · `analisis_fotos`  — la comparación del mes, para no repetirla
+//      · `felicitaciones`  — la del cumpleaños, una por año
+//      · y los RPC `gastar_consulta_ia` / `devolver_consulta_ia`
+//
+//  Lo que sigue siendo cierto, y es lo que de verdad protege: NO escribe
+//  los datos de la persona —ni comida, ni peso, ni rutina, ni metas—.
+//  Eso lo devuelve como propuesta y lo guarda la app con el token de
+//  quien sea, por RLS. Lo que la función escribe por su cuenta es
+//  contabilidad suya, y cada escritura va atada a `userId`, que sale del
+//  token verificado y nunca del cuerpo de la petición.
 //
 //  Desplegar:
 //    supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
@@ -52,7 +78,7 @@ const CORS = {
 //
 // Ahora lo dice: un GET sin sesión devuelve este sello y nada más.
 // `pruebas/funciones-vivas.mjs` lo compara con el del repo.
-const SELLO = '7707eee4a5';
+const SELLO = 'a29a98ec27';
 
 // Tope diario por persona. Es la única defensa contra que un solo usuario
 // -o un token robado- vacíe la cuenta en una noche con un bucle.
@@ -491,7 +517,7 @@ Eres el asistente de una app de conteo de macros. Hablas español de
 México, de tú, corto y sin rodeos. Nada de listas con viñetas para
 responder algo simple.
 
-Haces tres cosas:
+Haces cuatro cosas:
 
 1. APUNTAR COMIDA. Si te cuentan lo que comieron -o te mandan foto del
    plato- devuelves los alimentos en "alimentos", con las mismas reglas
@@ -3018,7 +3044,7 @@ Deno.serve(async (req) => {
       }
 
       // Se guarda el TEXTO. Nunca las imágenes ni nada que las reconstruya.
-      await admin.from('analisis_fotos').upsert({
+      const { error: errGuardar } = await admin.from('analisis_fotos').upsert({
         user_id: userId,
         mes,
         semana_nueva: semanaNueva,
@@ -3027,6 +3053,33 @@ Deno.serve(async (req) => {
         visto,
         mensaje,
       }, { onConflict: 'user_id,mes' });
+
+      // Y SE MIRA SI GUARDÓ. Antes no, y eso rompía en silencio la regla
+      // que está escrita doce líneas más arriba: «sin guardar, la app no
+      // marca el mes y lo vuelve a pedir la próxima vez que abra».
+      //
+      // `.upsert()` no lanza cuando Postgres dice que no: resuelve con
+      // `{ error }`. Sin mirarlo, esto contestaba `estado: 'ok'` igual, y
+      // la app marca el mes EN CUANTO EL SERVIDOR CONTESTA, sea lo que
+      // sea. O sea:
+      //
+      //   · la comparación se generó —dos pasadas del modelo, lo más caro
+      //     que hace esta app—;
+      //   · esa persona la leyó una vez, en esa sesión;
+      //   · al volver a abrir, la tarjeta sale vacía, porque en la base no
+      //     hay nada;
+      //   · y no se reintenta HASTA EL MES QUE VIENE, porque el mes ya
+      //     está marcado.
+      //
+      // Se pierde entera y nadie se entera. Contestando con error, la app
+      // no marca el mes y lo vuelve a pedir al abrir, que es justo lo que
+      // su propio comentario decía que pasaría.
+      if (errGuardar) {
+        console.error('no se pudo guardar la comparación de fotos:', errGuardar);
+        return json({
+          error: 'Hice tu comparación pero no pude guardarla. Lo intento otra vez al abrir.',
+        }, 500);
+      }
 
       return json({
         estado: 'ok', mes, mensaje,
@@ -3244,9 +3297,24 @@ Deno.serve(async (req) => {
       // `upsert` y no `insert`: si quedó una cortada de un intento
       // anterior, esta la sustituye. El `unique (user_id, anio)` sigue
       // siendo el que impide que haya dos.
-      await admin.from('felicitaciones').upsert({
+      const { error: errFelicita } = await admin.from('felicitaciones').upsert({
         user_id: userId, anio, mensaje,
       }, { onConflict: 'user_id,anio' });
+
+      // AQUÍ SÍ SE CONTESTA IGUAL, Y A PROPÓSITO. No es como la
+      // comparación de fotos, donde callar el fallo la perdía un mes
+      // entero: aquí la felicitación ya está escrita y es lo único que
+      // importa hoy. Devolver un error dejaría a alguien sin felicitación
+      // el día de su cumpleaños para proteger una fila de la base.
+      //
+      // Lo que se pierde si no guardó es el freno: al volver a abrir la
+      // app ese día saldrá otra distinta, porque el `select` de arriba no
+      // encuentra nada. Molesta y cuesta llamadas, pero dura un día.
+      //
+      // Se apunta en el registro para que se pueda ver que pasó, que es
+      // justo lo que no se podía antes: `.upsert()` no lanza cuando
+      // Postgres dice que no, resuelve con `{ error }`, y nadie lo miraba.
+      if (errFelicita) console.error('no se pudo guardar la felicitación:', errFelicita);
 
       return json({ estado: 'ok', anio, mensaje });
     }
@@ -3313,15 +3381,41 @@ Deno.serve(async (req) => {
     //
     // Devolver la consulta es lo MENOS importante de este bloque: si falla,
     // se pierde una consulta y ya. Lo que no puede fallar es contestar.
+    // Y SE MIRA SI DE VERDAD SE DEVOLVIÓ, porque el mensaje de abajo lo
+    // afirma. Dos formas tiene de no devolverse, y antes no se veía
+    // ninguna:
+    //
+    //   · `admin.rpc()` NO LANZA cuando Postgres dice que no. Resuelve con
+    //     `{ error }`, así que este `try/catch` solo pilla el fallo de red
+    //     y el de la base se iba entero por el desagüe.
+    //   · Y si revienta de verdad, el `catch` lo apunta y sigue.
+    //
+    // En los dos casos la consulta se queda gastada y la persona leía «no
+    // gastaste ninguna consulta». Es el fallo de siempre de esta app con
+    // otra cara: la pantalla afirmando algo que no pasó. Y aquí escuece
+    // más, porque son cinco al día y acaba de perder una por una avería
+    // que no es suya.
+    //
+    // `quedan === null` quiere decir que esa acción NO cobra —la del
+    // cumpleaños y la de las fotos—, así que ahí no hay nada que devolver
+    // y la frase es verdad sin tocar nada.
+    let devuelta = quedan === null;
     if (saturado && quedan !== null) {
-      try { await admin.rpc('devolver_consulta_ia', { usuario: userId }); }
-      catch (e2) { console.error('no se pudo devolver la consulta:', e2); }
+      try {
+        const { error: errDev } = await admin.rpc('devolver_consulta_ia', { usuario: userId });
+        devuelta = !errDev;
+        if (errDev) console.error('no se pudo devolver la consulta:', errDev);
+      } catch (e2) { console.error('no se pudo devolver la consulta:', e2); }
     }
 
     if (saturado) {
       return json({
-        error: 'El asistente está saturado ahora mismo. No es cosa tuya y no ' +
-               'gastaste ninguna consulta: espera un minuto y vuelve a intentarlo.',
+        error: devuelta
+          ? 'El asistente está saturado ahora mismo. No es cosa tuya y no ' +
+            'gastaste ninguna consulta: espera un minuto y vuelve a intentarlo.'
+          : 'El asistente está saturado ahora mismo. No es cosa tuya, pero no ' +
+            'pude devolverte la consulta y esta sí te cuenta: espera un minuto ' +
+            'y vuelve a intentarlo.',
       }, 503);
     }
 
