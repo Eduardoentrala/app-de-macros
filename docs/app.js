@@ -6333,12 +6333,6 @@
     return (a >= 0 && a <= 120) ? a : null;
   }
 
-  function miEdad(){
-    var p = MI_PERFIL || {};
-    var deLaFecha = edadDeNacimiento(p.nacimiento, isoDe(HOY));
-    return (deLaFecha != null) ? deLaFecha : ((p.age != null) ? Number(p.age) : null);
-  }
-
   function volcarPerfilEnRegistro(p){
     if(!p) return;
     // LA DE LA FECHA MANDA. Va antes del `age` guardado a propósito: si
@@ -13273,6 +13267,8 @@
   function cancelarEvento(fecha){
     if(!EVENTOS[fecha]) return Promise.resolve();
     var titulo = EVENTOS[fecha].titulo;
+    // Guardado para poder reponerlo si el servidor no se entera.
+    var comoEstaba = EVENTOS[fecha];
     delete EVENTOS[fecha];
     actualizarSemana();                 // la meta de hoy vuelve al momento
     toast('toastDiario', titulo + ' quitado · tus calorías vuelven a la normalidad');
@@ -13284,12 +13280,21 @@
       headers: { 'Prefer': 'return=minimal' },
       body: JSON.stringify({ cancelado_en: new Date().toISOString() })
     })['catch'](function(e){
-      // La pantalla ya dijo "quitado · tus calorías vuelven a la
-      // normalidad". Si la base no se enteró, el evento sigue vivo y al
-      // recargar la app te vuelve a repartir la semana por una cena que
-      // creías cancelada.
+      // SE REPONE, no solo se avisa. La pantalla ya había dicho «quitado ·
+      // tus calorías vuelven a la normalidad» y había rehecho la semana
+      // sin el evento. Decir «sigue apuntado» mientras la pantalla lo
+      // enseña quitado deja a esa persona mirando dos verdades distintas
+      // —y con las calorías de la semana repartidas como si la cena no
+      // existiera, hasta que recargue y vuelvan a cambiar solas—.
+      //
+      // Reponerlo es lo único que hace que el aviso y lo que se ve digan
+      // lo mismo: sigue ahí, porque de verdad sigue ahí.
+      EVENTOS[fecha] = comoEstaba;
+      actualizarSemana();
+      if(typeof pintarEventos === 'function') pintarEventos();
       toast('toastDiario', 'No se pudo quitar: ' + traducirError(e.message) +
             ' Sigue apuntado, inténtalo otra vez.');
+      apuntarFallo('cancelar_evento', e);
     });
   }
 
