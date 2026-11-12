@@ -136,8 +136,30 @@ self.addEventListener('fetch', (e) => {
       fetch(req)
         .then((r) => {
           clearTimeout(reloj);
-          const copia = r.clone();
-          caches.open(CACHE).then((c) => c.put(req, copia)).catch(() => {});
+          // SE GUARDA SOLO SI ES LA APP DE VERDAD.
+          //
+          // Esto guardaba la respuesta FUERA LO QUE FUERA, mientras que la
+          // rama de abajo —el JavaScript y las hojas— sí mira `r.ok` y lo
+          // tiene explicado: «guardar un 404 lo convertiría en permanente».
+          // Aquí valía igual y más, porque el index es lo que sostiene la
+          // app sin señal. Un despliegue a medias devolviendo 404, o el
+          // servidor de mal día, y ese error pasaba a ser LO QUE SE ABRE
+          // SIN SEÑAL —justo lo que este fichero existe para evitar—.
+          //
+          // Y el otro caso, que no lo pilla ningún `r.ok`: el wifi de un
+          // hotel o de un café que te devuelve SU página de acceso con un
+          // 200 limpio. Como redirige a su propio dominio, `r.url` ya no
+          // es el nuestro, y eso sí se puede mirar. Sin esto, la app
+          // guardaba la pantalla de «conéctese aquí» y la enseñaba luego
+          // como si fuera ella.
+          let suyo = false;
+          try { suyo = new URL(r.url || req.url).origin === self.location.origin; }
+          catch (err) { suyo = false; }
+
+          if (r && r.ok && suyo) {
+            const copia = r.clone();
+            caches.open(CACHE).then((c) => c.put(req, copia)).catch(() => {});
+          }
           contestar(r);
         })
         .catch(() => {
