@@ -13501,6 +13501,14 @@
     pintarBotonHablar();
   }
 
+  // LAS QUE QUEDAN, no las usadas. `gastar_consulta_ia` devuelve
+  // `tope - usadas`, y el nombre de esta variable es lo único que lo
+  // decía: la pantalla ponía «13 consultas hoy», que se lee como trece
+  // hechas cuando son trece POR HACER.
+  //
+  // Y se leía al revés justo cuando importa: a una consulta del tope
+  // decía «1 consulta hoy», o sea «apenas has usado nada», cuando la
+  // siguiente te deja fuera hasta mañana.
   var iaQuedanNum = null;
   function pintarQuedanIA(){
     var el = document.getElementById('iaQuedan');
@@ -13509,7 +13517,9 @@
     // El plan primero: es lo que explica por qué el asistente puede o no
     // puede hacer algo. El contador va detrás, y solo si se sabe.
     el.textContent = p.nombre + (iaQuedanNum === null ? '' :
-      ' · ' + iaQuedanNum + (iaQuedanNum === 1 ? ' consulta hoy' : ' consultas hoy'));
+      ' · ' + (iaQuedanNum === 1
+        ? 'te queda 1 consulta hoy'
+        : 'te quedan ' + iaQuedanNum + ' consultas hoy'));
   }
 
   var planIaSheet = document.getElementById('planIaSheet');
