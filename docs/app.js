@@ -63,7 +63,8 @@
     // La librería siempre se abre apilada, con su botón de regresar: ya no
     // existe como pestaña de la barra de abajo, solo se llega desde
     // "+ agregar ejercicio" dentro de Mi Rutina.
-    if(id === 'library') renderBottom();
+    // Entra limpia: sin la busqueda de la vez pasada y con el contador al dia.
+    if(id === 'library') abrirLibreria();
     show(id);
     // Entrar a una pantalla nueva empieza arriba. Al VOLVER no se toca: la
     // posición donde estabas es justo lo que se espera encontrar.
@@ -1872,113 +1873,162 @@
   // más abajo, y con estos delante el aviso salía dos veces.
 
   // ---- Ejercicios recomendados (library) ----
+  //
+  // Cada ejercicio es [nombre, aparejo, básico].
+  //
+  // «Básico» es el que mueve varias articulaciones a la vez —sentadilla,
+  // dominada, press de banca—, y «accesorio» el que mueve una sola —curl,
+  // elevaciones laterales—. No es una opinión sobre cuál es mejor: es para
+  // saber cómo ordenar la sesión, porque los básicos van primero, con
+  // fuerza en las piernas, y los accesorios al final.
+  var BASICO = true, ACCESORIO = false;
   var groups = [
-    {key:'pecho', label:'Pecho', accent:'#3b82f6', ex:['Press de banca con barra','Press inclinado mancuerna','Aperturas con mancuerna','Fondos en paralelas','Press en máquina','Cruce de poleas']},
-    {key:'espalda', label:'Espalda', accent:'#8b5cf6', ex:['Dominadas','Remo con barra','Remo con mancuerna','Jalón al pecho','Peso muerto','Remo en máquina']},
-    {key:'piernas', label:'Piernas', accent:'#22c55e', ex:['Sentadilla con barra','Prensa de piernas','Zancadas con mancuerna','Peso muerto rumano','Extensión de cuádriceps','Curl femoral']},
-    {key:'hombros', label:'Hombros', accent:'#f59e0b', ex:['Press militar con barra','Press con mancuerna','Elevaciones laterales','Elevaciones frontales','Pájaros posterior','Press Arnold']},
-    {key:'biceps', label:'Bíceps', accent:'#ec4899', ex:['Curl con barra','Curl con mancuerna','Curl martillo','Curl concentrado','Curl en polea','Curl predicador']},
-    {key:'triceps', label:'Tríceps', accent:'#06b6d4', ex:['Press francés','Extensión en polea','Fondos en banco','Patada de tríceps','Press cerrado con barra','Extensión sobre cabeza']},
-    {key:'abdomen', label:'Abdomen', accent:'#ef4444', ex:['Crunch abdominal','Plancha','Elevación de piernas','Rueda abdominal','Crunch en polea','Giro ruso']},
-    {key:'gluteos', label:'Glúteos', accent:'#a855f7', ex:['Hip thrust','Puente de glúteo','Patada de glúteo en polea','Sentadilla sumo','Zancada búlgara','Abducción de cadera']}
+    {key:'pecho', label:'Pecho', accent:'#3b82f6', ex:[
+      ['Press de banca con barra',   'barra',     BASICO],
+      ['Press inclinado mancuerna',  'mancuerna', BASICO],
+      ['Aperturas con mancuerna',    'mancuerna', ACCESORIO],
+      ['Fondos en paralelas',        'cuerpo',    BASICO],
+      ['Press en máquina',           'maquina',   BASICO],
+      ['Cruce de poleas',            'polea',     ACCESORIO]
+    ]},
+    {key:'espalda', label:'Espalda', accent:'#8b5cf6', ex:[
+      ['Dominadas',                  'cuerpo',    BASICO],
+      ['Remo con barra',             'barra',     BASICO],
+      ['Remo con mancuerna',         'mancuerna', BASICO],
+      ['Jalón al pecho',             'polea',     BASICO],
+      ['Peso muerto',                'barra',     BASICO],
+      ['Remo en máquina',            'maquina',   BASICO]
+    ]},
+    {key:'piernas', label:'Piernas', accent:'#22c55e', ex:[
+      ['Sentadilla con barra',       'barra',     BASICO],
+      ['Prensa de piernas',          'maquina',   BASICO],
+      ['Zancadas con mancuerna',     'mancuerna', BASICO],
+      ['Peso muerto rumano',         'barra',     BASICO],
+      ['Extensión de cuádriceps',    'maquina',   ACCESORIO],
+      ['Curl femoral',               'maquina',   ACCESORIO]
+    ]},
+    {key:'hombros', label:'Hombros', accent:'#f59e0b', ex:[
+      ['Press militar con barra',    'barra',     BASICO],
+      ['Press con mancuerna',        'mancuerna', BASICO],
+      ['Elevaciones laterales',      'mancuerna', ACCESORIO],
+      ['Elevaciones frontales',      'mancuerna', ACCESORIO],
+      ['Pájaros posterior',          'mancuerna', ACCESORIO],
+      ['Press Arnold',               'mancuerna', BASICO]
+    ]},
+    {key:'biceps', label:'Bíceps', accent:'#ec4899', ex:[
+      ['Curl con barra',             'barra',     ACCESORIO],
+      ['Curl con mancuerna',         'mancuerna', ACCESORIO],
+      ['Curl martillo',              'mancuerna', ACCESORIO],
+      ['Curl concentrado',           'mancuerna', ACCESORIO],
+      ['Curl en polea',              'polea',     ACCESORIO],
+      ['Curl predicador',            'barra',     ACCESORIO]
+    ]},
+    {key:'triceps', label:'Tríceps', accent:'#06b6d4', ex:[
+      ['Press francés',              'barra',     ACCESORIO],
+      ['Extensión en polea',         'polea',     ACCESORIO],
+      ['Fondos en banco',            'cuerpo',    ACCESORIO],
+      ['Patada de tríceps',          'mancuerna', ACCESORIO],
+      ['Press cerrado con barra',    'barra',     BASICO],
+      ['Extensión sobre cabeza',     'mancuerna', ACCESORIO]
+    ]},
+    {key:'abdomen', label:'Abdomen', accent:'#ef4444', ex:[
+      ['Crunch abdominal',           'cuerpo',    ACCESORIO],
+      ['Plancha',                    'cuerpo',    ACCESORIO],
+      ['Elevación de piernas',       'cuerpo',    ACCESORIO],
+      ['Rueda abdominal',            'rueda',     ACCESORIO],
+      ['Crunch en polea',            'polea',     ACCESORIO],
+      ['Giro ruso',                  'cuerpo',    ACCESORIO]
+    ]},
+    {key:'gluteos', label:'Glúteos', accent:'#a855f7', ex:[
+      ['Hip thrust',                 'barra',     BASICO],
+      ['Puente de glúteo',           'cuerpo',    ACCESORIO],
+      ['Patada de glúteo en polea',  'polea',     ACCESORIO],
+      ['Sentadilla sumo',            'mancuerna', BASICO],
+      ['Zancada búlgara',            'mancuerna', BASICO],
+      ['Abducción de cadera',        'maquina',   ACCESORIO]
+    ]}
   ];
-  // Figura anatómica: cuerpo en gris, músculo trabajado resaltado en rojo,
-  // vista frontal y posterior (marcador de posición del arte final).
-  var MUSCLE = '#c2c7ce', MUSCLE_D = '#a8aeb6', SKIN = '#dfe3e8', HL = '#d94a2b', HL_D = '#b03a20';
 
-  function on(group, key){ return group === key; }
-
-  // Qué vista del cuerpo se muestra según el grupo muscular
-  var VISTA = {
-    pecho:'frente', abdomen:'frente', biceps:'frente', hombros:'frente', piernas:'frente',
-    espalda:'espalda', triceps:'espalda', gluteos:'espalda'
+  // AQUÍ HABÍA UN DIBUJO, Y EL FALLO ESTABA EN SU ARGUMENTO.
+  //
+  // Era `figureSvg(grupo)`: una figura anatómica en gris con el músculo
+  // trabajado en rojo. Dependía del GRUPO, no del ejercicio, así que los
+  // seis de «Pecho» recibían la misma llamada y salían seis dibujos
+  // idénticos. Y para llegar a esa pantalla ya habías tocado la pestaña
+  // «Pecho», o sea que el dibujo te repetía lo que acababas de tocar. El
+  // rótulo de debajo tampoco hablaba del ejercicio: decía «VISTA FRONTAL»,
+  // que es información sobre el dibujo.
+  //
+  // El propio comentario lo confesaba —«marcador de posición del arte
+  // final»—. El arte final nunca llegó y el marcador se quedó haciendo de
+  // versión buena. De noche era peor todavía: el recuadro se forzaba a
+  // claro con un `#f0f1f3` fijo, porque la figura iba pintada con grises
+  // fijos, así que eran seis cuadros blancos encendidos en una pantalla
+  // negra.
+  //
+  // En su sitio va lo único que SÍ cambia de un ejercicio al de al lado:
+  // con qué se hace, y si mueve varias articulaciones o una. Eso sirve de
+  // verdad —llegas al gimnasio, el banco está ocupado, y ves de un vistazo
+  // qué se puede hacer con mancuernas—, y de paso caben los seis en la
+  // pantalla en vez de cuatro, y el nombre deja de partirse en dos
+  // renglones.
+  //
+  // Si algún día hay arte de verdad, es un dibujo POR EJERCICIO. Uno por
+  // grupo ya se probó y es esto.
+  var APAREJOS = {
+    barra:     { nombre:'Barra',     icono:'i-ap-barra' },
+    mancuerna: { nombre:'Mancuerna', icono:'i-ap-mancuerna' },
+    polea:     { nombre:'Polea',     icono:'i-ap-polea' },
+    maquina:   { nombre:'Máquina',   icono:'i-ap-maquina' },
+    cuerpo:    { nombre:'Tu peso',   icono:'i-ap-cuerpo' },
+    rueda:     { nombre:'Rueda',     icono:'i-ap-rueda' }
   };
-
-  function figureSvg(key){
-    function f(part){ return on(key, part) ? HL : MUSCLE; }
-    function fd(part){ return on(key, part) ? HL_D : MUSCLE_D; }
-    var vista = VISTA[key] || 'frente';
-    var vb = vista === 'frente' ? '8 8 94 224' : '98 8 94 224';
-
-    return '<svg viewBox="'+vb+'" width="100%" height="100%" role="img">'+
-    '<g stroke="'+MUSCLE_D+'" stroke-width="1.1" stroke-linejoin="round">'+
-
-      /* ---------- VISTA FRONTAL ---------- */
-      '<g transform="translate(0,0)">'+
-        /* cabeza y cuello */
-        '<ellipse cx="55" cy="26" rx="12" ry="14" fill="'+SKIN+'"/>'+
-        '<path d="M49 38 h12 v9 h-12 z" fill="'+SKIN+'"/>'+
-        /* trapecio frontal */
-        '<path d="M42 50 q13 -8 26 0 l-4 7 q-9 -5 -18 0 z" fill="'+f('hombros')+'"/>'+
-        /* hombros (deltoides) */
-        '<ellipse cx="34" cy="59" rx="10" ry="11" fill="'+f('hombros')+'" stroke="'+fd('hombros')+'"/>'+
-        '<ellipse cx="76" cy="59" rx="10" ry="11" fill="'+f('hombros')+'" stroke="'+fd('hombros')+'"/>'+
-        /* pectorales */
-        '<path d="M55 56 q-13 -1 -18 6 q-2 9 5 13 q9 3 13 -5 z" fill="'+f('pecho')+'" stroke="'+fd('pecho')+'"/>'+
-        '<path d="M55 56 q13 -1 18 6 q2 9 -5 13 q-9 3 -13 -5 z" fill="'+f('pecho')+'" stroke="'+fd('pecho')+'"/>'+
-        /* bíceps */
-        '<ellipse cx="29" cy="79" rx="8" ry="13" fill="'+f('biceps')+'" stroke="'+fd('biceps')+'"/>'+
-        '<ellipse cx="81" cy="79" rx="8" ry="13" fill="'+f('biceps')+'" stroke="'+fd('biceps')+'"/>'+
-        /* antebrazos */
-        '<ellipse cx="25" cy="103" rx="7" ry="14" fill="'+SKIN+'"/>'+
-        '<ellipse cx="85" cy="103" rx="7" ry="14" fill="'+SKIN+'"/>'+
-        /* abdomen */
-        '<path d="M44 74 h22 v34 q0 8 -11 12 q-11 -4 -11 -12 z" fill="'+f('abdomen')+'" stroke="'+fd('abdomen')+'"/>'+
-        '<g stroke="'+fd('abdomen')+'" stroke-width="1">'+
-          '<line x1="55" y1="76" x2="55" y2="116"/>'+
-          '<line x1="45" y1="86" x2="65" y2="86"/>'+
-          '<line x1="45" y1="97" x2="65" y2="97"/>'+
-          '<line x1="46" y1="107" x2="64" y2="107"/>'+
-        '</g>'+
-        /* cadera */
-        '<path d="M43 118 h24 l-3 12 h-18 z" fill="'+SKIN+'"/>'+
-        /* cuádriceps */
-        '<path d="M46 130 q-6 24 -2 44 q6 5 10 0 q3 -22 1 -44 z" fill="'+f('piernas')+'" stroke="'+fd('piernas')+'"/>'+
-        '<path d="M64 130 q6 24 2 44 q-6 5 -10 0 q-3 -22 -1 -44 z" fill="'+f('piernas')+'" stroke="'+fd('piernas')+'"/>'+
-        /* pantorrillas */
-        '<ellipse cx="49" cy="196" rx="7" ry="17" fill="'+f('piernas')+'" stroke="'+fd('piernas')+'"/>'+
-        '<ellipse cx="61" cy="196" rx="7" ry="17" fill="'+f('piernas')+'" stroke="'+fd('piernas')+'"/>'+
-        '<path d="M43 214 h12 v6 h-12 z M55 214 h12 v6 h-12 z" fill="'+SKIN+'"/>'+
-      '</g>'+
-
-      /* ---------- VISTA POSTERIOR ---------- */
-      '<g transform="translate(90,0)">'+
-        '<ellipse cx="55" cy="26" rx="12" ry="14" fill="'+SKIN+'"/>'+
-        '<path d="M49 38 h12 v9 h-12 z" fill="'+SKIN+'"/>'+
-        /* trapecio */
-        '<path d="M55 47 l16 6 l-6 22 l-10 4 l-10 -4 l-6 -22 z" fill="'+f('espalda')+'" stroke="'+fd('espalda')+'"/>'+
-        /* deltoides posteriores */
-        '<ellipse cx="34" cy="59" rx="10" ry="11" fill="'+f('hombros')+'" stroke="'+fd('hombros')+'"/>'+
-        '<ellipse cx="76" cy="59" rx="10" ry="11" fill="'+f('hombros')+'" stroke="'+fd('hombros')+'"/>'+
-        /* dorsales */
-        '<path d="M43 66 q-4 22 3 34 l9 6 v-30 z" fill="'+f('espalda')+'" stroke="'+fd('espalda')+'"/>'+
-        '<path d="M67 66 q4 22 -3 34 l-9 6 v-30 z" fill="'+f('espalda')+'" stroke="'+fd('espalda')+'"/>'+
-        /* tríceps */
-        '<ellipse cx="29" cy="79" rx="8" ry="13" fill="'+f('triceps')+'" stroke="'+fd('triceps')+'"/>'+
-        '<ellipse cx="81" cy="79" rx="8" ry="13" fill="'+f('triceps')+'" stroke="'+fd('triceps')+'"/>'+
-        '<ellipse cx="25" cy="103" rx="7" ry="14" fill="'+SKIN+'"/>'+
-        '<ellipse cx="85" cy="103" rx="7" ry="14" fill="'+SKIN+'"/>'+
-        /* lumbar */
-        '<path d="M48 104 h14 v14 h-14 z" fill="'+f('espalda')+'" stroke="'+fd('espalda')+'"/>'+
-        /* glúteos */
-        '<path d="M55 118 q-14 0 -13 12 q1 10 13 10 z" fill="'+f('gluteos')+'" stroke="'+fd('gluteos')+'"/>'+
-        '<path d="M55 118 q14 0 13 12 q-1 10 -13 10 z" fill="'+f('gluteos')+'" stroke="'+fd('gluteos')+'"/>'+
-        /* femorales */
-        '<path d="M46 142 q-5 18 -1 32 q6 5 10 0 q2 -18 1 -32 z" fill="'+f('piernas')+'" stroke="'+fd('piernas')+'"/>'+
-        '<path d="M64 142 q5 18 1 32 q-6 5 -10 0 q-2 -18 -1 -32 z" fill="'+f('piernas')+'" stroke="'+fd('piernas')+'"/>'+
-        /* gemelos */
-        '<ellipse cx="49" cy="196" rx="7.5" ry="18" fill="'+f('piernas')+'" stroke="'+fd('piernas')+'"/>'+
-        '<ellipse cx="61" cy="196" rx="7.5" ry="18" fill="'+f('piernas')+'" stroke="'+fd('piernas')+'"/>'+
-        '<path d="M43 214 h12 v6 h-12 z M55 214 h12 v6 h-12 z" fill="'+SKIN+'"/>'+
-      '</g>'+
-    '</g></svg>';
-  }
 
   var selected = new Set();
   var activeGroup = groups[0].key;
+  var busqueda = '';
   var muscleTabs = document.getElementById('muscleTabs');
   var grid = document.getElementById('exerciseGrid');
   var libBottom = document.getElementById('libBottomBtn');
+  var libBuscar = document.getElementById('libBuscar');
+  var libScroller = document.getElementById('libScroller');
+  var libCuantos = document.getElementById('libCuantos');
+
+  // Sin tildes y en minúsculas: en el teclado del teléfono nadie escribe
+  // «jalón» con tilde para buscar, y «BICEPS» tiene que encontrar «Bíceps».
+  function sinTildes(s){
+    return String(s == null ? '' : s)
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '');
+  }
+
+  // Qué filas tocan ahora mismo. Con búsqueda se mira en LOS OCHO grupos:
+  // hasta hoy, para agregar «Curl martillo» había que adivinar que vive en
+  // Bíceps y tocar esa pestaña. Sin búsqueda, el grupo de la pestaña.
+  function filasDeLaLibreria(){
+    var q = sinTildes(busqueda).trim();
+    var palabras = q ? q.split(/\s+/) : [];
+    var filas = [];
+    groups.forEach(function(g){
+      if(!q && g.key !== activeGroup) return;
+      g.ex.forEach(function(e){
+        var ap = APAREJOS[e[1]];
+        if(q){
+          // El aparejo y el grupo también cuentan como pajar: escribir
+          // «mancuerna» saca todo lo de mancuernas, que es media razón
+          // para tener el dato.
+          var pajar = sinTildes(e[0] + ' ' + ap.nombre + ' ' + g.label);
+          // Todas las palabras, en cualquier orden, para que «polea curl»
+          // encuentre «Curl en polea» igual que «curl polea».
+          var cuadra = palabras.every(function(p){ return pajar.indexOf(p) >= 0; });
+          if(!cuadra) return;
+        }
+        filas.push({ grupo:g, nombre:e[0], aparejo:ap, basico:e[2] });
+      });
+    });
+    return filas;
+  }
 
   function renderTabs(){
     muscleTabs.innerHTML = groups.map(function(g){
@@ -1987,16 +2037,49 @@
     }).join('');
   }
   function renderGrid(){
-    var g = groups.find(function(x){ return x.key===activeGroup; });
-    grid.innerHTML = g.ex.map(function(name){
-      var id = g.key+'::'+name;
+    var filas = filasDeLaLibreria();
+    var buscando = !!busqueda.trim();
+
+    // Buscando, las pestañas de grupo no mandan nada: lo que se enseña
+    // viene de los ocho. Dejarlas con una marcada diría que sí.
+    libScroller.hidden = buscando;
+
+    if(!filas.length){
+      // SIN PUERTAS QUE NO EXISTEN. Aquí no se puede escribir un ejercicio
+      // nuevo —ese campo está en la hoja de «+ agregar ejercicio», que es
+      // de donde se viene y que ya se cerró—, así que no se ofrece. Lo que
+      // sí se puede hacer desde aquí es buscar de otra manera, y eso es lo
+      // que se dice.
+      grid.innerHTML = '<div class="ex-vacio">' +
+        '<b>Nada con «' + escapar(busqueda.trim()) + '»</b>' +
+        '<span>Prueba con otra palabra, con el músculo («hombro») ' +
+        'o con el aparejo («polea», «mancuerna»).</span></div>';
+      libCuantos.hidden = true;
+      return;
+    }
+
+    libCuantos.hidden = !buscando;
+    if(buscando){
+      libCuantos.textContent = filas.length === 1
+        ? '1 ejercicio, de todos los grupos'
+        : filas.length + ' ejercicios, de todos los grupos';
+    }
+
+    grid.innerHTML = filas.map(function(f){
+      var id = f.grupo.key + '::' + f.nombre;
       var picked = selected.has(id);
-      return '<div class="ex-lib-card'+(picked?' picked':'')+'" data-id="'+id+'">'+
-        '<div class="ex-lib-pic">'+figureSvg(g.key)+
-          '<span class="ex-lib-view">'+(VISTA[g.key]==='espalda' ? 'vista posterior' : 'vista frontal')+'</span></div>'+
-        '<div class="ex-lib-name">'+escapar(name)+'</div>'+
-        '<div class="ex-lib-check">✓</div>'+
-        '</div>';
+      // Buscando se dice de qué grupo es, que es justo lo que no se sabe
+      // cuando los resultados salen de los ocho. Dentro de un grupo sobra,
+      // porque lo pone la pestaña.
+      var sub = (buscando ? f.grupo.label + ' · ' : '') + f.aparejo.nombre +
+                ' · ' + (f.basico ? 'Básico' : 'Accesorio');
+      return '<button type="button" class="ex-row'+(picked?' picked':'')+'" '+
+        'data-id="'+escapar(id)+'" aria-pressed="'+(picked?'true':'false')+'">'+
+        '<span class="ex-row-ico"><svg aria-hidden="true"><use href="#'+f.aparejo.icono+'"/></svg></span>'+
+        '<span class="ex-row-txt"><b>'+escapar(f.nombre)+'</b>'+
+          '<small>'+escapar(sub)+'</small></span>'+
+        '<span class="ex-row-chk">✓</span>'+
+        '</button>';
     }).join('');
   }
   function renderBottom(){
@@ -2004,21 +2087,48 @@
     libBottom.textContent = 'Agregar seleccionados (' + n + ')';
     libBottom.classList.toggle('disabled', n===0);
   }
+  // Al ABRIR la librería se entra limpio. Con la búsqueda de la vez pasada
+  // puesta, abrirla enseñaría cuatro resultados sueltos y las pestañas de
+  // grupo escondidas, y nadie entendería por qué.
+  function abrirLibreria(){
+    busqueda = '';
+    if(libBuscar) libBuscar.value = '';
+    renderTabs(); renderGrid(); renderBottom();
+  }
   renderTabs(); renderGrid(); renderBottom();
+
+  if(libBuscar){
+    libBuscar.addEventListener('input', function(){
+      busqueda = libBuscar.value;
+      renderGrid();
+    });
+    // El teclado del teléfono trae «buscar»; que lo baje en vez de no hacer
+    // nada. La lista ya está filtrada mientras se escribe.
+    libBuscar.addEventListener('keydown', function(e){
+      if(e.key === 'Enter'){ e.preventDefault(); libBuscar.blur(); }
+    });
+  }
 
   muscleTabs.addEventListener('click', function(e){
     var b = e.target.closest('.muscle-tab');
     if(!b) return;
     activeGroup = b.dataset.group;
+    // Elegir un grupo a mano es decir «quiero ver esto», así que la
+    // búsqueda anterior estorba. (Hoy no se puede llegar aquí buscando,
+    // porque las pestañas se esconden, pero el día que eso cambie esto ya
+    // hace lo que se espera.)
+    busqueda = '';
+    if(libBuscar) libBuscar.value = '';
     renderTabs(); renderGrid();
   });
   grid.addEventListener('click', function(e){
-    var card = e.target.closest('.ex-lib-card');
-    if(!card) return;
-    var id = card.dataset.id;
+    var fila = e.target.closest('.ex-row');
+    if(!fila) return;
+    var id = fila.dataset.id;
     if(selected.has(id)) selected.delete(id); else selected.add(id);
     renderGrid(); renderBottom();
   });
+
   libBottom.addEventListener('click', function(){
     if(selected.size===0) return;
     var cuantos = selected.size;

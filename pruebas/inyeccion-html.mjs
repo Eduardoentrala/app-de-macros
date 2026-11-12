@@ -75,7 +75,9 @@ console.log('\n— Los sitios que estaban mal, uno por uno —');
   const casos = [
     ['el ejercicio al crearlo',      "'<div><div class=\"ex-name\">'+escapar(name)+"],
     ['el ejercicio desde la base',   "'<div><div class=\"ex-name\">' + escapar(ej.nombre) +"],
-    ['el catálogo de ejercicios',    "'<div class=\"ex-lib-name\">'+escapar(name)+"],
+    ['el catálogo de ejercicios',    "'<span class=\"ex-row-txt\"><b>'+escapar(f.nombre)+"],
+    ['el id de la fila del catálogo', "'data-id=\"'+escapar(id)+'\" aria-pressed=\"'"],
+    ['lo que no se encontró',        "escapar(busqueda.trim())"],
     ['el alimento en el diario',     "<div class=\"fc-name\">'+escapar(a.n)+"],
     ['el atributo data-alim',        "data-alim=\"'+escapar(a.n)+'\""],
     ['la receta',                    "<div class=\"fc-name\">'+escapar(r.n)+"],

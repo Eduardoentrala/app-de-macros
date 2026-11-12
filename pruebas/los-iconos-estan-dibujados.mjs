@@ -76,6 +76,11 @@ for (const m of HTML.matchAll(/href="#(i-[a-z-]+)"/g)) apunta(m[1], 'index.html'
 for (const m of APP.matchAll(/href="#(i-[a-z-]+)"/g)) apunta(m[1], 'app.js');
 for (const m of APP.matchAll(/href="#i-' \+ ([A-Za-z.]+) \+ '"/g)) apunta('(variable: ' + m[1] + ')', 'app.js');
 for (const m of APP.matchAll(/iconoSVG\('([a-z-]+)'\)/g)) apunta('i-' + m[1], 'app.js');
+// El catálogo de ejercicios guarda el id ENTERO en el dato —`icono:'i-ap-barra'`—
+// y lo pega de una pieza: `href="#' + f.aparejo.icono + '"`. Sin el prefijo
+// suelto, así que el buscador de arriba no lo ve.
+for (const m of APP.matchAll(/href="#' *\+ *([A-Za-z.]+) *\+ *'"/g)) apunta('(variable: ' + m[1] + ')', 'app.js');
+for (const m of APP.matchAll(/icono:'(i-[a-z-]+)'/g)) apunta(m[1], 'app.js (APAREJOS)');
 // La tabla de momentos del plan: ahí el id no se escribe junto al <use>,
 // se guarda en `ico` y se compone al pintar.
 for (const m of APP.matchAll(/ico:'([a-z-]+)'/g)) apunta('i-' + m[1], 'app.js (MOMENTOS)');
@@ -95,7 +100,7 @@ for (const [id, donde] of USOS) {
 // su id.
 {
   const compuestos = [...USOS.keys()].filter((k) => k.startsWith('('));
-  const esperados = ['(variable: m.ico)', '(variable: id)'];
+  const esperados = ['(variable: m.ico)', '(variable: id)', '(variable: f.aparejo.icono)'];
   ok(compuestos.length === esperados.length &&
      esperados.every((e) => compuestos.includes(e)),
      'los ids que se componen al pintar son los dos que ya se comprueban',
@@ -106,6 +111,10 @@ for (const [id, donde] of USOS) {
      'y la tabla de momentos sigue dándole ids',
      'sin ella `m.ico` es undefined y el <use> apunta a «#i-undefined»');
   ok(/iconoSVG\('[a-z]+'\)/.test(APP), 'y los atajos del asistente también');
+  ok([...USOS.values()].some((d) => d.has('app.js (APAREJOS)')),
+     'y la tabla de aparejos del catálogo también',
+     'sin ella `f.aparejo.icono` es undefined y las filas del catálogo se ' +
+     'quedan con el recuadro vacío');
 }
 
 // ------------------------------------------------------------------

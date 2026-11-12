@@ -112,7 +112,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = 'c9973b50a4';
+    var SELLO = '42651e964d';
     // Y a la vista de app.js, que lo manda con cada fallo que apunta. Sin
     // la versión, un error de hace una semana y uno de ahora se leen igual
     // y «eso ya lo arreglé» no se puede comprobar.
@@ -193,6 +193,58 @@
           stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
     <path d="M3.5 17 9.5 11 13 14.5 20.5 7"/>
     <path d="M15.5 7h5v5"/>
+  </symbol>
+
+  <!-- Los aparejos del catálogo de ejercicios. Uno por cada forma de hacer
+       un ejercicio, que es lo que distingue a uno del de al lado dentro del
+       mismo grupo muscular. Van aparte de `i-pesa`, que es el icono del
+       botón que abre el catálogo y tiene que seguir significando "gimnasio"
+       en general y no "mancuerna". -->
+  <symbol id="i-ap-barra" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M2.5 12h19"/>
+    <path d="M6.5 8v8"/>
+    <path d="M4 9.75v4.5"/>
+    <path d="M17.5 8v8"/>
+    <path d="M20 9.75v4.5"/>
+  </symbol>
+  <symbol id="i-ap-mancuerna" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 12h6"/>
+    <path d="M9 7.5v9"/>
+    <path d="M6.3 9.5v5"/>
+    <path d="M15 7.5v9"/>
+    <path d="M17.7 9.5v5"/>
+  </symbol>
+  <symbol id="i-ap-polea" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="5.4" r="2.6"/>
+    <path d="M12 8v6"/>
+    <path d="M7.5 14h9"/>
+    <path d="M7.5 14v3"/>
+    <path d="M16.5 14v3"/>
+  </symbol>
+  <symbol id="i-ap-maquina" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 4.5h6"/>
+    <path d="M12 4.5v4.5"/>
+    <rect x="7.5" y="9" width="9" height="10.5" rx="1.4"/>
+    <path d="M7.5 12.5h9"/>
+    <path d="M7.5 16h9"/>
+  </symbol>
+  <symbol id="i-ap-cuerpo" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="5" r="2"/>
+    <path d="M12 7.3v6.2"/>
+    <path d="m12 13.5-2.8 7"/>
+    <path d="m12 13.5 2.8 7"/>
+    <path d="M7.3 9.6 12 10.9l4.7-1.3"/>
+  </symbol>
+  <symbol id="i-ap-rueda" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="5"/>
+    <path d="M3 12h4"/>
+    <path d="M17 12h4"/>
   </symbol>
   <symbol id="i-amanecer" viewBox="0 0 24 24" fill="none" stroke="currentColor"
           stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -1661,13 +1713,24 @@
           <h2>Ejercicios</h2>
           <p>Elige por grupo muscular y agrégalos a tu rutina.</p>
         </div>
-        <div class="scroller-bar">
+        <!-- El buscador va ENCIMA de las pestañas de grupo, no debajo: es la
+             forma rápida, y las pestañas son la forma de mirar. Antes solo
+             estaban las pestañas, así que para agregar "Curl martillo" había
+             que saber de antemano que vive en Bíceps. -->
+        <div class="lib-buscar">
+          <svg class="lib-buscar-ico" aria-hidden="true"><use href="#i-lupa"/></svg>
+          <input id="libBuscar" type="search" autocomplete="off"
+                 enterkeyhint="search" placeholder="Buscar ejercicio o aparejo"
+                 aria-label="Buscar en el catálogo de ejercicios">
+        </div>
+        <div class="scroller-bar" id="libScroller">
           <button class="sc-arrow" data-scroll="muscleTabs" data-dir="-1" aria-label="Ver grupos anteriores">‹</button>
           <div class="muscle-tabs" id="muscleTabs"></div>
           <button class="sc-arrow" data-scroll="muscleTabs" data-dir="1" aria-label="Ver más grupos">›</button>
         </div>
         <div class="scroll" style="position:relative;">
-          <div class="exercise-grid" id="exerciseGrid"></div>
+          <div class="lib-cuantos" id="libCuantos" hidden></div>
+          <div class="ex-lista" id="exerciseGrid"></div>
         </div>
         <div class="lib-bottom disabled" id="libBottomBtn">Agregar seleccionados (0)</div>
       </div>
@@ -2501,7 +2564,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = 'c9973b50a4';
+    var SELLO = '42651e964d';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que

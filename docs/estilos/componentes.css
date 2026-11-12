@@ -21,35 +21,80 @@
 .muscle-tab{flex:none;padding:9px 15px;border-radius:16px;background:var(--pill-bg);border:none;cursor:pointer;font:700 13px/1 sans-serif;color:var(--ink);display:flex;align-items:center;gap:6px;}
 .muscle-tab.active{background:var(--ink);color:var(--card-bg);}
 .dot{width:8px;height:8px;border-radius:50%;flex:none;}
-.exercise-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:14px 16px 110px;}
-.ex-lib-card{
-  background:var(--card-bg);border-radius:16px;box-shadow:var(--shadow);overflow:hidden;position:relative;cursor:pointer;
-  /* El borde iba transparente porque estaba reservado para el seleccionado.
-     Resultado: tarjeta blanca sobre fondo blanco, con una sombra al 4% que
-     no se ve, y los cuadros se fundían unos con otros. Ahora en reposo hay
-     un pelo de marco; seleccionado sigue siendo negro entero, así que se
-     distinguen igual de bien.
-     Los 2px se quedan en los dos estados a propósito: si el reposo fuera de
-     1px, al seleccionar la tarjeta daría un salto. */
-  border:2px solid var(--borde-tarjeta);
+/* ---- Catálogo de ejercicios ----
+   Era una rejilla de dos columnas con un dibujo grande en cada tarjeta. El
+   dibujo dependía del grupo muscular, no del ejercicio, así que los seis de
+   un grupo salían idénticos; y en oscuro había que forzar el recuadro a
+   claro, porque la figura iba con grises fijos: seis cuadros blancos
+   encendidos de noche. Ahora es una lista, con lo que sí cambia de una fila
+   a la siguiente. Caben los seis sin bajar y el nombre no se parte. */
+.lib-buscar{
+  position:relative;flex:none;padding:10px 16px 2px;
 }
-.ex-lib-card.picked{border-color:var(--ink);}
-.ex-lib-pic{
-  aspect-ratio:.92;display:flex;align-items:center;justify-content:center;padding:8px 4px 2px;
-  background:#f4f5f7;position:relative;
+.lib-buscar-ico{
+  position:absolute;left:28px;top:50%;transform:translateY(-40%);
+  width:16px;height:16px;color:var(--ink-faint);pointer-events:none;
 }
-.ex-lib-view{
-  position:absolute;left:8px;bottom:6px;font:700 9.5px/1 sans-serif;letter-spacing:.05em;
-  text-transform:uppercase;color:#9aa0a8;
+.lib-buscar input{
+  width:100%;box-sizing:border-box;border:none;border-radius:12px;
+  background:var(--pill-bg);color:var(--ink);
+  padding:11px 12px 11px 36px;font:500 16px/1 sans-serif;
+  /* 16px, NO 15. Por debajo de 16 Safari hace zoom al enfocar y la pantalla
+     da un brinco del que ya no se vuelve. Aquí se puso 15 «porque el campo
+     es ancho» y `sin-zoom` lo cazó: esa prueba existe por cuatro campos que
+     lo hicieron antes, y el ancho del campo no tiene nada que ver. */
+  -webkit-appearance:none;appearance:none;
 }
-:root[data-theme="dark"] .ex-lib-pic{background:#f0f1f3;}
-@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .ex-lib-pic{background:#f0f1f3;} }
-.ex-lib-name{padding:9px 10px 12px;font:700 12.5px/1.25 sans-serif;color:var(--ink);}
-.ex-lib-check{
-  position:absolute;top:8px;right:8px;width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.9);
-  border:1.5px solid var(--ink-faint);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;color:transparent;
+.lib-buscar input::placeholder{color:var(--ink-faint);}
+.lib-buscar input::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none;}
+
+.lib-cuantos{
+  padding:12px 16px 2px;font:700 11.5px/1 sans-serif;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--ink-faint);
 }
-.ex-lib-card.picked .ex-lib-check{background:var(--ink);border-color:var(--ink);color:var(--card-bg);}
+
+.ex-lista{padding:8px 16px 110px;}
+.ex-row{
+  display:flex;align-items:center;gap:13px;width:100%;box-sizing:border-box;
+  padding:12px 14px;background:var(--card-bg);border:none;cursor:pointer;
+  position:relative;text-align:left;font-family:inherit;
+  /* Alto de dedo: 34 del icono + 12 arriba + 12 abajo = 58. */
+  min-height:58px;
+}
+/* Las esquinas redondeadas son de la LISTA, no de cada fila: agrupadas
+   leen como una sola cosa, que es lo que son. */
+.ex-row:first-child{border-radius:14px 14px 0 0;}
+.ex-row:last-child{border-radius:0 0 14px 14px;}
+.ex-row:only-child{border-radius:14px;}
+/* La raya empieza donde empieza el texto y no debajo del icono: así el
+   icono y el nombre se leen como una unidad. */
+.ex-row + .ex-row::before{
+  content:'';position:absolute;left:61px;right:0;top:0;height:1px;
+  background:var(--borde-tarjeta);
+}
+.ex-row-ico{
+  width:34px;height:34px;border-radius:10px;flex:none;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--pill-bg);color:var(--ink-soft);
+}
+.ex-row-ico svg{width:19px;height:19px;}
+.ex-row-txt{flex:1;min-width:0;}
+.ex-row-txt b{display:block;font:650 14.5px/1.3 sans-serif;color:var(--ink);}
+.ex-row-txt small{display:block;font:500 12px/1.3 sans-serif;color:var(--ink-faint);margin-top:2px;}
+.ex-row-chk{
+  width:22px;height:22px;border-radius:50%;flex:none;
+  border:1.6px solid var(--ink-faint);
+  display:flex;align-items:center;justify-content:center;
+  font:900 12px/1 sans-serif;color:transparent;
+}
+.ex-row.picked .ex-row-chk{background:var(--ink);border-color:var(--ink);color:var(--card-bg);}
+.ex-row.picked .ex-row-ico{background:var(--ink);color:var(--card-bg);}
+
+.ex-vacio{
+  padding:34px 20px;text-align:center;
+}
+.ex-vacio b{display:block;font:700 15px/1.35 sans-serif;color:var(--ink);}
+.ex-vacio span{display:block;margin-top:6px;font:400 13.5px/1.5 sans-serif;color:var(--ink-faint);}
 .lib-bottom{
   position:absolute;left:16px;right:16px;bottom:22px;background:var(--ink);color:var(--card-bg);
   border-radius:16px;padding:15px;text-align:center;font:800 14.5px/1 sans-serif;cursor:pointer;
