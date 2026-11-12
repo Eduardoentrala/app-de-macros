@@ -12760,6 +12760,27 @@
       // en pantalla solo se ve su pregunta, que es lo que se quería.
       guardarEventoSiEstaCompleto(r.evento);
       guardarMemoriaIA(r.memoria);
+
+      // ---- Y EL AVISO QUEDA CONTESTADO ----
+      //
+      //  Hasta ahora, contestar no lo cerraba: la tarjeta seguía en el
+      //  Diario preguntando lo mismo después de haberle respondido y de
+      //  haber tenido la conversación entera. Se comprobó en su base —
+      //  `avisos_sin_ver = 1` con la charla ya hecha.
+      //
+      //  Se marca AL MANDAR y no al pulsar «Contestar», que es lo que lo
+      //  hace verdad: abrir el chat y cerrarlo sin escribir no es haber
+      //  contestado, y ahí la pregunta tiene que seguir esperando.
+      if(avisoEsperandoRespuesta){
+        var cualAviso = avisoEsperandoRespuesta;
+        avisoEsperandoRespuesta = null;
+        marcarAvisoVisto(cualAviso);
+        // Y SE DICE QUÉ PASA CON LO QUE ACABA DE CONTAR, pero solo si de
+        // verdad pasó algo: `r.memoria` es el modelo diciendo que lo
+        // guardó, y lo guardado es lo que el cierre del lunes lee. Sin
+        // eso, decir «anotado» sería otra promesa sin puerta.
+        if(r.memoria) toast('toastIA2', 'Anotado para el cierre del lunes');
+      }
       pintarChat();
     })['catch'](function(e){
       IA_MSGS.pop();
@@ -12831,7 +12852,13 @@
   // Abre el asistente CON LO QUE ACABA DE DECIRLE delante, para que no haya
   // que repetírselo. Se mete como un turno suyo en la conversación, que es
   // lo que de verdad fue: lo escribió el mismo modelo.
-  function contestarAviso(texto){
+  // De qué aviso se vino, para poder darlo por contestado cuando de verdad
+  // conteste. Se guarda el id, no un `true`: entre que abre el chat y
+  // escribe puede haber llegado otro aviso, y cerraríamos el que no es.
+  var avisoEsperandoRespuesta = null;
+
+  function contestarAviso(texto, id){
+    avisoEsperandoRespuesta = id || null;
     var yaEsta = IA_MSGS.some(function(m){ return m.rol === 'el' && m.texto === texto; });
     if(!yaEsta) IA_MSGS.push({ rol:'el', texto: texto });
     pintarChat();
@@ -12840,9 +12867,22 @@
     setTimeout(function(){ iaTexto.focus(); }, 200);
   }
 
-  // Marcar como visto es lo único que la app puede hacer con un aviso: el
-  // texto lo escribe el modelo y lo guarda una función que comprueba antes
-  // que el motivo sea de verdad el que toca.
+  // Darlo por leído. Lo llaman DOS sitios: «Entendido», y el chat cuando
+  // se contesta de verdad — contestar y que la tarjeta siguiera ahí
+  // preguntando lo mismo era el agujero.
+  function marcarAvisoVisto(id){
+    pintarAvisoCoach(null);
+    if(!id || !sesion || !sesion.user) return;
+    sbFetch('/rest/v1/avisos_coach?id=eq.' + id, {
+      method: 'PATCH',
+      headers: { 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ visto_en: new Date().toISOString() })
+    })['catch'](function(){});
+    // CALLA A PROPÓSITO: lo peor que pasa es que el mismo aviso vuelva a
+    // salir en la próxima apertura. Y volver a enseñarlo no cuesta nada:
+    // se lee la fila que ya existe, sin consultar a la IA.
+  }
+
   (function(){
     var caja = document.getElementById('avisoCoach');
     if(!caja) return;
@@ -12854,22 +12894,13 @@
       var c = e.target.closest('[data-contesta]');
       if(c){
         var p = caja.querySelector('p');
-        contestarAviso(p ? p.textContent : '');
+        contestarAviso(p ? p.textContent : '', c.dataset.contesta);
         return;
       }
 
       var b = e.target.closest('[data-visto]');
       if(!b) return;
-      pintarAvisoCoach(null);
-      if(!sesion || !sesion.user) return;
-      sbFetch('/rest/v1/avisos_coach?id=eq.' + b.dataset.visto, {
-        method: 'PATCH',
-        headers: { 'Prefer': 'return=minimal' },
-        body: JSON.stringify({ visto_en: new Date().toISOString() })
-      })['catch'](function(){});
-      // CALLA A PROPÓSITO: lo peor que pasa es que el mismo aviso vuelva a
-      // salir en la próxima apertura. Y volver a enseñarlo no cuesta nada:
-      // se lee la fila que ya existe, sin consultar a la IA.
+      marcarAvisoVisto(b.dataset.visto);
     });
   })();
 

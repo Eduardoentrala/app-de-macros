@@ -136,7 +136,13 @@ console.log('\nY contestar NO lo marca como visto');
      'y sale sin seguir al de visto',
      'si al abrir el chat el aviso desapareciera y luego cerrara sin ' +
      'escribir, se habría quedado sin la pregunta y sin saber que la hubo');
-  ok(/method: 'PATCH'/.test(h), 'y «Entendido» sí lo marca, como siempre');
+  // El PATCH se mudó a `marcarAvisoVisto`, que ahora llaman dos sitios:
+  // «Entendido» y el chat al contestar de verdad. Ver
+  // `el-aviso-se-cierra-al-contestar`.
+  ok(/marcarAvisoVisto\(b\.dataset\.visto\)/.test(h),
+     'y «Entendido» sí lo marca, como siempre');
+  ok(/method: 'PATCH'/.test(APP) && /visto_en: new Date\(\)/.test(APP),
+     'y el marcado sigue llegando a la base');
 }
 
 // ------------------------------------------------------------------
