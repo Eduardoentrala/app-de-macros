@@ -256,6 +256,26 @@ export const CATALOGO = [
   { n:'Pan blanco', cat:'panes', e:'unico', u:/^Bread, white, commercially prepared \(includes soft bread crumbs\)$/i, s:['pan','bolillo'] },
   { n:'Pan integral', cat:'panes', e:'unico', u:/^Bread, whole-wheat, commercially prepared$/i, s:['pan','integral'] },
   { n:'Bolillo', cat:'panes', e:'unico', u:/^Rolls, hard \(includes kaiser\)$/i, s:['bolillo','telera','pan'] },
+  // EL MISMO PAN, PEDIDO DE OTRA FORMA. Arriba en gramos, para quien lo
+  // pesa; aquí por piezas, para quien se come un bolillo y ya.
+  //
+  // `pieza` son los gramos de UNA, y no me los invento: salen del mismo
+  // registro de USDA, de su tabla de porciones. Ese fdc_id trae dos,
+  // «oz» (28,35 g) y «roll (3-1/2" dia)» (57 g); la de la pieza es la
+  // segunda. La primera es la que ya usa la fila de arriba como
+  // `porcion`, y por eso allí no sirve de nada: nadie se come una onza
+  // de pan.
+  //
+  // Dos filas y no una porque la base tiene `unique (nombre, estado)` y
+  // porque una fila solo puede pedirse de una forma. Que el nombre diga
+  // cuál es cada una es justo lo que hace que se puedan distinguir al
+  // buscar.
+  //
+  // OJO: 57 g es el panecillo duro de USDA, no necesariamente el bolillo
+  // de tu panadería, que suele andar entre 60 y 80. Si el tuyo pesa
+  // otra cosa, pésalo una vez y usa la fila de gramos.
+  { n:'Bolillo (pieza)', cat:'panes', e:'unico', u:/^Rolls, hard \(includes kaiser\)$/i,
+    pieza:57, s:['bolillo','telera','pan','pieza'] },
 
   { n:'Hot cakes', cat:'panes', e:'cocido', u:/^Pancakes, plain, prepared from recipe$/i, s:['hot cakes','hotcakes','panqueque'] },
   { n:'Galletas saladas', cat:'panes', e:'unico', u:/^Crackers, saltines \(includes oyster, soda, soup\)$/i, s:['galleta','galletas','saladas'] },

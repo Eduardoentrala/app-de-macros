@@ -3661,7 +3661,28 @@
     var aReceta = document.getElementById('mealAReceta');
     if(aReceta) aReceta.hidden = !lista.length;
 
-    cont.innerHTML = lista.length ? '<div class="food-list">' + lista.map(function(a, i){
+    // ESTA LISTA NO SE PRESENTABA, Y LAS DE ARRIBA SÍ.
+    //
+    // En esta pantalla hay dos listas pegadas: los resultados de buscar
+    // —que llevan su franja: «Tus recetas», «Tus guardados», «Base de
+    // datos»— y, debajo, lo que YA llevas apuntado en esta comida. La
+    // segunda no tenía rótulo ninguno, así que la última franja que se
+    // leía era la de los resultados y parecía que todo lo de abajo
+    // seguía siendo eso.
+    //
+    // Él lo leyó como «mi base de datos, la que he escrito a mano». No
+    // lo es: es su desayuno. Y esa confusión es el fallo, no el error de
+    // quien mira: una lista sin presentar hereda la presentación de la
+    // de arriba.
+    //
+    // Dice la comida por su nombre —«Ya en tu desayuno»— porque desde
+    // aquí se apunta en una comida concreta y conviene recordar en cuál.
+    var franja = '<div class="sug-franja ya-apuntado">Ya en tu ' +
+      escapar(String(comidaActual || '').toLowerCase()) +
+      '<small>' + lista.length +
+      (lista.length === 1 ? ' alimento' : ' alimentos') + '</small></div>';
+
+    cont.innerHTML = lista.length ? franja + '<div class="food-list">' + lista.map(function(a, i){
       prepararAlimento(a);
       return '<div class="food-card"><div class="fc-main"><div class="fc-name">'+escapar(a.n)+'</div>'+
         '<div class="fc-sub">'+lineaComida(a)+'</div></div>'+
@@ -4694,11 +4715,34 @@
   // alimento no está en la app y lo crea a mano con macros a ojo — cuando
   // en el catálogo estaba, medido. La app afirmaba algo que no comprobó.
   function pintarSugerencias(lista, texto, sinRed){
-    if(!texto || texto.length < 2){ mealSugeridos.innerHTML = ''; return; }
+    var apuntadoYa = document.getElementById('mealList');
+    if(!texto || texto.length < 2){
+      mealSugeridos.innerHTML = '';
+      // Sin búsqueda, la pantalla vuelve a ser tu comida.
+      if(apuntadoYa) apuntadoYa.hidden = false;
+      return;
+    }
 
-    var deMios     = lista.filter(function(a){ return a.fuente === 'mio'; });
-    var deCatalogo = lista.filter(function(a){ return a.fuente === 'catalogo'; });
-    var deGente    = lista.filter(function(a){ return a.fuente === 'gente'; });
+    // TRES GRUPOS Y NO DOS, porque el catálogo tiene dentro dos cosas
+    // distintas que se enseñaban bajo un solo rótulo:
+    //
+    //   · lo que trae la app —USDA medido, y los platillos con receta—
+    //   · lo que dio de alta alguien desde el panel, leyendo la etiqueta
+    //
+    // Los dos sirven, y el de la marca a veces sirve más —un atún Dolores
+    // es más tuyo que un «Fish, tuna, light, canned in water»— pero
+    // mezclados bajo «Base de datos» no hay forma de saber cuál estás
+    // eligiendo. Él lo pidió así: «la base de datos de la aplicación y
+    // abajo mi base de datos».
+    //
+    // Los dados de alta a mano se juntan con los guardados propios:
+    // desde dentro de la app las dos cosas son «míos», y tener tres
+    // franjas de lo mismo sería separar por donde no duele.
+    var delCatalogo = lista.filter(function(a){ return a.fuente === 'catalogo'; });
+    var deLaApp     = delCatalogo.filter(function(a){ return a.delaApp; });
+    var aMano       = delCatalogo.filter(function(a){ return !a.delaApp; });
+    var deMios      = lista.filter(function(a){ return a.fuente === 'mio'; }).concat(aMano);
+    var deGente     = lista.filter(function(a){ return a.fuente === 'gente'; });
 
     // Si no hay alimentos pero SI una receta tuya, no es «no encontre
     // nada»: lo de abajo se salta y se pinta la receta.
@@ -4758,10 +4802,29 @@
           '<span style="color:var(--ink-faint);font-size:19px;">+</span></div>';
       }).join('') + '</div>';
 
+    // EL ORDEN QUE PIDIÓ: la de la app arriba, la suya debajo. Antes los
+    // guardados propios iban primero; ahora el rótulo distingue de quién
+    // es cada cosa, así que lo útil es tener juntas las dos «bases de
+    // datos» y en ese orden.
     mealSugeridos.innerHTML = aviso + bloqueRecetas +
-      bloque('Tus guardados', 'lo que ya usas', deMios) +
-      bloque('Base de datos', 'medido, en gramos', deCatalogo) +
+      bloque('Base de datos de la app', 'medidos, en gramos', deLaApp) +
+      bloque('Tus alimentos', 'los que diste de alta tú', deMios) +
       bloque('De otras personas', 'lo que registran otros', deGente);
+
+    // Y MIENTRAS BUSCAS, TU COMIDA NO ESTORBA.
+    //
+    // Debajo de los resultados venía la lista de lo que ya llevas
+    // apuntado en esta comida, sin rótulo. Al no presentarse, heredaba
+    // la última franja que se leía y parecía más base de datos: él la
+    // leyó como «la mía, la que he escrito a mano». No lo era: era su
+    // desayuno.
+    //
+    // Se esconde mientras hay búsqueda. Y no se pierde nada, porque el
+    // buscador se vacía solo al registrar un alimento —lo hace
+    // `limpiarBuscadoresDeAlimento`—, así que en cuanto apuntas algo la
+    // lista vuelve, ya con lo nuevo dentro.
+    var apuntado = document.getElementById('mealList');
+    if(apuntado) apuntado.hidden = true;
   }
 
   function buscarSugerencias(){
@@ -4826,17 +4889,24 @@
         // pesa-. Antes había que inventarse un peso para poder guardarlo, y
         // un peso inventado se propaga a todas las cantidades.
         if(uni !== 'Gramos' && x.macros_por === 'unidad'){
-          return { fuente:'catalogo', n:x.nombre, estado:x.estado,
+          return { fuente:'catalogo', delaApp: x.de_la_app !== false,
+                   n:x.nombre, estado:x.estado,
                    u:uni, cant:1, P:P, C:C, G:G };
         }
 
         // Y lo de siempre: por 100 g, convertidos con el peso de una unidad.
         if(uni !== 'Gramos' && pz > 0){
           var por = function(v){ return Math.round(v * pz / 100 * 10) / 10; };
-          return { fuente:'catalogo', n:x.nombre, estado:x.estado,
+          return { fuente:'catalogo', delaApp: x.de_la_app !== false,
+                   n:x.nombre, estado:x.estado,
                    u:uni, cant:1, P:por(P), C:por(C), G:por(G) };
         }
-        return { fuente:'catalogo', n:x.nombre, estado:x.estado,
+        // `!== false` y no `=== true`: si la base todavía no tiene la
+        // 0070, la columna llega `undefined` y entonces todo el catálogo
+        // es «de la app», que es exactamente como se comportaba antes.
+        // Un despliegue a medias no debe reetiquetar los alimentos.
+        return { fuente:'catalogo', delaApp: x.de_la_app !== false,
+                 n:x.nombre, estado:x.estado,
                  u:'Gramos', cant:100, P:P, C:C, G:G };
       });
 

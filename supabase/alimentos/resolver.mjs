@@ -24,6 +24,16 @@ for (const item of CATALOGO) {
   if (cand.length > 1) ambiguos.push({ item, cand });
   const u = cand.slice().sort((a, b) => a.en.length - b.en.length)[0];
 
+  // AQUÍ NO VA `unidad` NI `pieza_g`, Y NO ES OLVIDO.
+  //
+  // Se intentó: el bolillo por piezas necesitaba su peso y parecía que
+  // el sitio natural era este. Pero esta migración es la 0019 y esas dos
+  // columnas no existen hasta la 0023 y la 0033. Al regenerar, el
+  // esquema de prueba reventaba con «column "unidad" does not exist».
+  //
+  // El proyecto ya tiene el patrón bueno: la fila nace aquí en gramos y
+  // una migración POSTERIOR le pone el peso por pieza, que es lo que
+  // hacen la 0023 con el huevo y la 0028 con la tortilla.
   filas.push(
     `  (${esc(item.n)}, ${esc(item.cat)}, ${esc(item.e)}, ` +
     `${u.kcal}, ${u.p}, ${u.c}, ${u.g}, ` +

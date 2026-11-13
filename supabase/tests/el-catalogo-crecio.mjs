@@ -44,7 +44,7 @@ console.log('\n— Están todos y una sola vez —');
   const { pla } = await uno(`select count(*)::int as pla from public.alimentos_catalogo
                               where composicion is not null`);
   check(`hay ${n} filas: ${ing} ingredientes y ${pla} platillos`,
-    ing === 222 && pla === 18, 'se esperaban 222 y 18');
+    ing === 223 && pla === 18, 'se esperaban 223 y 18');
 
   // La `unique (nombre, estado)` ya lo impide en la base, así que esto
   // vigila lo que la restricción NO ve: el mismo alimento metido dos
@@ -375,6 +375,44 @@ console.log('\n— Y los platillos salen de sus ingredientes —');
     sinReceta.map((x) => x.nombre).join(', ') +
     '\n        un platillo de un solo ingrediente no es un platillo, y uno ' +
     'de cero deja la comprobación de la suma sin nada que comparar');
+}
+
+// ====================================================================
+console.log('\n— Y el bolillo se puede pedir de las dos formas —');
+{
+  const b = await todas(`select nombre, unidad, pieza_g, kcal, fdc_id
+                           from public.alimentos_catalogo
+                          where nombre like 'Bolillo%' order by nombre`);
+  check('hay dos bolillos', b.length === 2, JSON.stringify(b.map((x) => x.nombre)));
+
+  const gramos = b.find((x) => x.nombre === 'Bolillo');
+  const pieza  = b.find((x) => x.nombre === 'Bolillo (pieza)');
+  check('uno en gramos', !!gramos && gramos.unidad === 'Gramos' && gramos.pieza_g === null,
+    JSON.stringify(gramos));
+  check('y otro por piezas, de 57 g',
+    !!pieza && pieza.unidad === 'Pieza' && Number(pieza.pieza_g) === 57,
+    JSON.stringify(pieza));
+
+  // Los dos salen del MISMO registro de USDA. Si algún día cambian los
+  // macros de uno y no del otro, el mismo pan tendría dos verdades y la
+  // pantalla diría una u otra según cómo lo pidas.
+  check('y los dos salen del mismo registro de USDA',
+    !!gramos && !!pieza && String(gramos.fdc_id) === String(pieza.fdc_id) &&
+    Number(gramos.kcal) === Number(pieza.kcal),
+    'fdc ' + (gramos || {}).fdc_id + ' vs ' + (pieza || {}).fdc_id);
+
+  // Una pieza sale a ~167 kcal, que es el número que se ve en pantalla.
+  if (pieza) {
+    const porPieza = Math.round(Number(pieza.kcal) * Number(pieza.pieza_g) / 100);
+    check('una pieza son ~167 kcal', Math.abs(porPieza - 167) <= 2, 'salieron ' + porPieza);
+  }
+
+  // Y las dos se encuentran con la misma palabra: si solo saliera una,
+  // tener dos filas no serviría de nada.
+  const r = await todas(`select nombre from public.buscar_catalogo('bolillo', 8)`);
+  check('y «bolillo» encuentra las dos',
+    r.some((x) => x.nombre === 'Bolillo') && r.some((x) => x.nombre === 'Bolillo (pieza)'),
+    'salió: ' + r.map((x) => x.nombre).join(', '));
 }
 
 console.log('\n' + ok + ' pasan · ' + mal + ' fallan');

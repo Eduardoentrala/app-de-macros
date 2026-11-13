@@ -24,7 +24,12 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
-const APP = readFileSync(join(RAIZ, 'docs', 'app.js'), 'utf8');
+// Los saltos se normalizan al leer. En Windows el fichero de trabajo
+// queda en CRLF —git lo guarda en LF y lo convierte al sacarlo— y
+// cualquier ancla de varias líneas deja de encontrarse. No es un
+// fallo del código: es la prueba mirando otra cosa.
+const APP = readFileSync(join(RAIZ, 'docs', 'app.js'), 'utf8')
+  .replace(/\r\n/g, '\n');
 
 let pasan = 0, fallan = 0;
 const ok = (c, q, extra = '') => {

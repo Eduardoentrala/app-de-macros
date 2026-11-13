@@ -151,7 +151,12 @@ console.log('\nY aparecen donde se usan');
   // no aparece: `indexOf` devuelve -1 y -1 siempre es menor. La mutacion
   // que quitaba las recetas del todo sobrevivia por eso.
   const iRecetas = pintarSug.indexOf('aviso + bloqueRecetas +');
-  const iMios = pintarSug.indexOf("bloque('Tus guardados'");
+  // La franja se llamaba «Tus guardados» y ahora es «Tus alimentos»:
+  // ahí dentro se juntaron los guardados propios con los que él dio de
+  // alta en el catálogo, que desde fuera son la misma cosa —suyos—.
+  // Lo que esta comprobación vigila no cambia: las recetas van ANTES
+  // que cualquier cosa tuya suelta.
+  const iMios = pintarSug.indexOf("bloque('Tus alimentos'");
   ok(iRecetas > 0 && iMios > 0 && iRecetas < iMios,
      'y salen las primeras',
      'son tuyas y meten varios alimentos de un toque: si coincide una, es ' +

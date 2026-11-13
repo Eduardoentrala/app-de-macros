@@ -414,6 +414,15 @@
 }
 /* La primera no necesita raya arriba: ya la separa la barra de búsqueda. */
 .sug-franja:first-child{border-top:none;}
+/* La de «ya en tu desayuno» SÍ necesita aire, porque arriba tiene los
+   resultados de la búsqueda y son dos cosas distintas: una es lo que
+   puedes añadir y la otra lo que ya te comiste. Pegadas se leían como
+   una sola lista, y lo de abajo parecía más base de datos. */
+.sug-franja.ya-apuntado{
+  margin-top:22px;
+  border-top:1px solid var(--line);
+  color:var(--ink);
+}
 .ajuste-nota{
   margin-top:10px;padding:7px 12px;border-radius:11px;text-align:center;
   font:600 11.5px/1.35 sans-serif;background:var(--pill-bg);color:var(--ink-soft);

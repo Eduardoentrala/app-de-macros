@@ -2,7 +2,7 @@
 --  INSTALACIÓN COMPLETA — pega este archivo entero en el editor SQL
 --  de Supabase y pulsa Run. Una sola vez.
 --
---  Son las 69 migraciones de supabase/migrations/ unidas en orden.
+--  Son las 72 migraciones de supabase/migrations/ unidas en orden.
 --  Se ejecutan como una sola transacción: si algo fallara, no queda nada
 --  a medias — se deshace todo y la base se queda como estaba.
 --
@@ -4152,10 +4152,10 @@ grant usage, select on sequence public.alimentos_sinonimos_id_seq to authenticat
 -- =====================================================================
 --  DATOS DEL CATÁLOGO DE ALIMENTOS
 --
---  Generado por supabase/alimentos/resolver.mjs el 2026-11-12.
+--  Generado por supabase/alimentos/resolver.mjs el 2026-11-13.
 --  NO editar a mano: se regenera desde curado.mjs + USDA SR Legacy.
 --
---  222 alimentos. Los macros son de USDA, por 100 g, sin tocar.
+--  223 alimentos. Los macros son de USDA, por 100 g, sin tocar.
 --  Cada fila lleva su fdc_id y la descripción original para poder
 --  auditarla contra la fuente.
 --
@@ -4354,6 +4354,7 @@ values
   ('Pan blanco', 'panes', 'unico', 266, 8.9, 49.4, 3.3, 'slice', 29, 174924, 'Bread, white, commercially prepared (includes soft bread crumbs)'),
   ('Pan integral', 'panes', 'unico', 252, 12.5, 42.7, 3.5, 'slice', 32, 172688, 'Bread, whole-wheat, commercially prepared'),
   ('Bolillo', 'panes', 'unico', 293, 9.9, 52.7, 4.3, 'oz', 28, 175031, 'Rolls, hard (includes kaiser)'),
+  ('Bolillo (pieza)', 'panes', 'unico', 293, 9.9, 52.7, 4.3, 'oz', 28, 175031, 'Rolls, hard (includes kaiser)'),
   ('Hot cakes', 'panes', 'cocido', 227, 6.4, 28.3, 9.7, 'oz', 28, 175009, 'Pancakes, plain, prepared from recipe'),
   ('Galletas saladas', 'panes', 'unico', 418, 9.5, 74.1, 8.6, 'crackers', 15, 172746, 'Crackers, saltines (includes oyster, soda, soup)'),
   ('Azúcar', 'azucares', 'unico', 387, 0, 100, 0, 'serving packet', 3, 169655, 'Sugars, granulated'),
@@ -4746,6 +4747,10 @@ select a.id, v.termino
     ('Bolillo', 'unico', 'bolillo'),
     ('Bolillo', 'unico', 'telera'),
     ('Bolillo', 'unico', 'pan'),
+    ('Bolillo (pieza)', 'unico', 'bolillo'),
+    ('Bolillo (pieza)', 'unico', 'telera'),
+    ('Bolillo (pieza)', 'unico', 'pan'),
+    ('Bolillo (pieza)', 'unico', 'pieza'),
     ('Hot cakes', 'cocido', 'hot cakes'),
     ('Hot cakes', 'cocido', 'hotcakes'),
     ('Hot cakes', 'cocido', 'panqueque'),
@@ -10784,3 +10789,229 @@ on conflict (alimento_id, termino) do nothing;
 -- Y que se encuentren:
 --   select * from public.buscar_catalogo('chilaquiles', 5);
 --   select * from public.buscar_catalogo('pozole', 5);
+
+
+-- ============================ 0070_de_quien_es_cada_alimento.sql ============================
+
+-- =====================================================================
+--  DE QUIÉN ES CADA ALIMENTO DEL CATÁLOGO
+--
+--  El catálogo tiene dos clases de alimento mezcladas y la app las
+--  enseñaba juntas, bajo un solo rótulo que decía «Base de datos»:
+--
+--    · Los de la app: 222 de USDA, medidos, con su fdc_id, más 18
+--      platillos con su receta.
+--    · Los que dio de alta una persona desde el panel, leyendo la
+--      etiqueta: hoy 100. «Arroz con leche», «Atún Dolores», «crema
+--      alpura». Comida de verdad, con marca y todo.
+--
+--  No son lo mismo y conviene saber cuál estás eligiendo. Los primeros
+--  son un dato medido en laboratorio; los segundos, lo que decía un
+--  paquete. Los dos sirven —el de la marca a veces sirve más— pero
+--  mezclados no se puede distinguir, y él lo pidió con estas palabras:
+--  «que se separara un poquito más y apareciera como otra cosa».
+--
+--  No hace falta columna nueva: la diferencia YA está en los datos.
+--  Tiene `fdc_id` quien vino de USDA y `composicion` quien es un
+--  platillo. Quien no tiene ninguna de las dos lo escribió alguien.
+--  Añadir una bandera aparte sería un tercer sitio donde guardar lo
+--  mismo, y el tercero siempre acaba diciendo otra cosa.
+--
+--  Lo único que faltaba era que `buscar_catalogo` lo dijera.
+--
+--  Depende de 0052 (la versión anterior de la función) y de 0068 (la
+--  columna `composicion`).
+-- =====================================================================
+
+-- `drop` y no `create or replace`: cambia la lista de columnas que
+-- devuelve, y eso Postgres no lo deja reemplazar en caliente. Se vuelve
+-- a crear aquí mismo, en la misma migración.
+drop function if exists public.buscar_catalogo(text, integer);
+
+create or replace function public.buscar_catalogo(
+  p_texto  text,
+  p_limite integer default 25
+)
+returns table (
+  id bigint, nombre text, categoria public.categoria_alimento,
+  estado public.estado_alimento, kcal numeric, proteina numeric,
+  carbos numeric, grasas numeric, porcion text, porcion_g integer,
+  pieza_g integer, unidad text, macros_por text,
+  -- true  = lo trae la app (USDA o platillo)
+  -- false = lo dio de alta una persona
+  de_la_app boolean
+)
+language sql stable security definer set search_path = public, pg_temp
+as $$
+  with q as (select public.normalizar_texto(coalesce(p_texto, '')) t)
+  select distinct on (a.id)
+         a.id, a.nombre, a.categoria, a.estado,
+         a.kcal, a.proteina, a.carbos, a.grasas, a.porcion, a.porcion_g,
+         a.pieza_g, a.unidad, a.macros_por,
+         (a.fdc_id is not null or a.composicion is not null) as de_la_app
+    from public.alimentos_catalogo a
+    left join public.alimentos_sinonimos s on s.alimento_id = a.id
+   cross join q
+   where a.activo
+     and length(q.t) >= 2
+     and (a.nombre_norm like '%' || q.t || '%' or s.termino_norm like '%' || q.t || '%')
+   order by a.id,
+            (a.nombre_norm = q.t) desc,
+            (a.nombre_norm like q.t || '%') desc,
+            length(a.nombre)
+   limit least(greatest(p_limite, 1), 50);
+$$;
+
+revoke execute on function public.buscar_catalogo(text, integer) from public, anon;
+grant  execute on function public.buscar_catalogo(text, integer) to authenticated;
+
+
+-- ---------------------------------------------------------------------
+--  Comprobaciones
+-- ---------------------------------------------------------------------
+-- Que la bandera salga y separe bien:
+--   select de_la_app, count(*) from public.buscar_catalogo('a', 50)
+--    group by 1;
+--
+-- Y de dónde viene cada alimento del catálogo entero:
+--   select case when composicion is not null then 'platillo de la app'
+--               when fdc_id is not null      then 'USDA'
+--               else 'dado de alta a mano' end as de_donde,
+--          count(*)
+--     from public.alimentos_catalogo group by 1 order by 2 desc;
+
+
+-- ============================ 0071_el_bolillo_por_piezas.sql ============================
+
+-- =====================================================================
+--  MÁS ALIMENTOS EN EL CATÁLOGO
+--
+--  1 alimentos nuevos y 4 sinónimos. Mismo origen que los 164
+--  de la 0019: USDA SR Legacy, por 100 g, sin tocar, cada uno con su
+--  fdc_id y la descripción original para poder auditarlo.
+--
+--  POR QUÉ ESTA MIGRACIÓN Y NO REGENERAR LA 0019
+--
+--  La 0019 es el fichero generado y ya tiene estos dentro: se regeneró
+--  entera desde curado.mjs el 2026-11-13. Pero en producción ya corrió, y
+--  volver a pegarla haría un `on conflict do update` sobre los 164 que
+--  ya estaban. Eso normalmente no cambia nada —los números de USDA son
+--  los mismos— salvo en un caso: un alimento que alguien haya corregido
+--  a mano desde el panel de admin. Ese se perdería, y en silencio.
+--
+--  Así que aquí van SOLO los nuevos. El delta se sacó comparando la 0019
+--  regenerada contra la que estaba en el repo, no a mano.
+--
+--  Generado por supabase/alimentos/delta (ver el commit) el 2026-11-13.
+--  Depende de 0018 y 0019.
+-- =====================================================================
+
+insert into public.alimentos_catalogo
+(nombre, categoria, estado, kcal, proteina, carbos, grasas,
+   porcion, porcion_g, fdc_id, nombre_usda)
+values
+  ('Bolillo (pieza)', 'panes', 'unico', 293, 9.9, 52.7, 4.3, 'oz', 28, 175031, 'Rolls, hard (includes kaiser)')
+on conflict (nombre, estado) do nothing;
+
+
+-- Sinónimos. Se resuelven por nombre+estado para no depender de los id.
+--
+-- `do nothing` y no `do update`: si esto se corre dos veces no pasa nada,
+-- y si alguien añadió un sinónimo suyo desde el panel, se queda.
+insert into public.alimentos_sinonimos (alimento_id, termino)
+select a.id, v.termino
+  from (values
+    ('Bolillo (pieza)', 'unico', 'bolillo'),
+    ('Bolillo (pieza)', 'unico', 'telera'),
+    ('Bolillo (pieza)', 'unico', 'pan'),
+    ('Bolillo (pieza)', 'unico', 'pieza')
+  ) as v(nombre, estado, termino)
+  join public.alimentos_catalogo a
+    on a.nombre = v.nombre and a.estado::text = v.estado
+on conflict (alimento_id, termino) do nothing;
+
+
+-- ---------------------------------------------------------------------
+--  Comprobaciones
+-- ---------------------------------------------------------------------
+-- Cuántos ingredientes hay ahora (debe dar 223):
+--
+--   Este número se calcula al generar, no se escribe a mano. Llegó a
+--   decir 224 cuando eran 222, porque se quitaron dos alimentos de la
+--   lista DESPUÉS de generar el comentario. Un número de comprobación
+--   que no cuadra enseña a desconfiar de la comprobación.
+--
+--   Cuenta solo los ingredientes: los platillos de la 0069 suman aparte.
+--   select count(*) from public.alimentos_catalogo;
+--
+-- Que ninguno tenga macros imposibles (debe dar 0 filas):
+--   select nombre, kcal, proteina, carbos, grasas
+--     from public.alimentos_catalogo
+--    where kcal > 900 or proteina > 100 or carbos > 100 or grasas > 100;
+--
+-- Y que los nuevos se encuentren al buscar:
+--   select * from public.buscar_catalogo('chorizo', 5);
+--   select * from public.buscar_catalogo('refritos', 5);
+
+
+-- ============================ 0072_el_bolillo_pesa_57.sql ============================
+
+-- =====================================================================
+--  EL BOLILLO, POR PIEZAS
+--
+--  El mismo pan, pedido de dos formas:
+--
+--    · «Bolillo»          → en gramos, para quien lo pesa
+--    · «Bolillo (pieza)»  → de uno en uno, para quien se come un bolillo
+--
+--  Dos filas y no una porque la base tiene `unique (nombre, estado)` y
+--  porque una fila solo puede pedirse de una forma. Que el nombre diga
+--  cuál es cada una es lo que permite distinguirlas al buscar; las dos
+--  salen con «bolillo», «telera» y «pan».
+--
+--  LOS 57 g NO ME LOS INVENTÉ. Salen del mismo registro de USDA que ya
+--  da los macros —«Rolls, hard (includes kaiser)», fdc 175031—, de su
+--  tabla de porciones. Ese registro trae dos:
+--
+--      seq 1   oz                     28.35 g
+--      seq 2   roll (3-1/2" dia)      57 g
+--
+--  La tubería se queda siempre con la de menor `seq_num`, que aquí es
+--  la onza; por eso la fila de arriba tiene `porcion = 'oz'` y por eso
+--  no servía de nada: nadie se come una onza de pan.
+--
+--  OJO CON LO QUE ES: 57 g es el panecillo duro de USDA, no el bolillo
+--  de tu panadería, que suele andar entre 60 y 80. Para quien pesa el
+--  suyo está la fila en gramos, que es la buena.
+--
+--  POR QUÉ ESTA MIGRACIÓN APARTE Y NO EN LA 0019
+--
+--  Se intentó meter `unidad` y `pieza_g` en lo que genera la tubería.
+--  No se puede: la 0019 corre antes que la 0023 y la 0033, que son las
+--  que crean esas dos columnas. Al regenerar, el esquema reventaba con
+--  «column "unidad" does not exist».
+--
+--  Así que la fila nace en gramos en la 0071 y aquí se le pone el peso,
+--  que es exactamente lo que hacen la 0023 con el huevo y la 0028 con
+--  la tortilla. El patrón ya estaba; solo había que verlo.
+--
+--  Depende de 0071 (la fila), 0023 (`pieza_g`) y 0033 (`unidad`).
+-- =====================================================================
+
+update public.alimentos_catalogo
+   set pieza_g = 57,
+       unidad  = 'Pieza'
+ where nombre = 'Bolillo (pieza)';
+
+
+-- ---------------------------------------------------------------------
+--  Comprobaciones
+-- ---------------------------------------------------------------------
+-- Los dos bolillos, uno en gramos y otro por piezas:
+--   select nombre, unidad, pieza_g, kcal,
+--          round(kcal * coalesce(pieza_g, 100) / 100) as kcal_de_una
+--     from public.alimentos_catalogo
+--    where nombre like 'Bolillo%' order by nombre;
+--
+--   Debe dar:  Bolillo         Gramos  null  293  ->  293 por 100 g
+--              Bolillo (pieza) Pieza     57  293  ->  167 por pieza

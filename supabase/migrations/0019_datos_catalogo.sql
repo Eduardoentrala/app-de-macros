@@ -1,10 +1,10 @@
 -- =====================================================================
 --  DATOS DEL CATÁLOGO DE ALIMENTOS
 --
---  Generado por supabase/alimentos/resolver.mjs el 2026-11-12.
+--  Generado por supabase/alimentos/resolver.mjs el 2026-11-13.
 --  NO editar a mano: se regenera desde curado.mjs + USDA SR Legacy.
 --
---  222 alimentos. Los macros son de USDA, por 100 g, sin tocar.
+--  223 alimentos. Los macros son de USDA, por 100 g, sin tocar.
 --  Cada fila lleva su fdc_id y la descripción original para poder
 --  auditarla contra la fuente.
 --
@@ -203,6 +203,7 @@ values
   ('Pan blanco', 'panes', 'unico', 266, 8.9, 49.4, 3.3, 'slice', 29, 174924, 'Bread, white, commercially prepared (includes soft bread crumbs)'),
   ('Pan integral', 'panes', 'unico', 252, 12.5, 42.7, 3.5, 'slice', 32, 172688, 'Bread, whole-wheat, commercially prepared'),
   ('Bolillo', 'panes', 'unico', 293, 9.9, 52.7, 4.3, 'oz', 28, 175031, 'Rolls, hard (includes kaiser)'),
+  ('Bolillo (pieza)', 'panes', 'unico', 293, 9.9, 52.7, 4.3, 'oz', 28, 175031, 'Rolls, hard (includes kaiser)'),
   ('Hot cakes', 'panes', 'cocido', 227, 6.4, 28.3, 9.7, 'oz', 28, 175009, 'Pancakes, plain, prepared from recipe'),
   ('Galletas saladas', 'panes', 'unico', 418, 9.5, 74.1, 8.6, 'crackers', 15, 172746, 'Crackers, saltines (includes oyster, soda, soup)'),
   ('Azúcar', 'azucares', 'unico', 387, 0, 100, 0, 'serving packet', 3, 169655, 'Sugars, granulated'),
@@ -595,6 +596,10 @@ select a.id, v.termino
     ('Bolillo', 'unico', 'bolillo'),
     ('Bolillo', 'unico', 'telera'),
     ('Bolillo', 'unico', 'pan'),
+    ('Bolillo (pieza)', 'unico', 'bolillo'),
+    ('Bolillo (pieza)', 'unico', 'telera'),
+    ('Bolillo (pieza)', 'unico', 'pan'),
+    ('Bolillo (pieza)', 'unico', 'pieza'),
     ('Hot cakes', 'cocido', 'hot cakes'),
     ('Hot cakes', 'cocido', 'hotcakes'),
     ('Hot cakes', 'cocido', 'panqueque'),

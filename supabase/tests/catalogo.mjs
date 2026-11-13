@@ -200,10 +200,14 @@ check('y sale a ~67 cal la pieza', Math.abs(Number(calTor.rows[0].c) - 67) <= 4,
 const conPieza = await db.query(`select nombre from public.alimentos_catalogo
                                   where pieza_g is not null
                                     and composicion is null order by nombre`);
-const esperados = ['Clara de huevo', 'Huevo cocido', 'Huevo entero', 'Huevo estrellado',
-                   'Huevo revuelto', 'Tortilla de harina', 'Tortilla de maíz',
-                   'Yema de huevo'];
-check('solo se cuentan por pieza los huevos y las tortillas',
+// En orden alfabetico, que es como los devuelve la consulta. El bolillo
+// entro con la 0072: es el mismo pan que «Bolillo», que sigue en gramos,
+// pero pedido de uno en uno. Los 57 g salen de la tabla de porciones de
+// su propio registro de USDA, no de un numero tecleado.
+const esperados = ['Bolillo (pieza)', 'Clara de huevo', 'Huevo cocido', 'Huevo entero',
+                   'Huevo estrellado', 'Huevo revuelto', 'Tortilla de harina',
+                   'Tortilla de maíz', 'Yema de huevo'];
+check('solo se cuentan por pieza los que deben',
   JSON.stringify(conPieza.rows.map(r => r.nombre)) === JSON.stringify(esperados),
   JSON.stringify(conPieza.rows.map(r => r.nombre)));
 

@@ -7,7 +7,10 @@ import { readFileSync, writeFileSync } from 'node:fs';
 
 const D = 'C:/Users/coman/AppData/Local/Temp/claude/072b26855eb02816/1197e5e2-c1ff-472f-a39c-000229ed16ce/scratchpad';
 const RAIZ = 'C:/Users/coman/OneDrive/Desktop/app de macros';
-const viejo = readFileSync(D + '/0019.viejo.sql', 'utf8');
+// Uso:  node delta.mjs <0019-de-antes.sql> <migracion-de-salida.sql>
+const BASE   = process.argv[2] || (D + '/0019.viejo.sql');
+const SALIDA = process.argv[3] || (RAIZ + '/supabase/migrations/0067_mas_alimentos.sql');
+const viejo = readFileSync(BASE, 'utf8');
 const nuevo = readFileSync(RAIZ + '/supabase/migrations/0019_datos_catalogo.sql', 'utf8');
 
 // Las filas de alimentos: líneas que empiezan por "  ('" dentro del
@@ -24,6 +27,16 @@ const sinsDe = (s) => {
   const j = s.indexOf('on conflict (alimento_id, termino)', i);
   return s.slice(i, j).split('\n').filter((l) => l.trim().startsWith("('"))
     .map((l) => l.trim().replace(/,\s*$/, ''));
+};
+
+// Las columnas del insert se LEEN del 0019 generado en vez de
+// escribirlas aquí. Estaban a mano y se quedaron en once cuando el
+// generador pasó a emitir trece: el delta habría salido con más
+// valores que nombres.
+const columnasDe = (s) => {
+  const i = s.indexOf('insert into public.alimentos_catalogo');
+  const j = s.indexOf('values', i);
+  return s.slice(s.indexOf('(', i), j).trimEnd();
 };
 
 const clave = (fila) => {
@@ -67,8 +80,7 @@ const sql = `-- ================================================================
 -- =====================================================================
 
 insert into public.alimentos_catalogo
-  (nombre, categoria, estado, kcal, proteina, carbos, grasas,
-   porcion, porcion_g, fdc_id, nombre_usda)
+${columnasDe(nuevo)}
 values
 ${filasNuevas.join(',\n')}
 on conflict (nombre, estado) do nothing;
@@ -111,6 +123,6 @@ on conflict (alimento_id, termino) do nothing;
 --   select * from public.buscar_catalogo('refritos', 5);
 `;
 
-writeFileSync(RAIZ + '/supabase/migrations/0067_mas_alimentos.sql', sql);
-console.log(`0067: ${filasNuevas.length} alimentos, ${sinsNuevos.length} sinónimos`);
+writeFileSync(SALIDA, sql);
+console.log(`${SALIDA.split('/').pop()}: ${filasNuevas.length} alimentos, ${sinsNuevos.length} sinónimos`);
 console.log('nuevos:', filasNuevas.map((f) => clave(f).split('|')[0]).join(', '));
