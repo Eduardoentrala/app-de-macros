@@ -193,14 +193,29 @@ check('y sale a ~67 cal la pieza', Math.abs(Number(calTor.rows[0].c) - 67) <= 4,
 
 // La lista de lo que se cuenta por piezas, entera. Si algun dia se rellena
 // a lo loco -o se olvida rellenar algo que se anadio- esto salta.
+// SOLO LOS INGREDIENTES. Los platillos llevan `pieza_g` todos y a
+// propósito: es lo que les deja pedirse como «1 taco» en vez de «90
+// gramos de taco», y su peso sale de sumar su receta, no de rellenar
+// una columna a mano. Se comprueban aparte, justo abajo.
 const conPieza = await db.query(`select nombre from public.alimentos_catalogo
-                                  where pieza_g is not null order by nombre`);
+                                  where pieza_g is not null
+                                    and composicion is null order by nombre`);
 const esperados = ['Clara de huevo', 'Huevo cocido', 'Huevo entero', 'Huevo estrellado',
                    'Huevo revuelto', 'Tortilla de harina', 'Tortilla de maíz',
                    'Yema de huevo'];
 check('solo se cuentan por pieza los huevos y las tortillas',
   JSON.stringify(conPieza.rows.map(r => r.nombre)) === JSON.stringify(esperados),
   JSON.stringify(conPieza.rows.map(r => r.nombre)));
+
+// Y los platillos, TODOS. Al reves que los ingredientes: ahi tener
+// `pieza_g` es la excepcion y aqui es la regla. Uno sin peso volveria a
+// pedirse en gramos, que es justo lo que no sirve de un plato servido.
+const platoSinPieza = await db.query(`select nombre from public.alimentos_catalogo
+                                       where composicion is not null
+                                         and pieza_g is null order by nombre`);
+check('y todos los platillos se cuentan por porcion',
+  platoSinPieza.rows.length === 0,
+  JSON.stringify(platoSinPieza.rows.map(r => r.nombre)));
 // Nada con pieza puede quedarse sin peso: seria ofrecer "1 pieza" de algo
 // que no se sabe cuanto pesa, que es de donde venia el fallo del espagueti.
 const cero = await db.query(`select count(*)::int n from public.alimentos_catalogo
