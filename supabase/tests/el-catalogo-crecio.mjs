@@ -269,18 +269,35 @@ console.log('\n— Y los platillos salen de sus ingredientes —');
   check('y todos sus ingredientes siguen en el catálogo', huerfanos.length === 0,
     huerfanos.map((x) => `${x.plato} -> ${x.falta}`).join(', '));
 
-  // Toda fila tiene que poder auditarse por un lado o por el otro. Es lo
-  // que dice el `check` de la 0068; esto comprueba que el `check` está
-  // puesto de verdad y no solo escrito.
-  let rechazo = null;
-  try {
-    await db.exec(`insert into public.alimentos_catalogo
-      (nombre, categoria, estado, kcal, proteina, carbos, grasas)
-      values ('Invento', 'otros', 'unico', 100, 1, 1, 1)`);
-  } catch (e) { rechazo = e.message.split('\n')[0]; }
-  check('y la base no acepta una fila sin forma de auditarla', !!rechazo,
-    'entró un alimento sin fdc_id y sin composición: nadie podría saber ' +
-    'de dónde salieron esos números');
+  // AQUÍ HABÍA UNA COMPROBACIÓN QUE DEFENDÍA UNA REGLA INVENTADA.
+  //
+  // Decía: la base no acepta una fila sin `fdc_id` y sin receta, porque
+  // nadie podría auditarla. Y pasaba, porque en el repo todas las filas
+  // salen de los generadores. En la base de verdad hay 321 alimentos y
+  // CIEN son añadidos a mano desde el panel, leyendo la etiqueta:
+  // «Arroz con leche», «Atún Dolores», «crema alpura».
+  //
+  // La restricción no los habría borrado, pero habría impedido añadir
+  // uno más: el panel guardaría y la base diría que no. Una función que
+  // se usa, rota por una regla que salió de mirar solo el repositorio.
+  //
+  // Lo que sí se vigila es que los PLATILLOS tengan receta —arriba, con
+  // la suma— y eso no le impide nada a nadie.
+  const aMano = await todas(`
+    select count(*)::int as n from public.alimentos_catalogo
+     where fdc_id is null and composicion is null`);
+  check('un alimento tecleado a mano sigue cabiendo en el catálogo',
+    (await (async () => {
+      try {
+        await db.exec(`insert into public.alimentos_catalogo
+          (nombre, categoria, estado, kcal, proteina, carbos, grasas)
+          values ('Atún de marca', 'pescados', 'unico', 110, 25, 0, 1)`);
+        return true;
+      } catch (e) { return false; }
+    })()),
+    'la base lo rechazó. Cien de los alimentos de esa base son así: ' +
+    'tecleados de una etiqueta, que es una procedencia buena y no cabe ' +
+    'en ninguna columna');
 
   // Y los platillos se encuentran al buscarlos, que es el punto.
   for (const [texto, esperado] of [

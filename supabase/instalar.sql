@@ -10624,38 +10624,45 @@ comment on column public.alimentos_catalogo.composicion is
 
 
 -- ---------------------------------------------------------------------
---  3. Toda fila tiene que poder auditarse
+--  3. AQUÍ IBA UNA RESTRICCIÓN, Y HABRÍA ROTO EL PANEL
 --
---  O viene de USDA y lleva su `fdc_id`, o es un plato y lleva su receta.
---  Sin una de las dos, nadie puede saber de dónde salieron esos números
---  —y el catálogo entero se apoya en que siempre se puede saber—.
+--  La idea era: toda fila del catálogo tiene que poder auditarse, o por
+--  `fdc_id` o por su receta.
 --
---  `not valid` + `validate` en dos pasos: así, si alguna fila vieja no
---  cumpliera, la migración lo dice en vez de reventar a medias.
+--    check (fdc_id is not null or composicion is not null)
+--
+--  Suena bien y en el repo pasaba: las 222 filas que generan curado.mjs
+--  y platillos.mjs cumplen. En la base de verdad hay 321, y CIEN de
+--  ellas no tienen `fdc_id` ni lo van a tener nunca: son alimentos
+--  añadidos a mano desde el panel de admin, leyendo la etiqueta.
+--  «Arroz con leche», «Atún Dolores», «crema alpura». Comida de verdad
+--  que alguien se come.
+--
+--  Con el `check` puesto, esas cien no se borran —`not valid` no las
+--  toca— pero NO SE PUEDE AÑADIR NI UNA MÁS: el panel guardaría y la
+--  base diría que no. Se habría roto una función que se usa, para
+--  defender una regla que yo me inventé mirando solo el repo.
+--
+--  La lección es la de siempre en este proyecto: lo que dice el
+--  repositorio no es lo que hay en producción. Y la provenencia de un
+--  alimento tecleado de una etiqueta es «lo leí en el paquete», que es
+--  perfectamente válida y no cabe en ninguna columna.
+--
+--  Lo que sí se vigila, y en su sitio: que los PLATILLOS tengan receta.
+--  Eso lo comprueba `el-catalogo-crecio` contra el esquema, sin
+--  impedirle nada a nadie.
 -- ---------------------------------------------------------------------
-do $$
-begin
-  if not exists (select 1 from pg_constraint
-                  where conname = 'alimentos_catalogo_auditable') then
-    alter table public.alimentos_catalogo
-      add constraint alimentos_catalogo_auditable
-      check (fdc_id is not null or composicion is not null) not valid;
-  end if;
-end $$;
-
-alter table public.alimentos_catalogo
-  validate constraint alimentos_catalogo_auditable;
 
 
 -- ---------------------------------------------------------------------
 --  Comprobaciones
 -- ---------------------------------------------------------------------
--- Que la categoría exista:
---   select unnest(enum_range(null::public.categoria_alimento));
---
--- Que ninguna fila se quede sin forma de auditarla (debe dar 0):
---   select count(*) from public.alimentos_catalogo
---    where fdc_id is null and composicion is null;
+-- Cuántos alimentos hay y de qué procedencia:
+--   select case when composicion is not null then 'platillo'
+--               when fdc_id is not null      then 'usda'
+--               else 'a mano' end as de_donde,
+--          count(*)
+--     from public.alimentos_catalogo group by 1 order by 2 desc;
 
 
 -- ============================ 0069_platillos.sql ============================
