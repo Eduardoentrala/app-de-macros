@@ -672,6 +672,21 @@ select a.id, v.termino
     on a.nombre = v.nombre and a.estado::text = v.estado
 on conflict (alimento_id, termino) do nothing;
 
+-- EL ALCOHOL NO SE EMITE AQUÍ, Y ES LA TERCERA VEZ QUE PASA LO MISMO.
+--
+-- Su columna la crea la 0073 y esta migración es la 0019: cualquier
+-- cosa que la mencione revienta con «column "alcohol" does not exist»,
+-- igual que pasó al intentar meter `unidad` y `pieza_g`.
+--
+-- Esta migración es la PRIMERA que toca el catálogo. Todo lo que no
+-- existía ya en la 0018 tiene que ponerlo una migración posterior, y es
+-- lo que hacen la 0023 con el peso del huevo, la 0072 con el del
+-- bolillo y la 0073 con el alcohol de la cerveza.
+--
+-- `extraer.mjs` SÍ saca el alcohol de USDA —nutriente 1018, 73 de los
+-- 7.793 lo traen— y lo deja en el volcado. Está ahí para el día que
+-- haga falta, y para que el número no tenga que teclearlo nadie:
+-- Cerveza 3.9 g.
 
 -- ---------------------------------------------------------------------
 --  Comprobaciones

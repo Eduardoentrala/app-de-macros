@@ -12,7 +12,7 @@ const USDA = JSON.parse(readFileSync(process.argv[2], 'utf8'));
 
 const esc = (s) => s === null || s === undefined ? 'null' : `'${String(s).replace(/'/g, "''")}'`;
 
-const filas = [], sinonimos = [], fallos = [], ambiguos = [];
+const filas = [], sinonimos = [], fallos = [], ambiguos = [], conAlcohol = [];
 
 for (const item of CATALOGO) {
   const cand = USDA.filter(u => item.u.test(u.en));
@@ -40,6 +40,16 @@ for (const item of CATALOGO) {
     `${esc(u.porcion)}, ${u.porcion_g === null ? 'null' : u.porcion_g}, ` +
     `${u.fdc}, ${esc(u.en)})`
   );
+  // EL ALCOHOL VA APARTE, Y NO POR CAPRICHO. Su columna la crea la
+  // 0073 y esta migración es la 0019: si fuera en el insert, el
+  // esquema reventaría con «column "alcohol" does not exist». Igual
+  // que pasó con `unidad` y `pieza_g`.
+  //
+  // Así que sale como un bloque de `update` al final del fichero, que
+  // se ejecuta cuando la columna ya existe. Solo para los que lo
+  // tienen: hoy son el 1% de USDA.
+  if (u.alc > 0) conAlcohol.push({ n: item.n, e: item.e, alc: u.alc });
+
   for (const s of (item.s || [])) {
     sinonimos.push({ nombre: item.n, estado: item.e, termino: s });
   }
@@ -97,6 +107,21 @@ ${sinonimos.map(s => `    (${esc(s.nombre)}, ${esc(s.estado)}, ${esc(s.termino)}
     on a.nombre = v.nombre and a.estado::text = v.estado
 on conflict (alimento_id, termino) do nothing;
 
+-- EL ALCOHOL NO SE EMITE AQUÍ, Y ES LA TERCERA VEZ QUE PASA LO MISMO.
+--
+-- Su columna la crea la 0073 y esta migración es la 0019: cualquier
+-- cosa que la mencione revienta con «column "alcohol" does not exist»,
+-- igual que pasó al intentar meter \`unidad\` y \`pieza_g\`.
+--
+-- Esta migración es la PRIMERA que toca el catálogo. Todo lo que no
+-- existía ya en la 0018 tiene que ponerlo una migración posterior, y es
+-- lo que hacen la 0023 con el peso del huevo, la 0072 con el del
+-- bolillo y la 0073 con el alcohol de la cerveza.
+--
+-- \`extraer.mjs\` SÍ saca el alcohol de USDA —nutriente 1018, 73 de los
+-- 7.793 lo traen— y lo deja en el volcado. Está ahí para el día que
+-- haga falta, y para que el número no tenga que teclearlo nadie:
+-- ${conAlcohol.length ? conAlcohol.map((x) => x.n + ' ' + x.alc + ' g').join(', ') : 'hoy ninguno del catálogo lo tiene'}.
 
 -- ---------------------------------------------------------------------
 --  Comprobaciones

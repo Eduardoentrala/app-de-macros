@@ -36,7 +36,10 @@ function leerCsv(ruta) {
               .map(f => Object.fromEntries(cab.map((k, i) => [k, f[i]])));
 }
 
-const P = { PROT: '1003', GRASA: '1004', CARB: '1005', KCAL: '1008' };
+// 1018 es el alcohol etílico, en gramos. Es el cuarto macro: 7 kcal
+// por gramo, y no es ninguno de los otros tres. Sin él una cerveza
+// sale con los macros de agua con azúcar.
+const P = { PROT: '1003', GRASA: '1004', CARB: '1005', KCAL: '1008', ALC: '1018' };
 
 const alimentos = leerCsv(join(DIR, 'food.csv'));
 const categorias = Object.fromEntries(
@@ -73,6 +76,10 @@ for (const a of alimentos) {
   const m = macros.get(a.fdc_id);
   if (!m) continue;
   const kcal = m[P.KCAL], prot = m[P.PROT], carb = m[P.CARB], gra = m[P.GRASA];
+  // El alcohol NO entra en la comprobación de abajo: la inmensa mayoría
+  // de los alimentos no lo trae, y exigirlo dejaría fuera casi todo.
+  // Lo que no lo declara es que no tiene.
+  const alc = m[P.ALC];
   // Sin las cuatro cifras el registro no sirve para contar macros.
   if ([kcal, prot, carb, gra].some(v => v === undefined || Number.isNaN(v))) continue;
 
@@ -85,6 +92,7 @@ for (const a of alimentos) {
     p: Math.round(prot * 10) / 10,
     c: Math.round(carb * 10) / 10,
     g: Math.round(gra * 10) / 10,
+    alc: alc === undefined || Number.isNaN(alc) ? 0 : Math.round(alc * 10) / 10,
     porcion: por ? por.desc : null,
     porcion_g: por ? por.g : null,
   });
