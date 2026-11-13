@@ -37,6 +37,12 @@ const meter = async (campos) => {
     categoria: 'otros', estado: 'crudo',
     proteina: 6.3, carbos: 0.4, grasas: 5.3, kcal: 75,
     unidad: 'Gramos', pieza_g: null, macros_por: '100g',
+    // `fdc_id` desde que la 0068 exige que toda fila se pueda auditar:
+    // o viene de USDA con su id, o es un platillo y lleva su receta.
+    // Esta de mentira no tenía ninguna de las dos y la restricción la
+    // rechazaba —haciendo justo lo suyo—. Un alimento de prueba que no
+    // podría existir de verdad tampoco sirve para probar nada.
+    fdc_id: 999001,
   }, campos);
   const cols = Object.keys(c).join(', ');
   const vals = Object.keys(c).map((_, i) => '$' + (i + 1)).join(', ');

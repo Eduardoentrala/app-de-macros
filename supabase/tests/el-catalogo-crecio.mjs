@@ -39,7 +39,12 @@ const uno = async (sql) => (await todas(sql))[0];
 console.log('\n— Están todos y una sola vez —');
 {
   const { n } = await uno('select count(*)::int as n from public.alimentos_catalogo');
-  check(`hay ${n} alimentos`, n === 222, 'se esperaban 222');
+  const { ing } = await uno(`select count(*)::int as ing from public.alimentos_catalogo
+                              where composicion is null`);
+  const { pla } = await uno(`select count(*)::int as pla from public.alimentos_catalogo
+                              where composicion is not null`);
+  check(`hay ${n} filas: ${ing} ingredientes y ${pla} platillos`,
+    ing === 222 && pla === 18, 'se esperaban 222 y 18');
 
   // La `unique (nombre, estado)` ya lo impide en la base, así que esto
   // vigila lo que la restricción NO ve: el mismo alimento metido dos
@@ -184,7 +189,10 @@ console.log('\n— Y la lista curada y el SQL dicen lo mismo —');
   // cosas se separan y nadie lo nota hasta que falta un alimento.
   const { CATALOGO } = await import(
     'file://' + join(AQUI, '..', 'alimentos', 'curado.mjs').replace(/\\/g, '/'));
-  const enBase = await todas('select nombre, estado from public.alimentos_catalogo');
+  // Sin los platillos: esos no salen de `curado.mjs` sino de
+  // `platillos.mjs`, y se comprueban por su cuenta más abajo.
+  const enBase = await todas(`select nombre, estado from public.alimentos_catalogo
+                               where composicion is null`);
   const clave = (n, e) => n + '|' + e;
   const base = new Set(enBase.map((x) => clave(x.nombre, x.estado)));
   const lista = CATALOGO.map((x) => clave(x.n, x.e));
@@ -195,6 +203,161 @@ console.log('\n— Y la lista curada y el SQL dicen lo mismo —');
   check('y todas acabaron en la base', faltan.length === 0,
     'en curado.mjs y no en el SQL: ' + faltan.join(', ') +
     '\n        hay que volver a pasar resolver.mjs');
+}
+
+// ====================================================================
+console.log('\n— Y los platillos salen de sus ingredientes —');
+{
+  // ESTO ES LO QUE SOSTIENE UN PLATILLO. Un ingrediente se audita contra
+  // USDA por su `fdc_id`; un platillo no tiene eso, porque sus números no
+  // los copió de ninguna tabla. Lo que tiene es la receta, y la promesa
+  // es que sus macros son EXACTAMENTE la suma de esa receta.
+  //
+  // Así que la cuenta se rehace aquí, en SQL, desde `composicion` y desde
+  // las filas de los ingredientes. Si alguien toca un número a mano —o si
+  // un ingrediente cambia y nadie regenera— los dos lados dejan de
+  // cuadrar y esto se pone rojo.
+  const descuadre = await todas(`
+    with partes as (
+      select p.nombre as plato,
+             (p.composicion->>'porcion_g')::numeric as peso,
+             (i->>'nombre') as ing_nombre,
+             (i->>'estado') as ing_estado,
+             (i->>'gramos')::numeric as gramos
+        from public.alimentos_catalogo p,
+             jsonb_array_elements(p.composicion->'ingredientes') as i
+       where p.composicion is not null
+    ), sumas as (
+      select pa.plato, pa.peso,
+             sum(a.kcal     * pa.gramos / 100) as kcal,
+             sum(a.proteina * pa.gramos / 100) as p,
+             sum(a.carbos   * pa.gramos / 100) as c,
+             sum(a.grasas   * pa.gramos / 100) as g,
+             sum(pa.gramos) as peso_sumado
+        from partes pa
+        join public.alimentos_catalogo a
+          on a.nombre = pa.ing_nombre and a.estado::text = pa.ing_estado
+       group by pa.plato, pa.peso
+    )
+    select s.plato, p.kcal as dice,
+           round(s.kcal * 100 / s.peso, 1) as suma,
+           s.peso, s.peso_sumado
+      from sumas s
+      join public.alimentos_catalogo p
+        on p.nombre = s.plato and p.composicion is not null
+     where abs(p.kcal     - s.kcal * 100 / s.peso) > 0.2
+        or abs(p.proteina - s.p    * 100 / s.peso) > 0.2
+        or abs(p.carbos   - s.c    * 100 / s.peso) > 0.2
+        or abs(p.grasas   - s.g    * 100 / s.peso) > 0.2
+        or s.peso <> s.peso_sumado`);
+  check('las macros de cada plato son la suma de sus partes',
+    descuadre.length === 0,
+    descuadre.map((x) => `${x.plato}: dice ${x.dice}, la receta da ${x.suma}`).join('\n        ') +
+    '\n        hay que volver a pasar platillos.mjs');
+
+  // Y que cada ingrediente de cada receta exista de verdad. El generador
+  // se niega a producir nada si falta uno, pero eso protege al generar,
+  // no después: basta con que alguien renombre un ingrediente.
+  const huerfanos = await todas(`
+    select distinct p.nombre as plato, (i->>'nombre') as falta
+      from public.alimentos_catalogo p,
+           jsonb_array_elements(p.composicion->'ingredientes') as i
+     where p.composicion is not null
+       and not exists (
+         select 1 from public.alimentos_catalogo a
+          where a.nombre = (i->>'nombre') and a.estado::text = (i->>'estado'))`);
+  check('y todos sus ingredientes siguen en el catálogo', huerfanos.length === 0,
+    huerfanos.map((x) => `${x.plato} -> ${x.falta}`).join(', '));
+
+  // Toda fila tiene que poder auditarse por un lado o por el otro. Es lo
+  // que dice el `check` de la 0068; esto comprueba que el `check` está
+  // puesto de verdad y no solo escrito.
+  let rechazo = null;
+  try {
+    await db.exec(`insert into public.alimentos_catalogo
+      (nombre, categoria, estado, kcal, proteina, carbos, grasas)
+      values ('Invento', 'otros', 'unico', 100, 1, 1, 1)`);
+  } catch (e) { rechazo = e.message.split('\n')[0]; }
+  check('y la base no acepta una fila sin forma de auditarla', !!rechazo,
+    'entró un alimento sin fdc_id y sin composición: nadie podría saber ' +
+    'de dónde salieron esos números');
+
+  // Y los platillos se encuentran al buscarlos, que es el punto.
+  for (const [texto, esperado] of [
+    ['chilaquiles', 'Chilaquiles verdes con pollo'],
+    ['pozole', 'Pozole de pollo'],
+    ['torta', 'Torta de jamón'],
+    ['guacamole', 'Guacamole'],
+    ['sincronizada', 'Sincronizada'],
+    ['licuado', 'Licuado de plátano'],
+  ]) {
+    const r = await todas(`select nombre from public.buscar_catalogo('${texto}', 8)`);
+    check(`«${texto}» encuentra ${esperado}`, r.some((x) => x.nombre === esperado),
+      'salió: ' + (r.map((x) => x.nombre).join(', ') || '(nada)'));
+  }
+
+  // Y cada plato dice cuánto pesa una porción. Sin eso hay que pesar los
+  // chilaquiles, que es justo lo que estos existen para evitar.
+  const sinPorcion = await todas(`
+    select nombre from public.alimentos_catalogo
+     where composicion is not null and (porcion is null or porcion_g is null)`);
+  check('y todos dicen cuánto pesa una porción', sinPorcion.length === 0,
+    sinPorcion.map((x) => x.nombre).join(', '));
+
+  // Y SE PIDEN POR PORCIÓN, que es la mitad de la gracia de tenerlos.
+  //
+  // La app ofrece el catálogo en gramos a propósito: la «porción» de
+  // USDA es texto como «cup, chopped» y no dice cuánto pesa una unidad
+  // de comer, así que «1 pieza» de espagueti acababa siendo una taza.
+  // Un platillo sí lo sabe —un taco pesa 90 g porque se sumaron sus
+  // ingredientes—, así que usa el camino que ya existe, `unidad` +
+  // `pieza_g`, y se apunta como «1 taco», no como «90 gramos de taco».
+  // Sin esto serían tan incómodos de apuntar como desglosarlos a mano.
+  const porGramos = await todas(`
+    select nombre, unidad, pieza_g, porcion_g from public.alimentos_catalogo
+     where composicion is not null
+       and (unidad <> 'Servicio' or pieza_g is null or pieza_g <> porcion_g)`);
+  check('se piden por porción y no por gramos', porGramos.length === 0,
+    porGramos.map((x) => `${x.nombre}: unidad ${x.unidad}, pieza_g ${x.pieza_g}`).join('\n        '));
+
+  // Y los macros siguen siendo POR 100 g, que es como la app los
+  // convierte usando el peso. Con `macros_por = 'unidad'` los tomaría
+  // tal cual y un taco contaría 151 kcal en vez de las 136 que son.
+  const porUnidad = await todas(`
+    select nombre from public.alimentos_catalogo
+     where composicion is not null and macros_por <> '100g'`);
+  check('y sus macros siguen siendo por 100 g', porUnidad.length === 0,
+    porUnidad.map((x) => x.nombre).join(', '));
+
+  // Y ESE PESO ES EL DE LA RECETA. La columna `porcion_g` es la que usa
+  // la app para convertir «me comí un plato» en gramos; la receta vive
+  // en el jsonb. Si se separan, la app escala con un peso y los macros
+  // son de otro, y el error no se ve por ningún lado.
+  //
+  // Lo pilló una mutación: cambiando solo la columna de 150 a 180 g, la
+  // comprobación de «la suma cuadra» seguía verde —porque esa compara el
+  // jsonb contra los ingredientes— y nadie miraba la columna.
+  const pesoTorcido = await todas(`
+    select nombre, porcion_g as columna,
+           (composicion->>'porcion_g')::int as receta
+      from public.alimentos_catalogo
+     where composicion is not null
+       and porcion_g is distinct from (composicion->>'porcion_g')::int`);
+  check('y ese peso es el mismo que el de la receta', pesoTorcido.length === 0,
+    pesoTorcido.map((x) => `${x.nombre}: la columna dice ${x.columna} y la receta ${x.receta}`).join('\n        '));
+
+  // Y que la receta sea una receta. Un `composicion` con la forma
+  // cambiada —sin `ingredientes`— pasa el `check` de la base (no es
+  // null) y deja la comprobación de la suma sin filas que comparar: cero
+  // descuadres por no tener nada que cuadrar. Verde por no mirar.
+  const sinReceta = await todas(`
+    select nombre from public.alimentos_catalogo
+     where composicion is not null
+       and coalesce(jsonb_array_length(composicion->'ingredientes'), 0) < 2`);
+  check('y la receta tiene ingredientes de verdad', sinReceta.length === 0,
+    sinReceta.map((x) => x.nombre).join(', ') +
+    '\n        un platillo de un solo ingrediente no es un platillo, y uno ' +
+    'de cero deja la comprobación de la suma sin nada que comparar');
 }
 
 console.log('\n' + ok + ' pasan · ' + mal + ' fallan');
