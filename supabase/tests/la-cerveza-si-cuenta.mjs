@@ -153,5 +153,57 @@ console.log('\n— Y el gasto medido ve las calorías buenas —');
     'gasto medido más bajo del real y un cierre de lunes más apretado');
 }
 
+// ====================================================================
+console.log('\n— Y la búsqueda se lo pasa a la app —');
+{
+  // ESTO ES LO QUE SE ESCAPÓ. Con la 0073 aplicada en producción y la
+  // app ya desplegada, buscar «cerveza» seguía dando 16 kcal. El dato
+  // estaba en la tabla y el diario sabía sumarlo, pero entre los dos
+  // va `buscar_catalogo()`, que devuelve una lista FIJA de columnas y
+  // no incluía el alcohol. A la app le llegaba `undefined`, su `|| 0`
+  // lo hacía cero y nadie se enteraba.
+  //
+  // Las dos comprobaciones de arriba pasaban en verde mientras la
+  // pantalla mentía, porque probaban los dos extremos y no el tubo.
+  const r = await db.query(`select * from public.buscar_catalogo('cerveza', 5)`);
+  const fila = r.rows.find((x) => x.nombre === 'Cerveza');
+  check('la búsqueda encuentra la cerveza', !!fila);
+  check('y la devuelve con su alcohol', fila && Number(fila.alcohol) === 3.9,
+    'alcohol: ' + (fila || {}).alcohol + '. Si sale undefined, la función ' +
+    'no lo devuelve y la app lo convierte en cero');
+
+  const cal = fila && (Number(fila.proteina) * 4 + Number(fila.carbos) * 4 +
+                       Number(fila.grasas) * 9 + Number(fila.alcohol) * 7);
+  check('y con lo que devuelve salen las calorías de verdad',
+    fila && Math.abs(cal - Number(fila.kcal)) <= 1,
+    'con lo devuelto salen ' + cal + ' y USDA dice ' + (fila || {}).kcal);
+
+  // Y AHORA LO GENERAL, QUE ES LO QUE EVITA EL PRÓXIMO. La app lee la
+  // fila del catálogo por nombre de propiedad. Cualquiera que la
+  // función no devuelva llega como `undefined` —sin error, sin aviso—
+  // así que se comprueban TODAS contra lo que la función devuelve de
+  // verdad, no contra una lista escrita a mano aquí.
+  const APP = join(AQUI, '..', '..', 'docs', 'app.js');
+  const src = readFileSync(APP, 'utf8').replace(/\r\n/g, '\n');
+  const desde = src.indexOf('var cat = (r[0]');
+  const hasta = src.indexOf('var gente = (r[1]', desde);
+  check('se localiza el trozo que mapea el catálogo', desde > 0 && hasta > desde);
+
+  // Sin comentarios: ya hubo comprobaciones que pasaban por encontrar
+  // lo que buscaban dentro de un comentario recién escrito.
+  const bloque = src.slice(desde, hasta)
+    .split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n');
+  const leidas = [...new Set((bloque.match(/\bx\.[a-z_]+/g) || [])
+    .map((s) => s.slice(2)))];
+  const devueltas = r.fields.map((f) => f.name);
+  check('la app lee varias columnas de la fila', leidas.length >= 5,
+    'encontradas: ' + leidas.join(', '));
+
+  const huerfanas = leidas.filter((p) => devueltas.indexOf(p) < 0);
+  check('y la función devuelve todas las que lee', huerfanas.length === 0,
+    'la app lee ' + huerfanas.join(', ') + ' y buscar_catalogo() no lo' +
+    (huerfanas.length === 1 ? '' : 's') + ' devuelve: llegará undefined');
+}
+
 console.log('\n' + ok + ' pasan · ' + mal + ' fallan');
 process.exit(mal ? 1 : 0);
