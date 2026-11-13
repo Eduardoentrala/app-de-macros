@@ -2359,7 +2359,22 @@
   var EVENTOS = {};
 
   var iso = isoDe;
-  function calDe(m){ return m.P*4 + m.C*4 + m.G*9; }
+  // EL ALCOHOL ES EL CUARTO MACRO, Y HASTA HOY NO EXISTÍA.
+  //
+  //  Tiene 7 kcal por gramo y no es proteína, ni carbohidrato, ni
+  //  grasa. Como aquí solo se sumaban esos tres, una cerveza entraba
+  //  al anillo como 16 kcal por 100 g cuando son 43: un tarro de 355
+  //  ml se apuntaba en 58 calorías en vez de 153.
+  //
+  //  No es solo el número de la pantalla. `gastoMedido()` calcula su
+  //  gasto real cruzando lo que come con cómo se mueve su peso, así
+  //  que comer más de lo apuntado le bajaba el gasto medido, y con él
+  //  las calorías que le pone el cierre de los lunes.
+  //
+  //  `|| 0` en todas partes: lo que no traiga alcohol cuenta como
+  //  antes. Así, cualquier sitio donde se me haya pasado pasarlo sigue
+  //  dando el número de siempre en vez de romperse.
+  function calDe(m){ return m.P*4 + m.C*4 + m.G*9 + (m.A || 0)*7; }
 
   // El "ancla" es el lunes de esta semana: el día 1. Se recalcula sola cada
   // vez que se abre la app, así que al llegar el lunes la semana se reinicia
@@ -3581,7 +3596,7 @@
   var COMIDAS = { Desayuno: [], Comida: [], Cena: [] };
   var comidaActual = 'Desayuno';
 
-  function calAlim(a){ return a.P*4 + a.C*4 + a.G*9; }
+  function calAlim(a){ return a.P*4 + a.C*4 + a.G*9 + (a.A || 0)*7; }
   function un(x){ return (Math.round(x*10)/10); }
   function lineaMacros(a){
     return 'P ' + un(a.P) + 'g · C ' + un(a.C) + 'g · G ' + un(a.G) + 'g · ' +
@@ -3622,7 +3637,7 @@
       // Al venir de la base de datos ya trae cantidad y macros consumidos,
       // así que la porción base se deduce dividiendo.
       var f = (a.cant / a.base) || 1;
-      a.porBase = { P: a.P / f, C: a.C / f, G: a.G / f };
+      a.porBase = { P: a.P / f, C: a.C / f, G: a.G / f, A: (a.A || 0) / f };
     }
     return a;
   }
@@ -3633,6 +3648,10 @@
     a.P = Math.round(a.porBase.P * f * 10) / 10;
     a.C = Math.round(a.porBase.C * f * 10) / 10;
     a.G = Math.round(a.porBase.G * f * 10) / 10;
+    // SI NO ESCALA, NO SIRVE DE NADA. Los macros del catálogo son por
+    // 100 g; sin esta línea, medio litro de cerveza contaría el alcohol
+    // de cien mililitros.
+    a.A = Math.round((a.porBase.A || 0) * f * 10) / 10;
   }
 
   // En la comida interesa primero cuánto y cuántas calorías; los macros van
@@ -3752,7 +3771,7 @@
     if(!sesion || !sesion.user) return Promise.resolve();
 
     return sbFetch('/rest/v1/diary_entries' +
-        '?select=id,meal,food_name,unit,quantity,protein_g,carbs_g,fat_g' +
+        '?select=id,meal,food_name,unit,quantity,protein_g,carbs_g,fat_g,alcohol_g' +
         '&user_id=eq.' + sesion.user.id +
         '&entry_date=eq.' + isoDe(fecha) + '&order=created_at.asc')
       .then(function(filas){
@@ -3768,7 +3787,8 @@
             id: f.id, n: f.food_name, u: unidad, cant: cantidad,
             P: Number(f.protein_g) || 0,
             C: Number(f.carbs_g)   || 0,
-            G: Number(f.fat_g)     || 0
+            G: Number(f.fat_g)     || 0,
+            A: Number(f.alcohol_g) || 0
           }));
         });
         pintarComida();
@@ -4152,13 +4172,14 @@
     if(!a.id || !sesion) return;
 
     // Si su alta sigue en la cola, se cambia ahí y no hay nada que mandar.
-    if(retocarEnCola(a.id, { quantity: a.cant, protein_g: a.P,
+    if(retocarEnCola(a.id, { quantity: a.cant, alcohol_g: a.A || 0, protein_g: a.P,
                              carbs_g: a.C, fat_g: a.G })) return;
 
     {
       sbFetch('/rest/v1/diary_entries?id=eq.' + a.id, {
         method:'PATCH', headers:{ 'Prefer':'return=minimal' },
-        body: JSON.stringify({ quantity: a.cant, protein_g: a.P, carbs_g: a.C, fat_g: a.G })
+        body: JSON.stringify({ quantity: a.cant, protein_g: a.P, carbs_g: a.C,
+                               fat_g: a.G, alcohol_g: a.A || 0 })
       })['catch'](function(e){
         sumarAlRegistro(a, -1);
         a.cant = antes.cant; a.P = antes.P; a.C = antes.C; a.G = antes.G;
@@ -4872,7 +4893,11 @@
       var cat = (r[0] || []).map(function(x){
         var P = Number(x.proteina) || 0,
             C = Number(x.carbos)   || 0,
-            G = Number(x.grasas)   || 0;
+            G = Number(x.grasas)   || 0,
+            // EL CUARTO MACRO. 7 kcal por gramo, y no es ninguno de los
+            // tres de arriba. Sin esto una cerveza entra al anillo como
+            // 16 kcal por 100 g cuando son 43.
+            A = Number(x.alcohol)  || 0;
         // La unidad la dice la fila, no se deduce del dato. Antes se
         // asumía "si hay pieza_g, es una pieza", y eso valía mientras la
         // pieza fuese la única forma de contar que no era gramos. Desde que
@@ -4895,7 +4920,7 @@
         if(uni !== 'Gramos' && x.macros_por === 'unidad'){
           return { fuente:'catalogo', delaApp: x.de_la_app !== false,
                    n:x.nombre, estado:x.estado,
-                   u:uni, cant:1, P:P, C:C, G:G };
+                   u:uni, cant:1, P:P, C:C, G:G, A:A };
         }
 
         // Y lo de siempre: por 100 g, convertidos con el peso de una unidad.
@@ -4903,7 +4928,7 @@
           var por = function(v){ return Math.round(v * pz / 100 * 10) / 10; };
           return { fuente:'catalogo', delaApp: x.de_la_app !== false,
                    n:x.nombre, estado:x.estado,
-                   u:uni, cant:1, P:por(P), C:por(C), G:por(G) };
+                   u:uni, cant:1, P:por(P), C:por(C), G:por(G), A:por(A) };
         }
         // `!== false` y no `=== true`: si la base todavía no tiene la
         // 0070, la columna llega `undefined` y entonces todo el catálogo
@@ -4911,7 +4936,7 @@
         // Un despliegue a medias no debe reetiquetar los alimentos.
         return { fuente:'catalogo', delaApp: x.de_la_app !== false,
                  n:x.nombre, estado:x.estado,
-                 u:'Gramos', cant:100, P:P, C:C, G:G };
+                 u:'Gramos', cant:100, P:P, C:C, G:G, A:A };
       });
 
       var gente = (r[1] || []).map(function(x){
@@ -6177,10 +6202,11 @@
   function sumarAlRegistro(a, signo){
     var k = isoDe(diaDeApunte());
     var r = REGISTRO[k];
-    if(!r){ r = REGISTRO[k] = {P:0, C:0, G:0}; }
+    if(!r){ r = REGISTRO[k] = {P:0, C:0, G:0, A:0}; }
     r.P = Math.max(0, r.P + signo * a.P);
     r.C = Math.max(0, r.C + signo * a.C);
     r.G = Math.max(0, r.G + signo * a.G);
+    r.A = Math.max(0, (r.A || 0) + signo * (a.A || 0));
 
     // Que el día tenga registro es lo que sostiene la racha y lo que hace
     // que cuente para el reparto de la semana. Así que se borra cuando no
@@ -11981,7 +12007,7 @@
 
   function sbDiario(desde){
     return sbFetch('/rest/v1/diary_entries' +
-      '?select=id,entry_date,meal,food_name,unit,quantity,protein_g,carbs_g,fat_g' +
+      '?select=id,entry_date,meal,food_name,unit,quantity,protein_g,carbs_g,fat_g,alcohol_g' +
       '&user_id=eq.' + sesion.user.id +
       '&entry_date=gte.' + desde + '&order=created_at.asc');
   }
@@ -12006,6 +12032,10 @@
       quantity: a.cant || 1,
       unit: a.u || 'Gramos',
       protein_g: a.P, carbs_g: a.C, fat_g: a.G,
+      // El cuarto macro. Casi siempre cero, y por eso la columna tiene
+      // `default 0`: lo que se apuntó antes de que esto existiera sigue
+      // contando igual que siempre.
+      alcohol_g: a.A || 0,
       created_at: new Date().toISOString()
     };
     var op = {
@@ -12179,10 +12209,11 @@
     }).forEach(function(f){
       var P = Number(f.protein_g) || 0,
           C = Number(f.carbs_g)   || 0,
-          G = Number(f.fat_g)     || 0;
+          G = Number(f.fat_g)     || 0,
+          A = Number(f.alcohol_g) || 0;
 
-      var r = REGISTRO[f.entry_date] || (REGISTRO[f.entry_date] = {P:0, C:0, G:0});
-      r.P += P; r.C += C; r.G += G;
+      var r = REGISTRO[f.entry_date] || (REGISTRO[f.entry_date] = {P:0, C:0, G:0, A:0});
+      r.P += P; r.C += C; r.G += G; r.A = (r.A || 0) + A;
 
       // La base admite 'Snack', que el Diario todavía no muestra: se
       // suma al día pero no se lista, en vez de reventar.
