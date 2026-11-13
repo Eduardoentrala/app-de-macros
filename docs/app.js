@@ -3661,7 +3661,16 @@
     var aReceta = document.getElementById('mealAReceta');
     if(aReceta) aReceta.hidden = !lista.length;
 
-    // ESTA LISTA NO SE PRESENTABA, Y LAS DE ARRIBA SÍ.
+    // AQUÍ HUBO UN RÓTULO Y SE QUITÓ PORQUE NO LO QUERÍA.
+    //
+    // Decía «Ya en tu desayuno · 2 alimentos». Nació de que esta lista
+    // —lo que llevas apuntado— se leía como una base de datos más, por
+    // ir pegada a los resultados y sin presentarse. Pero el problema de
+    // verdad era ESO, estar pegada, y ya está resuelto de otra forma:
+    // buscando, esta lista no se enseña. Sin búsqueda es lo único que
+    // hay en pantalla y no necesita que nadie la presente.
+    //
+    // Lo de antes, para que no vuelva a ponerse:
     //
     // En esta pantalla hay dos listas pegadas: los resultados de buscar
     // —que llevan su franja: «Tus recetas», «Tus guardados», «Base de
@@ -3677,12 +3686,7 @@
     //
     // Dice la comida por su nombre —«Ya en tu desayuno»— porque desde
     // aquí se apunta en una comida concreta y conviene recordar en cuál.
-    var franja = '<div class="sug-franja ya-apuntado">Ya en tu ' +
-      escapar(String(comidaActual || '').toLowerCase()) +
-      '<small>' + lista.length +
-      (lista.length === 1 ? ' alimento' : ' alimentos') + '</small></div>';
-
-    cont.innerHTML = lista.length ? franja + '<div class="food-list">' + lista.map(function(a, i){
+    cont.innerHTML = lista.length ? '<div class="food-list">' + lista.map(function(a, i){
       prepararAlimento(a);
       return '<div class="food-card"><div class="fc-main"><div class="fc-name">'+escapar(a.n)+'</div>'+
         '<div class="fc-sub">'+lineaComida(a)+'</div></div>'+
@@ -4931,13 +4935,29 @@
                  P:Number(a.P)||0, C:Number(a.C)||0, G:Number(a.G)||0 };
       });
 
-      // Lo suyo manda: si ya lo tiene guardado, no se repite abajo.
+      // EL DEL CATÁLOGO YA NO SE ESCONDE DETRÁS DEL TUYO.
+      //
+      // Había una regla —«lo suyo manda: si ya lo tiene guardado, no se
+      // repite abajo»— que quitaba del catálogo cualquier alimento cuyo
+      // nombre coincidiera con uno guardado. Tenía sentido cuando todo
+      // salía en una sola lista: el mismo nombre dos veces parecía un
+      // fallo.
+      //
+      // Ya no. Desde que hay dos franjas con su rótulo —«Base de datos
+      // de la app» y «Tus alimentos»— ver los dos no es repetir: es la
+      // información. Él tiene su «Bolillo» guardado, de 148 kcal la
+      // pieza, el de su panadería; y la app tiene el suyo, de 293 por
+      // 100 g, medido. Son dos panes distintos y la regla hacía
+      // desaparecer el segundo sin decir nada.
+      //
+      // Para lo de OTRAS PERSONAS sí se queda: una estimación ajena que
+      // se llama igual que algo tuyo o que algo medido no añade nada.
       var noRepetido = function(x){
         return !mios.some(function(m){
           return normalizarBusqueda(m.n) === normalizarBusqueda(x.n); });
       };
 
-      SUGERIDOS = mios.concat(cat.filter(noRepetido), gente.filter(noRepetido));
+      SUGERIDOS = mios.concat(cat, gente.filter(noRepetido));
       pintarSugerencias(SUGERIDOS, texto, sinRed);
     });
   }
