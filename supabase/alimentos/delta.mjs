@@ -91,7 +91,14 @@ on conflict (alimento_id, termino) do nothing;
 -- ---------------------------------------------------------------------
 --  Comprobaciones
 -- ---------------------------------------------------------------------
--- Cuántos hay ahora (debe dar 224):
+-- Cuántos ingredientes hay ahora (debe dar ${filasDe(nuevo).length}):
+--
+--   Este número se calcula al generar, no se escribe a mano. Llegó a
+--   decir 224 cuando eran 222, porque se quitaron dos alimentos de la
+--   lista DESPUÉS de generar el comentario. Un número de comprobación
+--   que no cuadra enseña a desconfiar de la comprobación.
+--
+--   Cuenta solo los ingredientes: los platillos de la 0069 suman aparte.
 --   select count(*) from public.alimentos_catalogo;
 --
 -- Que ninguno tenga macros imposibles (debe dar 0 filas):
