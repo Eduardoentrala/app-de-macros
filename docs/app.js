@@ -2698,12 +2698,23 @@
     { t:'ia_uso',                 por:'user_id' },
     { t:'avisos_coach',           por:'user_id' },
     { t:'ajustes_calorias',       por:'cliente_id' },
-    { t:'analisis_cliente',       por:'cliente_id' },
     { t:'plan_inscritos',         por:'cliente_id' },
     { t:'coach_clientes',         por:'cliente_id' }
   ];
 
   //  LO QUE NO ENTRA, y por qué, para que no parezca un olvido:
+  //
+  //   · `analisis_cliente` ESTABA EN LA LISTA Y NO PODIA SALIR NUNCA. Es
+  //     lo que la IA escribe SOBRE una persona para su entrenador, y la
+  //     0042 le prohíbe expresamente al propio cliente leerlo: su política
+  //     de lectura empieza por `cliente_id <> auth.uid()`. O sea que esta
+  //     consulta devolvía `[]` siempre —RLS no da error, da cero filas— y
+  //     el archivo decía `analisis_cliente: []`, que quien lo abre lee
+  //     como «no hay nada escrito sobre mí». Puede haberlo.
+  //
+  //     Pedirla y que vuelva vacía es peor que no pedirla: una promesa que
+  //     se cumple con un hueco. Así que sale de aquí y se dice en el propio
+  //     archivo, en `no_incluye`, que existe y cómo conseguirlo.
   //
   //   · `auditoria` y `errores` son registro técnico, no datos de nadie —y
   //     los errores ni siquiera los puede leer: son del super admin.
@@ -2718,7 +2729,7 @@
   //     nadie escribe, y atar la guarda de la 0034 —que se niega a borrar
   //     lo que la app todavía usa— a una referencia que no significa nada.
   //     La cazó `tablas-muertas`, que existe exactamente para esto.
-  var NO_SON_MIOS = ['auditoria', 'errores', 'ia_gasto'];
+  var NO_SON_MIOS = ['auditoria', 'errores', 'ia_gasto', 'analisis_cliente'];
 
   //  DE MIL EN MIL. PostgREST corta en mil filas y no avisa: un diario de
   //  año y medio son más de mil apuntes, y sin paginar la exportación se
@@ -2765,6 +2776,14 @@
         borrado: 'Lo que borraste no va aquí. En esta app borrar archiva: ' +
                  'se esconde al momento y se elimina de verdad a los seis ' +
                  'meses. Este archivo lleva lo que sigue vivo.',
+        // NO SE CALLA PORQUE NO SE PUEDA LEER. Es lo único que la app
+        // guarda SOBRE alguien en vez de PARA alguien, y omitirlo sin
+        // más dejaría el archivo diciendo que no existe.
+        analisis_del_entrenador:
+                 'Si tienes entrenador, puede haber un análisis que la IA ' +
+                 'escribió sobre tu progreso para él. No va aquí: son sus ' +
+                 'notas de trabajo y la base no deja que las leas tú. Si ' +
+                 'lo quieres, pídeselo a él.',
         tablas: NO_SON_MIOS
       },
       tablas: {}
@@ -4314,7 +4333,20 @@
             '<div class="fc-main"><div class="fc-name">'+escapar(r.n)+'</div>'+
             '<div class="fc-sub">'+((r.ing||[]).length ? (r.ing.length +
               ((r.ing.length === 1) ? ' alimento · ' : ' alimentos · ')) : '')+
-              r.cal+' kcal · '+r.vis+'</div></div>'+
+              // AQUI DECIA «privada», EN TODAS Y PARA SIEMPRE.
+              //
+              // Venia de `recipes.is_public`, que nace en `false` y no hay
+              // nada en la app que lo cambie: ni un interruptor, ni una
+              // pantalla, ni una linea que lo escriba. Y ninguna politica
+              // de la base lo mira, asi que aunque alguien lo pusiera a
+              // `true` a mano la receta NO se compartiria con nadie: solo
+              // cambiaria la palabra.
+              //
+              // O sea que la etiqueta no informaba de nada —siempre la
+              // misma— y ademas prometia una eleccion que no existe. Si
+              // algun dia se pueden compartir recetas, esto vuelve; hasta
+              // entonces, menos letra y ninguna promesa.
+              r.cal+' kcal</div></div>'+
             '<span style="color:var(--ink-faint)">›</span></div>';
         }).join('')
       : vacio(!!qRec, escritoRec,
@@ -4470,7 +4502,7 @@
     }).then(function(r){
       var creada = (r && r[0]) || {};
       RECETAS.unshift({
-        id: creada.id, n: fila.name, ing: ing, vis: 'privada',
+        id: creada.id, n: fila.name, ing: ing,
         cal: Math.round(fila.protein_g * 4 + fila.carbs_g * 4 + fila.fat_g * 9)
       });
       if(typeof guardarDespensa === 'function') guardarDespensa();
@@ -12111,7 +12143,7 @@
   function sbRecetas(){
     // `ingredients` hace falta para poder APUNTARLA otra vez. Sin eso la
     // receta es un nombre y un numero: se ve en la lista y no sirve.
-    return sbFetch('/rest/v1/recipes?select=id,name,servings,calories,is_public,ingredients' +
+    return sbFetch('/rest/v1/recipes?select=id,name,servings,calories,ingredients' +
                    '&user_id=eq.' + sesion.user.id +
                    '&order=created_at.desc');
   }
@@ -12548,8 +12580,7 @@
           var porciones = Math.max(1, Number(r.servings) || 1);
           RECETAS.push({ id:r.id, n:r.name,
                          cal: Math.round((Number(r.calories)||0) / porciones),
-                         ing: Array.isArray(r.ingredients) ? r.ingredients : [],
-                         vis: r.is_public ? 'pública' : 'privada' });
+                         ing: Array.isArray(r.ingredients) ? r.ingredients : [] });
         });
         pintarListas();
         // Copia al teléfono, para poder abrir la app sin señal y seguir

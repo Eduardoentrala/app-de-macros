@@ -14,7 +14,7 @@
 // se vuelve a apuntar desde el buscador de esa misma comida —donde ya se
 // sabe si es desayuno o cena, sin preguntar nada—.
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -115,7 +115,12 @@ console.log('\nY lo que se manda cabe en la columna');
 // ------------------------------------------------------------------
 console.log('\nY se vuelve a apuntar de un toque');
 {
-  ok(/select=id,name,servings,calories,is_public,ingredients/.test(APP),
+  // LA LISTA ENTERA NO, SOLO LO QUE ESTA PRUEBA DEFIENDE. Antes fijaba
+  // `select=id,name,servings,calories,is_public,ingredients` tal cual, y
+  // quitar una columna muerta —`is_public`, que no se usaba para nada—
+  // ponía en rojo una comprobación que habla de los ingredientes. Una
+  // prueba que se rompe por algo que no es lo suyo enseña a ignorarla.
+  ok(/\/rest\/v1\/recipes\?select=[^']*\bingredients\b/.test(APP),
      'los ingredientes se traen del servidor',
      'sin ellos la receta es un nombre y un número: se ve y no sirve');
   ok(/ing: Array\.isArray\(r\.ingredients\) \? r\.ingredients : \[\]/.test(APP),
@@ -263,6 +268,39 @@ console.log('\nY el botón que no hacía nada ya no está');
   ok(/Las recetas se guardan desde una comida/.test(HTML),
      'y en su lugar se dice de dónde salen',
      'quitar el botón sin explicar deja la misma pregunta sin el botón');
+}
+
+console.log('\nY la etiqueta que siempre decía lo mismo, tampoco');
+{
+  // Cada receta terminaba en «· privada». En todas, siempre, sin forma de
+  // que dijera otra cosa: `recipes.is_public` nace en `false` y no hay una
+  // sola escritura en la app que lo cambie.
+  //
+  // Y lo de verdad grave es lo otro: NINGUNA POLÍTICA DE LA BASE LA MIRA.
+  // Poniéndola a `true` a mano la receta seguiría sin verla nadie — solo
+  // cambiaría la palabra de la tarjeta. O sea que la etiqueta no describía
+  // un estado: describía una intención que nunca se programó.
+  const codigo = APP.replace(/^\s*\/\/.*$/gm, '');
+  ok(!/is_public/.test(codigo),
+     'la app ya no toca `is_public` en ninguna parte',
+     'sigue en: ' + (codigo.match(/.*is_public.*/g) || []).join(' | '));
+  ok(!/kcal · '\+r\.vis/.test(codigo) && !/vis:/.test(codigo),
+     'y la tarjeta de receta no dice si es pública o privada',
+     'una etiqueta que siempre dice lo mismo no informa, y prometía una ' +
+     'elección que no existe');
+
+  // La razón, comprobada y no afirmada: si algún día una política usa la
+  // columna, esto se pone rojo y habrá que decidir de nuevo — que es
+  // justo cuando la etiqueta tendría sentido otra vez.
+  const sqls = readdirSync(join(RAIZ, 'supabase', 'migrations'))
+    .filter((f) => f.endsWith('.sql'))
+    .map((f) => readFileSync(join(RAIZ, 'supabase', 'migrations', f), 'utf8'))
+    .join('\n').replace(/^\s*--.*$/gm, '');
+  const usos = (sqls.match(/is_public/g) || []).length;
+  ok(usos === 1,
+     'y en la base la columna solo se declara, no se usa en ninguna regla',
+     'aparece ' + usos + ' veces: si una política ya la mira, compartir ' +
+     'recetas existe de verdad y la etiqueta vuelve a tener sentido');
 }
 
 console.log('\n' + pasan + ' bien, ' + fallan + ' mal');

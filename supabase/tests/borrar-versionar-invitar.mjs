@@ -283,16 +283,42 @@ console.log('\n— Y lo que se exporta se puede leer de verdad —');
     'devolvió ' + suyas.length + ' filas. Si esto cambia, cambió la ' +
     'política y hay que revisar la decisión de abajo');
 
-  // ASÍ QUE LA EXPORTACIÓN LA PIDE PARA NADA. No se cambia aquí —si las
-  // notas del entrenador deben poder descargarse es una decisión suya, no
-  // de una prueba—, pero queda escrito que hoy esa línea del fichero sale
-  // vacía siempre, diga lo que diga la base.
+  // Y LA EXPORTACIÓN YA NO LA PIDE. Aquí estuvo escrito que sí, como
+  // deuda apuntada: la descarga recorría esta tabla y se traía `[]`
+  // siempre, y el fichero decía `analisis_cliente: []`, que se lee como
+  // «no hay nada escrito sobre mí».
+  //
+  // Se decidió no abrir la política —son notas de trabajo del entrenador
+  // y enseñárselas al cliente cambiaría lo que la IA puede escribir— sino
+  // dejar de prometer lo que no se puede cumplir: sale de la lista, entra
+  // en la de exclusiones a propósito, y el propio fichero dice que existe
+  // y que se le pida a él.
   const APP = readFileSync(join(AQUI, '..', '..', 'docs', 'app.js'), 'utf8');
   const i = APP.indexOf('var TABLAS_MIAS');
   const enLaLista = APP.slice(i, APP.indexOf('];', i)).includes("'analisis_cliente'");
-  check('y sigue estando en la lista de la descarga (queda dicho)', enLaLista,
-    'si se quitó, bien: entonces hay que borrar esta comprobación y su ' +
-    'explicación, porque ya no describe nada');
+  check('y la descarga ya no la pide', !enLaLista,
+    'volvió a la lista: PostgREST devolverá `[]` y el fichero dirá que no ' +
+    'hay nada escrito sobre esa persona');
+
+  // La otra mitad, y es la que importa: haberla quitado solo vale si el
+  // fichero lo cuenta. Si no, se pasó de mentir con un hueco a callar.
+  //
+  // CONTANDO LLAVES Y NO UNA VENTANA DE N CARACTERES. El primer intento
+  // miraba los 1.800 caracteres siguientes a `no_incluye` y daba rojo con
+  // el aviso puesto: entre medias hay comentarios largos que explican lo
+  // de las fotos y lo borrado. Una ventana fija mide el comentario, no el
+  // código.
+  const limpio = APP.replace(/^\s*\/\/.*$/gm, '');
+  const j = limpio.indexOf('no_incluye: {');
+  let prof = 0, fin = j;
+  for (let k = limpio.indexOf('{', j); k < limpio.length; k++) {
+    if (limpio[k] === '{') prof++;
+    else if (limpio[k] === '}') { prof--; if (!prof) { fin = k; break; } }
+  }
+  const bloque = limpio.slice(j, fin + 1);
+  check('y el fichero dice que existe',
+    j > 0 && /\banalisis_del_entrenador\s*:/.test(bloque),
+    'sin el aviso, quitarla es esconderla mejor');
 }
 
 console.log('\n' + ok + ' pasan · ' + mal + ' fallan');

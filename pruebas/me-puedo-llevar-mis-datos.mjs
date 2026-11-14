@@ -181,6 +181,28 @@ console.log('\nY lo que falte se dice DENTRO del archivo');
   ok(/exportado_en/.test(e) && /version_app/.test(e),
      'con la fecha y la versión de la app',
      'un archivo sin fecha no se sabe si es el bueno o el de hace un año');
+
+  // Y EL ANÁLISIS DEL ENTRENADOR, QUE ES EL CASO MÁS FEO DE TODOS.
+  //
+  // `analisis_cliente` estuvo en la lista de lo que se descarga y NO PODÍA
+  // SALIR NUNCA: la 0042 le prohíbe al propio cliente leer lo que se
+  // escribió sobre él —su política empieza por `cliente_id <> auth.uid()`—.
+  // RLS no da error, da cero filas, así que el archivo decía
+  // `analisis_cliente: []` y quien lo abría leía «no hay nada escrito
+  // sobre mí». Puede haberlo.
+  //
+  // Pedirla y que vuelva vacía es peor que no pedirla.
+  ok(!TABLAS.some((x) => x.t === 'analisis_cliente'),
+     'no se pide una tabla que RLS nunca va a dejar leer',
+     'devuelve `[]` siempre, y un hueco silencioso se lee como un cero');
+  ok(FUERA.includes('analisis_cliente'),
+     'y está excluida a propósito, no olvidada');
+  // CON LOS DOS PUNTOS. Sin ellos, renombrar la clave a
+  // `analisis_del_entrenador_x` dejaba la comprobación en verde con el
+  // aviso ya fuera del archivo. Lo cazó la mutación.
+  ok(/\banalisis_del_entrenador\s*:/.test(e) && /pídeselo a él/.test(e),
+     'y el archivo dice que existe y cómo conseguirlo',
+     'omitirlo sin más deja el archivo afirmando que no hay nada');
 }
 
 // ------------------------------------------------------------------
