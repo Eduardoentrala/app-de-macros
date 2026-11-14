@@ -2392,7 +2392,7 @@
     var d = new Date(ancla);
     while(d <= HOY){
       var reg = REGISTRO[iso(d)];
-      if(reg){ tot.P += reg.P; tot.C += reg.C; tot.G += reg.G; }
+      if(reg){ tot.P += reg.P; tot.C += reg.C; tot.G += reg.G; tot.A += (reg.A||0); }
       d.setDate(d.getDate() + 1);
     }
     var dias = Math.round((HOY - ancla) / 86400000) + 1;
@@ -3230,12 +3230,12 @@
     // Sin piso mínimo: si te pasaste, el número queda bajo (o negativo) y así se muestra.
     var s = sumaSemana();
     var diasRestantes = Math.max(1, 8 - s.dia);      // en el día 7 queda 1: todo el saldo de golpe
-    var antes = {P:0, C:0, G:0};
+    var antes = {P:0, C:0, G:0, A:0};
     var diasUsados = 0;                              // días ya pasados CON registro
     var dd = new Date(anclaSemana);
     while(dd < HOY){
       var reg = REGISTRO[iso(dd)];
-      if(reg){ antes.P += reg.P; antes.C += reg.C; antes.G += reg.G; diasUsados++; }
+      if(reg){ antes.P += reg.P; antes.C += reg.C; antes.G += reg.G; antes.A += (reg.A||0); diasUsados++; }
       dd.setDate(dd.getDate() + 1);
     }
 
@@ -3666,7 +3666,7 @@
   function pintarFilasComidas(){
     Array.from(document.querySelectorAll('[data-cal]')).forEach(function(el){
       var t = (COMIDAS[el.dataset.cal] || []).reduce(function(s,a){
-        s.P+=a.P; s.C+=a.C; s.G+=a.G; return s; }, {P:0,C:0,G:0});
+        s.P+=a.P; s.C+=a.C; s.G+=a.G; s.A+=(a.A||0); return s; }, {P:0,C:0,G:0,A:0});
       el.textContent = mil(Math.round(calAlim(t))) + ' cal ›';
     });
   }
@@ -3720,7 +3720,31 @@
         '</div></div>';
     }).join('') + '</div>' : '';
 
-    var t = lista.reduce(function(s,a){ s.P+=a.P; s.C+=a.C; s.G+=a.G; return s; }, {P:0,C:0,G:0});
+    // Y AQUÍ SE DECIDE SI ESTA LISTA SE VE, QUE ES EL ÚNICO SITIO POR EL
+    // QUE PASAN TODOS LOS CAMINOS.
+    //
+    // Se esconde mientras hay búsqueda, para que no se lea como una base
+    // de datos más. Antes eso lo hacía `pintarSugerencias` al esconderla,
+    // y quien vaciara el buscador tenía que acordarse de volver a
+    // enseñarla. `limpiarBuscadoresDeAlimento()` no se acordaba: al
+    // apuntar un alimento el buscador se vaciaba, la lista se quedaba
+    // escondida, y las tres comidas parecían vacías hasta cerrar la app
+    // y volver a abrirla.
+    //
+    // Lo difícil de ver era que los totales seguían BIEN —«883 cal», los
+    // macros abajo, todo correcto— porque esos salen de los datos y los
+    // datos estaban. Lo único que faltaba era enseñarlos.
+    //
+    // Derivado del estado y no recordado: cualquier camino que repinte la
+    // comida la deja como toca, incluidos los que todavía no existen.
+    cont.hidden = !!(typeof mealSearch !== 'undefined' && mealSearch &&
+                     String(mealSearch.value || '').trim().length >= 2);
+
+    // La `A` es el alcohol. Sin ella el total de la comida se queda con
+    // las tres de siempre y una cerveza aquí vuelve a contar de menos,
+    // con el diario ya arreglado: el fallo se mudaría de sitio.
+    var t = lista.reduce(function(s,a){
+      s.P+=a.P; s.C+=a.C; s.G+=a.G; s.A+=(a.A||0); return s; }, {P:0,C:0,G:0,A:0});
     document.getElementById('tP').textContent = un(t.P).toFixed(1) + ' g';
     document.getElementById('tC').textContent = un(t.C).toFixed(1) + ' g';
     document.getElementById('tG').textContent = un(t.G).toFixed(1) + ' g';
@@ -4844,10 +4868,18 @@
     // leyó como «la mía, la que he escrito a mano». No lo era: era su
     // desayuno.
     //
-    // Se esconde mientras hay búsqueda. Y no se pierde nada, porque el
-    // buscador se vacía solo al registrar un alimento —lo hace
-    // `limpiarBuscadoresDeAlimento`—, así que en cuanto apuntas algo la
-    // lista vuelve, ya con lo nuevo dentro.
+    // Se esconde mientras hay búsqueda. VOLVER A ENSEÑARLA NO ES COSA
+    // DE AQUÍ, y donde dice esto llegó a haber un comentario afirmando
+    // que sí: «el buscador se vacía solo al registrar, así que la lista
+    // vuelve». No volvía. `limpiarBuscadoresDeAlimento()` vacía el
+    // buscador y no sabe nada de este `hidden`, así que al apuntar un
+    // alimento las tres comidas se quedaban en blanco hasta cerrar la
+    // app. Los totales seguían bien, que es lo que lo hacía raro de ver.
+    //
+    // Ahora quien decide si se ve es `pintarComida()`, mirando el
+    // buscador, porque por ahí pasan todos los caminos. Esconderla aquí
+    // es solo para mientras se teclea, que entonces no se repinta la
+    // comida.
     var apuntado = document.getElementById('mealList');
     if(apuntado) apuntado.hidden = true;
   }
