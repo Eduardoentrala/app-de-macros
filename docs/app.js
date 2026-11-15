@@ -3967,7 +3967,15 @@
     var a = alimentoEditando;
     var f = (Number(cantValor.value) || 0) / a.base;
     var P = a.porBase.P * f, C = a.porBase.C * f, G = a.porBase.G * f;
-    document.getElementById('cantCal').textContent = mil(P*4 + C*4 + G*9);
+    // EL ALCOHOL, QUE AQUI FALTABA Y SE VEIA. Un tequila decia «0 cal»
+    // con 200 g puestos, y medio litro de vino «54» en vez de 425. Esta
+    // es la pantalla donde se decide cuanto apuntar: el numero de la
+    // tarjeta estaba bien y el de aqui no, asi que la app se contradecia
+    // a si misma a un toque de distancia.
+    //
+    // No hay `porBase.A` en lo que no lleva: `|| 0` y cuenta como antes.
+    var A = (a.porBase.A || 0) * f;
+    document.getElementById('cantCal').textContent = mil(P*4 + C*4 + G*9 + A*7);
     // Con un decimal siempre, como la ficha de la comida: sin él, "6 g" y
     // "1.5 g" en la misma fila bailan de alto y se lee peor.
     document.getElementById('cantP').textContent = un(P).toFixed(1) + ' g';
@@ -4120,9 +4128,9 @@
       preguntar(
         'Ya lo tienes guardado',
         '«' + a.n + '» ya está en tus guardados con otros macros: ' +
-        mil(Math.round(yaEsta.P * 4 + yaEsta.C * 4 + yaEsta.G * 9)) + ' cal por ' +
+        mil(Math.round(calAlim(yaEsta))) + ' cal por ' +
         (UNIDAD_BASE[a.u || 'Gramos'] || '100g') + ', y este tiene ' +
-        mil(Math.round(nueva.P * 4 + nueva.C * 4 + nueva.G * 9)) +
+        mil(Math.round(calAlim(nueva))) +
         '. ¿Le cambio los macros a los de este?',
         'Sí, cambiarlos'
       ).then(function(cambiar){
@@ -4160,6 +4168,7 @@
         P: a.porBase ? a.porBase.P : a.P,
         C: a.porBase ? a.porBase.C : a.C,
         G: a.porBase ? a.porBase.G : a.G,
+        A: a.porBase ? (a.porBase.A || 0) : (a.A || 0),
         veces: 0
       });
       if(typeof pintarListas === 'function') pintarListas();
@@ -5406,7 +5415,7 @@
     var yaLoTiene = guardadoIgual(nombre, unidadActual);
     if(yaLoTiene){
       var cal = Math.round(P * 4 + C * 4 + G * 9);
-      var calAntes = Math.round(yaLoTiene.P * 4 + yaLoTiene.C * 4 + yaLoTiene.G * 9);
+      var calAntes = Math.round(calAlim(yaLoTiene));
       preguntar(
         'Ya lo tienes guardado',
         '«' + nombre + '» ya está en tus guardados por ' + (UNIDAD_BASE[unidadActual] || '100g') +
@@ -9512,7 +9521,7 @@
     // Justo la regresión silenciosa que la 0033 se cuidó de evitar.
     var q = '/rest/v1/alimentos_catalogo?select=id,nombre,categoria,estado,kcal,' +
             'proteina,carbos,grasas,porcion,porcion_g,fdc_id,nombre_usda,activo,' +
-            'unidad,pieza_g,macros_por' +
+            'unidad,pieza_g,macros_por,alcohol' +
             '&order=nombre.asc&limit=400';
     if(catFiltro.trim().length >= 2){
       q += '&nombre=ilike.*' + encodeURIComponent(catFiltro.trim()) + '*';
@@ -9578,7 +9587,13 @@
     var p = Number(document.getElementById('catP').value) || 0;
     var c = Number(document.getElementById('catC').value) || 0;
     var g = Number(document.getElementById('catG').value) || 0;
-    document.getElementById('catCal').textContent = Math.round(p*4 + c*4 + g*9) + ' cal';
+    // Y el alcohol de la fila, que aqui no se teclea pero si cuenta.
+    // Este numero es el que mira quien edita para ver si lo escrito
+    // tiene sentido: un tequila marcando 0 cal invita a «arreglarlo»
+    // metiendole grasa a mano, y ahi si se rompe de verdad.
+    var al = Number(catEditando && catEditando.alcohol) || 0;
+    document.getElementById('catCal').textContent =
+      Math.round(p*4 + c*4 + g*9 + al*7) + ' cal';
   }
   ['catP','catC','catG'].forEach(function(id){
     document.getElementById(id).addEventListener('input', calcularCalCatalogo);
@@ -9687,8 +9702,12 @@
     document.getElementById('catPreviewQue').textContent =
       UNIDAD_UNA[u].charAt(0).toUpperCase() + UNIDAD_UNA[u].slice(1) +
       (g > 0 ? ' (' + g + ' g)' : '');
+    // Con el alcohol que ya tenga la fila, para que la previa diga lo
+    // mismo que se va a guardar. Si no, un vino se previsualiza en 11 cal
+    // y se guarda en 85, y quien edita no entiende cual de los dos manda.
+    var A = Number(catEditando && catEditando.alcohol) || 0;
     document.getElementById('catPreviewCal').textContent =
-      mil(Math.round((P*4 + C*4 + G*9) * f)) + ' cal';
+      mil(Math.round((P*4 + C*4 + G*9 + A*7) * f)) + ' cal';
     document.getElementById('catPreviewDet').textContent =
       'P ' + Math.round(P*f*10)/10 + ' g · C ' + Math.round(C*f*10)/10 +
       ' g · G ' + Math.round(G*f*10)/10 + ' g';
@@ -9804,7 +9823,17 @@
     };
     // Las calorías no se piden: se calculan. Pedirlas invita a que un día
     // no cuadren con los macros de su propia fila.
-    cuerpo.kcal = Math.round((cuerpo.proteina*4 + cuerpo.carbos*4 + cuerpo.grasas*9) * 10) / 10;
+    //
+    // Y EL ALCOHOL DEL QUE YA LO TENGA, QUE SI NO SE BORRA SOLO. Este
+    // formulario no tiene campo para el alcohol —se pone desde las
+    // migraciones, con el dato de USDA—, pero las kcal se recalculan
+    // aqui con lo que hay en pantalla. Sin esta linea, abrir un tequila
+    // en el panel y darle a guardar sin tocar nada le dejaba las kcal en
+    // CERO: la columna `alcohol` seguia con sus 33,4 y las calorias
+    // decian 0. Guardar sin cambiar nada no puede romper una fila.
+    var alcoholYa = Number(catEditando && catEditando.alcohol) || 0;
+    cuerpo.kcal = Math.round((cuerpo.proteina*4 + cuerpo.carbos*4 + cuerpo.grasas*9 +
+                              alcoholYa*7) * 10) / 10;
 
     var p = catEditando
       ? sbFetch('/rest/v1/alimentos_catalogo?id=eq.' + catEditando.id, {
@@ -12177,7 +12206,7 @@
   // Los archivados no vuelven: la política de la 0007 ya los filtra en la
   // base, así que aquí no hay que acordarse de excluirlos.
   function sbAlimentos(){
-    return sbFetch('/rest/v1/saved_foods?select=id,name,unit,protein_g,carbs_g,fat_g,veces_usado' +
+    return sbFetch('/rest/v1/saved_foods?select=id,name,unit,protein_g,carbs_g,fat_g,alcohol_g,veces_usado' +
                    '&user_id=eq.' + sesion.user.id +
                    '&order=veces_usado.desc,name.asc');
   }
@@ -12204,7 +12233,11 @@
       // reutilizara. La otra ruta que guarda un alimento ya lo hacía bien.
       protein_g: a.porBase ? a.porBase.P : a.P,
       carbs_g:   a.porBase ? a.porBase.C : a.C,
-      fat_g:     a.porBase ? a.porBase.G : a.G
+      fat_g:     a.porBase ? a.porBase.G : a.G,
+      // `saved_foods.calories` tambien es generada y suma `alcohol_g*7`
+      // desde la 0073. Sin esto, guardar una cerveza en la despensa la
+      // devuelve sin alcohol cada vez que la reutilices.
+      alcohol_g: (a.porBase ? (a.porBase.A || 0) : (a.A || 0))
     };
     var op = {
       method:'POST', headers:{ 'Prefer':'return=representation' },
@@ -12609,6 +12642,7 @@
         alimentos.forEach(function(f){
           var a = { id:f.id, n:f.name, u:f.unit || 'Gramos',
                     P:Number(f.protein_g)||0, C:Number(f.carbs_g)||0, G:Number(f.fat_g)||0,
+                    A:Number(f.alcohol_g)||0,
                     veces:Number(f.veces_usado)||0 };
           MIS_ALIMENTOS.push(a);
         });
@@ -16225,13 +16259,15 @@
   }
 
   function macrosDeHoy(){
-    var r = REGISTRO[isoDe(HOY)] || {P:0, C:0, G:0};
+    var r = REGISTRO[isoDe(HOY)] || {P:0, C:0, G:0, A:0};
     var meta = leerMetas();
     return {
       meta_p: meta.P, meta_c: meta.C, meta_g: meta.G,
       meta_cal: Math.round(meta.P*4 + meta.C*4 + meta.G*9),
       hoy_p: Math.round(r.P), hoy_c: Math.round(r.C), hoy_g: Math.round(r.G),
-      hoy_cal: Math.round(r.P*4 + r.C*4 + r.G*9)
+      // Con el alcohol: el REGISTRO lo lleva desde la 0073 y sin esto el
+      // asistente vería un dia mas flojo del que fue.
+      hoy_cal: Math.round(r.P*4 + r.C*4 + r.G*9 + (r.A||0)*7)
     };
   }
 

@@ -57,12 +57,29 @@ console.log('\n— Toda lectura personal dice de quién —');
     // declaración y el envío se metieran unas líneas de comentario para que
     // la comprobación diera por «sin dueño» un POST que sí lo llevaba.
     // Seguir el nombre no depende de la distancia.
+    //
+    // Y SE SIGUEN DOS SALTOS, NO UNO. `sbGuardarAlimento` manda
+    // `sbFetch(ruta, op)` donde `op` lleva `body: JSON.stringify(fila)` y
+    // es `fila` la que tiene el `user_id`. Con un solo salto esto no
+    // llegaba, y pasaba de milagro: el `user_id` caía dentro de los 900
+    // caracteres de `antes`. Añadir cuatro líneas de comentario ahí
+    // dentro lo empujó fuera y la prueba dio por «sin dueño» un POST que
+    // siempre lo llevó. La distancia no es una propiedad del código.
+    const declaracionDe = (v) => {
+      const i = APP.lastIndexOf('var ' + v + ' = {', m.index);
+      return i < 0 ? '' : APP.slice(i, APP.indexOf('};', i));
+    };
     const porVariable = (() => {
-      const v = (trozo.match(/JSON\.stringify\((\w+)\)/) || [])[1];
-      if (!v) return false;
-      const decl = APP.lastIndexOf('var ' + v + ' = {', m.index);
-      if (decl < 0) return false;
-      return /user_id: sesion/.test(APP.slice(decl, APP.indexOf('};', decl)));
+      let cuerpo = trozo;
+      for (let salto = 0; salto < 3; salto++) {
+        if (/user_id: sesion/.test(cuerpo)) return true;
+        const v = (cuerpo.match(/JSON\.stringify\((\w+)\)/) ||
+                   cuerpo.match(/sbFetch\([^,]+,\s*(\w+)\s*\)/) || [])[1];
+        if (!v) return false;
+        cuerpo = declaracionDe(v);
+        if (!cuerpo) return false;
+      }
+      return false;
     })();
 
     const filtra =

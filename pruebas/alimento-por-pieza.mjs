@@ -113,7 +113,12 @@ console.log('\n— Se ve lo que va a ver quien lo apunte —');
   // el doble y el formulario parecería correcto: justo lo que esta previa
   // existe para evitar.
   check('lo lleva a UNA unidad', /var f = 1 \/ catCantidad\(\);/.test(fn));
-  check('enseña las calorías', /\(P\*4 \+ C\*4 \+ G\*9\) \* f/.test(fn));
+  // SIN FIJAR LA FORMULA ENTERA. Decia `\(P\*4 \+ C\*4 \+ G\*9\) \* f`
+  // y se puso roja al sumarle el alcohol, que es un cambio correcto:
+  // esta comprobacion habla de que la previa ENSEÑE las calorias por
+  // una unidad, no de con que macros se calculan. Lo que de verdad
+  // defiende es el `* f`.
+  check('enseña las calorías', /catPreviewCal/.test(fn) && /\* f\)/.test(fn));
   check('y los tres macros', /'P ' \+ Math\.round\(P\*f\*10\)\/10/.test(fn));
   check('diciendo cuánto pesa, cuando ese peso se sabe',
     /g > 0 \? ' \(' \+ g \+ ' g\)' : ''/.test(fn),
