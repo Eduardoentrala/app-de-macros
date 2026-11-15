@@ -113,13 +113,19 @@ const raros = (await db.query(
        or proteina + carbos + grasas > 105`)).rows;
 check('ninguna cifra es imposible', raros.length === 0, JSON.stringify(raros));
 
-// Las calorias deben cuadrar con los macros (4/4/9), con margen: USDA usa
-// factores especificos por alimento y la fibra cuenta distinto.
+// Las calorias deben cuadrar con los macros (4/4/9/7), con margen: USDA
+// usa factores especificos por alimento y la fibra cuenta distinto.
+//
+// EL 7 ES EL ALCOHOL Y HASTA LA 0073 NO ESTABA. Mientras el catalogo solo
+// tuvo cerveza, su descuadre cabia en el margen de tres que permite esta
+// comprobacion. Con el vino y los destilados de la 0075 ya no: un tequila
+// son 231 kcal y sus tres macros dan CERO. Sumarlo aqui no es relajar la
+// regla, es contar el cuarto macro que ahora existe.
 const descuadre = (await db.query(
-  `select nombre, kcal, round(proteina*4 + carbos*4 + grasas*9) calc
+  `select nombre, kcal, round(proteina*4 + carbos*4 + grasas*9 + alcohol*7) calc
      from public.alimentos_catalogo
     where kcal > 50
-      and abs(kcal - (proteina*4 + carbos*4 + grasas*9)) > kcal * 0.30`)).rows;
+      and abs(kcal - (proteina*4 + carbos*4 + grasas*9 + alcohol*7)) > kcal * 0.30`)).rows;
 check('las calorias cuadran con los macros', descuadre.length <= 3,
   JSON.stringify(descuadre.slice(0, 4)));
 

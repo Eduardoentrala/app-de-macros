@@ -18,6 +18,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { CATALOGO } from '../alimentos/curado.mjs';
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const MIG = join(AQUI, '..', 'migrations');
@@ -43,8 +44,18 @@ console.log('\n— Están todos y una sola vez —');
                               where composicion is null`);
   const { pla } = await uno(`select count(*)::int as pla from public.alimentos_catalogo
                               where composicion is not null`);
+  // EL NÚMERO SE CUENTA, NO SE ESCRIBE. Estaba a mano —223— y se quedó
+  // viejo en cuanto entraron las nueve bebidas de la 0075: la prueba se
+  // puso roja por su propia cifra, no por un fallo del catálogo. Ya pasó
+  // antes con el «debe dar 224» de la 0067, cuando eran 222.
+  //
+  // `curado.mjs` es de donde salen todos los ingredientes, así que es su
+  // longitud la que manda. Y si alguno no resolviera contra USDA, el
+  // catálogo tendría uno menos que la lista y esto lo cazaría — que es
+  // justo lo que una cifra a mano no puede hacer.
   check(`hay ${n} filas: ${ing} ingredientes y ${pla} platillos`,
-    ing === 223 && pla === 18, 'se esperaban 223 y 18');
+    ing === CATALOGO.length && pla === 18,
+    `se esperaban ${CATALOGO.length} (los de curado.mjs) y 18`);
 
   // La `unique (nombre, estado)` ya lo impide en la base, así que esto
   // vigila lo que la restricción NO ve: el mismo alimento metido dos
@@ -85,16 +96,23 @@ console.log('\n— Y los números tienen sentido —');
   // alcohol no están en estas cuatro columnas. Lo que caza un margen así
   // es una cifra puesta en la columna equivocada, que es el error que de
   // verdad pasa.
+  //
+  // Y EL ALCOHOL ENTRA EN LA CUENTA, QUE ES LO QUE CAMBIÓ. Esta consulta
+  // sumaba tres macros y tenía a la cerveza exenta con un `nombre <>`,
+  // porque sus 43 kcal no salían de ninguna de las tres. Con la 0073 el
+  // alcohol es un macro más y la cuenta cierra sola: la exención sobra, y
+  // mantenerla habría dejado pasar en silencio un vino o un tequila con
+  // el alcohol mal puesto.
   const descuadran = await todas(`
     select nombre, estado, kcal,
-           round(proteina*4 + carbos*4 + grasas*9) as por_macros
+           round(proteina*4 + carbos*4 + grasas*9 + alcohol*7) as por_macros
       from public.alimentos_catalogo
      where kcal >= 20
-       and nombre <> 'Cerveza'
-       and abs(kcal - (proteina*4 + carbos*4 + grasas*9)) > kcal * 0.30
-       and abs(kcal - (proteina*4 + carbos*4 + grasas*9)) > 25
-     order by abs(kcal - (proteina*4 + carbos*4 + grasas*9)) desc`);
-  // LA CERVEZA ESTÁ EXENTA Y ES UN PROBLEMA, no una excepción cómoda.
+       and abs(kcal - (proteina*4 + carbos*4 + grasas*9 + alcohol*7)) > kcal * 0.30
+       and abs(kcal - (proteina*4 + carbos*4 + grasas*9 + alcohol*7)) > 25
+     order by abs(kcal - (proteina*4 + carbos*4 + grasas*9 + alcohol*7)) desc`);
+  // AQUÍ ESTUVO ESCRITO POR QUÉ LA CERVEZA ESTABA EXENTA, y se deja la
+  // historia porque explica de dónde vienen tres migraciones:
   //
   // `diary_entries.calories` es una columna GENERADA: `protein_g*4 +
   // carbs_g*4 + fat_g*9`. El alcohol tiene 7 kcal por gramo y no es

@@ -205,5 +205,59 @@ console.log('\n— Y la búsqueda se lo pasa a la app —');
     (huerfanas.length === 1 ? '' : 's') + ' devuelve: llegará undefined');
 }
 
+// ====================================================================
+console.log('\n— Y la cerveza ya no está sola —');
+{
+  // Hasta la 0073 el catálogo no podía tener vino ni destilados: un
+  // tequila de 231 kcal habría entrado al anillo como CERO, y un vino
+  // de 85 como 11. Se quedaron fuera a propósito y queda escrito en
+  // `curado.mjs`. Con la columna puesta, la 0075 los mete.
+  const esperadas = ['Cerveza light', 'Vino tinto', 'Vino blanco', 'Vino rosado',
+                     'Tequila', 'Mezcal', 'Ron', 'Vodka', 'Whisky'];
+  const hay = await todas(`select nombre from public.alimentos_catalogo
+                            where nombre in (${esperadas.map((x) => `'${x}'`).join(',')})`);
+  check(`están las ${esperadas.length} bebidas nuevas`, hay.length === esperadas.length,
+    'faltan: ' + esperadas.filter((e) => !hay.some((h) => h.nombre === e)).join(', '));
+
+  // LA REGLA GENERAL, Y ES LA QUE IMPORTA. No se comprueba bebida por
+  // bebida con números escritos aquí —eso sería teclear dos veces lo
+  // mismo y que la prueba se equivoque igual que el dato—, sino que en
+  // TODA fila con alcohol la cuenta cierre contra las kcal de USDA, que
+  // vienen de la misma ficha y por otro camino.
+  //
+  // Así, un alcohol mal puesto no puede pasar: es el único número de la
+  // fila que no se usa para calcular las kcal, y esto los cruza.
+  const conAlcohol = await todas(
+    `select nombre, kcal, proteina, carbos, grasas, alcohol
+       from public.alimentos_catalogo where alcohol > 0 order by nombre`);
+  check(`hay ${conAlcohol.length} alimentos con alcohol`, conAlcohol.length >= 10);
+
+  const descuadran = conAlcohol.filter((c) => {
+    const suma = Number(c.proteina) * 4 + Number(c.carbos) * 4 +
+                 Number(c.grasas) * 9 + Number(c.alcohol) * 7;
+    return Math.abs(suma - Number(c.kcal)) > 3;
+  });
+  check('y en todos la cuenta cierra contra USDA', descuadran.length === 0,
+    descuadran.map((c) => c.nombre + ': USDA dice ' + c.kcal + ' y sale ' +
+      (Number(c.proteina) * 4 + Number(c.carbos) * 4 + Number(c.grasas) * 9 +
+       Number(c.alcohol) * 7).toFixed(1)).join(' · ') +
+    '\n        un alcohol mal puesto solo se ve así: es el único número de ' +
+    'la fila que no entra en el cálculo de sus kcal');
+
+  // Y QUE LLEGUEN A LA APP, que es donde se rompió la vez anterior: el
+  // dato estaba en la tabla, el diario sabía sumarlo, y la función de
+  // en medio no lo devolvía.
+  const t = (await db.query(`select * from public.buscar_catalogo('tequila', 5)`))
+    .rows.find((x) => x.nombre === 'Tequila');
+  check('y el tequila se busca y trae su alcohol', t && Number(t.alcohol) === 33.4,
+    'devolvió ' + JSON.stringify(t && t.alcohol));
+  const cal = t && (Number(t.proteina) * 4 + Number(t.carbos) * 4 +
+                    Number(t.grasas) * 9 + Number(t.alcohol) * 7);
+  check('que son las 231 kcal de verdad y no cero',
+    t && Math.abs(cal - 231) <= 3,
+    'con lo devuelto salen ' + cal + '. Sin alcohol serían 0: un destilado ' +
+    'no tiene proteína, ni carbohidrato, ni grasa');
+}
+
 console.log('\n' + ok + ' pasan · ' + mal + ' fallan');
 process.exit(mal ? 1 : 0);

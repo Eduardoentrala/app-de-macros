@@ -1,10 +1,10 @@
 -- =====================================================================
 --  DATOS DEL CATÁLOGO DE ALIMENTOS
 --
---  Generado por supabase/alimentos/resolver.mjs el 2026-11-13.
+--  Generado por supabase/alimentos/resolver.mjs el 2026-11-15.
 --  NO editar a mano: se regenera desde curado.mjs + USDA SR Legacy.
 --
---  223 alimentos. Los macros son de USDA, por 100 g, sin tocar.
+--  232 alimentos. Los macros son de USDA, por 100 g, sin tocar.
 --  Cada fila lleva su fdc_id y la descripción original para poder
 --  auditarla contra la fuente.
 --
@@ -227,6 +227,15 @@ values
   ('Café negro', 'bebidas', 'unico', 1, 0.1, 0, 0, 'fl oz', 30, 171890, 'Beverages, coffee, brewed, prepared with tap water'),
   ('Té negro', 'bebidas', 'unico', 1, 0, 0.3, 0, 'fl oz', 30, 173227, 'Beverages, tea, black, brewed, prepared with tap water'),
   ('Cerveza', 'bebidas', 'unico', 43, 0.5, 3.6, 0, 'fl oz', 30, 168746, 'Alcoholic beverage, beer, regular, all'),
+  ('Cerveza light', 'bebidas', 'unico', 29, 0.2, 1.6, 0, 'fl oz', 30, 168749, 'Alcoholic beverage, beer, light'),
+  ('Vino tinto', 'bebidas', 'unico', 85, 0.1, 2.6, 0, 'fl oz', 29, 173190, 'Alcoholic beverage, wine, table, red'),
+  ('Vino blanco', 'bebidas', 'unico', 82, 0.1, 2.6, 0, 'fl oz', 29, 174837, 'Alcoholic beverage, wine, table, white'),
+  ('Vino rosado', 'bebidas', 'unico', 83, 0.4, 3.8, 0, 'fl oz', 30, 171908, 'Alcoholic beverages, wine, rose'),
+  ('Tequila', 'bebidas', 'unico', 231, 0, 0, 0, 'fl oz', 28, 174815, 'Alcoholic beverage, distilled, all (gin, rum, vodka, whiskey) 80 proof'),
+  ('Mezcal', 'bebidas', 'unico', 231, 0, 0, 0, 'fl oz', 28, 174815, 'Alcoholic beverage, distilled, all (gin, rum, vodka, whiskey) 80 proof'),
+  ('Ron', 'bebidas', 'unico', 231, 0, 0, 0, 'fl oz', 28, 174815, 'Alcoholic beverage, distilled, all (gin, rum, vodka, whiskey) 80 proof'),
+  ('Vodka', 'bebidas', 'unico', 231, 0, 0, 0, 'fl oz', 28, 174815, 'Alcoholic beverage, distilled, all (gin, rum, vodka, whiskey) 80 proof'),
+  ('Whisky', 'bebidas', 'unico', 231, 0, 0, 0, 'fl oz', 28, 174815, 'Alcoholic beverage, distilled, all (gin, rum, vodka, whiskey) 80 proof'),
   ('Refresco de cola', 'bebidas', 'unico', 42, 0, 10.4, 0.3, 'fl oz', 31, 174852, 'Beverages, carbonated, cola, regular'),
   ('Jugo de naranja', 'bebidas', 'unico', 47, 0.7, 11, 0.2, 'cup', 249, 169099, 'Orange juice, canned, unsweetened'),
   ('Agua mineral', 'bebidas', 'unico', 0, 0, 0, 0, 'fl oz', 30, 171922, 'Beverages, water, bottled, non-carbonated, EVIAN'),
@@ -642,6 +651,20 @@ select a.id, v.termino
     ('Café negro', 'unico', 'cafe'),
     ('Té negro', 'unico', 'te'),
     ('Cerveza', 'unico', 'cerveza'),
+    ('Cerveza light', 'unico', 'cerveza light'),
+    ('Cerveza light', 'unico', 'light'),
+    ('Vino tinto', 'unico', 'vino'),
+    ('Vino tinto', 'unico', 'tinto'),
+    ('Vino blanco', 'unico', 'vino'),
+    ('Vino blanco', 'unico', 'blanco'),
+    ('Vino rosado', 'unico', 'vino'),
+    ('Vino rosado', 'unico', 'rosado'),
+    ('Tequila', 'unico', 'tequila'),
+    ('Mezcal', 'unico', 'mezcal'),
+    ('Ron', 'unico', 'ron'),
+    ('Vodka', 'unico', 'vodka'),
+    ('Whisky', 'unico', 'whisky'),
+    ('Whisky', 'unico', 'whiskey'),
     ('Refresco de cola', 'unico', 'refresco'),
     ('Refresco de cola', 'unico', 'coca'),
     ('Refresco de cola', 'unico', 'soda'),
@@ -686,7 +709,7 @@ on conflict (alimento_id, termino) do nothing;
 -- `extraer.mjs` SÍ saca el alcohol de USDA —nutriente 1018, 73 de los
 -- 7.793 lo traen— y lo deja en el volcado. Está ahí para el día que
 -- haga falta, y para que el número no tenga que teclearlo nadie:
--- Cerveza 3.9 g.
+-- Cerveza 3.9 g, Cerveza light 3.1 g, Vino tinto 10.6 g, Vino blanco 10.3 g, Vino rosado 9.6 g, Tequila 33.4 g, Mezcal 33.4 g, Ron 33.4 g, Vodka 33.4 g, Whisky 33.4 g.
 
 -- ---------------------------------------------------------------------
 --  Comprobaciones

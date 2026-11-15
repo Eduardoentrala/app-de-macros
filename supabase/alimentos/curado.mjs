@@ -20,15 +20,21 @@
 //
 // LO QUE NO ENTRA, Y POR QUÉ:
 //
-//  · BEBIDAS CON ALCOHOL. No es por moralina: es que la app NO SABE
-//    contarlas. Las calorías del diario son una columna generada en la
-//    base —`protein_g*4 + carbs_g*4 + fat_g*9`— y el alcohol tiene 7
-//    kcal por gramo sin ser ninguna de las tres cosas. Un destilado de
-//    231 kcal entraría al anillo como CERO; un vino de 85, como 11.
-//    Meterlas sería que la app diga que no te tomaste nada.
-//    (La cerveza ya estaba desde la 0019 y tiene el mismo problema: 43
-//    reales y 16 contadas. No se quita aquí a la ligera porque hay
-//    diarios con ella; está anotado en `el-catalogo-crecio`.)
+//  · BEBIDAS CON ALCOHOL: YA ENTRAN, y aquí estuvo escrito que no. La
+//    razón era buena y dejó de serlo. Decía: la app no sabe contarlas,
+//    porque las calorías del diario son una columna generada con
+//    `protein_g*4 + carbs_g*4 + fat_g*9` y el alcohol tiene 7 kcal por
+//    gramo sin ser ninguna de las tres. Un destilado de 231 kcal
+//    entraba al anillo como CERO; un vino de 85, como 11.
+//
+//    La 0073 añadió `alcohol_g` a las tres tablas y rehizo esa columna
+//    con `+ alcohol_g*7`; la 0074 hizo que la búsqueda lo devuelva. Y
+//    la cerveza, que llevaba desde la 0019 contando 16 de sus 43, ya
+//    cuenta 43. Así que lo que faltaba era la base, y ya está.
+//
+//    Se quedan fuera los preparados —daiquiri, piña colada, whiskey
+//    sour—: son recetas de bar embotelladas y su azúcar depende de
+//    quién las haga. Lo que entra son las bebidas tal cual.
 //
 //  · MARCAS COMERCIALES. USDA tiene «Cereales ready-to-eat, RALSTON Corn
 //    Flakes» y es el único cereal de caja del volcado. Un cereal de
@@ -305,6 +311,24 @@ export const CATALOGO = [
   { n:'Café negro', cat:'bebidas', e:'unico', u:/^Beverages, coffee, brewed, prepared with tap water$/i, s:['cafe'] },
   { n:'Té negro', cat:'bebidas', e:'unico', u:/^Beverages, tea, black, brewed, prepared with tap water$/i, s:['te'] },
   { n:'Cerveza', cat:'bebidas', e:'unico', u:/^Alcoholic beverage, beer, regular, all$/i, s:['cerveza'] },
+  { n:'Cerveza light', cat:'bebidas', e:'unico', u:/^Alcoholic beverage, beer, light$/i, s:['cerveza light','light'] },
+  { n:'Vino tinto', cat:'bebidas', e:'unico', u:/^Alcoholic beverage, wine, table, red$/i, s:['vino','tinto'] },
+  { n:'Vino blanco', cat:'bebidas', e:'unico', u:/^Alcoholic beverage, wine, table, white$/i, s:['vino','blanco'] },
+  { n:'Vino rosado', cat:'bebidas', e:'unico', u:/^Alcoholic beverages, wine, rose$/i, s:['vino','rosado'] },
+
+  // LOS CINCO DESTILADOS SALEN DE LA MISMA FILA DE USDA, Y NO ES PEREZA:
+  // la fila se llama «distilled, all (gin, rum, vodka, whiskey) 80
+  // proof» porque a 40 grados son lo mismo —agua y etanol, sin macros—.
+  // 33,4 g de alcohol por 100 g y 231 kcal, para los cinco.
+  //
+  // Se guardan con nombre propio en vez de uno solo llamado
+  // «destilados» porque nadie busca eso: busca «tequila». Y cada fila
+  // lleva su `nombre_usda`, así que de dónde salió se puede comprobar.
+  { n:'Tequila', cat:'bebidas', e:'unico', u:/^Alcoholic beverage, distilled, all \(gin, rum, vodka, whiskey\) 80 proof$/i, s:['tequila'] },
+  { n:'Mezcal', cat:'bebidas', e:'unico', u:/^Alcoholic beverage, distilled, all \(gin, rum, vodka, whiskey\) 80 proof$/i, s:['mezcal'] },
+  { n:'Ron', cat:'bebidas', e:'unico', u:/^Alcoholic beverage, distilled, all \(gin, rum, vodka, whiskey\) 80 proof$/i, s:['ron'] },
+  { n:'Vodka', cat:'bebidas', e:'unico', u:/^Alcoholic beverage, distilled, all \(gin, rum, vodka, whiskey\) 80 proof$/i, s:['vodka'] },
+  { n:'Whisky', cat:'bebidas', e:'unico', u:/^Alcoholic beverage, distilled, all \(gin, rum, vodka, whiskey\) 80 proof$/i, s:['whisky','whiskey'] },
   { n:'Refresco de cola', cat:'bebidas', e:'unico', u:/^Beverages, carbonated, cola, regular$/i, s:['refresco','coca','soda'] },
   { n:'Jugo de naranja', cat:'bebidas', e:'unico', u:/^Orange juice, canned, unsweetened$/i, s:['jugo','naranja'] },
   { n:'Agua mineral', cat:'bebidas', e:'unico', u:/^Beverages, water, bottled, non-carbonated, .*$/i, s:['agua'] },

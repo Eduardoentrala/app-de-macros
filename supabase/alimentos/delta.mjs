@@ -55,6 +55,38 @@ const sinsNuevos = sinsDe(nuevo).filter((s) => {
   return nombresNuevos.has(k) && !sinsAntes.has(s);
 });
 
+// EL ALCOHOL VA APARTE Y SE SACA DE USDA, NO SE TECLEA.
+//
+// `resolver.mjs` no puede emitirlo dentro del insert de la 0019: esa
+// migración es anterior a la 0073, que es la que crea la columna, y
+// mencionarla allí revienta el esquema con «column "alcohol" does not
+// exist». Así que sale aquí, como un bloque de `update` al final, que
+// se ejecuta cuando la columna ya existe desde hace cincuenta y tantas
+// migraciones.
+//
+// Se cruza por `fdc_id`, que es el identificador de USDA y va en la
+// propia fila: así el número no lo escribe nadie y no puede
+// desincronizarse de los macros que vienen de la misma ficha.
+const CRUDO = process.argv[4] || (D + '/crudo.json');
+const alcoholPorFdc = new Map(
+  JSON.parse(readFileSync(CRUDO, 'utf8'))
+    .filter((u) => u.alc > 0).map((u) => [String(u.fdc), u.alc]));
+
+const conAlcohol = [];
+for (const f of filasNuevas) {
+  const m = f.match(/, (\d+), '((?:[^']|'')*)'\)$/);
+  if (!m) continue;
+  const alc = alcoholPorFdc.get(m[1]);
+  if (alc > 0) conAlcohol.push({ nombre: clave(f).split('|')[0], fdc: m[1], alc });
+}
+
+const bloqueAlcohol = conAlcohol.length
+  ? conAlcohol.map((x) => [
+      `update public.alimentos_catalogo set alcohol = ${x.alc}`,
+      ` where nombre = '${x.nombre.replace(/'/g, "''")}' and fdc_id = ${x.fdc};`
+    ].join('\n')).join('\n')
+  : '-- Ninguno de los nuevos lleva alcohol.';
+
 const hoy = new Date().toISOString().slice(0, 10);
 const sql = `-- =====================================================================
 --  MÁS ALIMENTOS EN EL CATÁLOGO
@@ -76,7 +108,7 @@ const sql = `-- ================================================================
 --  regenerada contra la que estaba en el repo, no a mano.
 --
 --  Generado por supabase/alimentos/delta (ver el commit) el ${hoy}.
---  Depende de 0018 y 0019.
+--  Depende de 0018 y 0019${conAlcohol.length ? ', y de 0073 por la columna `alcohol`' : ''}.
 -- =====================================================================
 
 insert into public.alimentos_catalogo
@@ -98,6 +130,20 @@ ${sinsNuevos.map((s) => '    ' + s).join(',\n')}
   join public.alimentos_catalogo a
     on a.nombre = v.nombre and a.estado::text = v.estado
 on conflict (alimento_id, termino) do nothing;
+
+
+-- ---------------------------------------------------------------------
+--  El alcohol de los que lo llevan
+--
+--  Gramos por 100 g, del nutriente 1018 de la misma ficha de USDA que da
+--  sus macros. Se cruza por \`fdc_id\` y lo escribe el generador: si
+--  alguien cambia la bebida, el número se mueve solo con ella.
+--
+--  Hace falta porque \`alimentos_catalogo.kcal\` viene de USDA pero las
+--  calorías que cuenta la app se calculan de los macros, y sin esto un
+--  tequila de 231 kcal entra al anillo como CERO.
+-- ---------------------------------------------------------------------
+${bloqueAlcohol}
 
 
 -- ---------------------------------------------------------------------
