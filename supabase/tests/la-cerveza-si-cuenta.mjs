@@ -49,7 +49,8 @@ await db.exec(`insert into auth.users (id, email) values ('${YO}', 'yo@x.com')`)
 console.log('\n— La cerveza sabe cuánto alcohol lleva —');
 {
   const c = await uno(`select kcal, proteina, carbos, grasas, alcohol
-                         from public.alimentos_catalogo where nombre = 'Cerveza'`);
+                         from public.alimentos_catalogo
+                        where nombre = 'Cerveza (lata)'`);
   check('está en el catálogo', !!c);
   check('y declara 3,9 g de alcohol por 100 g', c && Number(c.alcohol) === 3.9,
     'alcohol: ' + (c || {}).alcohol);
@@ -166,7 +167,7 @@ console.log('\n— Y la búsqueda se lo pasa a la app —');
   // Las dos comprobaciones de arriba pasaban en verde mientras la
   // pantalla mentía, porque probaban los dos extremos y no el tubo.
   const r = await db.query(`select * from public.buscar_catalogo('cerveza', 5)`);
-  const fila = r.rows.find((x) => x.nombre === 'Cerveza');
+  const fila = r.rows.find((x) => x.nombre === 'Cerveza (lata)');
   check('la búsqueda encuentra la cerveza', !!fila);
   check('y la devuelve con su alcohol', fila && Number(fila.alcohol) === 3.9,
     'alcohol: ' + (fila || {}).alcohol + '. Si sale undefined, la función ' +
@@ -212,8 +213,13 @@ console.log('\n— Y la cerveza ya no está sola —');
   // tequila de 231 kcal habría entrado al anillo como CERO, y un vino
   // de 85 como 11. Se quedaron fuera a propósito y queda escrito en
   // `curado.mjs`. Con la columna puesta, la 0075 los mete.
-  const esperadas = ['Cerveza light', 'Vino tinto', 'Vino blanco', 'Vino rosado',
-                     'Tequila', 'Mezcal', 'Ron', 'Vodka', 'Whisky'];
+  // CON SU MEDIDA EN EL NOMBRE, que se la pone la 0076 al pasarlas a
+  // piezas. Nadie pesa una bebida: se sirve un caballito, una copa, una
+  // lata.
+  const esperadas = ['Cerveza light (lata)', 'Vino tinto (copa)',
+                     'Vino blanco (copa)', 'Vino rosado (copa)',
+                     'Tequila (caballito)', 'Mezcal (caballito)', 'Ron (caballito)',
+                     'Vodka (caballito)', 'Whisky (caballito)'];
   const hay = await todas(`select nombre from public.alimentos_catalogo
                             where nombre in (${esperadas.map((x) => `'${x}'`).join(',')})`);
   check(`están las ${esperadas.length} bebidas nuevas`, hay.length === esperadas.length,
@@ -248,11 +254,34 @@ console.log('\n— Y la cerveza ya no está sola —');
   // dato estaba en la tabla, el diario sabía sumarlo, y la función de
   // en medio no lo devolvía.
   const t = (await db.query(`select * from public.buscar_catalogo('tequila', 5)`))
-    .rows.find((x) => x.nombre === 'Tequila');
-  check('y el tequila se busca y trae su alcohol', t && Number(t.alcohol) === 33.4,
+    .rows.find((x) => x.nombre === 'Tequila (caballito)');
+  check('y el tequila se busca por su nombre de siempre', t && Number(t.alcohol) === 33.4,
     'devolvió ' + JSON.stringify(t && t.alcohol));
   const cal = t && (Number(t.proteina) * 4 + Number(t.carbos) * 4 +
                     Number(t.grasas) * 9 + Number(t.alcohol) * 7);
+  // Y POR MEDIDAS, que es como se apuntan desde la 0076: nadie pesa un
+  // tequila. Los números son los que él va a ver al poner «1», así que
+  // se comprueban aquí y no solo en un comentario de la migración.
+  const porPieza = await todas(
+    `select nombre, unidad, pieza_g,
+            round((proteina*4 + carbos*4 + grasas*9 + alcohol*7) * pieza_g / 100) as una
+       from public.alimentos_catalogo where alcohol > 0 order by nombre`);
+  const enGramos = porPieza.filter((x) => x.unidad !== 'Pieza' || !(x.pieza_g > 0));
+  check('las diez se apuntan por medida y no por gramos', enGramos.length === 0,
+    'siguen en gramos: ' + enGramos.map((x) => x.nombre).join(', '));
+
+  const busca = (nom) => porPieza.find((x) => x.nombre === nom) || {};
+  const medidas = [
+    ['Tequila (caballito)', 43, 100], ['Vino tinto (copa)', 147, 125],
+    ['Cerveza (lata)', 360, 157], ['Cerveza light (lata)', 360, 104]
+  ];
+  for (const [nom, peso, cal] of medidas) {
+    const f = busca(nom);
+    check(`${nom}: ${peso} g y ${cal} cal`,
+      Number(f.pieza_g) === peso && Math.abs(Number(f.una) - cal) <= 2,
+      'salió ' + f.pieza_g + ' g y ' + f.una + ' cal');
+  }
+
   check('que son las 231 kcal de verdad y no cero',
     t && Math.abs(cal - 231) <= 3,
     'con lo devuelto salen ' + cal + '. Sin alcohol serían 0: un destilado ' +

@@ -210,9 +210,20 @@ const conPieza = await db.query(`select nombre from public.alimentos_catalogo
 // entro con la 0072: es el mismo pan que «Bolillo», que sigue en gramos,
 // pero pedido de uno en uno. Los 57 g salen de la tabla de porciones de
 // su propio registro de USDA, no de un numero tecleado.
-const esperados = ['Bolillo (pieza)', 'Clara de huevo', 'Huevo cocido', 'Huevo entero',
-                   'Huevo estrellado', 'Huevo revuelto', 'Tortilla de harina',
-                   'Tortilla de maíz', 'Yema de huevo'];
+//
+// Y LAS BEBIDAS, desde la 0076. Nadie pesa un tequila: se sirve un
+// caballito. Los pesos son la medida de la casa convertida con la
+// densidad de su propia ficha de USDA —45 ml de destilado son 43 g, 150
+// de vino son 147, 355 de cerveza son 360—, no un gramo por mililitro a
+// ojo. La medida va en el nombre porque «1 pieza» de tequila no
+// significa nada.
+const esperados = ['Bolillo (pieza)', 'Cerveza (lata)', 'Cerveza light (lata)',
+                   'Clara de huevo', 'Huevo cocido', 'Huevo entero',
+                   'Huevo estrellado', 'Huevo revuelto', 'Mezcal (caballito)',
+                   'Ron (caballito)', 'Tequila (caballito)', 'Tortilla de harina',
+                   'Tortilla de maíz', 'Vino blanco (copa)', 'Vino rosado (copa)',
+                   'Vino tinto (copa)', 'Vodka (caballito)', 'Whisky (caballito)',
+                   'Yema de huevo'];
 check('solo se cuentan por pieza los que deben',
   JSON.stringify(conPieza.rows.map(r => r.nombre)) === JSON.stringify(esperados),
   JSON.stringify(conPieza.rows.map(r => r.nombre)));

@@ -211,13 +211,28 @@ console.log('\n— Y la lista curada y el SQL dicen lo mismo —');
   // `platillos.mjs`, y se comprueban por su cuenta más abajo.
   const enBase = await todas(`select nombre, estado from public.alimentos_catalogo
                                where composicion is null`);
+  // UNA MIGRACIÓN POSTERIOR PUEDE AÑADIRLE LA MEDIDA AL NOMBRE, y eso
+  // no es que falte: la 0076 convierte las bebidas a piezas y las deja
+  // como «Tequila (caballito)», «Vino tinto (copa)», «Cerveza (lata)».
+  //
+  // No se renombran en `curado.mjs` —que sería lo ordenado— porque la
+  // 0073 le pone el alcohol a la cerveza buscándola por `nombre =
+  // 'Cerveza'`. Cambiarlo allí dejaría una instalación nueva con la
+  // cerveza en alcohol 0, y arreglarlo pediría editar una migración ya
+  // aplicada en producción. Entre las dos, esto.
+  //
+  // Lo que se afloja es solo el sufijo entre paréntesis: si un alimento
+  // de la lista no está en la base ni con su nombre ni con medida, sigue
+  // saliendo rojo.
   const clave = (n, e) => n + '|' + e;
+  const sinMedida = (n) => n.replace(/ \([^)]+\)$/, '');
   const base = new Set(enBase.map((x) => clave(x.nombre, x.estado)));
+  const baseSinMedida = new Set(enBase.map((x) => clave(sinMedida(x.nombre), x.estado)));
   const lista = CATALOGO.map((x) => clave(x.n, x.e));
 
   check(`la lista curada tiene ${CATALOGO.length} entradas`, CATALOGO.length === base.size,
     'curado.mjs: ' + CATALOGO.length + ' · base: ' + base.size);
-  const faltan = lista.filter((k) => !base.has(k));
+  const faltan = lista.filter((k) => !base.has(k) && !baseSinMedida.has(k));
   check('y todas acabaron en la base', faltan.length === 0,
     'en curado.mjs y no en el SQL: ' + faltan.join(', ') +
     '\n        hay que volver a pasar resolver.mjs');
