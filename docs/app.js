@@ -3690,6 +3690,19 @@
     });
   }
 
+  // SI LA COMIDA SE VE O NO. Una sola funcion, porque hay dos momentos
+  // distintos en que puede cambiar y ninguno de los dos sabe del otro:
+  // cuando se repinta la comida y cuando se vacia el buscador.
+  //
+  // Se esconde mientras hay busqueda, para que no se lea como una base de
+  // datos mas pegada a los resultados.
+  function ajustarApuntado(){
+    var cont = document.getElementById('mealList');
+    if(!cont) return;
+    cont.hidden = !!(typeof mealSearch !== 'undefined' && mealSearch &&
+                     String(mealSearch.value || '').trim().length >= 2);
+  }
+
   function pintarComida(){
     pintarFilasComidas();
     var lista = COMIDAS[comidaActual];
@@ -3739,8 +3752,8 @@
         '</div></div>';
     }).join('') + '</div>' : '';
 
-    // Y AQUÍ SE DECIDE SI ESTA LISTA SE VE, QUE ES EL ÚNICO SITIO POR EL
-    // QUE PASAN TODOS LOS CAMINOS.
+    // Y AQUÍ SE AJUSTA SI ESTA LISTA SE VE. NO BASTA CON ESTO SOLO, y el
+    // primer arreglo se quedó justo aquí creyendo que sí.
     //
     // Se esconde mientras hay búsqueda, para que no se lea como una base
     // de datos más. Antes eso lo hacía `pintarSugerencias` al esconderla,
@@ -3754,10 +3767,16 @@
     // macros abajo, todo correcto— porque esos salen de los datos y los
     // datos estaban. Lo único que faltaba era enseñarlos.
     //
-    // Derivado del estado y no recordado: cualquier camino que repinte la
-    // comida la deja como toca, incluidos los que todavía no existen.
-    cont.hidden = !!(typeof mealSearch !== 'undefined' && mealSearch &&
-                     String(mealSearch.value || '').trim().length >= 2);
+    // LO QUE FALTABA ERA EL ORDEN. `elegirAlimento()` apunta —y esto
+    // repinta— y SOLO DESPUÉS vacía el buscador. Así que cuando esta línea
+    // decidía, el texto buscado todavía estaba escrito: escondía la lista
+    // con toda la razón, y nadie volvía a mirarlo al vaciarse el buscador
+    // un instante después. Mismo síntoma que antes, una vuelta más abajo.
+    //
+    // Por eso la decisión vive en `ajustarApuntado()` y la llaman los DOS
+    // momentos: este y el de vaciar. Ninguno tiene que saber del otro ni
+    // llegar en un orden concreto.
+    ajustarApuntado();
 
     // La `A` es el alcohol. Sin ella el total de la comida se queda con
     // las tres de siempre y una cerveza aquí vuelve a contar de menos,
@@ -5108,6 +5127,12 @@
     // Y las listas vuelven a salir enteras, que si no quedarían filtradas
     // por una palabra que ya no está escrita en ningún sitio.
     pintarListas();
+    // Y lo apuntado vuelve a verse. ESTA LÍNEA ES EL ARREGLO DE VERDAD: se
+    // llega aquí justo después de apuntar un alimento, cuando la comida ya
+    // se repintó con el texto de búsqueda todavía puesto y por tanto quedó
+    // escondida. Sin esto, las tres comidas se quedan en blanco hasta
+    // cerrar la app, con los totales perfectos debajo.
+    if(typeof ajustarApuntado === 'function') ajustarApuntado();
   }
 
   // Crear alimento: las calorías salen solas de los macros

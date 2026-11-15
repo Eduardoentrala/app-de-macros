@@ -61,18 +61,33 @@ function fn(cabecera) {
 // ------------------------------------------------------------------
 // SE EJECUTA DE VERDAD. Mirando el texto no se distingue un `hidden`
 // que se calcula de uno que se queda como estaba.
-const CUERPO = sinComentarios(fn('function pintarComida('));
+//
+// LAS TRES JUNTAS, Y NO SOLO `pintarComida()`. El primer intento montaba
+// esa sola y la llamaba con el buscador ya vacío. Pasaba en verde y el
+// fallo seguía vivo en el teléfono, porque EL ORDEN DE VERDAD es otro:
+// `elegirAlimento()` apunta —lo que repinta la comida con el texto
+// todavía escrito, así que se esconde— y SOLO DESPUÉS vacía el buscador.
+// Una prueba que llama a una función suelta no ve lo que pasa entre dos.
+const FUENTE =
+  sinComentarios(fn('function ajustarApuntado(')) + '\n' +
+  sinComentarios(fn('function pintarComida(')) + '\n' +
+  sinComentarios(fn('function limpiarBuscadoresDeAlimento('));
 
-function correr(lista, textoBuscado, empiezaEscondida) {
+// Monta la pantalla y devuelve las palancas, para poder tocarlas en el
+// orden que haga falta.
+function pantalla(lista, textoBuscado, empiezaEscondida) {
   const lienzo = {};
-  const el = (id) => (lienzo[id] = lienzo[id] || { textContent: '', style: {} });
+  const el = (id) => (lienzo[id] = lienzo[id] || { textContent: '', style: {}, value: '' });
   const mealList = { innerHTML: '', hidden: !!empiezaEscondida };
   const mealSearch = { value: textoBuscado };
+  const mealSugeridos = { innerHTML: 'resultados' };
 
-  new Function(
+  const app = new Function(
     'pintarFilasComidas', 'COMIDAS', 'comidaActual', 'document', 'mealSearch',
     'prepararAlimento', 'escapar', 'lineaComida', 'un', 'mil', 'calAlim',
-    CUERPO + '; pintarComida();'
+    'mealSugeridos', 'SUGERIDOS', 'relojBusqueda', 'pintarListas',
+    FUENTE + '; return { pintarComida: pintarComida, ' +
+             'limpiar: limpiarBuscadoresDeAlimento };'
   )(
     () => {},
     { Comida: lista }, 'Comida',
@@ -80,19 +95,60 @@ function correr(lista, textoBuscado, empiezaEscondida) {
     mealSearch,
     () => {}, (s) => String(s), () => 'sub',
     (n) => n, (n) => String(n),
-    (m) => m.P * 4 + m.C * 4 + m.G * 9 + (m.A || 0) * 7
+    (m) => m.P * 4 + m.C * 4 + m.G * 9 + (m.A || 0) * 7,
+    mealSugeridos, [], null, () => {}
   );
 
-  return {
+  const estado = () => ({
     escondida: mealList.hidden,
     html: mealList.innerHTML,
     tarjetas: (mealList.innerHTML.match(/class="food-card"/g) || []).length,
-    cal: lienzo.tCal ? lienzo.tCal.textContent : '(no se pintó)'
-  };
+    cal: lienzo.tCal ? lienzo.tCal.textContent : '(no se pintó)',
+    buscador: mealSearch.value
+  });
+  return { ...app, estado };
+}
+
+// El caso simple: repintar y mirar cómo queda.
+function correr(lista, textoBuscado, empiezaEscondida) {
+  const p = pantalla(lista, textoBuscado, empiezaEscondida);
+  p.pintarComida();
+  return p.estado();
 }
 
 const CERVEZA  = { n: 'Cerveza',  P: 1.8, C: 12.8, G: 0, A: 13.8 };
 const PECHUGA  = { n: 'Pechuga',  P: 31,  C: 0,    G: 3.6 };
+
+// ------------------------------------------------------------------
+console.log('\nEn el orden de verdad: apuntar, y luego vaciar el buscador');
+{
+  // ESTE ES EL CASO QUE SE ESCAPÓ DOS VECES. Tal y como pasa en el móvil:
+  //
+  //   1. Escribes «claras de huevo» — hay búsqueda, la comida se esconde.
+  //   2. Tocas el alimento y lo apuntas: `agregarAlimento()` repinta la
+  //      comida, y en ese instante el buscador TODAVÍA dice «claras de
+  //      huevo», así que se vuelve a esconder con toda la razón.
+  //   3. `limpiarBuscadoresDeAlimento()` vacía el buscador.
+  //
+  // Si el paso 3 no vuelve a mirar, la lista se queda escondida con el
+  // buscador vacío: las tres comidas en blanco y los totales perfectos
+  // debajo, hasta cerrar la app.
+  const p = pantalla([PECHUGA], 'claras de huevo', false);
+
+  p.pintarComida();
+  ok(p.estado().escondida === true,
+     'al apuntar, con el texto aún escrito, se esconde',
+     'hasta aquí es correcto: sigue habiendo búsqueda');
+
+  p.limpiar();
+  const fin = p.estado();
+  ok(fin.buscador === '', 'vaciar el buscador lo deja vacío',
+     'si no lo vacía, esta prueba no está probando lo que cree');
+  ok(fin.escondida === false,
+     'y entonces la comida vuelve a verse',
+     'ESTE es el fallo: buscador vacío y lista escondida. Las tres ' +
+     'comidas en blanco hasta cerrar la app, con los totales bien');
+}
 
 // ------------------------------------------------------------------
 console.log('\nApuntar un alimento no esconde lo que ya tenías');
