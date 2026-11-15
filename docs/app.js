@@ -4494,13 +4494,19 @@
     var un1 = function(x){ return Math.round((Number(x) || 0) * 10) / 10; };
     // Se guarda lo COMIDO, no la porcion base: la receta es esta comida tal
     // y como fue, con sus cantidades.
+    // LA `A` ES EL ALCOHOL, Y AQUI SE PERDIA. Una cerveza suelta en el
+    // diario contaba bien desde la 0073, pero al guardar esa comida como
+    // receta el ingrediente se quedaba con tres macros: volver a apuntar
+    // la receta devolvia la cerveza sin alcohol. El fallo no desaparecia,
+    // se mudaba a la puerta de al lado.
     var ing = lista.map(function(a){
       return { n: String(a.n || '').slice(0, 80), u: a.u || 'Gramos',
-               cant: un1(a.cant), P: un1(a.P), C: un1(a.C), G: un1(a.G) };
+               cant: un1(a.cant), P: un1(a.P), C: un1(a.C), G: un1(a.G),
+               A: un1(a.A || 0) };
     });
     var tot = ing.reduce(function(t, x){
-      t.P += x.P; t.C += x.C; t.G += x.G; return t;
-    }, { P:0, C:0, G:0 });
+      t.P += x.P; t.C += x.C; t.G += x.G; t.A += (x.A || 0); return t;
+    }, { P:0, C:0, G:0, A:0 });
 
     var fila = {
       user_id: sesion.user.id,
@@ -4512,7 +4518,10 @@
       // fila entera y la receta no se guarda.
       protein_g: Math.min(999999, Math.max(0, un1(tot.P))),
       carbs_g:   Math.min(999999, Math.max(0, un1(tot.C))),
-      fat_g:     Math.min(999999, Math.max(0, un1(tot.G)))
+      fat_g:     Math.min(999999, Math.max(0, un1(tot.G))),
+      // `recipes.calories` es una columna GENERADA y desde la 0073 suma
+      // `alcohol_g*7`. Sin mandarlo, la receta se guarda contando 0.
+      alcohol_g: Math.min(999999, Math.max(0, un1(tot.A)))
     };
 
     sbFetch('/rest/v1/recipes', {
@@ -4522,7 +4531,8 @@
       var creada = (r && r[0]) || {};
       RECETAS.unshift({
         id: creada.id, n: fila.name, ing: ing,
-        cal: Math.round(fila.protein_g * 4 + fila.carbs_g * 4 + fila.fat_g * 9)
+        cal: Math.round(fila.protein_g * 4 + fila.carbs_g * 4 + fila.fat_g * 9 +
+                        (fila.alcohol_g || 0) * 7)
       });
       if(typeof guardarDespensa === 'function') guardarDespensa();
       if(typeof pintarListas === 'function') pintarListas();
@@ -4569,8 +4579,12 @@
     // A un decimal, como todo lo demás que se apunta. Redondear a entero
     // haría que tres tercios no sumaran la receta entera.
     var red = function(v){ return Math.round((Number(v) || 0) * k * 10) / 10; };
+    // El alcohol se escala con todo lo demas: media receta lleva la mitad
+    // de la cerveza. Sin esta linea, apuntar un tercio devolvia el alcohol
+    // entero —o cero, segun por donde entrara— y el numero no cuadraba con
+    // sus propios ingredientes.
     return { n:x.n, u:x.u || 'Gramos', cant:red(x.cant),
-             P:red(x.P), C:red(x.C), G:red(x.G) };
+             P:red(x.P), C:red(x.C), G:red(x.G), A:red(x.A || 0) };
   }
 
   function apuntarReceta(r, factor){
@@ -4642,9 +4656,9 @@
 
     var esc = ing.map(function(x){ return escalarIngrediente(x, factorReceta); });
     var tot = esc.reduce(function(t, x){
-      t.P += x.P; t.C += x.C; t.G += x.G; return t;
-    }, { P:0, C:0, G:0 });
-    var cal = Math.round(tot.P * 4 + tot.C * 4 + tot.G * 9);
+      t.P += x.P; t.C += x.C; t.G += x.G; t.A += (x.A || 0); return t;
+    }, { P:0, C:0, G:0, A:0 });
+    var cal = Math.round(tot.P * 4 + tot.C * 4 + tot.G * 9 + tot.A * 7);
 
     var prev = document.getElementById('recetaPreview');
     if(prev){
@@ -4659,7 +4673,8 @@
           return '<div class="food-card"><div class="fc-main">' +
             '<div class="fc-name">' + escapar(x.n) + '</div>' +
             '<div class="fc-sub">' + un(x.cant) + ' ' + escapar(textoUnidad(x.cant, x.u)) +
-            ' · ' + mil(Math.round(x.P*4 + x.C*4 + x.G*9)) + ' cal</div></div></div>';
+            ' · ' + mil(Math.round(x.P*4 + x.C*4 + x.G*9 + (x.A||0)*7)) +
+            ' cal</div></div></div>';
         }).join('') + '</div>'
       : '';
   }
@@ -4675,9 +4690,10 @@
     var ing = r.ing || [];
     var tot = ing.reduce(function(t, x){
       t.P += Number(x.P) || 0; t.C += Number(x.C) || 0; t.G += Number(x.G) || 0;
+      t.A += Number(x.A) || 0;
       return t;
-    }, { P:0, C:0, G:0 });
-    var cal = Math.round(tot.P * 4 + tot.C * 4 + tot.G * 9);
+    }, { P:0, C:0, G:0, A:0 });
+    var cal = Math.round(tot.P * 4 + tot.C * 4 + tot.G * 9 + tot.A * 7);
 
     document.getElementById('recetaResumen').textContent = ing.length
       ? ing.length + (ing.length === 1 ? ' alimento · ' : ' alimentos · ') +
