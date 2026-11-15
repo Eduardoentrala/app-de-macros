@@ -112,7 +112,12 @@ console.log('\nY la función lo pone al lado de lo que hizo');
 
 console.log('\nY se le dice qué hacer con eso');
 {
-  const reglas = FN.slice(FN.indexOf('SISTEMA_SEMANA'), FN.indexOf('LA SEMANA QUE SE CIERRA'));
+  // EL MARCADOR SE BUSCA DESDE `SISTEMA_SEMANA`, NO DESDE EL PRINCIPIO.
+  // «LA SEMANA QUE SE CIERRA» es una frase, no un identificador, y el dia
+  // que alguien la escriba en un comentario mas arriba —paso— este corte
+  // se va al reves y el trozo sale vacio: la prueba se pone roja sin que
+  // el prompt haya cambiado una coma.
+  const reglas = FN.slice(FN.indexOf('SISTEMA_SEMANA'), FN.indexOf('LA SEMANA QUE SE CIERRA', FN.indexOf('SISTEMA_SEMANA')));
   // Dos ideas distintas de la MISMA regla: que el listón es su plan, y que
   // cumplirlo cuenta aunque sean pocos días. Pidiendo solo una, borrar el
   // encabezado dejaba pasar la comprobación — lo enseñó una mutación.

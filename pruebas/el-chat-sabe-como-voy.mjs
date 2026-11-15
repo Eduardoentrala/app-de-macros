@@ -159,6 +159,30 @@ console.log('\nLo que no se sabe se dice, no se inventa un cero');
      'salió: ' + JSON.stringify(lleno).slice(0, 300));
   ok(/subió/.test(lleno), 'y si el volumen subió o bajó');
 
+  // Y DICE DE QUÉ SEMANA HABLA, que es donde mentía.
+  //
+  // `datosDeEntreno()` calcula la semana QUE SE CIERRA —los siete días
+  // anteriores al inicio de la actual— porque nació para el cierre de los
+  // lunes, donde «esta semana» se entiende. Aquí se presentaba igual, y el
+  // chat se pregunta cualquier día: él preguntó un domingo y el asistente
+  // le dijo «fuiste tus 4 días esta semana» con los datos de la anterior.
+  //
+  // El número era bueno y la etiqueta no, que es la peor combinación: no
+  // hay forma de notarlo mirando la respuesta.
+  const lineaGym = (lleno.match(/- Gimnasio[^\n]*/) || [''])[0];
+  ok(!/Gimnasio esta semana/.test(lleno),
+     'y no llama «esta semana» a la que ya se cerró', lineaGym);
+  ok(/semana COMPLETA, no la de hoy/.test(lleno),
+     'sino que dice que es la última completa', lineaGym);
+  ok(/de la de hoy no te paso datos de gimnasio/.test(lleno),
+     'y avisa de que la de hoy no va',
+     'sin decirlo, el modelo rellena el hueco: un silencio se lee como ' +
+     '«no entrenaste». ' + lineaGym);
+  ok(/semana de antes de esa/.test(lleno),
+     'y el porcentaje dice contra cuál se compara',
+     '«respecto a la semana anterior» colgando de una semana ya mal ' +
+     'etiquetada son dos semanas de desfase. ' + lineaGym);
+
   // El caso que importa: todavía no hay medición.
   const sinMedir = comoVa({
     objetivo: 'bajar',

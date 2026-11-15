@@ -117,7 +117,7 @@ console.log('\nY sin ningún día apuntado no se inventa nada');
 
 console.log('\nY la función se lo dice al modelo');
 {
-  const i = FN.indexOf('LA SEMANA QUE SE CIERRA');
+  const i = FN.indexOf('LA SEMANA QUE SE CIERRA', FN.indexOf('SISTEMA_SEMANA'));
   const contexto = FN.slice(i, FN.indexOf('¿Hay material para ajustar?', i));
   ok(/media_p/.test(contexto), 'le pasa la proteína que comió',
      'la app la manda pero el texto del cierre no la nombra: llega y se tira');
@@ -126,7 +126,12 @@ console.log('\nY la función se lo dice al modelo');
 
   // Y que se le explique qué hacer con eso. Un número suelto en el contexto
   // lo puede ignorar; la regla es lo que hace que lo use.
-  const reglas = FN.slice(FN.indexOf('SISTEMA_SEMANA'), FN.indexOf('LA SEMANA QUE SE CIERRA'));
+  // EL MARCADOR SE BUSCA DESDE `SISTEMA_SEMANA`, NO DESDE EL PRINCIPIO.
+  // «LA SEMANA QUE SE CIERRA» es una frase, no un identificador, y el dia
+  // que alguien la escriba en un comentario mas arriba —paso— este corte
+  // se va al reves y el trozo sale vacio: la prueba se pone roja sin que
+  // el prompt haya cambiado una coma.
+  const reglas = FN.slice(FN.indexOf('SISTEMA_SEMANA'), FN.indexOf('LA SEMANA QUE SE CIERRA', FN.indexOf('SISTEMA_SEMANA')));
   // Por concepto, no por la frase exacta: la redacción se va a retocar y
   // clavarla aquí haría fallar la prueba por un sinónimo. Pero tampoco vale
   // con buscar «proteína» a secas —ya salía en otro sitio y la comprobación
@@ -155,7 +160,7 @@ console.log('\nY aguanta que la app vaya por detrás');
 {
   // App y función se despliegan por separado. Si llega un cuerpo viejo sin
   // los promedios nuevos, el cierre tiene que seguir funcionando.
-  const i = FN.indexOf('LA SEMANA QUE SE CIERRA');
+  const i = FN.indexOf('LA SEMANA QUE SE CIERRA', FN.indexOf('SISTEMA_SEMANA'));
   const contexto = FN.slice(i, FN.indexOf('¿Hay material para ajustar?', i));
   const usos = contexto.match(/d\.(media|meta)_[pcg]/g) || [];
   ok(usos.length >= 6, 'usa los seis números nuevos', 'usa ' + usos.length);

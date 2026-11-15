@@ -78,7 +78,7 @@ const CORS = {
 //
 // Ahora lo dice: un GET sin sesión devuelve este sello y nada más.
 // `pruebas/funciones-vivas.mjs` lo compara con el del repo.
-const SELLO = 'a29a98ec27';
+const SELLO = 'ad39f9a75d';
 
 // Tope diario por persona. Es la única defensa contra que un solo usuario
 // -o un token robado- vacíe la cuenta en una noche con un bucle.
@@ -243,12 +243,29 @@ function comoVa(p: Record<string, unknown>): string {
   const e = (p.entreno ?? null) as Record<string, unknown> | null;
   if (e && n(e.sesiones) != null) {
     const meta = n(e.dias_previstos);
-    let t = `- Gimnasio esta semana: ${n(e.sesiones)} día(s)` + (meta ? ` de ${meta}` : '');
+    // «ESTA SEMANA» ERA MENTIRA, Y SE NOTÓ EN CUANTO ALGUIEN PREGUNTÓ.
+    //
+    // `datosDeEntreno()` calcula LA SEMANA QUE SE CIERRA: los siete días
+    // anteriores al inicio de la actual. Lo hace así porque nació para el
+    // cierre de los lunes, que habla de la semana que acaba de terminar y
+    // ahí «esta semana» se entiende.
+    //
+    // El chat no tiene ese marco: se pregunta un domingo cualquiera y
+    // «esta semana» es la de hoy. Él preguntó «¿cómo voy?» y el asistente
+    // le dijo «fuiste al gimnasio tus 4 días esta semana» con los datos de
+    // la semana anterior. El número era bueno; la etiqueta, no.
+    //
+    // Y se dice que la de hoy NO entra, porque si no, el modelo rellena el
+    // hueco: un «no veo tus entrenos de esta semana» es mejor que un
+    // silencio que se lee como «no entrenaste».
+    let t = `- Gimnasio en la última semana COMPLETA, no la de hoy ` +
+            `(de la de hoy no te paso datos de gimnasio): ` +
+            `${n(e.sesiones)} día(s)` + (meta ? ` de ${meta}` : '');
     const v = n(e.volumen), va = n(e.volumen_antes);
     if (v && va) {
       const d = Math.round((v - va) / va * 100);
       t += `, y el volumen ${d > 2 ? 'subió' : d < -2 ? 'bajó' : 'quedó igual'}` +
-           ` respecto a la semana anterior (${d > 0 ? '+' : ''}${d} %)`;
+           ` respecto a la semana de antes de esa (${d > 0 ? '+' : ''}${d} %)`;
     }
     l.push(t + '.');
   }
