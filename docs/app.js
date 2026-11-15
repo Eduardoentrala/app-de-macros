@@ -4114,10 +4114,15 @@
     if(yaEsta){
       var nueva = { P: a.porBase ? a.porBase.P : a.P,
                     C: a.porBase ? a.porBase.C : a.C,
-                    G: a.porBase ? a.porBase.G : a.G };
+                    G: a.porBase ? a.porBase.G : a.G,
+                    A: a.porBase ? (a.porBase.A || 0) : (a.A || 0) };
+      // Y EL ALCOHOL CUENTA PARA «SON LOS MISMOS». Sin el, una cerveza
+      // guardada en cero y la del catalogo con sus 3,9 pasaban por
+      // iguales: no se preguntaba nada y se quedaba la de cero.
       var mismos = Math.round(nueva.P * 10) === Math.round(yaEsta.P * 10) &&
                    Math.round(nueva.C * 10) === Math.round(yaEsta.C * 10) &&
-                   Math.round(nueva.G * 10) === Math.round(yaEsta.G * 10);
+                   Math.round(nueva.G * 10) === Math.round(yaEsta.G * 10) &&
+                   Math.round((nueva.A || 0) * 10) === Math.round((yaEsta.A || 0) * 10);
       // Si son los mismos macros no hay nada que preguntar: se dice y ya.
       if(mismos){
         a.guardado = true; a.id_guardado = yaEsta.id;
@@ -4156,7 +4161,8 @@
         // ya los tiene calculados en porBase justamente para esto.
         protein_g: Math.round((a.porBase ? a.porBase.P : a.P) * 10) / 10,
         carbs_g:   Math.round((a.porBase ? a.porBase.C : a.C) * 10) / 10,
-        fat_g:     Math.round((a.porBase ? a.porBase.G : a.G) * 10) / 10
+        fat_g:     Math.round((a.porBase ? a.porBase.G : a.G) * 10) / 10,
+        alcohol_g: Math.round((a.porBase ? (a.porBase.A || 0) : (a.A || 0)) * 10) / 10
       })
     }).then(function(f){
       var fila = f && f[0];
@@ -4228,7 +4234,9 @@
 
   function guardarCantidadEditada(){
     var a = alimentoEditando;
-    var antes = { cant:a.cant, P:a.P, C:a.C, G:a.G };
+    // CON LA `A`: esto es lo que se repone si el servidor dice que no, y
+    // reponer sin el alcohol dejaria el apunte contando de menos.
+    var antes = { cant:a.cant, P:a.P, C:a.C, G:a.G, A:a.A || 0 };
 
     // El día lleva la cuenta de lo consumido, así que hay que restar lo
     // viejo antes de sumar lo nuevo o el anillo se descuadra.
@@ -4254,6 +4262,7 @@
       })['catch'](function(e){
         sumarAlRegistro(a, -1);
         a.cant = antes.cant; a.P = antes.P; a.C = antes.C; a.G = antes.G;
+        a.A = antes.A || 0;
         sumarAlRegistro(a, +1);
         pintarComida();
         toast('toastComida', 'No se pudo guardar: ' + traducirError(e.message));
@@ -5065,7 +5074,8 @@
         return normalizarBusqueda(a.n).indexOf(suyo) >= 0;
       }).map(function(a){
         return { fuente:'mio', n:a.n, u:a.u || 'Gramos', cant:null,
-                 P:Number(a.P)||0, C:Number(a.C)||0, G:Number(a.G)||0 };
+                 P:Number(a.P)||0, C:Number(a.C)||0, G:Number(a.G)||0,
+                 A:Number(a.A)||0 };
       });
 
       // EL DEL CATÁLOGO YA NO SE ESCONDE DETRÁS DEL TUYO.
@@ -5127,7 +5137,16 @@
     // poder distinguir el arroz crudo del cocido de un vistazo, que es
     // toda la razón de que sean registros separados.
     var nombre = (a.estado && a.estado !== 'unico') ? a.n + ' (' + a.estado + ')' : a.n;
-    elegirAlimento({ n:nombre, u:a.u, cant:a.cant || undefined, P:a.P, C:a.C, G:a.G });
+    // CON LA `A`, Y AQUI ES DONDE SE PERDIA. Esta copia se arma campo a
+    // campo, y el alcohol no estaba en la lista: la tarjeta decia 101
+    // kcal —usa el objeto entero— y la hoja de la cantidad decia 0,
+    // porque recibia esta copia sin alcohol. Peor que el numero: al
+    // darle a «Agregar» el tequila entraba al diario con CERO calorias.
+    //
+    // Copiar campo a campo es comodo hasta que aparece un campo nuevo.
+    // Lo vigila ahora `no-se-pierde-el-alcohol-al-copiar`.
+    elegirAlimento({ n:nombre, u:a.u, cant:a.cant || undefined,
+                     P:a.P, C:a.C, G:a.G, A:a.A || 0 });
   });
 
   // ---- Al registrar un alimento, los buscadores se vacían ----
