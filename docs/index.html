@@ -112,7 +112,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '15896be494';
+    var SELLO = 'ff57f5235e';
     // Y a la vista de app.js, que lo manda con cada fallo que apunta. Sin
     // la versión, un error de hace una semana y uno de ahora se leen igual
     // y «eso ya lo arreglé» no se puede comprobar.
@@ -2468,6 +2468,12 @@
               <div><b id="cantP">0</b><span>Proteína</span></div>
               <div><b id="cantC">0</b><span>Carbos</span></div>
               <div><b id="cantG">0</b><span>Grasas</span></div>
+              <!-- Escondida salvo que el alimento lleve alcohol, que son
+                   diez de doscientos cuarenta. Sin ella, un tequila
+                   enseña tres ceros y un total de 101 y la pantalla no
+                   cuadra consigo misma: parece un fallo, y de hecho lo
+                   pareció dos veces. -->
+              <div id="cantCajaA" hidden><b id="cantA">0</b><span>Alcohol</span></div>
             </div>
             <div class="cant-total"><span>Total</span><b><i id="cantCal">0</i> cal</b></div>
           </div>
@@ -2576,7 +2582,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '15896be494';
+    var SELLO = 'ff57f5235e';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que

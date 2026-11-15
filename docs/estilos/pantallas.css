@@ -422,6 +422,13 @@
 .cant-macros{
   display:grid;grid-template-columns:repeat(3,1fr);gap:6px;
 }
+/* Y cuatro cuando el alimento lleva alcohol. La clase la pone el
+   JavaScript en vez de usar `:has()`: se ve en los teléfonos viejos de
+   la familia igual que en los nuevos, y aquí no se gana nada por usar
+   lo moderno. */
+.cant-macros.con-alcohol{
+  grid-template-columns:repeat(4,1fr);
+}
 .cant-macros div{
   background:var(--card-bg);border-radius:11px;padding:10px 4px;text-align:center;
 }

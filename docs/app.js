@@ -3617,8 +3617,12 @@
 
   function calAlim(a){ return a.P*4 + a.C*4 + a.G*9 + (a.A || 0)*7; }
   function un(x){ return (Math.round(x*10)/10); }
+  // El alcohol solo si lo lleva. «P 0g · C 0g · G 0g · 101kcal» deja al
+  // que lo lee buscando de dónde salen esas calorías; con «A 14.4g»
+  // delante, el número se explica solo.
   function lineaMacros(a){
-    return 'P ' + un(a.P) + 'g · C ' + un(a.C) + 'g · G ' + un(a.G) + 'g · ' +
+    return 'P ' + un(a.P) + 'g · C ' + un(a.C) + 'g · G ' + un(a.G) + 'g' +
+           ((a.A || 0) > 0.05 ? ' · A ' + un(a.A) + 'g' : '') + ' · ' +
            Math.round(calAlim(a)) + 'kcal · ' + a.u;
   }
 
@@ -3678,7 +3682,8 @@
   function lineaComida(a){
     return un(a.cant) + ' ' + textoUnidad(a.cant, a.u) +
            ' · ' + Math.round(calAlim(a)) + ' kcal' +
-           ' · P' + un(a.P) + ' C' + un(a.C) + ' G' + un(a.G);
+           ' · P' + un(a.P) + ' C' + un(a.C) + ' G' + un(a.G) +
+           ((a.A || 0) > 0.05 ? ' A' + un(a.A) : '');
   }
 
   // Las calorías de cada fila del Diario salen de lo que tiene esa comida
@@ -3976,6 +3981,22 @@
     // No hay `porBase.A` en lo que no lleva: `|| 0` y cuenta como antes.
     var A = (a.porBase.A || 0) * f;
     document.getElementById('cantCal').textContent = mil(P*4 + C*4 + G*9 + A*7);
+
+    // Y SE ENSEÑA EL ALCOHOL, QUE SI NO EL TOTAL NO SE EXPLICA. Un
+    // caballito de tequila son tres ceros y 101 calorías: visto así
+    // parece que la app se equivoca. Las calorías salen de los 14 g de
+    // alcohol, y eso tiene que estar escrito en algún sitio.
+    //
+    // Solo cuando lo lleva: diez alimentos de doscientos cuarenta. Al
+    // resto no se le añade una casilla en cero para nada.
+    var cajaA = document.getElementById('cantCajaA');
+    if(cajaA){
+      var hay = A > 0.05;
+      cajaA.hidden = !hay;
+      if(hay) document.getElementById('cantA').textContent = un(A).toFixed(1) + ' g';
+      var fila = cajaA.parentNode;
+      if(fila && fila.classList) fila.classList.toggle('con-alcohol', hay);
+    }
     // Con un decimal siempre, como la ficha de la comida: sin él, "6 g" y
     // "1.5 g" en la misma fila bailan de alto y se lee peor.
     document.getElementById('cantP').textContent = un(P).toFixed(1) + ' g';
