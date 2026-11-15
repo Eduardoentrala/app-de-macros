@@ -51,7 +51,17 @@ const ok = (c, q, extra = '') => {
 
 // ---- Los dos trozos de verdad ----
 const BLOQUE_VERSION = (() => {
-  const i = HTML.indexOf('    try{\n      if(sessionStorage.getItem(\'macros.recargado\') !== SELLO){');
+  // POR EL PRINCIPIO DEL BLOQUE, NO POR SU PRIMERA CONDICIÓN. El ancla
+  // incluía `if(sessionStorage.getItem('macros.recargado') !== SELLO){`,
+  // que era justo el freno que había que cambiar —comparaba el sello
+  // equivocado y desarmaba la actualización entera—. Al moverlo, esta
+  // prueba no se puso roja por lo suyo: reventó por no encontrar el
+  // trozo. Un ancla que incluye la línea que se va a tocar se rompe
+  // cada vez que se toca, y esconde lo que de verdad hay que mirar.
+  // Desde el `try{`, que es donde empieza el bloque de verdad: cortando
+  // más abajo, el trozo se queda sin su `try` y el `}catch(e){}` del
+  // final no parsea.
+  const i = HTML.indexOf('    try{\n      // EL FRENO');
   if (i < 0) throw new Error('no encuentro el comprobador de versión');
   return HTML.slice(i, HTML.indexOf('    }catch(e){}', i) + 15);
 })();

@@ -67,9 +67,26 @@ console.log('\n— El index tampoco se queda viejo —');
     'sin esto, pulsar el enlace de recuperar justo tras un despliegue lo gasta para nada');
   // Sin freno, un despliegue a medias dejaría la app recargándose en bucle,
   // y una app que parpadea es peor que una desactualizada.
+  //
+  // PERO EL FRENO VA SOBRE EL SELLO DE DESTINO, no sobre el que corre.
+  // Esta comprobación pedía `setItem(..., SELLO)` y defendía media cosa:
+  // frenaba el bucle, sí, y además desarmaba la actualización entera. Si
+  // la recarga no cuajaba —el service worker volvía a servir el index
+  // guardado— la página seguía con el sello viejo, que era justo lo
+  // apuntado, y no se volvía a mirar en toda la sesión. La app se
+  // quedaba vieja para siempre y los dos números de la misma pantalla
+  // empezaban a contradecirse.
+  //
+  // Guardando el nuevo se consiguen las dos cosas: no se insiste con el
+  // mismo sello, y el día que salga otro se vuelve a intentar.
   check('con freno para no recargar en bucle',
-    /sessionStorage\.getItem\('macros\.recargado'\) !== SELLO/.test(HTML) &&
-    /sessionStorage\.setItem\('macros\.recargado', SELLO\)/.test(HTML));
+    /if\(yaIntentado === nuevo\) return;/.test(HTML) &&
+    /sessionStorage\.setItem\('macros\.recargado', nuevo\)/.test(HTML));
+  check('y el freno no desarma la siguiente actualización',
+    /var yaIntentado = sessionStorage\.getItem\('macros\.recargado'\)/.test(HTML) &&
+    !/sessionStorage\.setItem\('macros\.recargado', SELLO\)/.test(HTML),
+    'apuntando el sello que ya corre, una actualización fallida deja la ' +
+    'app vieja el resto de la sesión sin reintentar');
   check('sin red se sigue con lo que hay', /\['catch'\]\(function\(\)\{\}\)/.test(HTML));
 
   // El index entra en el sello, o un cambio solo de HTML no avisaría a nadie.

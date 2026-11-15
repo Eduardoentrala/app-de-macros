@@ -112,7 +112,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = 'e9084a9428';
+    var SELLO = '2917e9c5a8';
     // Y a la vista de app.js, que lo manda con cada fallo que apunta. Sin
     // la versión, un error de hace una semana y uno de ahora se leen igual
     // y «eso ya lo arreglé» no se puede comprobar.
@@ -2576,7 +2576,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = 'e9084a9428';
+    var SELLO = '2917e9c5a8';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que
@@ -2624,12 +2624,29 @@
     }
 
     try{
-      if(sessionStorage.getItem('macros.recargado') !== SELLO){
+      // EL FRENO VA SOBRE EL SELLO AL QUE SE QUIERE LLEGAR, no sobre el
+      // que esta corriendo.
+      //
+      // Antes la condicion era `!== SELLO` aqui arriba, y eso tenia una
+      // trampa: si la recarga no cuajaba -el service worker volvia a
+      // servir el index guardado- la pagina seguia con el sello viejo,
+      // que era justo lo apuntado, y esta comprobacion se saltaba EL
+      // RESTO DE LA SESION. La app se quedaba vieja y no volvia a mirar.
+      //
+      // Ahora se apunta el sello NUEVO y se compara con el. Sigue sin
+      // haber bucle -no se insiste dos veces con el mismo- pero el dia
+      // que salga otro se vuelve a intentar.
+      var yaIntentado = sessionStorage.getItem('macros.recargado');
+      {
         fetch('version.txt', { cache: 'no-store' })
           .then(function(r){ return r.ok ? r.text() : null; })
           .then(function(t){
             var nuevo = (t || '').trim();
             if(!nuevo || nuevo === SELLO) return;
+            // Ya se intento llegar a este en esta sesion y aqui seguimos
+            // con el viejo: no se insiste. Una app que parpadea
+            // recargandose es peor que una desactualizada.
+            if(yaIntentado === nuevo) return;
             // NI UNA RECARGA ENCIMA DE UN ENLACE DEL CORREO.
             //
             // app.js lo pone al arrancar, si vino uno. Va ANTES de apuntar
@@ -2637,13 +2654,51 @@
             // aplaza a la proxima apertura.
             if(window.enlaceDeCorreoEnMarcha) return;
 
-            sessionStorage.setItem('macros.recargado', SELLO);
-            // Y CON EL HASH DETRAS, que es la otra mitad. Cual de los dos
-            // corre primero depende de la latencia: si gana esto, la
-            // almohadilla sigue en la direccion y hay que llevarsela; si gana
-            // app.js, ya la limpio y avisa con la marca de arriba. Las dos
-            // cosas hacen falta, cada una para un orden.
-            location.replace(location.pathname + '?v=' + nuevo + location.hash);
+            // SE APUNTA EL SELLO NUEVO, NO EL VIEJO.
+            //
+            // Esto guardaba SELLO -el de la pagina que esta corriendo- y
+            // ahi estaba media trampa: si la recarga volvia a traer el
+            // index viejo, el sello seguia siendo el mismo que lo
+            // apuntado y esta comprobacion se saltaba para siempre. La
+            // app se quedaba vieja el resto de la sesion sin reintentar.
+            //
+            // Con el nuevo: si la actualizacion a B falla, no se insiste
+            // con B -que es para lo que existe esta marca, para no entrar
+            // en un bucle de recargas-, pero el dia que salga una C se
+            // vuelve a intentar.
+            sessionStorage.setItem('macros.recargado', nuevo);
+
+            // Y ANTES DE RECARGAR, QUE EL SERVICE WORKER SE TRAIGA EL
+            // INDEX NUEVO. Sin esto la recarga se la volvia a servir el
+            // de la cache -va a red con un reloj de 2,5 s, y con mala
+            // señal gana la copia- y acababas con los datos nuevos del
+            // servidor y el programa viejo a la vez. Eso fue lo del
+            // tequila: la tarjeta decia 101 kcal y la hoja decia 0.
+            //
+            // Se espera poco y se recarga pase lo que pase: una
+            // actualizacion que deja la app colgada esperando es peor que
+            // una que llega a la proxima apertura.
+            var irse = function(){
+              location.replace(location.pathname + '?v=' + nuevo + location.hash);
+            };
+            var yaFui = false;
+            var irseUnaVez = function(){ if(!yaFui){ yaFui = true; irse(); } };
+            try{
+              var sw = navigator.serviceWorker;
+              if(sw && sw.controller){
+                var alOir = function(ev){
+                  if(ev.data && ev.data.tipo === 'index-refrescado'){
+                    sw.removeEventListener('message', alOir);
+                    irseUnaVez();
+                  }
+                };
+                sw.addEventListener('message', alOir);
+                sw.controller.postMessage({ tipo: 'refrescar-index' });
+                setTimeout(irseUnaVez, 4000);
+              } else {
+                irse();
+              }
+            }catch(e){ irseUnaVez(); }
           })['catch'](function(){});   // sin red se sigue con lo que hay
       }
     }catch(e){}

@@ -82,9 +82,44 @@ self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys()
       .then((ns) => Promise.all(ns.filter((n) => n !== CACHE).map((n) => caches.delete(n))))
+      // Y DE PASO, EL INDEX GUARDADO SE PONE AL DIA. SOLO.
+      //
+      // Lo de abajo lo puede pedir la pagina, pero eso no sirve cuando la
+      // pagina que esta corriendo ES la vieja: el arreglo vive en el index
+      // y en este archivo, justo los dos que tiene guardados.
+      //
+      // Este archivo si se actualiza por su cuenta -el navegador lo
+      // vuelve a pedir al navegar-, asi que es el unico sitio desde el
+      // que se puede romper el circulo. Cuando el service worker nuevo
+      // arranca, se trae el index nuevo y lo deja guardado: la siguiente
+      // apertura ya es la buena, sin que nadie tenga que borrar nada.
+      //
+      // Y NO SE BORRA EL VIEJO PRIMERO. Si se borrara y la red fallara,
+      // la app se quedaria sin nada que abrir sin señal, que es
+      // exactamente lo que este archivo existe para evitar. Se pisa solo
+      // si llega uno bueno.
+      .then(() => refrescarIndex())
       .then(() => self.clients.claim())
   );
 });
+
+// Trae el index de la red, saltandose la cache, y lo guarda si es de
+// verdad el nuestro. Sin reloj: quien llama ya ha decidido que quiere la
+// version nueva, no una respuesta rapida.
+function refrescarIndex() {
+  return fetch('./index.html', { cache: 'reload' })
+    .then((r) => {
+      // Las dos guardas de siempre: un 404 de un despliegue a medias, o
+      // la pantalla de acceso del wifi de un cafe, se quedarian como LO
+      // QUE SE ABRE SIN SEÑAL.
+      let suyo = false;
+      try { suyo = new URL(r.url || './index.html', self.location.href).origin === self.location.origin; }
+      catch (err) { suyo = false; }
+      if (!r || !r.ok || !suyo) return false;
+      return caches.open(CACHE).then((c) => c.put('./index.html', r.clone())).then(() => true);
+    })
+    .catch(() => false);
+}
 
 self.addEventListener('fetch', (e) => {
   const req = e.request;
@@ -197,6 +232,39 @@ self.addEventListener('fetch', (e) => {
 // app.js?v=nuevo y el anterior se queda para siempre ocupando sitio.
 self.addEventListener('message', (e) => {
   const d = e.data || {};
+
+  // REFRESCAR EL INDEX A PETICION DE LA PAGINA, SIN RELOJ.
+  //
+  // El index va a red primero, pero con un reloj de 2,5 s: con mala señal
+  // gana la copia guardada, que puede ser de hace semanas. Eso solo era
+  // molesto hasta que se vio lo que de verdad hace.
+  //
+  // La pagina se abre con el index viejo (sello A). Pide `version.txt`,
+  // que siempre va a la red, y ve que hay sello B. Se recarga con
+  // `?v=B`... y el service worker vuelve a servir el index guardado,
+  // porque el reloj vuelve a ganar. Y como la pagina ya apunto en
+  // `sessionStorage` que miro esta version, NO VUELVE A MIRAR: se queda
+  // con la app vieja hasta que se cierre del todo.
+  //
+  // Se vio con el tequila: la tarjeta decia 101 kcal -eso viene del
+  // servidor- y la hoja de la cantidad decia 0, que es codigo viejo. Los
+  // datos nuevos y el programa viejo, a la vez y sin avisar.
+  //
+  // Aqui no hay reloj: esto se pide cuando ya se sabe que hay version
+  // nueva, y lo que importa es traerla entera, no contestar rapido. La
+  // pagina espera lo justo y recarga igual si esto tarda.
+  if (d.tipo === 'refrescar-index') {
+    const responder = (ok) => {
+      if (e.source && e.source.postMessage) {
+        try { e.source.postMessage({ tipo: 'index-refrescado', ok: !!ok }); } catch (err) {}
+      }
+    };
+    // La misma funcion que usa `activate`, no una copia: dos versiones de
+    // «traete el index» acaban con una arreglada y la otra no.
+    refrescarIndex().then(responder);
+    return;
+  }
+
   if (d.tipo !== 'limpiar' || !d.sello) return;
   caches.open(CACHE).then((c) => c.keys().then((claves) => {
     claves.forEach((req) => {
