@@ -167,7 +167,12 @@ console.log('\nLo que no se sabe se dice, no se inventa un cero');
   ok(/de los 3 que planea/.test(lleno),
      'y el plan dicho aparte, no pegado',
      (lleno.match(/- Gimnasio[^\n]*/) || [''])[0]);
-  ok(/subió/.test(lleno), 'y si el volumen subió o bajó');
+  // «LOS KILOS LEVANTADOS», no «el volumen». El volumen mezclaba kilos
+  // con repeticiones sin peso, y ahora son dos números que no se suman:
+  // lo que sube o baja aquí son los kilos.
+  ok(/kilos levantados/.test(lleno) && /subieron|bajaron|quedaron igual/.test(lleno),
+     'y si los kilos subieron o bajaron',
+     (lleno.match(/- Gimnasio[^\n]*/) || [''])[0]);
 
   // Y DICE DE QUÉ SEMANA HABLA, que es donde mentía.
   //

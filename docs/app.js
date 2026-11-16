@@ -14844,6 +14844,44 @@
         '?select=session_date,total_volume,exercises,duration_min&session_date=gte.' + desde +
         '&user_id=eq.' + sesion.user.id + '&order=session_date.asc')
       .then(function(filas){
+        // LO QUE PESA Y LO QUE NO, POR SEPARADO.
+        //
+        //  `total_volume` suma `reps × peso` cuando hay peso y `reps` a
+        //  secas cuando no. Mezclar kilos con repeticiones da igual
+        //  mientras nadie compare — y este número existe para comparar
+        //  una semana con la siguiente, que es justo donde se rompe:
+        //
+        //      4 × 10 × 50 kg de press    =  2.000
+        //      4 × 10 dominadas al fallo  =     40
+        //
+        //  Mismo esfuerzo, o más, y la resta dice «-98 %». Basta cambiar
+        //  un ejercicio con barra por uno con el peso del cuerpo.
+        //
+        //  Y SOLO LAS SERIES MARCADAS. Las filas vienen rellenas con lo
+        //  que dice la rutina —reps y peso ya puestos—, así que sumarlas
+        //  todas es contar lo que pensabas hacer. El peso máximo ya se
+        //  protegía de esto; el volumen no. Misma regla y mismo respaldo:
+        //  si no hay ninguna marcada se cuentan todas, porque mucha gente
+        //  no usa las palomitas y dejarle la semana en cero sería peor.
+        //
+        //  Y si la sesión no trae series —las de antes de que se guardara
+        //  el detalle— se usa el total que quedó escrito: tirarlas sería
+        //  borrarle semanas del historial.
+        function volumenDeSesion(f){
+          var kg = 0, libres = 0, hubo = false;
+          ((f && f.exercises) || []).forEach(function(ejer){
+            var todas = (ejer && ejer.series) || [];
+            var hechas = todas.filter(function(x){ return x && x.hecho; });
+            (hechas.length ? hechas : todas).forEach(function(x){
+              hubo = true;
+              var r = Number(x.reps) || 0, pe = Number(x.peso) || 0;
+              if(pe > 0) kg += r * pe; else libres += r;
+            });
+          });
+          return hubo ? { kg: kg, libres: libres }
+                      : { kg: Number(f.total_volume) || 0, libres: 0 };
+        }
+
         var corte = isoDe(iniCerrada);
         var finCerrada = isoDe(anclaSemana);      // exclusivo: ya es la nueva
         // Y EL TERCER CORTE, el de abajo. Con dos no bastaba: ver la nota
@@ -14863,7 +14901,7 @@
         //
         //  El volumen sí suma TODAS las filas: si entrenó dos veces ese día,
         //  las dos cuentan como trabajo hecho.
-        var estaSemana = [], anterior = [];
+        var estaSemana = [], anterior = [], libresEsta = [], libresAntes = [];
         var diasEsta = {}, diasAntes = {};
         // CUANTO DURAN LAS SESIONES.
         //
@@ -14894,7 +14932,9 @@
           if(f.session_date >= finCerrada) return;   // de la semana en curso
           if(f.session_date < iniPreviaIso) return;  // mas viejas: solo para la tendencia
           var esDeEsta = f.session_date >= corte;
-          (esDeEsta ? estaSemana : anterior).push(Number(f.total_volume) || 0);
+          var vol = volumenDeSesion(f);
+          (esDeEsta ? estaSemana : anterior).push(vol.kg);
+          (esDeEsta ? libresEsta : libresAntes).push(vol.libres);
           (esDeEsta ? diasEsta : diasAntes)[f.session_date] = true;
           var m = f.duration_min == null ? null : Number(f.duration_min);
           if(m != null && isFinite(m) && m > 0)
@@ -14921,7 +14961,8 @@
             // Por días, igual que arriba: dos filas del mismo día son un
             // día de entreno, no dos.
             sesiones: Object.keys(v.reduce(function(o, f){ o[f.session_date] = 1; return o; }, {})).length,
-            volumen: Math.round(v.reduce(function(x, f){ return x + (Number(f.total_volume) || 0); }, 0))
+            volumen: Math.round(v.reduce(function(x, f){ return x + volumenDeSesion(f).kg; }, 0)),
+            reps_libres: Math.round(v.reduce(function(x, f){ return x + volumenDeSesion(f).libres; }, 0))
           });
         }
 
@@ -15051,6 +15092,10 @@
           dias_previstos: (reg && reg.dias >= 1 && reg.dias <= 7) ? Number(reg.dias) : null,
           volumen: Math.round(suma(estaSemana)),
           volumen_antes: Math.round(suma(anterior)),
+          // Las repeticiones sin peso, aparte. Sumarlas a los kilos
+          // convierte cambiar de ejercicio en un derrumbe.
+          reps_libres: Math.round(suma(libresEsta)),
+          reps_libres_antes: Math.round(suma(libresAntes)),
           // CUANTO DURARON, de media. Es lo unico que distingue «entreno
           // igual de veces pero a medias» de «entreno igual»: el volumen
           // sube y baja con el peso levantado, pero media hora menos en el

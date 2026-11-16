@@ -92,7 +92,7 @@ console.log('\nY la función lo pone al lado de lo que hizo');
   // el trozo se quedaba sin la definicion de `entreno`: ReferenceError y
   // rojo sin que nada estuviera roto.
   const armar = new Function('e', trozo(
-    'const plan = e && e.dias_previstos', '          duracion\n        : \'\';') +
+    'const plan = e && e.dias_previstos', '          libres + duracion\n        : \'\';') +
     '; return entreno;');
 
   const cumplio = armar({ sesiones: 4, sesiones_antes: 4, dias_previstos: 4,

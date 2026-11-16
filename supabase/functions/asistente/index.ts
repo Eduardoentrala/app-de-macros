@@ -78,7 +78,7 @@ const CORS = {
 //
 // Ahora lo dice: un GET sin sesión devuelve este sello y nada más.
 // `pruebas/funciones-vivas.mjs` lo compara con el del repo.
-const SELLO = 'b8c3d45ad4';
+const SELLO = '0771922f34';
 
 // Tope diario por persona. Es la única defensa contra que un solo usuario
 // -o un token robado- vacíe la cuenta en una noche con un bucle.
@@ -271,10 +271,21 @@ function comoVa(p: Record<string, unknown>): string {
     const v = n(e.volumen), va = n(e.volumen_antes);
     if (v && va) {
       const d = Math.round((v - va) / va * 100);
-      t += `, y el volumen ${d > 2 ? 'subió' : d < -2 ? 'bajó' : 'quedó igual'}` +
+      t += `, y los kilos levantados ${d > 2 ? 'subieron' : d < -2 ? 'bajaron' : 'quedaron igual'}` +
            ` respecto a la semana de antes de esa (${d > 0 ? '+' : ''}${d} %)`;
     }
     l.push(t + '.');
+
+    // LO QUE SE HACE CON EL PESO DEL CUERPO NO SON KILOS. Dominadas,
+    // fondos, plancha: se cuentan en repeticiones y van por su lado.
+    // Sumarlas a la barra hacía que cambiar un ejercicio por otro
+    // pareciera un derrumbe, y entonces el modelo se ponía a explicar con
+    // mucha seguridad por qué había bajado alguien que no bajó.
+    const rl = n(e.reps_libres), rla = n(e.reps_libres_antes);
+    if (rl || rla) {
+      l.push(`- Y ${rl ?? 0} repeticiones sin peso (${rla ?? 0} la semana de ` +
+             `antes de esa). No se suman a los kilos: son unidades distintas.`);
+    }
   }
 
   // La cintura es lo que distingue perder grasa de no perder nada cuando la
@@ -2461,10 +2472,20 @@ Deno.serve(async (req) => {
         ? `\n- Duración media: ${e.minutos} min por sesión esta semana, ` +
           `${e.minutos_antes} min la anterior`
         : '';
+      //  LAS REPETICIONES SIN PESO, APARTE DE LOS KILOS. Dominadas,
+      //  fondos, plancha: no tienen kilos que sumar, y meterlas en el
+      //  mismo número que la barra hacía que cambiar de ejercicio se
+      //  leyera como un derrumbe. Solo se nombran si las hubo.
+      const libres = (e && (e.reps_libres || e.reps_libres_antes))
+        ? `\n- Y ${e.reps_libres ?? 0} repeticiones sin peso ` +
+          `(${e.reps_libres_antes ?? 0} la anterior). No se suman a los kilos: ` +
+          `son unidades distintas`
+        : '';
       const entreno = e
         ? `\n- Entrenó ${e.sesiones} veces${plan} (${e.sesiones_antes} la semana anterior)\n` +
-          `- Volumen: ${e.volumen} kg esta semana, ${e.volumen_antes} kg la anterior` +
-          duracion
+          `- Volumen levantado: ${e.volumen} kg·rep esta semana, ` +
+          `${e.volumen_antes} la anterior` +
+          libres + duracion
         : '';
 
       // Las semanas de antes. Una semana suelta casi no dice nada: hambre 4

@@ -81,7 +81,7 @@ console.log('\nLa media se hace con lo que hay, o no se hace');
 {
   // EJECUTADO: el agregado real, con el `forEach` y la `media` del código.
   const cuerpo = (() => {
-    const i = APP.indexOf('        var estaSemana = [], anterior = [];');
+    const i = APP.indexOf('        var estaSemana = [], anterior = [], libresEsta');
     const f = APP.indexOf('        // Y las cuatro semanas por separado', i);
     return APP.slice(i, f);
   })();
@@ -90,10 +90,16 @@ console.log('\nLa media se hace con lo que hay, o no se hace');
   // TRES CORTES, NO DOS. El agregado dejó de poder repartir con uno
   // arriba y otro abajo: «anterior» eran TODAS las semanas anteriores
   // sumadas, y ahora tiene su propio suelo. Aquí solo hay que pasárselo.
+  // Y `volumenDeSesion`, que vive unas líneas más arriba del trozo. Esta
+  // prueba habla de MINUTOS, así que basta con algo que cumpla su
+  // contrato —devolver kilos y repeticiones sueltas— sin fingir que
+  // calcula nada: lo que esto mira es la media de duración.
+  const volumenDeSesion = (f) => ({ kg: Number(f.total_volume) || 0, libres: 0 });
   const correr = (filas) => new Function('filas', 'corte', 'finCerrada', 'iniPreviaIso',
+    'volumenDeSesion',
     cuerpo + '\n return { minEsta: minEsta, minAntes: minAntes, ' +
     'mediaEsta: media(minEsta), mediaAntes: media(minAntes) };'
-  )(filas, '2026-10-20', '2026-10-27', '2026-10-13');
+  )(filas, '2026-10-20', '2026-10-27', '2026-10-13', volumenDeSesion);
 
   const s = (fecha, vol, min) => ({ session_date: fecha, total_volume: vol, duration_min: min });
 
