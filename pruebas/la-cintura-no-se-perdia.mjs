@@ -40,15 +40,28 @@ const ok = (c, q, extra = '') => {
   else { fallan++; console.log('  FALLA  ' + q + (extra ? '\n         ' + extra : '')); }
 };
 
-// El manejador del botón, entero, contando llaves.
+// El manejador del botón y lo que llama, contando llaves.
+//
+// NO BASTA CON EL `click`. El guardado salió de dentro del manejador al meter
+// la pregunta por un peso que no cuadra con el anterior (ver
+// un-peso-mal-tecleado): ahora el `click` valida y decide, y `guardarElPeso`
+// hace el trabajo. Ejecutando solo el manejador, esto reventaba con
+// «guardarElPeso is not defined» —rojo sin que faltara nada—.
+//
+// Así que se coge el trozo entero, desde `pesajeAnterior` hasta el final de
+// `guardarElPeso`: son vecinos en el fichero y es justo lo que hace falta
+// para pulsar el botón de verdad. Lo de después —la hoja de la pregunta— no
+// entra: engancha `addEventListener` sobre ids que este navegador de mentira
+// no tiene.
 const fuente = (() => {
-  const marca = "document.getElementById('saveWeightBtn').addEventListener('click', function(){";
-  const i = APP.indexOf(marca);
-  if (i < 0) throw new Error('no encuentro el botón de guardar peso');
-  let n = 0, j = APP.indexOf('{', APP.indexOf('function(){', i));
+  const i = APP.indexOf('  function pesajeAnterior(){');
+  if (i < 0) throw new Error('no encuentro el peso anterior');
+  const g = APP.indexOf('  function guardarElPeso(', i);
+  if (g < 0) throw new Error('no encuentro el guardado del peso');
+  let n = 0, j = APP.indexOf('{', g);
   for (; j < APP.length; j++) {
     if (APP[j] === '{') n++;
-    else if (APP[j] === '}') { n--; if (!n) return APP.slice(i, APP.indexOf(');', j) + 2); }
+    else if (APP[j] === '}') { n--; if (!n) return APP.slice(i, j + 1); }
   }
   throw new Error('llaves sin cerrar');
 })();
@@ -66,9 +79,14 @@ function montar({ pesoTecleado = '', cinturaTecleada = '', pesoDeHoy = null } = 
   if (pesoDeHoy != null) PESOS['2026-08-27'] = pesoDeHoy;
   let CINTURAS = [];
 
+  // `preguntarPesoRaro` entra como falso: aquí no hay pesajes anteriores con
+  // los que comparar, así que no debería llamarse nunca —y si algún día se
+  // llamara, saltaría por no ser una función, que es mejor que pasar de
+  // largo—.
   new Function('document', 'toast', 'isoDe', 'HOY', 'PESOS', 'CINTURAS',
     'pintarPeso', 'pintarCintura', 'sbGuardarPeso', 'traducirError',
     'revisarRecordatorios', 'actualizarSemana', 'pintarRacha', 'recalcAll',
+    'PESO_MIN', 'PESO_MAX', 'preguntarPesoRaro',
     fuente)(
     { getElementById: (id) => (id === 'saveWeightBtn' ? boton : campos[id] || { value: '' }) },
     (_, m) => avisos.push(m),
@@ -79,7 +97,8 @@ function montar({ pesoTecleado = '', cinturaTecleada = '', pesoDeHoy = null } = 
     () => {}, () => {},
     (fecha, kg, cintura) => { guardados.push({ fecha, kg, cintura }); return Promise.resolve(); },
     (m) => String(m),
-    () => {}, () => {}, () => {}, () => {});
+    () => {}, () => {}, () => {}, () => {},
+    20, 400, null);
 
   return { boton, avisos, guardados, PESOS };
 }

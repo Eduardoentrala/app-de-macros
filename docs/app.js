@@ -6008,6 +6008,12 @@
     // ejecutaría nunca en esos primeros días.
     if(typeof revisarRecordatorios === 'function') revisarRecordatorios();
 
+    // Y la lista de pesajes, por lo mismo: con un solo pesaje esta función se
+    // va por el `return` de abajo, y ese pesaje único es justo el que puede
+    // estar mal teclado. Puesta después, la fila para abrir Pesajes no
+    // aparecería hasta tener dos.
+    pintarPantallaPesajes();
+
     if(pts.length < 2){
       cont.innerHTML = '<div class="sin-datos">Aún no hay suficientes registros en este periodo.</div>';
       delta.textContent = '—'; delta.className = 'chart-delta';
@@ -6177,6 +6183,203 @@
     }), function(p){ return fmtFecha(p.d); });
   }
 
+  // ---- La pantalla de los pesajes ----
+  //
+  //  Existe para poder QUITAR uno. La pantalla de Peso solo escribe el día de
+  //  hoy —y lo pisa, que es lo correcto: un peso por día—, así que un 185 en
+  //  vez de 85 descubierto al día siguiente no se podía tocar. Lo único que
+  //  borraba era «Empezar de cero», con el historial entero.
+  //
+  //  Y no se EDITA, se quita. Un número que esa persona no midió no se arregla
+  //  adivinando otro: se borra ese día y no queda nada afirmado.
+  //
+  //  SE ENSEÑAN LOS ÚLTIMOS 60 Y NO TODOS. Quien se pesa a diario tiene
+  //  trescientas sesenta filas al año, y la cintura ya enseñó lo que eso hace
+  //  con una pantalla. Sesenta cubre de sobra lo que todavía importa: la
+  //  medición del gasto mira ocho semanas, y más atrás un pesaje malo ya no
+  //  mueve nada —la semana que lo contenía se guardó cerrada hace tiempo—.
+  var PESAJES_QUE_SE_VEN = 60;
+
+  function pintarPantallaPesajes(){
+    var filas = document.getElementById('pesajeFilas');
+    var tit   = document.getElementById('pesajeTitulo');
+    var ir    = document.getElementById('pesajesIr');
+    var sub   = document.getElementById('pesajesResumen');
+    if(!filas || !tit || !ir || !sub) return;
+
+    var todas = Object.keys(PESOS || {}).filter(function(k){
+      return Number(PESOS[k]) > 0;
+    }).sort();                                        // de la vieja a la nueva
+
+    // Sin pesajes no se enseña la fila: no hay nada que abrir, y sería la
+    // única de la app que lleva a una pantalla vacía.
+    ir.hidden = !todas.length;
+    if(todas.length){
+      var ultimo = Number(PESOS[todas[todas.length - 1]]);
+      sub.textContent = todas.length + (todas.length === 1 ? ' pesaje · ' : ' pesajes · ') +
+                        'último ' + ultimo.toFixed(1) + ' kg';
+    }
+    tit.textContent = todas.length > PESAJES_QUE_SE_VEN
+      ? 'TUS ÚLTIMOS ' + PESAJES_QUE_SE_VEN + ' PESAJES'
+      : 'TUS PESAJES';
+
+    // De la más reciente a la más vieja: lo último pesado es lo que se mira,
+    // y es donde está el error que se viene a quitar.
+    var vista = todas.slice(-PESAJES_QUE_SE_VEN).reverse();
+    filas.innerHTML = vista.map(function(k, i, arr){
+      var kg = Number(PESOS[k]);
+      var previa = arr[i + 1];                        // la de antes en el tiempo
+      var dif = previa ? Math.round((kg - Number(PESOS[previa])) * 10) / 10 : null;
+      var clase = dif == null ? '' : (dif < 0 ? 'baja' : (dif > 0 ? 'sube' : 'igual'));
+      var texto = dif == null ? '—'
+                : (dif === 0 ? 'igual' : (dif > 0 ? '+' : '−') + Math.abs(dif).toFixed(1) + ' kg');
+      return '<div class="medida-fila">' +
+               '<div><div class="mf-val">' + kg.toFixed(1) + ' kg</div>' +
+               '<div class="mf-fecha">' + fmtFecha(new Date(k + 'T12:00:00')) + '</div></div>' +
+               '<div class="mf-dif ' + clase + '">' + texto + '</div>' +
+               '<button class="borrar-discreto" data-quitar-peso="' + k + '">Quitar</button>' +
+             '</div>';
+    }).join('');
+  }
+
+  // ---- Quitar uno ----
+  //
+  //  Pregunta antes, como «Empezar de cero», y por el mismo motivo: aquí el
+  //  borrado es de verdad —`weight_logs` no está entre las tablas que archiva
+  //  la 0007— y en Peso solo se escribe el día de hoy, así que lo quitado no
+  //  se puede volver a poner.
+  var pesajeQuitarSheet = document.getElementById('pesajeQuitarSheet');
+  var pesajeEnEspera = null;
+
+  function cerrarPesajeQuitar(){
+    pesajeQuitarSheet.classList.remove('open');
+    pesajeEnEspera = null;
+  }
+
+  document.getElementById('pesajeFilas').addEventListener('click', function(e){
+    var b = e.target.closest('[data-quitar-peso]');
+    if(!b) return;
+    var k = b.dataset.quitarPeso;
+    if(PESOS[k] == null) return;
+    pesajeEnEspera = k;
+    document.getElementById('pesajeQuitarTexto').textContent =
+      Number(PESOS[k]).toFixed(1) + ' kg del ' + fmtFecha(new Date(k + 'T12:00:00')) +
+      '. Deja de contar en tu progreso y en la medición de tu gasto.';
+    pesajeQuitarSheet.classList.add('open');
+  });
+  document.getElementById('pesajeQuitarNo').addEventListener('click', cerrarPesajeQuitar);
+  pesajeQuitarSheet.addEventListener('click', function(e){
+    if(e.target === pesajeQuitarSheet) cerrarPesajeQuitar();
+  });
+  document.getElementById('pesajeQuitarOk').addEventListener('click', function(){
+    var k = pesajeEnEspera;
+    cerrarPesajeQuitar();
+    if(k) quitarPesaje(k);
+  });
+
+  function quitarPesaje(fecha){
+    var antes = PESOS[fecha];
+    if(antes == null) return;
+    var cinturasAntes = CINTURAS.slice();
+
+    // LA CINTURA VIVE EN LA MISMA FILA, así que el borrado se la lleva. Se
+    // dice en el aviso: perder una medida que solo se toma cada quince días
+    // sin avisar es lo que ya pasó una vez por aquí.
+    var habiaCintura = CINTURAS.some(function(m){ return m.fecha === fecha; });
+
+    delete PESOS[fecha];
+    CINTURAS = CINTURAS.filter(function(m){ return m.fecha !== fecha; });
+    // Si era el de hoy, el campo se vacía: dejarlo con el número recién
+    // quitado invita a volver a guardarlo sin querer.
+    if(fecha === isoDe(HOY)) document.getElementById('pesoInput').value = '';
+    pintarPeso();
+    pintarCintura();
+    toast('toastPeso', 'Pesaje del ' + fmtFecha(new Date(fecha + 'T12:00:00')) + ' quitado' +
+                       (habiaCintura ? ' · con su medida de cintura' : ''));
+
+    sbBorrarPeso(fecha)
+      .then(function(){
+        // SI AÚN ESTABA EN LA COLA, FUERA TAMBIÉN. Un pesaje guardado sin
+        // señal espera ahí su turno; sin esto, la próxima vez que haya red
+        // sube el número que se acaba de borrar y reaparece solo.
+        //
+        // Va DESPUÉS del borrado y no antes: si el servidor no contesta, se
+        // deshace todo, y haber vaciado la cola antes habría dejado el
+        // pesaje en pantalla y a nadie encargado de subirlo.
+        quitarDeLaCola('peso:' + fecha);
+      })
+      ['catch'](function(e){
+        PESOS[fecha] = antes;
+        CINTURAS = cinturasAntes;
+        if(fecha === isoDe(HOY)) document.getElementById('pesoInput').value = antes;
+        pintarPeso();
+        pintarCintura();
+        toast('toastPeso', sinConexion(e)
+          ? 'Sin señal: para quitar un pesaje hace falta conexión.'
+          : 'No se pudo quitar: ' + traducirError(e.message));
+      });
+  }
+
+  // ---- UN PESO MAL TECLEADO ----
+  //
+  //  Lo único que revisaba el peso era `v > 0`. La cintura, al lado, lleva su
+  //  rango en el HTML y otra vez aquí en el código; el peso no llevaba
+  //  ninguno de los dos. Y el `check` de la columna —20 a 400— no se entera
+  //  del error que de verdad se comete: 185 en vez de 85, o 58 en vez de 85.
+  //  Esos números caben, entran, y nada vuelve a mirarlos.
+  //
+  //  Encima era permanente. Aquí solo se escribe el día de HOY, así que
+  //  pasada la medianoche no había forma de tocarlo: lo único que borraba era
+  //  «Empezar de cero», que se lleva el historial entero. Y mientras
+  //  estuviera, ese número contaba en el `peso_medio` de su semana y de ahí
+  //  en la medición del gasto, que es la que mueve las calorías —y una semana
+  //  envenenada se arrastra las ocho que mira `serieParaMedir`—.
+  //
+  //  Tres cosas, entonces: el rango duro, la pregunta cuando el número no
+  //  cuadra con el pesaje anterior, y la pantalla de Pesajes para quitar uno.
+  var PESO_MIN = 20, PESO_MAX = 400;      // el `check` de la columna, en la 0001
+
+  // El último pesaje ANTERIOR A HOY, nunca el de hoy: si acabas de teclear
+  // 185 y lo corriges a 85, comparar contra ese 185 preguntaría por la
+  // corrección, que es justo lo que no hay que estorbar.
+  function pesajeAnterior(){
+    var hoy = isoDe(HOY);
+    var ks = Object.keys(PESOS || {}).filter(function(k){
+      return k < hoy && Number(PESOS[k]) > 0;
+    }).sort();
+    if(!ks.length) return null;
+    var k = ks[ks.length - 1];
+    // Las dos fechas a medianoche y `round`, como en `tocaMedirCintura`: un
+    // día puede durar 23 o 25 horas y la resta cruda da 14,96.
+    var d = new Date(k + 'T12:00:00'); d.setHours(0, 0, 0, 0);
+    return { fecha: k, kg: Number(PESOS[k]), dias: Math.round((HOY - d) / 86400000) };
+  }
+
+  // CUÁNTO PUEDE HABER CAMBIADO DE VERDAD desde entonces.
+  //
+  //  El suelo son 3 kg porque el peso de un día se mueve un kilo largo por
+  //  agua, sal y lo que haya en el estómago, y eso no es cambio: es ruido.
+  //  Preguntar por ahí sería preguntar todos los días, y a una pregunta que
+  //  sale siempre se le da «sí» sin leerla —y entonces no sirve para el día
+  //  que de verdad hay un error—.
+  //
+  //  Y encima un kilo por semana transcurrida: sostenido eso no se ve casi
+  //  nunca, pero quien se pesa después de tres meses puede traer diez kilos
+  //  de diferencia de verdad, y a esa persona no se le va a discutir. El tope
+  //  son 15 kg: más allá la comparación ya no distingue nada.
+  function tolerarCambio(dias){
+    return Math.min(15, 3 + Math.max(0, dias) / 7);
+  }
+
+  // Null si cuadra. Si no, con qué no cuadra, para poder decírselo.
+  function pesoRaro(v){
+    var ult = pesajeAnterior();
+    if(!ult) return null;                 // el primero de todos: no hay con qué
+    var dif = Math.round((v - ult.kg) * 10) / 10;
+    if(Math.abs(dif) <= tolerarCambio(ult.dias)) return null;
+    return { kg: ult.kg, fecha: ult.fecha, dias: ult.dias, dif: dif };
+  }
+
   // Guardar peso: se registra en la fecha de hoy y la gráfica se actualiza
   document.getElementById('saveWeightBtn').addEventListener('click', function(){
     var v = Number(document.getElementById('pesoInput').value);
@@ -6206,6 +6409,21 @@
         : 'Escribe tu peso.');
       return;
     }
+    // FUERA DEL RANGO DE LA COLUMNA NO SE GUARDA, Y SE DICE AQUÍ.
+    //
+    //  Sin esto, un 850 por el punto perdido se pintaba en la gráfica, el
+    //  aviso felicitaba —«Peso guardado: 850 kg»— y un segundo después el
+    //  servidor devolvía un 400 y lo deshacía todo con un error en crudo. Lo
+    //  que esa persona ve es que la app se contradice sola.
+    //
+    //  Y sin señal es peor: el guardado se encola, se promete que subirá, y
+    //  cuando sube el servidor lo rechaza con el aviso de que «1 no se pudo».
+    if(v < PESO_MIN || v > PESO_MAX){
+      toast('toastPeso', 'Ese peso no puede ser: tiene que estar entre ' +
+                         PESO_MIN + ' y ' + PESO_MAX + ' kg. Revisa el número.');
+      return;
+    }
+
     // Fuera de rango se ignora en vez de rechazar el peso: quien se
     // equivoca tecleando la cintura no deberia perder el peso de hoy.
     //
@@ -6215,6 +6433,22 @@
     // es lo peor que puede hacerse con ella.
     var cinturaFuera = cin != null && (cin < 40 || cin > 200);
     if(cinturaFuera) cin = null;
+
+    // Y SI NO CUADRA CON EL PESAJE ANTERIOR, SE PREGUNTA ANTES DE GUARDAR.
+    //
+    //  Preguntar y no bloquear: hay gente que de verdad baja mucho, y una app
+    //  que te discute tu propio peso se vuelve inservible. Lo que no puede
+    //  pasar es que entre sin que nadie lo mire.
+    var raro = pesoRaro(v);
+    if(raro){ preguntarPesoRaro(v, cin, cinturaFuera, raro); return; }
+
+    guardarElPeso(v, cin, cinturaFuera);
+  });
+
+  // El guardado de siempre, en su propia función: la pregunta de arriba tiene
+  // que poder seguir adelante cuando se le dice que sí, y antes esto vivía
+  // dentro del `click`.
+  function guardarElPeso(v, cin, cinturaFuera){
     // Se guarda cómo estaba TODO lo que se va a tocar, no solo el peso. La
     // cintura se metía en memoria y no se retiraba nunca si el guardado
     // fallaba: quedaba una medida que no existe en la base, `tocaMedirCintura()`
@@ -6245,6 +6479,49 @@
       pintarCintura();
       toast('toastPeso', 'No se pudo guardar: ' + traducirError(e.message));
     });
+  }
+
+  // ---- La pregunta ----
+  //
+  //  Dice los dos números y la distancia entre ellos, que es lo único que
+  //  permite reconocer el error de un vistazo. «¿Seguro?» a secas no sirve:
+  //  quien acaba de teclear 185 cree que ha teclateado 85, y sin ver el 85 al
+  //  lado no tiene nada que comparar.
+  var pesoRaroSheet = document.getElementById('pesoRaroSheet');
+  var pesoEnEspera = null;
+
+  function cerrarPesoRaro(){
+    pesoRaroSheet.classList.remove('open');
+    pesoEnEspera = null;
+  }
+
+  function preguntarPesoRaro(v, cin, cinturaFuera, raro){
+    pesoEnEspera = { v: v, cin: cin, cinturaFuera: cinturaFuera };
+    var cuando = raro.dias === 1 ? 'de ayer'
+               : 'del ' + fmtFecha(new Date(raro.fecha + 'T12:00:00')) +
+                 ', hace ' + raro.dias + ' días';
+    document.getElementById('pesoRaroTexto').textContent =
+      'Escribiste ' + v.toFixed(1) + ' kg. Tu último peso fue ' +
+      raro.kg.toFixed(1) + ' kg, ' + cuando + ': son ' +
+      Math.abs(raro.dif).toFixed(1) + ' kg ' + (raro.dif > 0 ? 'más' : 'menos') + '.';
+    pesoRaroSheet.classList.add('open');
+  }
+
+  document.getElementById('pesoRaroOk').addEventListener('click', function(){
+    var p = pesoEnEspera;
+    cerrarPesoRaro();
+    if(p) guardarElPeso(p.v, p.cin, p.cinturaFuera);
+  });
+  // «Lo corrijo» devuelve el teclado al campo con el número seleccionado:
+  // cerrar la hoja y dejar a alguien buscando dónde tocar es la mitad del
+  // trabajo.
+  document.getElementById('pesoRaroNo').addEventListener('click', function(){
+    cerrarPesoRaro();
+    var campo = document.getElementById('pesoInput');
+    if(campo){ campo.focus(); if(campo.select) campo.select(); }
+  });
+  pesoRaroSheet.addEventListener('click', function(e){
+    if(e.target === pesoRaroSheet) cerrarPesoRaro();
   });
 
   pintarPeso();
@@ -7584,6 +7861,24 @@
     COLA = COLA.filter(function(x){ return x.fila !== id; });
     if(COLA.length !== antes){ colaGuardar(); pintarPendientes(); }
     return COLA.length !== antes;
+  }
+
+  // Quita de la cola lo que estuviera esperando bajo una clave.
+  //
+  //  `desencolar` no sirve para esto: busca por `fila`, que es el id de un
+  //  alta del diario. Las claves son lo otro que identifica un pendiente —hoy
+  //  `peso:<fecha>`, uno por día— y hacen falta cuando lo que se borra puede
+  //  estar todavía sin subir. Sin esto, quitar un pesaje guardado sin señal
+  //  lo borra de la pantalla y la cola lo vuelve a subir en cuanto hay red:
+  //  el número reaparece solo y nadie entiende por qué.
+  function quitarDeLaCola(clave){
+    if(!clave) return false;
+    var antes = COLA.length;
+    COLA = COLA.filter(function(x){ return x.clave !== clave; });
+    if(COLA.length === antes) return false;
+    colaGuardar();
+    pintarPendientes();
+    return true;
   }
 
   function hayPendientes(){
@@ -12378,6 +12673,35 @@
     return sbFetch('/rest/v1/weight_logs?select=log_date,weight_kg,cintura_cm' +
                    '&user_id=eq.' + sesion.user.id +
                    '&log_date=gte.' + desde + '&order=log_date.asc');
+  }
+  // Borra UN pesaje, el de esa fecha. Lo usa la pantalla de Pesajes para
+  // quitar uno mal teclado.
+  //
+  //  SE BORRA Y SE COMPRUEBA, igual que «Empezar de cero»: un DELETE que no
+  //  encaja con ninguna fila no da error, sale bien sin tocar nada. Sin releer
+  //  después, un borrado que no borró se ve idéntico a uno que sí, y la
+  //  persona solo se entera al recargar y encontrarse el número de vuelta.
+  //
+  //  Y se relee ESA fecha, no la tabla entera: lo que se quiere saber es si
+  //  queda esa fila, y pedir todo el historial para contarlo sería traerse un
+  //  año de pesajes por teléfono para mirar uno.
+  //  El `user_id=eq.` va escrito en las dos peticiones y no en una variable
+  //  compartida, aunque se repita: las políticas RLS ya lo garantizan, pero
+  //  el filtro tiene que VERSE en la línea que pide —es lo que comprueba
+  //  `filtro-usuario`, y la razón es que una consulta sin él se lee como un
+  //  descuido aunque hoy esté cubierta—.
+  function sbBorrarPeso(fecha){
+    if(!sesion || !sesion.user) return Promise.resolve();
+    var yo = sesion.user.id;
+    return sbFetch('/rest/v1/weight_logs?user_id=eq.' + yo + '&log_date=eq.' + fecha,
+                   { method:'DELETE' })
+      .then(function(){
+        return sbFetch('/rest/v1/weight_logs?select=log_date&limit=1' +
+                       '&user_id=eq.' + yo + '&log_date=eq.' + fecha);
+      })
+      .then(function(quedan){
+        if(quedan && quedan.length) throw new Error('el pesaje sigue ahí');
+      });
   }
   function sbActualizarPerfil(campos){
     if(!sesion || !sesion.user) return Promise.resolve();

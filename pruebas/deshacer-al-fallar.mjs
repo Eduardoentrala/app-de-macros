@@ -31,15 +31,21 @@ const check = (n, cond, extra = '') => {
 
 console.log('\n— Peso y cintura vuelven juntos —');
 {
-  // El manejador entero, contando llaves. Era una ventana de 2400 caracteres
+  // El guardado entero, contando llaves. Era una ventana de 2400 caracteres
   // y se quedó corta en cuanto el guardado creció —al dejar que se apunte
   // solo la cintura, ver la-cintura-no-se-perdia—: todo el deshacer quedaba
   // fuera del recorte y las cuatro comprobaciones se ponían rojas sin faltar
   // nada. Es la misma trampa que ya se pagó unas líneas más abajo.
-  const i = APP.indexOf("getElementById('saveWeightBtn')");
+  //
+  // Y SE BUSCA `guardarElPeso` Y NO EL BOTÓN. Esto colgaba del `click` del
+  // botón de Guardar, y salió de ahí al meter la pregunta por un peso que no
+  // cuadra con el anterior (ver un-peso-mal-tecleado): el manejador valida y
+  // decide, y el guardado —con su deshacer, que es lo que mira esta prueba—
+  // vive aparte para que la hoja pueda seguir adelante al decirle que sí.
+  const i = APP.indexOf('function guardarElPeso(');
   const fn = (() => {
     if (i < 0) return '';
-    let n = 0, j = APP.indexOf('{', APP.indexOf('function(){', i));
+    let n = 0, j = APP.indexOf('{', i);
     for (; j < APP.length; j++) {
       if (APP[j] === '{') n++;
       else if (APP[j] === '}') { n--; if (!n) return APP.slice(i, j + 1); }
@@ -47,6 +53,10 @@ console.log('\n— Peso y cintura vuelven juntos —');
     return APP.slice(i);
   })();
   check('existe el guardado de peso', i > 0);
+  // Y sigue colgando del botón, no se quedó huérfano.
+  check('y el botón de Guardar lo llama',
+    /guardarElPeso\(v, cin, cinturaFuera\);/.test(APP),
+    'un guardado perfecto que nadie llama no guarda nada');
 
   // Se guarda el estado ANTES de tocarlo, y de las dos cosas.
   check('se recuerda cómo estaba el peso', /var k = isoDe\(HOY\), antes = PESOS\[k\]/.test(fn));

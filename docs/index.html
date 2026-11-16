@@ -112,7 +112,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '685835b2bf';
+    var SELLO = '0a93681a35';
     // Y a la vista de app.js, que lo manda con cada fallo que apunta. Sin
     // la versión, un error de hace una semana y uno de ahora se leen igual
     // y «eso ya lo arreglé» no se puede comprobar.
@@ -1865,6 +1865,18 @@
                app, una fila con chevrón ya significa «esto tiene más dentro».
 
                Sin medidas no se enseña: no hay nada que abrir. -->
+          <!-- Y EL PESO NECESITABA LA SUYA, por un motivo distinto del de la
+               cintura: aquí solo se puede escribir el día de HOY, así que un
+               peso mal teclado que se descubre mañana no había forma de
+               tocarlo. Lo único que borraba era «Empezar de cero», que se
+               lleva el historial entero. Detrás de esta fila se puede quitar
+               un pesaje suelto. -->
+          <button class="fila-ir" id="pesajesIr" data-push="pesajes" hidden>
+            <span class="fi-txt">Pesajes</span>
+            <span class="fi-sub" id="pesajesResumen">—</span>
+            <span class="fi-chev">›</span>
+          </button>
+
           <button class="fila-ir" id="cinturaIr" data-push="cintura" hidden>
             <span class="fi-txt">Cintura</span>
             <span class="fi-sub" id="cinturaResumen">—</span>
@@ -1900,6 +1912,33 @@
 
           <div class="lista-tit" style="margin-top:4px;">TODAS LAS MEDIDAS</div>
           <div id="cinturaFilas"></div>
+          <div style="height:24px;"></div>
+        </div>
+      </div>
+
+      <!-- PESAJES
+           Para poder quitar uno. La pantalla de Peso solo escribe el día de
+           hoy -lo pisa, que es lo correcto: un peso por día- así que mientras
+           esto no existió, un 185 en vez de 85 descubierto al día siguiente
+           se quedaba para siempre, contando en el peso medio de la semana y
+           de ahí en la medición del gasto.
+
+           No se EDITA, se quita. Un número que esa persona no midió no se
+           arregla adivinando otro: se borra ese día y ya. -->
+      <div class="app-view" data-view="pesajes">
+        <div class="back-header">
+          <div class="back-header-inner">
+            <button class="back-btn" data-back>‹ Regresar</button>
+            <span class="back-title">Pesajes</span>
+            <span style="width:60px;"></span>
+          </div>
+        </div>
+        <div class="scroll">
+          <p class="hint" style="margin:14px 16px 0;">Un peso mal teclado cuenta en tu
+            progreso igual que uno bueno. Si te equivocaste, quítalo: se borra ese
+            día nada más, no tu historial.</p>
+          <div class="lista-tit" id="pesajeTitulo">TUS PESAJES</div>
+          <div id="pesajeFilas"></div>
           <div style="height:24px;"></div>
         </div>
       </div>
@@ -2453,6 +2492,34 @@
         </div>
       </div>
 
+      <!-- Quitar un pesaje suelto. Pregunta por lo mismo que «Empezar de
+           cero»: aquí el borrado es de verdad, y en Peso solo se escribe el
+           día de hoy, así que no se puede volver a poner. -->
+      <div class="sheet-backdrop" id="pesajeQuitarSheet">
+        <div class="sheet">
+          <h4>¿Quitar este pesaje?</h4>
+          <p class="hint" id="pesajeQuitarTexto">—</p>
+          <p class="wc-warn">⚠ No se puede deshacer: en Peso solo se escribe el día de hoy.</p>
+          <button class="btn-primary" id="pesajeQuitarOk">Sí, quitarlo</button>
+          <button class="btn-ghost-text" id="pesajeQuitarNo">Cancelar</button>
+        </div>
+      </div>
+
+      <!-- UN PESO QUE NO CUADRA CON EL ANTERIOR.
+           El rango de la columna (20–400) no atrapa el error que de verdad se
+           comete: 185 en vez de 85, o 58 en vez de 85. Esos números caben y
+           entran. Lo único que los distingue de un peso bueno es lo que esa
+           persona pesaba la última vez, así que se compara con eso y se
+           pregunta. No se bloquea: hay gente que de verdad baja mucho. -->
+      <div class="sheet-backdrop" id="pesoRaroSheet">
+        <div class="sheet">
+          <h4>¿Seguro que es tu peso?</h4>
+          <p class="hint" id="pesoRaroTexto">—</p>
+          <button class="btn-primary" id="pesoRaroOk">Sí, es mi peso</button>
+          <button class="btn-ghost-text" id="pesoRaroNo">Lo corrijo</button>
+        </div>
+      </div>
+
       <div class="sheet-backdrop" id="cantSheet">
         <div class="sheet">
           <h4 id="cantNombre">Alimento</h4>
@@ -2582,7 +2649,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '685835b2bf';
+    var SELLO = '0a93681a35';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que
