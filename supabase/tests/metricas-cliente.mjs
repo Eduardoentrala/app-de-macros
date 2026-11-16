@@ -56,13 +56,30 @@ await db.exec(`insert into public.coach_clientes(coach_id,cliente_id) values ('$
 await como(CLI, `insert into public.weight_logs(user_id,log_date,weight_kg,cintura_cm) values
   ('${CLI}',current_date,80.5,86),
   ('${CLI}',current_date-8,81.4,null),
-  ('${CLI}',current_date-31,83.0,89)`);
+  ('${CLI}',current_date-31,83.0,89),
+  -- Medio ano atras. La cintura se mide cada quince dias, asi que su
+  -- ventana es un ano y esta tiene que entrar; la del peso son 90 dias y
+  -- este pesaje tiene que quedarse fuera. Las dos cosas en una fila.
+  ('${CLI}',current_date-200,88.0,97)`);
 await como(CLI, `insert into public.diary_entries(user_id,entry_date,meal,food_name,quantity,unit,protein_g,carbs_g,fat_g) values
   ('${CLI}',current_date,  'Comida','Pollo',  200,'Gramos',60,10,8),
   ('${CLI}',current_date-2,'Cena',  'Pescado',150,'Gramos',35, 5,6),
   ('${CLI}',current_date-20,'Comida','Arroz', 200,'Gramos', 8,80,2)`);
 await como(CLI, `insert into public.workout_sessions(user_id,session_date,day_name,total_volume) values
-  ('${CLI}',current_date-1,'Pecho',4200), ('${CLI}',current_date-15,'Espalda',5100)`);
+  ('${CLI}',current_date-1,'Pecho',4200), ('${CLI}',current_date-15,'Espalda',5100),
+  ('${CLI}',current_date-40,'Pierna',3000)`);
+// Y una CON EL DETALLE DE LAS SERIES, que es lo que hay que saber contar.
+// Dos hechas de cuatro —las otras dos vienen rellenas por la rutina— y un
+// ejercicio con el peso del cuerpo:
+//   kg     = 2 x 10 x 60 = 1200   (las dos marcadas, no las cuatro)
+//   libres = 12                   (las dominadas, que no son kilos)
+await como(CLI, `insert into public.workout_sessions(user_id,session_date,day_name,total_volume,exercises)
+  values ('${CLI}',current_date-2,'Full',9999,'[
+    {"nombre":"Sentadilla","series":[
+      {"reps":10,"peso":60,"hecho":true},{"reps":10,"peso":60,"hecho":true},
+      {"reps":10,"peso":60,"hecho":false},{"reps":10,"peso":60,"hecho":false}]},
+    {"nombre":"Dominadas","series":[{"reps":12,"peso":0,"hecho":true}]}
+  ]'::jsonb)`);
 await como(CLI, `insert into public.cardio_logs(user_id,log_date,minutes,kind) values
   ('${CLI}',current_date-2,45,'bici'), ('${CLI}',current_date-20,30,'caminata')`);
 await como(CLI, `insert into public.chequeos_semanales(user_id,semana,hambre,energia,sueno) values
@@ -87,13 +104,46 @@ console.log('\n— Quien puede pedirlas —');
 console.log('\n— Peso y cintura —');
 {
   check('trae el ultimo peso', Number(m.peso.ultimo) === 80.5, JSON.stringify(m.peso));
-  // Los dos extremos de cada ventana, no un solo numero: el peso de un dia
-  // suelto varia dos kilos por agua y no dice nada.
-  check('y el de hace una semana', Number(m.peso.hace_7) === 81.4);
-  check('y el de hace un mes', Number(m.peso.hace_30) === 83.0);
   check('cuenta cuantas veces se peso en el mes', m.peso.apuntes_30 === 2,
     'el de hace 31 dias queda fuera: ' + m.peso.apuntes_30);
   check('y la ultima cintura con su fecha', Number(m.cintura.cm) === 86 && !!m.cintura.dia);
+
+  // LA SERIE, QUE ES LO NUEVO. Antes iban `hace_7` y `hace_30`: el ultimo
+  // pesaje contra el de hace una semana y contra el de hace un mes. Dos dias
+  // sueltos, y el peso de un dia suelto varia dos kilos por agua y sal — si
+  // el de hace siete cayo seco, la ficha decia que subio sin haber subido.
+  // Ahora va la serie y la recta la hace la app, con el mismo codigo que usa
+  // en las pantallas de esa persona.
+  check('el peso viene como serie, no como dos extremos',
+    Array.isArray(m.peso.serie) && m.peso.serie.length === 3,
+    JSON.stringify(m.peso.serie));
+  check('en orden, de la mas vieja a la mas nueva',
+    m.peso.serie[0].d < m.peso.serie[2].d, JSON.stringify(m.peso.serie));
+  check('con fecha y kilos en cada punto',
+    Number(m.peso.serie[2].kg) === 80.5 && !!m.peso.serie[2].d,
+    JSON.stringify(m.peso.serie));
+  // El de hace 31 dias entra: la ventana de la serie son NOVENTA, no los
+  // treinta de `apuntes_30`. Con un mes no hay tendencia que dibujar.
+  check('y llega hasta noventa dias atras',
+    m.peso.serie.some((p) => Number(p.kg) === 83.0),
+    JSON.stringify(m.peso.serie));
+  check('pero no mas: el de hace 200 dias se queda fuera',
+    !m.peso.serie.some((p) => Number(p.kg) === 88.0),
+    'quien se pesa a diario mandaria un ano de pares de numeros: ' +
+    JSON.stringify(m.peso.serie));
+
+  // Y LA CINTURA IGUAL, que antes era un numero suelto. Una cintura sola no
+  // dice nada: 88 no significa nada, 91 -> 88 significa que esta perdiendo
+  // grasa. Va a un ano porque se mide cada quince dias.
+  check('la cintura tambien viene como serie',
+    Array.isArray(m.cintura.serie) && m.cintura.serie.length === 3,
+    JSON.stringify(m.cintura.serie));
+  check('y solo con los dias en que se midio',
+    m.cintura.serie.every((x) => x.cm != null), JSON.stringify(m.cintura.serie));
+  check('y llega a un ano atras, no a noventa dias',
+    m.cintura.serie.some((x) => Number(x.cm) === 97),
+    'se mide cada quince dias: con noventa dias serian seis puntos y con ' +
+    'seis puntos no se ve nada. ' + JSON.stringify(m.cintura.serie));
 }
 
 console.log('\n— Adherencia —');
@@ -118,11 +168,43 @@ console.log('\n— Adherencia —');
 
 console.log('\n— Entrenamiento —');
 {
-  check('sesiones de la semana', m.entreno.sesiones_7 === 1, JSON.stringify(m.entreno));
-  check('y del mes', m.entreno.sesiones_30 === 2);
+  check('sesiones de la semana', m.entreno.sesiones_7 === 2, JSON.stringify(m.entreno));
+  check('y del mes', m.entreno.sesiones_30 === 3);
   check('cardio de la semana', m.cardio.min_7 === 45, JSON.stringify(m.cardio));
   check('y del mes', m.cardio.min_30 === 75);
   check('con sus metas', m.dias_entreno === 4 && m.meta_cardio === 150);
+}
+
+console.log('\n— El volumen, que no estaba —');
+{
+  const v = m.volumen || {};
+  // «Subio, mantuvo o bajo» era la pregunta que no se podia contestar desde
+  // la ficha: no estaba aqui, ni en la tarjeta, ni en lo que recibe la IA.
+  //
+  //   hace 1 dia  -> 4200 (sesion vieja, sin detalle: vale su total_volume)
+  //   hace 2 dias -> 1200 kg y 12 repeticiones sin peso (con detalle)
+  check('los kilos de la semana', Number(v.kg_7) === 5400, JSON.stringify(v));
+  check('y los del mes', Number(v.kg_30) === 10500,
+    '4200 + 1200 + los 5100 de hace 15 dias: ' + JSON.stringify(v));
+  check('con el mes anterior para comparar', Number(v.kg_30_antes) === 3000,
+    'la de hace 40 dias. Sin esto no hay «subio o bajo»: ' + JSON.stringify(v));
+
+  // SOLO LAS SERIES MARCADAS. Las filas vienen rellenas con lo que dice la
+  // rutina, asi que contarlas todas es contar lo que penso hacer: cuatro
+  // series de 10 a 60 kg serian 2400, y solo hizo dos.
+  check('y solo cuenta las series marcadas', Number(v.kg_7) !== 6600,
+    'con las cuatro series saldrian 2400 en vez de 1200: ' + JSON.stringify(v));
+  // Y EL `total_volume` DE ESA SESION NO SE USA: tiene detalle, asi que el
+  // total guardado (9999) es el viejo, el que sumaba kilos con repeticiones.
+  check('ni el total guardado cuando hay detalle', Number(v.kg_7) !== 14199,
+    'teniendo las series, el total guardado sobra: ' + JSON.stringify(v));
+
+  // LAS REPETICIONES SIN PESO, APARTE. Juntarlas con los kilos hace que
+  // cambiar press de banca por dominadas se lea como un derrumbe.
+  check('las repeticiones sin peso van por su lado', Number(v.libres_7) === 12,
+    JSON.stringify(v));
+  check('y no se cuelan en los kilos', Number(v.kg_7) === 5400,
+    '5412 serian las dominadas sumadas como si fueran kilos');
 }
 
 console.log('\n— Fotos, chequeo y plan —');

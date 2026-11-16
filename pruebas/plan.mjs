@@ -161,7 +161,16 @@ console.log('\n— Los números van con su comparación —');
   // Es la trampa de la que avisa la propia funcion de base de datos.
   check('se avisa de que la media es por día apuntado',
     /no entre siete/i.test(p), 'sin eso se lee como media de la semana y se decide mal');
-  check('los cambios de peso llevan signo', /d > 0 \? '\+' : ''/.test(APP));
+  // EL SIGNO VIVE AHORA EN LA TARJETA DE LA GRÁFICA. Esto miraba `delta()`,
+  // que restaba el último pesaje menos el de hace 7 o 30 días; esas dos
+  // filas se fueron —dos días sueltos no son un cambio de peso— y con ellas
+  // la función. Lo que la comprobación protege sigue en pie: un cambio sin
+  // signo explícito se lee mal, porque «0.4» y «-0.4» solo se distinguen por
+  // un guion pequeño en una lista de cifras.
+  check('los cambios llevan signo', /t\.pct > 0 \? '\+' : ''/.test(APP));
+  check('y se dice en palabras si subió o bajó',
+    /t\.dif > 0 \? 'Subió ' : 'Bajó '/.test(APP),
+    'el signo solo no se lee de un vistazo');
   // Lo escribe una persona -la nota del chequeo- y acaba en innerHTML.
   check('lo que escribe la persona va escapado', /escapar\(etiqueta\)[\s\S]{0,200}escapar\(/.test(APP));
 

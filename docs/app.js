@@ -11799,14 +11799,11 @@
            '</div>';
   }
 
-  // Un cambio de peso con su signo. El `+` explícito porque sin él «0.4» y
-  // «-0.4» se distinguen solo por un guion pequeño en una lista de cifras.
-  function delta(ahora, antes, unidad){
-    if(ahora == null || antes == null) return null;
-    var d = Math.round((Number(ahora) - Number(antes)) * 10) / 10;
-    if(d === 0) return 'igual';
-    return (d > 0 ? '+' : '') + d + ' ' + unidad;
-  }
+  // Aquí vivía `delta(ahora, antes, unidad)`, que restaba dos números y les
+  // ponía el signo. Lo usaban las dos únicas filas que comparaban el último
+  // pesaje contra el de hace 7 días y el de hace 30 —dos días sueltos—, y se
+  // fue con ellas: ahora el peso y la cintura se miran por su recta, en
+  // `tarjetaDeSerie`.
 
   // Una fecha corta, o «nunca». Las fechas de la base vienen como
   // 'AAAA-MM-DD' y hay que anclarlas a mediodía: a medianoche, según la
@@ -11826,6 +11823,62 @@
     return '<div class="card"><div class="field-label" style="margin-top:0;">' +
            escapar(titulo) + '</div>' +
            '<div class="fc-pie" style="margin-top:2px;">' + escapar(frase) + '</div></div>';
+  }
+
+  // ---- Una serie suya, dibujada ----
+  //
+  //  La ficha tenía números y ningún dibujo, y para armarle un plan a alguien
+  //  lo primero que se mira es la forma de la línea: dos kilos abajo en tres
+  //  semanas y dos kilos abajo que son una bajada y una subida no se parecen
+  //  en nada, y en una fila de texto se ven igual.
+  //
+  //  Usa el MISMO `svgDeSerie` y la MISMA `tendenciaDePeso` que las pantallas
+  //  de esa persona. No por ahorrar código: porque si la ficha calculara su
+  //  propia tendencia, el entrenador y la persona verían números distintos de
+  //  los mismos pesajes y no habría forma de saber cuál creer.
+  //
+  //  `pts` llega como `{d: Date, w: número}`, que es lo que espera la recta.
+  function tarjetaDeSerie(titulo, pts, unidad, vacia){
+    if(!pts.length) return tarjetaVacia(titulo, vacia);
+
+    var t = tendenciaDePeso(pts);
+    var chip = t ? (t.pct > 0 ? '+' : '') + t.pct + '% ' + lapso(t.dias) : '—';
+    var clase = !t ? '' : (t.dif > 0 ? 'sube' : t.dif < 0 ? 'baja' : '');
+    var resumen = !t
+      ? (pts.length === 1
+          ? 'Una sola medida: todavía no hay tendencia.'
+          : 'Sus medidas caben en muy pocos días: todavía no hay tendencia.')
+      : (t.dif === 0 ? 'Sin cambio '
+                     : (t.dif > 0 ? 'Subió ' : 'Bajó ') +
+                       Math.abs(t.dif).toFixed(1) + ' ' + unidad + ' ') +
+        lapso(t.dias) + ' · última ' + t.ultimo.toFixed(1) + ' ' + unidad;
+
+    // Con un punto no hay línea. Se dice, que un hueco en blanco se lee como
+    // que algo falló.
+    var dibujo = pts.length >= 2
+      ? svgDeSerie(pts.map(function(p){ return { d: p.d, v: p.w }; }),
+                   function(p){ return fmtFecha(p.d); })
+      : '<div class="sin-datos">Con una sola medida no hay línea que dibujar.</div>';
+
+    return '<div class="card">' +
+      '<div class="chart-title-row">' +
+        '<span style="font:800 15px/1 sans-serif;">' + escapar(titulo) + '</span>' +
+        '<span class="chart-delta ' + clase + '">' + escapar(chip) + '</span>' +
+      '</div>' + dibujo +
+      '<div class="peso-resumen">' + escapar(resumen) + '</div></div>';
+  }
+
+  // «Subió, se mantuvo o bajó», que es la pregunta de verdad.
+  //
+  //  La banda del 2 % es la misma con la que el asistente juzga el volumen de
+  //  la semana. Tiene que ser la misma: si aquí dijera «se mantuvo» y el
+  //  lunes el cierre le dice a esa persona «bajaste», los dos lados de la
+  //  misma app se estarían contradiciendo sobre el mismo número.
+  function comparado(ahora, antes){
+    var a = Number(ahora) || 0, b = Number(antes) || 0;
+    if(!b) return a ? 'sin periodo anterior con que comparar' : '';
+    var d = Math.round((a - b) / b * 100);
+    return d > 2 ? 'subió ' + d + '%' : d < -2 ? 'bajó ' + Math.abs(d) + '%' : 'se mantuvo';
   }
 
   function pintarMetricas(){
@@ -11867,28 +11920,78 @@
         ], 'Las medias son de los días que APUNTÓ, no entre siete.')
       : tarjetaVacia('Está apuntando', 'No ha apuntado comida en los últimos 30 días.');
 
+    // EL PESO: la gráfica primero y los números debajo.
+    //
+    //  Aquí había dos filas —«En la semana» y «En el mes»— que eran el último
+    //  pesaje contra el de hace 7 y contra el de hace 30. Dos días sueltos,
+    //  con un peso que varía un kilo largo por agua y sal: si el de hace
+    //  siete cayó seco, la ficha decía que subió ochocientos gramos sin que
+    //  esa persona hubiera subido nada. Se fueron, y con ellas `hace_7` y
+    //  `hace_30` de la función de la base.
+    var serieP = (p.serie || []).map(function(x){
+      return { d: new Date(x.d + 'T12:00:00'), w: Number(x.kg) };
+    });
     html += hayPeso
-      ? tarjetaFicha('Peso y cintura', [
+      // La frase del hueco no es decorativa: `hayPeso` puede ser cierto con
+      // la serie vacía —alguien cuyo último pesaje es de hace cuatro meses
+      // tiene «último peso» y ningún punto en la ventana— y una tarjeta en
+      // blanco se lee como que algo falló.
+      ? tarjetaDeSerie('Cómo va su peso', serieP, 'kg',
+                       'No se ha pesado en los últimos 90 días.') +
+        tarjetaFicha('Peso', [
           filaFicha('Último peso', p.ultimo != null ? p.ultimo + ' kg' : null,
                     p.ultimo_dia ? diaCorto(p.ultimo_dia) : ''),
-          filaFicha('En la semana', delta(p.ultimo, p.hace_7, 'kg')),
-          filaFicha('En el mes',    delta(p.ultimo, p.hace_30, 'kg')),
-          filaFicha('Se pesó',      (p.apuntes_30 || 0) + ' de 30 días'),
-          filaFicha('Última cintura', m.cintura && m.cintura.cm != null ? m.cintura.cm + ' cm' : null,
-                    m.cintura && m.cintura.dia ? diaCorto(m.cintura.dia) : '')
+          // Cuántas veces se pesó es lo que dice si la tendencia de arriba se
+          // puede creer: una recta por tres puntos en un mes es un dibujo,
+          // no una medición.
+          filaFicha('Se pesó', (p.apuntes_30 || 0) + ' de 30 días')
         ])
-      : tarjetaVacia('Peso y cintura', 'No se ha pesado en los últimos 30 días.');
+      : tarjetaVacia('Peso', 'No se ha pesado en los últimos 30 días.');
 
+    // LA CINTURA, QUE ERA UN NÚMERO SUELTO. Y un número suelto de cintura no
+    // dice nada: 88 no significa nada, 91 → 88 significa que está perdiendo
+    // grasa. Es además la única medida que distingue grasa de músculo, que es
+    // justo lo que la báscula no sabe hacer, así que aquí pesa más que el
+    // peso: alguien puede estar plano en kilos y bajando de cintura, y eso es
+    // que el plan está funcionando.
+    var serieC = ((m.cintura && m.cintura.serie) || []).map(function(x){
+      return { d: new Date(x.d + 'T12:00:00'), w: Number(x.cm) };
+    });
+    html += tarjetaDeSerie('Cómo va su cintura', serieC, 'cm',
+                           'No tiene ninguna medida de cintura en el último año.');
+
+    // EL VOLUMEN NO ESTABA EN NINGUNA PARTE: ni aquí, ni en la función de la
+    // base, ni en lo que recibe la IA al pulsar «Analizar». O sea que para
+    // saber si alguien subió, mantuvo o bajó había que entrar a mirarle las
+    // sesiones una por una.
+    //
+    // Y VA EN «kg·rep» CON LAS REPETICIONES SIN PESO APARTE. Sumarlas sería
+    // decir que quien cambia press de banca por dominadas se derrumbó un
+    // 98 %: son unidades distintas y no caben en el mismo número.
+    var vol = m.volumen || {};
     html += hayEntreno
       ? tarjetaFicha('Entrenamiento', [
           filaFicha('Fuerza esta semana', (e.sesiones_7 || 0),
                     m.dias_entreno ? 'de ' + m.dias_entreno : ''),
           filaFicha('Fuerza en el mes',   (e.sesiones_30 || 0)),
           filaFicha('Última sesión',      diaCorto(e.ultima)),
+          filaFicha('Volumen del mes',
+                    vol.kg_30 ? mil(Math.round(vol.kg_30)) + ' kg·rep' : null,
+                    comparado(vol.kg_30, vol.kg_30_antes)),
+          filaFicha('Volumen de la semana',
+                    vol.kg_7 ? mil(Math.round(vol.kg_7)) + ' kg·rep' : null,
+                    comparado(vol.kg_7, vol.kg_7_antes)),
+          // Solo si las hay. A quien entrena todo con barra, una fila de
+          // ceros no le dice nada y le quita sitio a lo que sí.
+          Number(vol.libres_30) > 0
+            ? filaFicha('Repeticiones sin peso', Math.round(vol.libres_30) + ' en el mes',
+                        comparado(vol.libres_30, vol.libres_30_antes))
+            : '',
           filaFicha('Cardio esta semana', (c.min_7 || 0) + ' min',
                     m.meta_cardio ? 'de ' + m.meta_cardio : ''),
           filaFicha('Cardio en el mes',   (c.min_30 || 0) + ' min')
-        ])
+        ], 'El volumen son los kilos levantados por repetición. Las ' +
+           'repeticiones sin peso van aparte porque no son kilos.')
       : tarjetaVacia('Entrenamiento', 'Sin entrenamientos ni cardio en el mes.');
 
     // ---- Lo que la app le cambió, y por qué ----
