@@ -66,7 +66,12 @@ console.log('\n— Peso y cintura vuelven juntos —');
   // guardar la referencia vieja no serviría de nada.
   check('se copia la lista, no se apunta a ella', /CINTURAS\.slice\(\)/.test(fn));
 
-  const cat = fn.slice(fn.indexOf("sbGuardarPeso(k, PESOS[k], cin)['catch']"));
+  // El `catch` del guardado. Se busca por `['catch']` y no por la llamada
+  // entera: la llamada ya cambió dos veces —la cintura dejó de salir de `cin`
+  // para salir de `CINTURAS`, que es lo que arregló perderla sin señal— y
+  // cada vez esto se ponía rojo sin que el deshacer tuviera nada malo. En
+  // `guardarElPeso` no hay otro.
+  const cat = fn.slice(fn.indexOf("['catch']"));
   check('al fallar vuelve el peso', /if\(antes == null\) delete PESOS\[k\]; else PESOS\[k\] = antes;/.test(cat));
   check('y también la cintura', /CINTURAS = cinturasAntes;/.test(cat),
     'sin esto queda una medida que no existe en la base');

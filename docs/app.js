@@ -5928,7 +5928,62 @@
 
   var RANGO = '14';
   var DIAS_RANGO = {'14': 14, 'mes': 30, 'anio': 365};
-  var NOMBRE_RANGO = {'14': '14 días', 'mes': 'el mes', 'anio': 'el año'};
+  // `NOMBRE_RANGO` vivía aquí —{'14': '14 días', 'mes': 'el mes', …}— y era el
+  // rótulo del titular de la gráfica. Se fue con él: el periodo que se nombra
+  // ahora es el de los pesajes que hay, no el del botón pulsado.
+
+  // ---- La tendencia del peso ----
+  //
+  //  Recta de mínimos cuadrados sobre los pesajes del periodo, con los DÍAS
+  //  de verdad en el eje y no la posición en la lista. Eso importa aquí y no
+  //  importa en el cierre semanal: las semanas van una detrás de otra, pero
+  //  los pesajes no —te pesas tres días seguidos, te saltas nueve, vuelves—,
+  //  y contándolos como si estuvieran repartidos la pendiente sale de un
+  //  calendario que no existe.
+  //
+  //  Devuelve null cuando no hay con qué: menos de dos pesajes, o todos
+  //  dentro de muy pocos días. Tres días es el suelo porque por debajo lo que
+  //  se mide es el agua del cuerpo, no el peso.
+  var DIAS_DE_TENDENCIA = 3;
+
+  function tendenciaDePeso(pts){
+    var n = (pts || []).length;
+    if(n < 2) return null;
+    var t0 = pts[0].d.getTime();
+    // `round` y no la división cruda: con el cambio de horario un día dura 23
+    // o 25 horas, y un x de 13,96 desplaza la recta entera.
+    var x = pts.map(function(p){ return Math.round((p.d.getTime() - t0) / 86400000); });
+    var dias = x[n - 1];
+    if(dias < DIAS_DE_TENDENCIA) return null;
+
+    var Sx = 0, Sy = 0, Sxy = 0, Sxx = 0;
+    for(var i = 0; i < n; i++){
+      Sx += x[i]; Sy += pts[i].w; Sxy += x[i] * pts[i].w; Sxx += x[i] * x[i];
+    }
+    var den = n * Sxx - Sx * Sx;
+    if(!den) return null;                      // todos el mismo día
+    var kgPorDia = (n * Sxy - Sx * Sy) / den;
+    var alPrincipio = (Sy - kgPorDia * Sx) / n;   // lo que dice la recta el día 0
+
+    // El porcentaje se mide contra el principio de la RECTA, no contra el
+    // primer pesaje: si ese pesaje estaba alto por agua, dividir por él
+    // encoge el porcentaje justo cuando más engaña.
+    return {
+      dif: Math.round(kgPorDia * dias * 10) / 10,
+      pct: alPrincipio > 0 ? Math.round(kgPorDia * dias / alPrincipio * 1000) / 10 : 0,
+      dias: dias,
+      ultimo: pts[n - 1].w
+    };
+  }
+
+  // «en 12 días», «en 4 meses». En días hasta mes y medio, que es hasta donde
+  // un número de días se lee de un vistazo; más allá, «en 112 días» obliga a
+  // dividir mentalmente.
+  function lapso(dias){
+    if(dias < 45) return 'en ' + dias + (dias === 1 ? ' día' : ' días');
+    var m = Math.round(dias / 30.4);
+    return 'en ' + m + (m === 1 ? ' mes' : ' meses');
+  }
 
   function serieDePeso(){
     var n = DIAS_RANGO[RANGO], pts = [];
@@ -6021,17 +6076,42 @@
       return;
     }
 
-    // Variación real: del primer registro del periodo al último
-    var ini = pts[0].w, fin = pts[pts.length-1].w;
-    var difKg = Math.round((fin - ini) * 10) / 10;
-    var pct = Math.round((fin - ini) / ini * 1000) / 10;
-    var signo = difKg > 0 ? '+' : '';
-    delta.textContent = signo + pct + '% en ' + NOMBRE_RANGO[RANGO];
-    delta.className = 'chart-delta ' + (difKg > 0 ? 'sube' : difKg < 0 ? 'baja' : '');
-    resumen.textContent = difKg === 0
-      ? 'Sin cambio en ' + NOMBRE_RANGO[RANGO] + ' · ' + fin.toFixed(1) + ' kg'
-      : (difKg > 0 ? 'Subiste ' : 'Bajaste ') + Math.abs(difKg).toFixed(1) + ' kg en ' +
-        NOMBRE_RANGO[RANGO] + ' · de ' + ini.toFixed(1) + ' a ' + fin.toFixed(1) + ' kg';
+    // LA TENDENCIA, NO EL PRIMERO CONTRA EL ÚLTIMO.
+    //
+    //  Esto era `fin - ini`: el primer pesaje del periodo contra el último, y
+    //  el resto de los puntos de adorno. Es exactamente lo que `gastoMedido`
+    //  se prohíbe a sí mismo unas pantallas más allá —«la pendiente usa todos
+    //  los puntos, no el primero contra el último, que es tirar la mitad de
+    //  los datos»—, y aquí pesaba más, porque esta es la cifra que se mira
+    //  todos los días.
+    //
+    //  Con dos extremos ruidosos el titular baila solo: pesarte un lunes
+    //  salado y un domingo en ayunas da «bajaste 1,8 kg» sin que hayas
+    //  perdido nada. La recta por todos los puntos no se mueve por eso.
+    //
+    //  Y DECÍA «EN 14 DÍAS» SIEMPRE. El rótulo era el del botón, no el de los
+    //  datos: con dos pesajes de anteayer y ayer ponía igual «en 14 días».
+    //  Ahora dice los días que de verdad hay entre el primero y el último.
+    var t = tendenciaDePeso(pts);
+    if(!t){
+      // Pasa de verdad: el primer periodo de alguien que acaba de empezar, o
+      // un «año» con dos pesajes de esta semana. Decir que no hay tendencia
+      // es más útil que inventar una con dos puntos pegados.
+      var juntos = Math.round((pts[pts.length-1].d - pts[0].d) / 86400000);
+      delta.textContent = '—'; delta.className = 'chart-delta';
+      resumen.textContent = 'Entre tu primer y tu último pesaje de este periodo hay ' +
+        juntos + (juntos === 1 ? ' día' : ' días') + ': todavía no hay tendencia.';
+    } else {
+      var difKg = t.dif;
+      delta.textContent = (t.pct > 0 ? '+' : '') + t.pct + '% ' + lapso(t.dias);
+      delta.className = 'chart-delta ' + (difKg > 0 ? 'sube' : difKg < 0 ? 'baja' : '');
+      // El último pesaje va en crudo, sin pasar por la recta: es el número que
+      // esa persona vio en la báscula y el que espera reconocer aquí.
+      resumen.textContent = (difKg === 0
+          ? 'Sin cambio '
+          : (difKg > 0 ? 'Subiste ' : 'Bajaste ') + Math.abs(difKg).toFixed(1) + ' kg ')
+        + lapso(t.dias) + ' · último pesaje ' + t.ultimo.toFixed(1) + ' kg';
+    }
 
     // En el año, el mes; en los rangos cortos, el día. Un «10-19» repetido
     // doce veces no distingue octubres de distintos años, y un «oct» suelto
@@ -6306,7 +6386,18 @@
         // Va DESPUÉS del borrado y no antes: si el servidor no contesta, se
         // deshace todo, y haber vaciado la cola antes habría dejado el
         // pesaje en pantalla y a nadie encargado de subirlo.
-        quitarDeLaCola('peso:' + fecha);
+        //
+        // Y TODO ESTO ENTRE `try`: el borrado ya salió bien en la base, así
+        // que nada de lo de aquí puede acabar en el `catch` de abajo. Si
+        // acabara, el pesaje volvería a la pantalla sin estar en el servidor
+        // —y con un aviso diciendo que no se pudo quitar—.
+        try{
+          quitarDeLaCola('peso:' + fecha);
+          // Y el perfil, que lleva la media de siete días: quitar un pesaje
+          // la mueve igual que apuntarlo, y si el que se va era el malo la
+          // mueve bastante.
+          ponerPesoDeLaBascula();
+        }catch(e2){ apuntarFallo('tras_quitar_pesaje', e2); }
       })
       ['catch'](function(e){
         PESOS[fecha] = antes;
@@ -6470,15 +6561,60 @@
       pintarCintura();
     }
 
-    sbGuardarPeso(k, PESOS[k], cin)['catch'](function(e){
-      if(antes == null) delete PESOS[k]; else PESOS[k] = antes;
-      // La cintura va en la MISMA fila que el peso: si no se guardó una,
-      // tampoco se guardó la otra, así que las dos vuelven atrás.
-      CINTURAS = cinturasAntes;
-      pintarPeso();
-      pintarCintura();
-      toast('toastPeso', 'No se pudo guardar: ' + traducirError(e.message));
-    });
+    // LA FILA DE HOY VA CON TODO LO QUE SE SABE DE HOY, no solo con lo que se
+    // acaba de teclear.
+    //
+    //  Se mandaba `cin`, que es null si esta vez no se tecleó ninguna. Online
+    //  daba igual —el upsert solo pisa las columnas que van en el cuerpo, así
+    //  que la cintura de antes se queda—. SIN SEÑAL NO:
+    //
+    //    · se guarda peso y cintura, y la petición se encola con la clave
+    //      `peso:<fecha>`, una por día;
+    //    · la cintura se esconde y el campo se vacía, porque ya está medida;
+    //    · se vuelve uno a pesar ese mismo día —por la tarde, otra báscula—;
+    //    · ese segundo guardado va sin cintura y, por la clave, SUSTITUYE al
+    //      anterior en la cola.
+    //
+    //  Y ahí se perdió: la medida sigue en pantalla, `tocaMedirCintura()`
+    //  cree que ya se midió y no la vuelve a pedir en quince días, pero lo
+    //  que va a subir no la lleva. Se nota al recargar, cuando reaparece el
+    //  aviso de medirse y nadie entiende por qué.
+    //
+    //  Cogiéndola de `CINTURAS` —que para hoy ya está puesta al día unas
+    //  líneas más arriba— el cuerpo que se encola lleva siempre las dos
+    //  cosas, se haya tecleado una o las dos.
+    var deHoy = CINTURAS.filter(function(m){ return m.fecha === k; })[0];
+
+    sbGuardarPeso(k, PESOS[k], deHoy ? deHoy.cm : null)
+      .then(function(subio){
+        // EL PERFIL, AL DÍA. `weight_kg` del perfil es la media de siete días
+        // y de ella salen la meta de proteína —peso × 2— y el suelo de
+        // calorías. Solo se recalculaba al abrir la app, así que pesarse no
+        // movía nada hasta la siguiente vez que entraras.
+        //
+        // Solo si subió de verdad: encolado no hay red con la que escribir el
+        // perfil, y el reintento ya está donde estaba, en la próxima apertura.
+        //
+        // Y ENTRE `try` A PROPÓSITO. Esto es un añadido sobre un guardado que
+        // YA salió bien; lo que se tira desde aquí cae en el `catch` de
+        // abajo, que deshace el peso y avisa de que no se pudo guardar. O
+        // sea: un fallo pintando el perfil borraría de la pantalla un peso
+        // que está en la base. Lo enseñó la prueba del borrado, donde pasó
+        // exactamente eso.
+        if(subio){
+          try{ ponerPesoDeLaBascula(); }
+          catch(e2){ apuntarFallo('perfil_peso', e2); }
+        }
+      })
+      ['catch'](function(e){
+        if(antes == null) delete PESOS[k]; else PESOS[k] = antes;
+        // La cintura va en la MISMA fila que el peso: si no se guardó una,
+        // tampoco se guardó la otra, así que las dos vuelven atrás.
+        CINTURAS = cinturasAntes;
+        pintarPeso();
+        pintarCintura();
+        toast('toastPeso', 'No se pudo guardar: ' + traducirError(e.message));
+      });
   }
 
   // ---- La pregunta ----
@@ -12725,7 +12861,11 @@
       headers:{ 'Prefer':'resolution=merge-duplicates,return=minimal' },
       body: JSON.stringify(fila)
     };
+    // Devuelve si SUBIÓ o si se quedó en la cola, que no es lo mismo para
+    // quien llama: con el peso en la cola no hay red para nada más —por
+    // ejemplo, para poner al día el peso del perfil—.
     return sbFetch(ruta, op)
+      .then(function(){ return true; })
       ['catch'](function(e){
         if(!sinConexion(e)) throw e;   // error de verdad: que lo deshaga quien llamó
         // Aquí no hace falta mandar un id propio como en la comida: la tabla
@@ -12737,7 +12877,7 @@
         // tiene que subir el último valor, no tres upserts encadenados.
         encolar({ ruta: ruta, op: op, tipo:'peso', clave:'peso:' + fecha });
         toast('toastPeso', 'Sin señal: se subirá cuando vuelva');
-        return null;
+        return false;
       });
   }
   // Las altas de comida que están en la cola sin subir, con la MISMA forma

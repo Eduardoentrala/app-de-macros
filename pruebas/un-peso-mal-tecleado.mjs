@@ -179,14 +179,15 @@ console.log('\nY lo que distingue un 185 de un peso de verdad');
 // ------------------------------------------------------------------
 console.log('\nY un pesaje se puede quitar, con lo que arrastra');
 {
-  const quitar = async ({ falla, sinRed, enLaCola }) => {
+  const quitar = async ({ falla, sinRed, enLaCola, perfilRevienta }) => {
     const fecha = haceDias(3);
     const PESOS = { [haceDias(5)]: 86, [fecha]: 185, [isoDe(HOY)]: 85 };
     const dom = domFalso({ pesoInput: '85' });
-    const borrados = [], claves = [], avisos = [];
+    const borrados = [], claves = [], avisos = [], perfil = [], fallos = [];
     const armar = new Function(
       'PESOS', 'CINTURAS', 'isoDe', 'HOY', 'document', 'pintarPeso', 'pintarCintura',
       'toast', 'fmtFecha', 'sbBorrarPeso', 'quitarDeLaCola', 'sinConexion', 'traducirError',
+      'ponerPesoDeLaBascula', 'apuntarFallo',
       sinC(fn('function quitarPesaje(fecha){')) +
       '; return { quitarPesaje: quitarPesaje, cinturas: function(){ return CINTURAS; } };'
     );
@@ -196,11 +197,13 @@ console.log('\nY un pesaje se puede quitar, con lo que arrastra');
       (donde, msg) => avisos.push(msg), fmtFecha,
       (f) => { borrados.push(f); return falla ? Promise.reject(new Error('no pude')) : Promise.resolve(); },
       (c) => { claves.push(c); return !!enLaCola; },
-      () => !!sinRed, (m) => m
+      () => !!sinRed, (m) => m,
+      () => { perfil.push(1); if(perfilRevienta) throw new Error('el perfil reventó'); },
+      (donde) => { fallos.push(donde); }
     );
     caja.quitarPesaje(fecha);
     await new Promise((r) => setTimeout(r, 0));
-    return { fecha, PESOS, cinturas: caja.cinturas(), borrados, claves, avisos, dom };
+    return { fecha, PESOS, cinturas: caja.cinturas(), borrados, claves, avisos, perfil, fallos, dom };
   };
 
   const r = await quitar({});
@@ -242,6 +245,28 @@ console.log('\nY un pesaje se puede quitar, con lo que arrastra');
   ok(/[Ss]in señal/.test(sinRed.avisos[1] || ''),
      'y sin señal se dice que hace falta conexión',
      'dijo: «' + (sinRed.avisos[1] || '') + '»');
+
+  // EL PESO DEL PERFIL ES LA MEDIA DE SIETE DÍAS: quitar un pesaje la mueve
+  // igual que apuntarlo, y si el que se va era el malo la mueve mucho.
+  ok(r.perfil.length === 1, 'y el peso del perfil se recalcula',
+     'de él salen la meta de proteína y el suelo de calorías');
+  ok(malo.perfil.length === 0, 'pero no si el borrado falló',
+     'no cambió nada que recalcular');
+
+  // LO QUE NO PUEDE PASAR: que un fallo PINTANDO el perfil deshaga un borrado
+  // que ya salió bien en la base. Lo enseñó esta misma prueba: al añadir la
+  // llamada sin protegerla, la excepción caía en el `catch` del borrado y el
+  // pesaje volvía a la pantalla sin estar en el servidor.
+  const revienta = await quitar({ perfilRevienta: true });
+  ok(revienta.PESOS[revienta.fecha] === undefined,
+     'y si el perfil revienta, el pesaje sigue quitado',
+     JSON.stringify(revienta.PESOS) + ' — ya no está en la base: devolverlo a ' +
+     'la pantalla sería enseñar algo que no existe');
+  ok(revienta.fallos.length === 1, '  y el fallo queda apuntado',
+     'callarlo del todo deja un perfil viejo sin que nadie se entere');
+  ok(!/No se pudo quitar/.test(revienta.avisos.join(' ')),
+     '  y no se dice que no se pudo, porque sí se pudo',
+     'dijo: ' + JSON.stringify(revienta.avisos));
 }
 
 console.log('\nY quitar de la cola quita solo lo suyo');
