@@ -14846,6 +14846,9 @@
       .then(function(filas){
         var corte = isoDe(iniCerrada);
         var finCerrada = isoDe(anclaSemana);      // exclusivo: ya es la nueva
+        // Y EL TERCER CORTE, el de abajo. Con dos no bastaba: ver la nota
+        // del reparto, unas lineas mas abajo.
+        var iniPreviaIso = isoDe(iniPrevia);
         // LAS VECES SE CUENTAN POR DÍAS, EL VOLUMEN POR FILAS.
         //
         //  `workout_sessions` no tiene nada que impida dos filas el mismo
@@ -14871,8 +14874,25 @@
         //  una afirmacion y no un hueco: es justo el fallo que ya se pago
         //  con los macros.
         var minEsta = [], minAntes = [];
+        // DOS MONTONES, PERO TRES CORTES. Aqui habia uno solo y por eso
+        // «la semana anterior» eran TODAS las anteriores sumadas.
+        //
+        // Esta consulta trae CUATRO semanas, que hacen falta para la
+        // tendencia. El reparto decia: lo que no es de la semana cerrada,
+        // a `anterior`. O sea que a `anterior` caian tres semanas.
+        //
+        // Con sus datos: la semana cerrada 14.753 y «la anterior» 65.567,
+        // que son las del 12, 19 y 26 de octubre juntas. El asistente le
+        // dijo «el volumen bajo un 73 %» cuando habia bajado un 53 %, y
+        // cuando pregunto por que, le explico muy convencido las causas de
+        // algo que no habia pasado.
+        //
+        // Comparar una semana contra tres SIEMPRE parece un derrumbe: para
+        // empatar habria que triplicar el volumen. Y no era solo el chat:
+        // el cierre de los lunes manda estos mismos campos.
         (filas || []).forEach(function(f){
           if(f.session_date >= finCerrada) return;   // de la semana en curso
+          if(f.session_date < iniPreviaIso) return;  // mas viejas: solo para la tendencia
           var esDeEsta = f.session_date >= corte;
           (esDeEsta ? estaSemana : anterior).push(Number(f.total_volume) || 0);
           (esDeEsta ? diasEsta : diasAntes)[f.session_date] = true;

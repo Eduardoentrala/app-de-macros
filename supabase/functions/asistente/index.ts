@@ -78,7 +78,7 @@ const CORS = {
 //
 // Ahora lo dice: un GET sin sesión devuelve este sello y nada más.
 // `pruebas/funciones-vivas.mjs` lo compara con el del repo.
-const SELLO = 'ad39f9a75d';
+const SELLO = 'b8c3d45ad4';
 
 // Tope diario por persona. Es la única defensa contra que un solo usuario
 // -o un token robado- vacíe la cuenta en una noche con un bucle.
@@ -258,9 +258,16 @@ function comoVa(p: Record<string, unknown>): string {
     // Y se dice que la de hoy NO entra, porque si no, el modelo rellena el
     // hueco: un «no veo tus entrenos de esta semana» es mejor que un
     // silencio que se lee como «no entrenaste».
+    // «3 día(s) de 4» ES UN FORMATO QUE SE LEE MAL, y no en teoría: el
+    // modelo lo convirtió en «entrenaste 4 de 4 días». El paréntesis del
+    // plural pegado a un «de 4» invita a juntar los dos números.
+    //
+    // Escrito con palabras no hay nada que juntar.
+    const d = n(e.sesiones)!;
     let t = `- Gimnasio en la última semana COMPLETA, no la de hoy ` +
-            `(de la de hoy no te paso datos de gimnasio): ` +
-            `${n(e.sesiones)} día(s)` + (meta ? ` de ${meta}` : '');
+            `(de la de hoy no te paso datos de gimnasio): entrenó ` +
+            `${d} ${d === 1 ? 'día' : 'días'}` +
+            (meta ? `, de los ${meta} que planea` : '');
     const v = n(e.volumen), va = n(e.volumen_antes);
     if (v && va) {
       const d = Math.round((v - va) / va * 100);

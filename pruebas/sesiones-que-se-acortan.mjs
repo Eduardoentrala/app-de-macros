@@ -87,10 +87,13 @@ console.log('\nLa media se hace con lo que hay, o no se hace');
   })();
   ok(cuerpo.length > 400, 'se encuentra el agregado', cuerpo.length + ' caracteres');
 
-  const correr = (filas) => new Function('filas', 'corte', 'finCerrada',
+  // TRES CORTES, NO DOS. El agregado dejó de poder repartir con uno
+  // arriba y otro abajo: «anterior» eran TODAS las semanas anteriores
+  // sumadas, y ahora tiene su propio suelo. Aquí solo hay que pasárselo.
+  const correr = (filas) => new Function('filas', 'corte', 'finCerrada', 'iniPreviaIso',
     cuerpo + '\n return { minEsta: minEsta, minAntes: minAntes, ' +
     'mediaEsta: media(minEsta), mediaAntes: media(minAntes) };'
-  )(filas, '2026-10-20', '2026-10-27');
+  )(filas, '2026-10-20', '2026-10-27', '2026-10-13');
 
   const s = (fecha, vol, min) => ({ session_date: fecha, total_volume: vol, duration_min: min });
 

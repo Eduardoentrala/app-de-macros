@@ -154,9 +154,19 @@ console.log('\nLo que no se sabe se dice, no se inventa un cero');
   // línea del gimnasio desapareció entera sin que nada fallara. Es el
   // acoplamiento invisible de siempre: el nombre lo pone `datosDeEntreno()`
   // en la app, a seis mil líneas de aquí.
-  ok(/Gimnasio/.test(lleno) && /\b3 día/.test(lleno),
+  // CON PALABRAS, NO «3 día(s) de 4». Ese formato el modelo lo leyó como
+  // «entrenaste 4 de 4 días»: el paréntesis del plural pegado a un «de 4»
+  // invita a juntar los dos números, y entonces el chat afirma algo que
+  // el contexto no dice. Con el plural resuelto no hay nada que juntar.
+  ok(/Gimnasio/.test(lleno) && /entrenó 3 días/.test(lleno),
      'y el gimnasio, con sus días',
      'salió: ' + JSON.stringify(lleno).slice(0, 300));
+  ok(!/día\(s\)/.test(lleno),
+     'sin el «día(s)» que se leía como otro número',
+     (lleno.match(/- Gimnasio[^\n]*/) || [''])[0]);
+  ok(/de los 3 que planea/.test(lleno),
+     'y el plan dicho aparte, no pegado',
+     (lleno.match(/- Gimnasio[^\n]*/) || [''])[0]);
   ok(/subió/.test(lleno), 'y si el volumen subió o bajó');
 
   // Y DICE DE QUÉ SEMANA HABLA, que es donde mentía.
