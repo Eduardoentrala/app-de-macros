@@ -7126,10 +7126,43 @@
     goalP.value = m.P; goalC.value = m.C; goalG.value = m.G;
     actualizarMetas();
 
-    // El peso del registro cuenta como el primero
-    PESOS[isoDe(HOY)] = Math.round(m.peso * 10) / 10;
-    document.getElementById('pesoInput').value = PESOS[isoDe(HOY)];
-    pintarPeso();
+    // AQUÍ HABÍA UN PESAJE INVENTADO, UNO POR APERTURA.
+    //
+    //  Estas tres líneas:
+    //
+    //      PESOS[isoDe(HOY)] = Math.round(m.peso * 10) / 10;
+    //      document.getElementById('pesoInput').value = PESOS[isoDe(HOY)];
+    //      pintarPeso();
+    //
+    //  y encima de ellas un comentario que decía «el peso del registro
+    //  cuenta como el primero». No contaba: no se guardaba en ningún sitio.
+    //  Lo que hacían de verdad era otra cosa, y peor.
+    //
+    //  `restaurarCuenta()` llama aquí EN CADA APERTURA de la app, y lo que
+    //  trae es el formulario que se guardó en `localStorage` el día del
+    //  alta -`guardarCuenta()` solo se llama al crear la cuenta, así que ese
+    //  número está congelado ahí desde entonces-. O sea que en cada arranque
+    //  el peso del registro entraba en `PESOS` con la fecha de HOY.
+    //
+    //  Con señal se corregía un segundo después, cuando la carga hace
+    //  `PESOS = {}` y lo llena con lo que hay en la base. Sin señal, o si la
+    //  carga falla, se quedaba. Y lo que se veía entonces era:
+    //
+    //    · la nota «No se ha registrado el peso hoy» escondida, porque hay
+    //      un peso de hoy;
+    //    · el campo de Peso relleno con ese número;
+    //    · y un toque en Guardar escribiendo ese peso viejo con la fecha de
+    //      hoy, en una tabla donde solo se puede escribir el día de hoy y
+    //      donde lo único que borra es «Empezar de cero».
+    //
+    //  Un pesaje inventado es peor que uno que falta, porque parece dato:
+    //  entra en el `peso_medio` de la semana y de ahí en la medición del
+    //  gasto, que es lo que mueve las calorías.
+    //
+    //  Así que esta función ya no toca el peso. Pinta el formulario y nada
+    //  más. El peso del registro sí cuenta como el primer pesaje -eso era
+    //  una buena idea- pero se guarda de verdad, en `primerPesaje()`, y
+    //  vuelve por la carga como cualquier otro.
   }
 
   // ================= CONEXIÓN CON SUPABASE =================
@@ -8020,6 +8053,41 @@
     });
   });
 
+  // EL PESO DEL REGISTRO, GUARDADO DE VERDAD.
+  //
+  //  El alta pregunta el peso -lo necesita para la fórmula- y ese número se
+  //  iba solo a `profiles.weight_kg`. En `weight_logs`, que es el historial,
+  //  no quedaba nada: el primer pesaje de cualquier cuenta nueva era el
+  //  primer día que esa persona se acordara de abrir Peso y darle a Guardar.
+  //
+  //  Y eso cuesta más de lo que parece, porque una semana solo cuenta para
+  //  medir el gasto con DOS pesajes -`GM.PESAJES`-. Faltando el del alta, la
+  //  primera semana se queda en uno con facilidad y no cuenta, así que la
+  //  medición empieza una semana más tarde de lo que podría.
+  //
+  //  No hace falta meterlo en `PESOS` a mano: la carga viene justo detrás y
+  //  lo trae de la base. Y si en ese momento no hubiera señal, `sbGuardarPeso`
+  //  lo encola y `aplicarPesosEnCola()` lo pone igual.
+  //
+  //  NO REVIENTA EL ALTA SI FALLA. Acabamos de crear una cuenta: quedarse sin
+  //  el primer pesaje es un hueco en el historial, y tratarlo como un error
+  //  del registro dejaría a alguien fuera de una cuenta que ya es suya. Se
+  //  apunta el fallo y se sigue.
+  //
+  //  (Queda sin cubrir el alta con confirmación por correo, donde todavía no
+  //  hay sesión al pasar por aquí. Ese camino está apagado en el proyecto y
+  //  ya se queda sin perfil entero, no solo sin peso: el comentario del
+  //  `catch` de abajo lo dice. Arreglarlo es arreglar ese camino, no este.)
+  function primerPesaje(){
+    var kg = Math.round((Number(document.getElementById('regPeso').value) || 0) * 10) / 10;
+    // El rango es el de la columna. Fuera de él la fila rebota entera, igual
+    // que en `ponerPesoDeLaBascula`.
+    if(!(kg >= 20 && kg <= 400)) return Promise.resolve();
+    return sbGuardarPeso(isoDe(HOY), kg, null)['catch'](function(e){
+      apuntarFallo('primer_pesaje', e);
+    });
+  }
+
   function crearLaCuenta(correo, pass){
     return sbRegistrar(correo, pass, campoNombre.value.trim())
       .then(function(r){
@@ -8042,7 +8110,10 @@
         aplicarRegistro();
         guardarCuenta();
         return sbGuardarPerfil()
-          .then(function(){ goto('diario', false); return cargarDatos(); })
+          .then(function(){
+            goto('diario', false);
+            return primerPesaje().then(function(){ return cargarDatos(); });
+          })
           ['catch'](function(e){
             // AQUÍ LA CUENTA YA EXISTE Y LA SESIÓN ESTÁ ACTIVA. Si esto
             // cayera al catch de abajo, saldría un error junto al correo
@@ -8056,7 +8127,9 @@
             goto('diario', false);
             toast('toastComida', 'Tu cuenta está lista, pero no pude guardar tus datos: ' +
                   traducirError(e.message) + ' Complétalos en Perfil.');
-            return cargarDatos();
+            // El pesaje va igual: es otra tabla y otra petición. Que el
+            // perfil no se guardara no es razón para perder también esto.
+            return primerPesaje().then(function(){ return cargarDatos(); });
           });
       })
       ['catch'](function(e){ marcarError(campoCorreo, avisoCorreo, traducirError(e.message)); })
