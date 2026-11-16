@@ -13257,9 +13257,26 @@
         // arriba todavía no está.
         if(MI_NIVEL_IA === 'plus'){
           revisarChequeoPendiente();
-          guardarSemanaSinCierre();
           revisarAvisoDelCoach();
         }
+        // FUERA DEL `if` DE PLUS, y esta línea es el arreglo entero.
+        //
+        //  Estaba dentro, y dentro no servía para el caso que la hizo
+        //  nacer. `cierreApagado()` mira si el nivel es «apagada»... pero
+        //  con el nivel en «apagada» esta rama no corre, así que esa
+        //  condición no se cumplía NUNCA. Guardaba las semanas de quien
+        //  tenía Plus con la llave del lunes bajada, que es el caso raro, y
+        //  no las de quien tiene la IA apagada, que es como se apaga de
+        //  verdad: desde su ficha, con el nivel.
+        //
+        //  O sea que apagarle la IA a alguien tres semanas le dejaba tres
+        //  agujeros permanentes en la única memoria que queda pasados 60
+        //  días. Al volver a encenderla, su gasto medido no tenía esas
+        //  semanas y había que esperar a juntarlas otra vez.
+        //
+        //  La función ya se protege sola: solo escribe si de verdad no va a
+        //  haber cierre, y solo si no hay ya una fila de esa semana.
+        guardarSemanaSinCierre();
         // Fuera del `if` de Plus a propósito: las fotos de progreso las sube
         // cualquiera, no son parte de la IA.
         revisarAvisoDeFotos();
@@ -14969,6 +14986,18 @@
   //  La encuesta NO se inventa: hambre, energía y sueño se quedan nulos
   //  porque nadie los preguntó. Un tres de relleno sería peor que el
   //  hueco, que al menos se lee como lo que es.
+  //  LOS DOS CASOS SON LOS DE SIEMPRE, y la condición nunca estuvo mal: lo
+  //  que estaba mal era desde dónde se llamaba. Con el nivel en «apagada»
+  //  —que es como se le apaga la IA a alguien desde su ficha— la primera
+  //  mitad no se cumplía nunca, porque la llamada vivía dentro de
+  //  `if(MI_NIVEL_IA === 'plus')`. Ver el arranque.
+  //
+  //  «Normal» NO entra, y es a propósito: esa persona nunca ha tenido
+  //  cierre del lunes, así que aquí no hay nada que se le haya apagado. Y
+  //  el día que se le suba a Plus tampoco empieza de cero —`resumenDeSemanas`
+  //  reconstruye sus últimas ocho semanas del diario que lleva en el
+  //  teléfono—. Escribirle filas a quien no usa la IA sería apuntar en su
+  //  historial algo que nadie le ha ofrecido.
   function cierreApagado(){
     return MI_NIVEL_IA === 'apagada' ||
            !!(MIS_LLAVES && MIS_LLAVES.semanal === false);

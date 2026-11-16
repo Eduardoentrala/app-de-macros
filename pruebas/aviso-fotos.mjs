@@ -113,11 +113,24 @@ console.log('\n— Se cierra y no vuelve… esta semana —');
 console.log('\n— Se revisa al entrar, y para todo el mundo —');
 {
   // Las fotos de progreso las sube cualquiera: no son parte de la IA.
+  //
+  // SE CUENTAN LLAVES, NO CARACTERES. Esto era una ventana de 500 caracteres
+  // desde el `if`, y midió comentarios: el día que se explicó ahí dentro por
+  // qué el guardado de la semana sale del candado, la llamada se fue más
+  // allá de los 500 y las dos comprobaciones se pusieron rojas sin que nada
+  // se hubiera movido de sitio.
   const i = APP.indexOf("if(MI_NIVEL_IA === 'plus'){");
-  const trozo = APP.slice(i, i + 500);
-  check('se revisa al entrar', /revisarAvisoDeFotos\(\);/.test(trozo));
-  check('fuera del candado de IA Plus',
-    trozo.indexOf('}') < trozo.indexOf('revisarAvisoDeFotos();'),
+  const finDelIf = (() => {
+    let n = 0;
+    for (let j = APP.indexOf('{', i); j < APP.length; j++) {
+      if (APP[j] === '{') n++;
+      else if (APP[j] === '}') { n--; if (!n) return j; }
+    }
+    return -1;
+  })();
+  const llamada = APP.indexOf('revisarAvisoDeFotos();', i);
+  check('se revisa al entrar', i > 0 && llamada > 0);
+  check('fuera del candado de IA Plus', finDelIf > 0 && llamada > finDelIf,
     'dentro del if, quien no tiene Plus no vería el aviso de sus propias fotos');
 }
 

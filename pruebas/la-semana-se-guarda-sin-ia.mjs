@@ -143,10 +143,56 @@ console.log('\nEl bloque del chequeo no se da por contestado con una fila autom�
 
 console.log('\nY se intenta al arrancar, no solo si alguien pulsa algo');
 {
-  const i = APP.indexOf('revisarChequeoPendiente();\n          guardarSemanaSinCierre();');
-  ok(i > 0, 'el arranque lo llama',
+  ok(/\n        guardarSemanaSinCierre\(\);/.test(APP), 'el arranque lo llama',
      'con la IA apagada no hay nada que pulsar: el bloque ni se enseña, así ' +
      'que si no se intenta aquí no se intenta nunca');
+
+  // Y FUERA DEL `if` DE PLUS, que es donde estaba y donde no servía.
+  //
+  //  Esta comprobación pedía literalmente que la llamada fuera detrás de
+  //  `revisarChequeoPendiente()`, o sea DENTRO de `if(MI_NIVEL_IA ===
+  //  'plus')`. Ahí dentro, la condición «nivel apagada» de `cierreApagado()`
+  //  no se cumple nunca: con el nivel en apagada esa rama no corre. Se
+  //  guardaban las semanas de quien tiene Plus con la llave del lunes
+  //  bajada —el caso raro— y no las de quien tiene la IA apagada, que es
+  //  como se apaga de verdad, desde su ficha.
+  const plus = APP.indexOf("if(MI_NIVEL_IA === 'plus'){");
+  const cierraPlus = APP.indexOf('\n        }', plus);
+  const llamada = APP.indexOf('\n        guardarSemanaSinCierre();');
+  ok(plus > 0 && llamada > cierraPlus,
+     'y no desde dentro del `if` de Plus',
+     'dentro, el caso para el que se escribió —la IA apagada— no entra ' +
+     'nunca: tres semanas apagada son tres agujeros permanentes en la única ' +
+     'memoria que queda pasados 60 días');
+}
+
+console.log('\nY «no va a haber cierre» se cumple de verdad, no solo sobre el papel');
+{
+  // EJECUTADO, que es donde estaba el fallo: la condición se leía bien y no
+  // se cumplía nunca.
+  const fuente = (() => {
+    const i = APP.indexOf('  function cierreApagado(){');
+    return APP.slice(i, APP.indexOf('\n  }', i) + 4);
+  })();
+  const dime = (nivel, llaves) => new Function('MI_NIVEL_IA', 'MIS_LLAVES',
+    fuente + '; return cierreApagado();')(nivel, llaves);
+
+  ok(dime('apagada', null) === true, 'con la IA apagada, sus semanas se guardan igual',
+     'es el caso que lo hizo nacer: apagarle la IA tres semanas no puede ' +
+     'costarle tres agujeros en su historial');
+  ok(dime('plus', { semanal: false }) === true, 'y con Plus y la llave del lunes bajada');
+  // «Normal» no entra, y es a propósito: esa persona nunca ha tenido cierre,
+  // así que aquí no hay nada que se le haya apagado. Y al subirla a Plus no
+  // empieza de cero — `resumenDeSemanas` le reconstruye las últimas ocho
+  // semanas del diario que lleva en el teléfono.
+  ok(dime('normal', null) === false, 'pero con nivel normal no se le escribe nada',
+     'nunca ha tenido cierre: apuntarle filas sería meterle en el historial ' +
+     'algo que nadie le ha ofrecido');
+  ok(dime('plus', null) === false, 'pero con Plus entero NO',
+     'ahí el cierre de verdad escribe la fila, con su encuesta y su motivo: ' +
+     'adelantarse sería pisarla con una a medias');
+  ok(dime('plus', { semanal: true, chat: false }) === false,
+     'ni con otras llaves bajadas que no son la suya');
 }
 
 // ------------------------------------------------------------------
