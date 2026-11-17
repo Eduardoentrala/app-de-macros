@@ -78,7 +78,7 @@ const CORS = {
 //
 // Ahora lo dice: un GET sin sesión devuelve este sello y nada más.
 // `pruebas/funciones-vivas.mjs` lo compara con el del repo.
-const SELLO = '0771922f34';
+const SELLO = '757fea6eb0';
 
 // Tope diario por persona. Es la única defensa contra que un solo usuario
 // -o un token robado- vacíe la cuenta en una noche con un bucle.
@@ -431,8 +431,20 @@ const ESQUEMA_PLAN = {
           dia:     { type: 'string', enum: DIAS as unknown as string[] },
           momento: { type: 'string', enum: ['Desayuno', 'Comida', 'Cena', 'Snack'] },
           texto:   { type: 'string' },
+          // LO QUE DICE QUE SUMA ESA COMIDA.
+          //
+          //  No se le enseña a la persona —su pantalla es «abre y mira qué
+          //  te toca», sin gramos ni macros— ni se guarda en su plan. Es
+          //  para quien lo revisa antes de firmarlo: hasta ahora el modelo
+          //  apuntaba a unas calorías y NADIE comprobaba el resultado,
+          //  porque el plan sale como texto y un texto no se suma.
+          //
+          //  Pedirlo por comida y no un total: un total lo puede escribir
+          //  el modelo al final sin que cuadre con lo que puso arriba.
+          //  Comida a comida, la suma la hace la app.
+          kcal:    { type: 'integer' },
         },
-        required: ['dia', 'momento', 'texto'],
+        required: ['dia', 'momento', 'texto', 'kcal'],
         additionalProperties: false,
       },
     },
@@ -454,8 +466,9 @@ const ESQUEMA_PLAN_DIA = {
         properties: {
           momento: { type: 'string', enum: ['Desayuno', 'Comida', 'Cena', 'Snack'] },
           texto:   { type: 'string' },
+          kcal:    { type: 'integer' },
         },
-        required: ['momento', 'texto'],
+        required: ['momento', 'texto', 'kcal'],
         additionalProperties: false,
       },
     },
@@ -1331,6 +1344,12 @@ Reglas:
   de un 5% ni quedarte corto de un 5%. Y los TRES macros -proteína,
   carbohidratos y grasas- deben quedar dentro de un 10% de los que te doy.
   Comprueba tus cuentas.
+- Y en el campo kcal de cada comida, lo que de verdad suma esa comida tal y
+  como la escribiste. Es tu propia cuenta puesta por escrito: quien revisa
+  el plan antes de firmarlo suma esos números y los compara con la meta,
+  así que un kcal que no cuadre con el texto se ve enseguida. No lo ajustes
+  para que el total salga redondo: si no cuadra, corrige la COMIDA.
+  Ese número no se le enseña a la persona.
 - Reparte la proteína entre todas las comidas, no toda en una.
 - Varía: que no salgan tres comidas de pollo con arroz.
 - En la nota va un consejo corto y práctico, si hace falta. No hables de

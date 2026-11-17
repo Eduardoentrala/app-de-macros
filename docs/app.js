@@ -7042,12 +7042,29 @@
   //
   // Sin efectos: no pinta nada. calcularMacros sí pinta, y llamarla solo
   // para preguntarle el gasto repintaba media pantalla de registro.
-  function gastoEstimado(){
-    var edad = Number(document.getElementById('regEdad').value) || 0;
-    var alt  = Number(document.getElementById('regAltura').value) || 0;
-    var peso = Number(document.getElementById('regPeso').value) || 0;
-    var tmb = 10*peso + 6.25*alt - 5*edad + (reg.sexo === 'h' ? 5 : -161);
-    var nivel = NIVEL[reg.dias];
+  // RECIBE UN CUERPO, O LEE EL DE LA PANTALLA DE REGISTRO.
+  //
+  //  Con argumento sirve para OTRA persona —la ficha del cliente mide su
+  //  gasto y necesita su estimación como tope de cordura—, y así la fórmula
+  //  sigue existiendo UNA sola vez. Calcularla también en la base de datos
+  //  o copiarla en la ficha es lo que esta función lleva evitando desde que
+  //  se escribió: hay una prueba puesta a propósito para eso.
+  //
+  //  De otra persona puede faltar cualquier dato, así que con argumento se
+  //  devuelve `null` en vez de un número hecho con ceros: Mifflin con
+  //  altura 0 y edad 0 da un basal ridículo, y un tope de cordura ridículo
+  //  tumba mediciones buenas. Sin argumento NO se devuelve null, que es el
+  //  camino del registro de siempre: ahí los huecos son campos a medio
+  //  teclear y el cálculo se rehace en cada tecla.
+  function gastoEstimado(de){
+    var edad = de ? Number(de.edad) || 0 : Number(document.getElementById('regEdad').value) || 0;
+    var alt  = de ? Number(de.alt)  || 0 : Number(document.getElementById('regAltura').value) || 0;
+    var peso = de ? Number(de.peso) || 0 : Number(document.getElementById('regPeso').value) || 0;
+    var sexo = de ? de.sexo : reg.sexo;
+    var dias = de ? de.dias : reg.dias;
+    var nivel = NIVEL[dias];
+    if(de && (!(peso > 0) || !(alt > 0) || !(edad > 0) || !nivel)) return null;
+    var tmb = 10*peso + 6.25*alt - 5*edad + (sexo === 'h' ? 5 : -161);
     return { tmb: tmb, gasto: tmb * nivel.f, nivel: nivel, peso: peso, alt: alt, edad: edad };
   }
 
@@ -11525,6 +11542,69 @@
   // días y se va llenando el que toque. Antes las pestañas solo aparecían si
   // el plan ya traía días, así que un plan nuevo no tenía forma de volverse
   // semanal — el modo dependía de lo que ya hubiera, no de lo que quisieras.
+  // ---- LO QUE DICE QUE SUMA CADA COMIDA ----
+  //
+  //  El plan sale como texto, así que el modelo apuntaba a unas calorías y
+  //  NADIE comprobaba el resultado: se le pedían 2.001 y podía devolver
+  //  2.600 sin que nada chistara. Ahora devuelve también lo que suma cada
+  //  comida y la app hace la cuenta mientras tú revisas.
+  //
+  //  NO SE GUARDA Y NO SE LE ENSEÑA A ELLA. Su pantalla es «abre y mira qué
+  //  te toca», sin gramos ni macros; y guardado, el número se quedaría
+  //  pegado a un texto que tú puedes reescribir cinco segundos después. Por
+  //  eso vive aquí, en memoria, y por eso cada comida que tocas pierde su
+  //  cuenta: una estimación de un texto que ya no existe es peor que
+  //  ninguna.
+  var planKcal = {};                 // 'Lunes|Desayuno' -> calorías
+  var planMetaCal = null;            // las de esa persona, para comparar
+
+  function clavePlan(dia, momento){ return (dia || '') + '|' + momento; }
+
+  function pintarSumaDelDia(){
+    var caja = document.getElementById('peSuma');
+    if(!caja) return;
+
+    // Solo las comidas CON texto: una cena en blanco no resta.
+    var delDia = planComidas.filter(function(c){
+      return c.dia === planDia && c.texto && c.texto.trim();
+    });
+    var conCuenta = delDia.filter(function(c){
+      return planKcal[clavePlan(c.dia, c.momento)] != null;
+    });
+
+    // Se calla si no hay nada que decir: sin meta no hay con qué comparar, y
+    // sin plan armado por la IA no hay cuentas que sumar. Un «—» ahí es una
+    // fila de ruido en una pantalla que ya tiene bastante.
+    if(!planMetaCal || !delDia.length || !conCuenta.length){
+      caja.hidden = true;
+      return;
+    }
+    caja.hidden = false;
+
+    var suma = 0;
+    conCuenta.forEach(function(c){ suma += Number(planKcal[clavePlan(c.dia, c.momento)]) || 0; });
+
+    // SI FALTAN COMIDAS POR CONTAR SE DICE, y no se compara: sumar tres de
+    // cuatro contra la meta del día entero diría «le faltan 600» de algo que
+    // está escrito ahí al lado.
+    if(conCuenta.length < delDia.length){
+      caja.className = 'plan-suma';
+      caja.textContent = 'Lo que armó la IA suma ' + mil(suma) + ' cal, pero ' +
+        (delDia.length - conCuenta.length === 1
+          ? 'una comida la escribiste tú y no se cuenta'
+          : (delDia.length - conCuenta.length) + ' comidas las escribiste tú y no se cuentan');
+      return;
+    }
+
+    // El 5% es el margen que se le pide al modelo en su prompt. Si aquí se
+    // aceptara más, la comprobación diría que está bien algo que el propio
+    // prompt llama mal hecho.
+    var fuera = Math.abs(suma - planMetaCal) / planMetaCal > 0.05;
+    caja.className = 'plan-suma' + (fuera ? ' fuera' : '');
+    caja.textContent = planDia + ' suma ' + mil(suma) + ' cal de ' + mil(planMetaCal) +
+      (fuera ? ' · se pasa del 5%, revísalo' : ' · cuadra');
+  }
+
   function pintarEditorComidas(){
     var cont = document.getElementById('peComidas');
     if(!planDia) planDia = DIAS_SEMANA[0];
@@ -11544,7 +11624,8 @@
       t.style.height = (t.scrollHeight + 2) + 'px';
     };
 
-    cont.innerHTML = tabs + MOMENTOS.map(function(m){
+    cont.innerHTML = tabs + '<div class="plan-suma" id="peSuma" hidden></div>' +
+      MOMENTOS.map(function(m){
       var c = planComidas.filter(function(x){
         return x.momento === m.k && x.dia === planDia; })[0];
       return '<div class="card">' +
@@ -11557,8 +11638,21 @@
 
     Array.prototype.forEach.call(cont.querySelectorAll('[data-momento]'), function(t){
       crecer(t);
-      t.addEventListener('input', function(){ crecer(t); });
+      t.addEventListener('input', function(){
+        crecer(t);
+        // TOCAR UNA COMIDA LE QUITA SU CUENTA. El número venía de un texto
+        // que acaba de dejar de existir; mantenerlo sería enseñar la suma
+        // de un plan que ya no es el que está en pantalla.
+        //
+        // Y se actualiza la línea EN SITIO, sin repintar el editor: un
+        // repintado en cada tecla rehace los `textarea` y se lleva por
+        // delante el cursor de quien está escribiendo.
+        delete planKcal[clavePlan(planDia, t.dataset.momento)];
+        pintarSumaDelDia();
+      });
     });
+
+    pintarSumaDelDia();
   }
 
   // Lo escrito se guarda en planComidas al cambiar de día o al guardar: si
@@ -11597,6 +11691,15 @@
     // luego el plan no cuadra con lo que la app le está pidiendo comer.
     var caja = document.getElementById('peMetas');
     if(caja) caja.innerHTML = cliente.metas ? tiraDeMetas(cliente.metas) : '';
+    // Sus calorías, para poder comparar contra ellas lo que arme la IA. Se
+    // ponen ANTES del primer pintado: `planEditando` se asigna unas líneas
+    // más abajo y hasta entonces todavía es el de la persona anterior.
+    planMetaCal = cliente.metas
+      ? Math.round(cliente.metas.P * 4 + cliente.metas.C * 4 + cliente.metas.G * 9)
+      : null;
+    // Las cuentas son de un plan concreto: abrir el de otra persona no puede
+    // heredar las del anterior.
+    planKcal = {};
     planComidas = [];
     planDia = null;
     pintarEditorComidas();
@@ -11719,8 +11822,26 @@
         // el entrenador, y tiene que poder corregirlo antes.
         if(r.nombre) document.getElementById('peNombre').value = r.nombre;
         if(r.nota)   document.getElementById('peNota').value = r.nota;
-        planComidas = (r.comidas || []).slice();
+
+        // LAS CUENTAS SE SEPARAN DE LAS COMIDAS, y no es un capricho de
+        // orden: `planComidas` es lo que se guarda en su plan tal cual, y
+        // ahí dentro `kcal` acabaría en la base, viajando con un texto que
+        // tú puedes reescribir cinco segundos después. Se queda en memoria
+        // y solo para esta revisión.
+        var crudas = (r.comidas || []).slice();
+        planComidas = crudas.map(function(c){
+          return { dia: c.dia, momento: c.momento, texto: c.texto };
+        });
+        // El día se pone ANTES de guardar las cuentas: el plan de un día
+        // llega sin `dia` y `ponerDiaALosViejos()` lo manda al lunes. Con la
+        // clave armada antes, las cuentas quedarían colgadas de un día que
+        // no es y la suma saldría vacía justo cuando acaba de armarse.
         ponerDiaALosViejos();
+        planKcal = {};
+        planComidas.forEach(function(c, i){
+          var k = crudas[i] && crudas[i].kcal;
+          if(k != null) planKcal[clavePlan(c.dia, c.momento)] = Number(k) || 0;
+        });
         pintarEditorComidas();
         toast('toastPlan', semana
           ? 'Semana lista — revísala día por día y guarda'
@@ -11879,6 +12000,51 @@
     if(!b) return a ? 'sin periodo anterior con que comparar' : '';
     var d = Math.round((a - b) / b * 100);
     return d > 2 ? 'subió ' + d + '%' : d < -2 ? 'bajó ' + Math.abs(d) + '%' : 'se mantuvo';
+  }
+
+  // ---- LO MISMO, PERO PARA EL MODELO ----
+  //
+  //  El servidor mete estos números en el prompt con
+  //  `JSON.stringify(metricas, null, 1).slice(0, 6000)`. Noventa pesajes con
+  //  fecha, escritos uno por línea, se comen ese tope ellos solos: medido,
+  //  el paquete entero pasaba de 6.300 caracteres, así que el corte caía a
+  //  media serie y SE PERDÍA TODO LO QUE VENÍA DETRÁS —la cintura, la
+  //  comida, el entreno, el volumen—. Y encima el JSON llegaba partido.
+  //
+  //  Así que las series no viajan: viaja su TENDENCIA, que además es mejor
+  //  entrada —el modelo no tiene que deducir una recta de noventa pares de
+  //  números, que es justo lo que hace mal—. Lo que se dibuja en pantalla
+  //  se queda en pantalla.
+  function metricasParaLaIa(m){
+    if(!m) return m;
+    var copia = Object.assign({}, m);
+
+    var resumir = function(serie, campo){
+      var pts = (serie || []).map(function(x){
+        return { d: new Date(x.d + 'T12:00:00'), w: Number(x[campo]) };
+      });
+      var t = tendenciaDePeso(pts);
+      return { medidas: pts.length,
+               cambio: t ? t.dif : null, dias: t ? t.dias : null,
+               ultima: pts.length ? pts[pts.length - 1].w : null };
+    };
+
+    copia.peso = Object.assign({}, m.peso || {});
+    if(copia.peso.serie){ copia.peso.tendencia = resumir(m.peso.serie, 'kg'); }
+    delete copia.peso.serie;
+
+    copia.cintura = Object.assign({}, m.cintura || {});
+    if(copia.cintura.serie){ copia.cintura.tendencia = resumir(m.cintura.serie, 'cm'); }
+    delete copia.cintura.serie;
+
+    // Las semanas sueltas tampoco: de ellas sale un solo número, su gasto
+    // medido, y es ese el que hay que juzgar.
+    delete copia.semanas;
+    delete copia.cuerpo;              // edad, altura y sexo no deciden nada aquí
+    var g = gastoMedidoDe(m);
+    if(g) copia.gasto = g;
+
+    return copia;
   }
 
   function pintarMetricas(){
@@ -12053,6 +12219,68 @@
         'contestó y con sus números. Para moverlas tú, ' +
         '«Ajustar sus calorías» aquí arriba.</div>' +
         '</div>';
+    }
+
+    // ---- SU GASTO MEDIDO ----
+    //
+    //  Lo que de verdad mueve las calorías, y lo que no estaba. El número
+    //  que da la app al registrarse sale de una fórmula por un factor de
+    //  actividad que esa persona eligió una vez; el medido se RESTA de lo
+    //  que comió y de cómo se movió su peso, y por eso absorbe hasta el
+    //  error de apuntar.
+    //
+    //  Se mide aquí con el MISMO cálculo que mide el mío —`medirGasto`— y
+    //  con su cuerpo en la misma fórmula de Mifflin. Si esta pantalla
+    //  tuviera su propia cuenta, el entrenador y esa persona verían dos
+    //  gastos distintos del mismo cuerpo y no habría forma de saber cuál
+    //  creer.
+    //
+    //  Y SE DICE POR QUÉ CUANDO NO SE PUEDE. «Faltan semanas» es
+    //  accionable: significa que esa persona tiene que apuntar y pesarse.
+    //  Una tarjeta vacía, o peor, un número de relleno, no lo es.
+    var g = gastoMedidoDe(m);
+    if(g){
+      html += tarjetaFicha('Su gasto', g.estado === 'ok'
+        ? [
+            filaFicha('Gasto medido', mil(g.gasto) + ' cal', 'con ' + g.semanas +
+                      (g.semanas === 1 ? ' semana completa' : ' semanas completas')),
+            filaFicha('La fórmula decía', mil(g.estimado) + ' cal'),
+            filaFicha('Su peso se mueve', (g.kg_por_semana > 0 ? '+' : '') +
+                      g.kg_por_semana + ' kg por semana'),
+            filaFicha('Comiendo de media', mil(g.media_cal) + ' cal')
+          ]
+        : g.estado === 'fuera_de_rango'
+          ? [
+              filaFicha('Gasto medido', 'no cuadra',
+                        mil(g.gasto) + ' contra ' + mil(g.estimado) + ' de la fórmula'),
+              filaFicha('Semanas completas', g.semanas)
+            ]
+          : [
+              filaFicha('Gasto medido', 'todavía no'),
+              filaFicha('Semanas completas', g.semanas || 0,
+                        'hacen falta ' + GM.SEMANAS),
+              filaFicha('Una semana cuenta con', GM.DIAS + ' días apuntados y ' +
+                        GM.PESAJES + ' pesajes')
+            ],
+        g.estado === 'fuera_de_rango'
+          ? 'Se aleja más de lo creíble de su fórmula, así que no se usa. ' +
+            'Suele ser una semana rara: un viaje, una gripe, un fin de semana ' +
+            'sin apuntar.'
+          : g.estado === 'ok'
+            ? 'Medido restando lo que comió de cómo se movió su peso, no ' +
+              'estimado. Es el número con el que se le ajustan las calorías.'
+            : 'Se mide con sus semanas cerradas. Si tiene la IA apagada, se ' +
+              'guardan igual.');
+    }
+
+    // ---- Y LO QUE EL CIERRE APRENDIÓ DE ELLA ----
+    //  Lo escribe el modelo cada lunes y hasta ahora lo leía solo él. Su
+    //  entrenador se encontraba a alguien comiendo distinto sin saber qué
+    //  había detrás de esa decisión.
+    if(m.aprendido && String(m.aprendido).trim()){
+      html += '<div class="card"><div class="field-label" style="margin-top:0;">' +
+        'Lo que aprendió su cierre</div>' +
+        '<div class="fc-motivo">' + escapar(String(m.aprendido)) + '</div></div>';
     }
 
     // Esta se OMITE entera si no hay nada, no se colapsa: fotos y chequeo
@@ -12368,7 +12596,7 @@
     // quien pide el analisis puede ver a esa persona. Fiarse solo de los
     // numeros del cuerpo dejaria pedir un "analisis" de cualquiera.
     iaLlamar({ accion: 'cliente', cliente: fichaDe.id,
-               nombre: fichaDe.nombre, metricas: METRICAS })
+               nombre: fichaDe.nombre, metricas: metricasParaLaIa(METRICAS) })
       .then(function(r){
         if(!fichaDe) return;
         var msg = (r && r.mensaje) || '';
@@ -15320,10 +15548,16 @@
   //  filtro más flojo que el de dos, y es aceptable porque son justo las
   //  viejas, las que menos pesan en la cuenta. La 0056 añade la columna, así
   //  que el hueco se cierra solo según se guarden semanas nuevas.
-  function serieParaMedir(){
+  // LAS SEMANAS GUARDADAS QUE SIRVEN PARA MEDIR, con sus reglas.
+  //
+  //  Sale aparte porque hace falta DOS VECES: para medir mi gasto con mis
+  //  semanas, y para medir el de un cliente en su ficha con las suyas. Con
+  //  el filtro copiado, el día que cambie —cinco días apuntados, dos
+  //  pesajes— cambiaría en un sitio y no en el otro, y el entrenador vería
+  //  un gasto medido con unas reglas y esa persona otro con otras.
+  function semanasQueCuentan(filas){
     var por = {};
-
-    (SEMANAS || []).forEach(function(f){
+    (filas || []).forEach(function(f){
       var iso = semanaQueJuzga(f);     // la fila se guarda con la clave de la
       if(!iso) return;                 // semana SIGUIENTE a la que describe
       if(f.media_cal == null || f.peso_medio == null) return;
@@ -15337,6 +15571,17 @@
         peso_medio: Number(f.peso_medio)
       };
     });
+    return por;
+  }
+
+  // Ordenadas de la más vieja a la más nueva, que es lo que espera la recta,
+  // y recortadas por si alguien lleva años.
+  function enOrdenParaLaRecta(por){
+    return Object.keys(por).sort().slice(-GM.LARGO).map(function(k){ return por[k]; });
+  }
+
+  function serieParaMedir(){
+    var por = semanasQueCuentan(SEMANAS);
 
     resumenDeSemanas(8).forEach(function(x){
       if(x.media_cal == null || x.peso_medio == null) return;
@@ -15349,9 +15594,7 @@
       };
     });
 
-    // Ordenadas de la más vieja a la más nueva, que es lo que espera la
-    // recta de abajo, y recortadas por si alguien lleva años.
-    return Object.keys(por).sort().slice(-GM.LARGO).map(function(k){ return por[k]; });
+    return enOrdenParaLaRecta(por);
   }
 
   // CUÁNTO SE PUEDE AFINAR CON LO QUE HAY APUNTADO.
@@ -15412,11 +15655,16 @@
            (a.tope < 200 ? 'Cada semana completa afina más. ' + cuenta : cuenta);
   }
 
-  function gastoMedido(){
-    // Solo semanas COMPLETAS de verdad. Una con tres días apuntados no dice
-    // lo que se comió esa semana, dice lo que se comió tres días de ella.
-    // El filtro vive en `serieParaMedir`, que es quien junta las fuentes.
-    var s = serieParaMedir();
+  // LA MEDICIÓN, SEPARADA DE DE QUIÉN SON LAS SEMANAS.
+  //
+  //  Recibe la serie y el gasto estimado con el que compararla, y no los
+  //  busca: así la misma cuenta mide mi gasto con mis semanas y el de un
+  //  cliente con las suyas desde su ficha. Copiarla para el entrenador
+  //  habría dejado dos mediciones que se separan en cuanto se toque una, y
+  //  entonces él vería un número y esa persona otro distinto del mismo
+  //  cuerpo.
+  function medirGasto(s, est){
+    s = s || [];
     if(s.length < GM.SEMANAS)
       return { estado: 'faltan_semanas', semanas: s.length, faltan: GM.SEMANAS - s.length };
 
@@ -15462,7 +15710,6 @@
     var mediaCal = Math.round(Scal / S);
     var gasto = Math.round(mediaCal - (kgPorSemana * KCAL_POR_KG / 7));
 
-    var est = Math.round(gastoEstimado().gasto);
     if(!est || !isFinite(gasto) || gasto <= 0)
       return { estado: 'faltan_semanas', semanas: n, faltan: 1 };
 
@@ -15483,6 +15730,32 @@
       // explica por qué una medición se creyó y otra parecida no.
       margen: margen
     };
+  }
+
+  // El mío: mis semanas contra mi fórmula.
+  //
+  //  Solo semanas COMPLETAS de verdad. Una con tres días apuntados no dice
+  //  lo que se comió esa semana, dice lo que se comió tres días de ella. El
+  //  filtro vive en `semanasQueCuentan`, que es quien conoce las reglas.
+  function gastoMedido(){
+    return medirGasto(serieParaMedir(), Math.round(gastoEstimado().gasto));
+  }
+
+  // Y EL DE UN CLIENTE, desde su ficha. Con sus semanas guardadas, que es lo
+  // único que hay de otra persona: su diario no está en este teléfono, así
+  // que las últimas ocho semanas no se pueden reconstruir como se hace con
+  // las mías. Por eso puede decir «le faltan semanas» a alguien que lleva
+  // meses apuntando pero con la IA apagada —hasta que se arregló, esas
+  // semanas no se guardaban—.
+  function gastoMedidoDe(m){
+    if(!m || !m.cuerpo) return null;
+    var est = gastoEstimado({
+      edad: m.cuerpo.edad, alt: m.cuerpo.altura, peso: m.cuerpo.peso,
+      sexo: m.cuerpo.sexo, dias: m.dias_entreno
+    });
+    if(!est) return null;
+    return medirGasto(enOrdenParaLaRecta(semanasQueCuentan(m.semanas)),
+                      Math.round(est.gasto));
   }
 
   // Las DOS semanas que se comparan tienen que ser las mismas que las de la

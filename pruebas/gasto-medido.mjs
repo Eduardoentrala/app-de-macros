@@ -209,10 +209,19 @@ console.log('\n— Viaja al cierre de semana —');
   // `gastoParaDecidir` es quien prefiere lo medido cuando lo hay, que es lo
   // que faltaba: la app enseñaba «Tu gasto real: 2.121» en Perfil y seguía
   // recalculando las calorías con los 2.740 de la fórmula.
-  check('y la usan las dos', /function gastoEstimado\(\)/.test(APP) &&
+  //
+  // LLEVA UN ARGUMENTO, y es parte de lo mismo: con él, la ficha del
+  // entrenador estima el gasto de OTRA persona con esta misma función en
+  // vez de copiarse la fórmula —que es justo lo que esta comprobación
+  // existe para impedir—. Sin argumento sigue leyendo la pantalla de
+  // registro, que es el camino de siempre.
+  check('y la usan las dos', /function gastoEstimado\(de\)/.test(APP) &&
     /var est = gastoEstimado\(\);/.test(APP) &&
     /var base = gastoParaDecidir\(\);/.test(APP),
     'si la calculadora vuelve a llamar directo al estimado, se pierde la medición');
+  check('y con un cuerpo de otra persona también', /gastoEstimado\(\{/.test(APP),
+    'la ficha del cliente mide su gasto y necesita su estimación como tope ' +
+    'de cordura: con la fórmula copiada allí, un día se corrige aquí y allí no');
 }
 
 console.log('\n— La IA lo usa, y con freno —');
@@ -352,6 +361,95 @@ console.log('\n— Las dos fuentes se juntan sin pisarse —');
                    peso_medio: 90, dias_con_peso: 3, fotos: 0 }];
   const r = montar(local, 2200, dupe)();
   check('no se cuenta dos veces', r.semanas === 3, `dio ${r.semanas} semanas`);
+}
+
+console.log('\n— Y el de un cliente, desde la ficha de su entrenador —');
+{
+  // De otra persona SOLO hay sus semanas guardadas: su diario de 60 días
+  // vive en su teléfono, no en el del entrenador. Por eso `resumenDeSemanas`
+  // aquí revienta a propósito: si la ficha lo llamara, estaría midiendo el
+  // gasto de ella con MI diario.
+  const montarDe = (cuerpos) => {
+    const pedidos = [];
+    return {
+      pedidos,
+      fn: new Function('resumenDeSemanas', 'gastoEstimado', 'KCAL_POR_KG', 'SEMANAS',
+        APOYO + TROZO + '\n return gastoMedidoDe;')(
+        () => { throw new Error('la ficha no puede mirar MI diario'); },
+        (de) => { pedidos.push(de); return cuerpos; },
+        7700, []),
+    };
+  };
+
+  const semanas = [guard(0, 2400, 85.2), guard(1, 2400, 84.9),
+                   guard(2, 2400, 84.6), guard(3, 2400, 84.3)];
+  const cuerpo = { peso: 84, altura: 165, edad: 34, sexo: 'm' };
+
+  const m = montarDe({ gasto: 2700 });
+  const r = m.fn({ semanas, cuerpo, dias_entreno: 4 });
+  check('mide con sus semanas guardadas', r && r.estado === 'ok', JSON.stringify(r));
+  check('y da el mismo número que daría el suyo', r.gasto === 2730, `dio ${r && r.gasto}`);
+  check('sin tocar el diario de quien mira', true,
+    'si lo tocara, el `resumenDeSemanas` de esta prueba habría reventado');
+
+  // SU CUERPO EN LA FÓRMULA, NO EL MÍO. El estimado es el tope de cordura
+  // que decide si la medición se cree: calculado con el peso y la edad de
+  // otra persona, descartaría mediciones buenas y aceptaría malas.
+  check('y la estimación se pide con SU cuerpo',
+    m.pedidos[0] && m.pedidos[0].peso === 84 && m.pedidos[0].edad === 34 &&
+    m.pedidos[0].sexo === 'm' && m.pedidos[0].dias === 4,
+    JSON.stringify(m.pedidos[0]));
+
+  // Las reglas de qué semana cuenta son las MISMAS: tres días apuntados no
+  // dicen lo que comió esa semana.
+  const flojas = montarDe({ gasto: 2700 }).fn({
+    cuerpo, dias_entreno: 4,
+    semanas: semanas.concat([guard(4, 2400, 84.0, 3, 1)]).map((s, i) =>
+      i < 2 ? Object.assign({}, s, { dias_apuntados: 3 }) : s),
+  });
+  check('y las semanas a medias no cuentan, igual que en las mías',
+    flojas.semanas === 2, `contó ${flojas.semanas}`);
+
+  // SIN SUS DATOS NO SE INVENTA NADA. Mifflin con altura 0 y edad 0 da un
+  // basal ridículo, y un tope de cordura ridículo tumba mediciones buenas.
+  check('sin su cuerpo no se mide', montarDe(null).fn({ semanas }) === null,
+    'antes de que el perfil tenga altura y edad, la ficha no puede estimar ' +
+    'nada: mejor no enseñar la tarjeta que enseñar un número hecho con ceros');
+  check('y sin nada tampoco', montarDe({ gasto: 2700 }).fn(null) === null);
+}
+
+console.log('\n— Y la fórmula, con un cuerpo ajeno, se niega a inventar —');
+{
+  // EJECUTADA de verdad. Arriba se le pasa un estimado ya hecho, así que el
+  // guardia de dentro de `gastoEstimado` no se tocaba: una mutación que lo
+  // quitaba pasaba limpia. Y lo que hay detrás no es un detalle — Mifflin
+  // con altura 0 y edad 0 da un basal ridículo, y de ese basal sale el tope
+  // de cordura que decide si la medición de esa persona se cree o se tira.
+  const estimar = new Function('NIVEL', 'reg', 'document',
+    sacarFn('function gastoEstimado(de){') + '; return gastoEstimado;')(
+    { 4: { f: 1.5 } }, { sexo: 'h', dias: 4 },
+    { getElementById: () => ({ value: '0' }) });
+
+  const bien = estimar({ peso: 84, alt: 165, edad: 34, sexo: 'm', dias: 4 });
+  check('con sus cuatro datos, sale', bien && bien.gasto > 1000, JSON.stringify(bien));
+  // 10×84 + 6.25×165 − 5×34 − 161 = 1540,25 · 1,5 = 2310,375
+  check('y es Mifflin con SU sexo, no con el mío',
+    bien && Math.round(bien.tmb) === 1540,
+    'con «h» saldrían 166 más: ' + JSON.stringify(bien));
+
+  for (const falta of [{ peso: 0 }, { alt: 0 }, { edad: 0 }, { dias: 9 }]) {
+    const cuerpo = Object.assign({ peso: 84, alt: 165, edad: 34, sexo: 'm', dias: 4 }, falta);
+    check('sin ' + Object.keys(falta)[0] + ' devuelve nulo', estimar(cuerpo) === null,
+      'un tope de cordura hecho con ceros tumba mediciones buenas: ' +
+      JSON.stringify(estimar(cuerpo)));
+  }
+
+  // Y SIN ARGUMENTO SIGUE SIENDO LA DE SIEMPRE: la pantalla de registro se
+  // rellena a trozos y ahí los huecos son campos a medio teclear, no datos
+  // que falten. Devolver null ahí rompería el cálculo en cada tecla.
+  check('y sin cuerpo delante no se niega a nada', estimar() !== null,
+    'es el camino del registro: se recalcula en cada tecla y los ceros son ' +
+    'campos todavía vacíos');
 }
 
 console.log(`\n${ok} pasan · ${mal} fallan`);

@@ -47,7 +47,13 @@ await db.exec(`update public.profiles set role='coach' where id in ('${COACH}','
 await db.exec(`update public.profiles set role='super_admin' where id='${ADMIN}'`);
 await db.exec('alter table public.profiles enable trigger trg_bloquear_escalada_de_rol');
 await db.exec(`update public.profiles set full_name='Ana', goal='bajar',
-                 dias_entreno=4, cardio_goal_min=150 where id='${CLI}'`);
+                 dias_entreno=4, cardio_goal_min=150,
+                 -- Su cuerpo: son las entradas de Mifflin, y de ahi sale el
+                 -- tope de cordura con el que se cree o se descarta su gasto
+                 -- medido. La formula vive en la app; aqui solo los datos.
+                 weight_kg=80.5, height_cm=165, age=34, sexo='m',
+                 aprendido_cierre='Responde mejor a subidas pequenas.'
+               where id='${CLI}'`);
 await db.exec(`insert into public.coach_clientes(coach_id,cliente_id) values ('${COACH}','${CLI}')`);
 
 // Datos de las siete tablas, con fechas repartidas para que las ventanas de
@@ -84,6 +90,18 @@ await como(CLI, `insert into public.cardio_logs(user_id,log_date,minutes,kind) v
   ('${CLI}',current_date-2,45,'bici'), ('${CLI}',current_date-20,30,'caminata')`);
 await como(CLI, `insert into public.chequeos_semanales(user_id,semana,hambre,energia,sueno) values
   ('${CLI}',current_date,3,4,4)`);
+// Tres semanas CERRADAS, con lo que pide la medicion del gasto: lo que comio
+// de media, su peso medio, cuantos dias apunto y cuantas veces se peso. Sin
+// esto, de otra persona no hay forma de medir nada: su diario no esta en el
+// telefono del entrenador.
+await como(CLI, `insert into public.chequeos_semanales
+    (user_id,semana,media_cal,peso_medio,dias_apuntados,dias_con_peso) values
+  ('${CLI}',current_date-7, 2380,84.2,7,5),
+  ('${CLI}',current_date-14,2410,84.8,6,4),
+  ('${CLI}',current_date-21,2395,85.3,7,6),
+  -- Y una a medias, de las que NO cuentan: tres dias apuntados no dicen lo
+  -- que comio esa semana, dicen lo que comio tres dias de ella.
+  ('${CLI}',current_date-28,2200,85.9,3,1)`);
 await como(COACH, `insert into public.planes(user_id,nombre,comidas,activo,creado_por)
   values ('${CLI}','Plan de Ana','[{"momento":"Cena","texto":"sopa"}]'::jsonb,true,'${COACH}')`);
 
@@ -205,6 +223,43 @@ console.log('\n— El volumen, que no estaba —');
     JSON.stringify(v));
   check('y no se cuelan en los kilos', Number(v.kg_7) === 5400,
     '5412 serian las dominadas sumadas como si fueran kilos');
+}
+
+console.log('\n— Lo que hace falta para medirle el gasto —');
+{
+  // El gasto medido es lo que de verdad mueve las calorias, y de otra
+  // persona no se podia calcular: se saca del diario de 60 dias, que vive
+  // en SU telefono. Lo que si existe son sus semanas cerradas.
+  const s = m.semanas || [];
+  check('vienen sus semanas guardadas', Array.isArray(s) && s.length === 4,
+    JSON.stringify(s));
+  check('de la mas vieja a la mas nueva',
+    s.length > 1 && s[0].semana < s[s.length - 1].semana,
+    'es el orden que espera la recta de la medicion');
+  check('con las cuatro cosas que pide la medicion',
+    s.every((x) => x.media_cal != null && x.peso_medio != null &&
+                   x.dias_apuntados != null && x.dias_con_peso != null),
+    JSON.stringify(s[0]));
+  // La de tres dias viaja: filtrarla AQUI seria tener dos definiciones de
+  // «semana completa», una en SQL y otra en la app. La app la descarta con
+  // las mismas reglas que usa para las mias.
+  check('la de tres dias tambien viaja, y la descarta la app',
+    s.some((x) => Number(x.dias_apuntados) === 3),
+    'el filtro vive en un solo sitio: ' + JSON.stringify(s.map((x) => x.dias_apuntados)));
+
+  // Su cuerpo: las entradas de Mifflin, para el tope de cordura.
+  check('y su cuerpo, para poder estimar su gasto',
+    Number(m.cuerpo.peso) === 80.5 && Number(m.cuerpo.altura) === 165 &&
+    Number(m.cuerpo.edad) === 34 && m.cuerpo.sexo === 'm',
+    JSON.stringify(m.cuerpo));
+  check('la formula NO se calcula en la base', !/tmb|mifflin/i.test(JSON.stringify(m)),
+    'vive en un solo sitio de la app; calcularla aqui tambien seria tener ' +
+    'dos que se separan el dia que se corrija una');
+
+  check('y lo que el cierre del lunes aprendio de ella',
+    /subidas pequenas/.test(m.aprendido || ''),
+    'lo escribe el modelo cada semana y lo leia solo el propio cierre: su ' +
+    'entrenador veia decisiones tomadas sin saber con que');
 }
 
 console.log('\n— Fotos, chequeo y plan —');

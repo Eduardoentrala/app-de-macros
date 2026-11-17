@@ -47,6 +47,8 @@ const SIN_ALCOHOL = [
   { trozo: 'base.cal = Math.round(base.P * 4 + base.C * 4 + base.G * 9);', por: 'las metas del cliente' },
   { trozo: 'var cal = Math.round(m.P * 4 + m.C * 4 + m.G * 9);', por: 'la tira de metas de un plan' },
   { trozo: 'var cal = Math.round(p.goal_protein_g*4', por: 'las metas guardadas de una persona' },
+  { trozo: '? Math.round(cliente.metas.P * 4 + cliente.metas.C * 4 + cliente.metas.G * 9)',
+    por: 'las calorías contra las que se compara el plan que arma la IA' },
   { trozo: 'meta_cal: Math.round(meta.P*4', por: 'la meta que se le manda al asistente' },
 
   // --- CREAR UN ALIMENTO A MANO. El formulario pide tres macros y no

@@ -192,7 +192,13 @@ console.log('\n— El análisis se guarda para no volver a pagarlo —');
 {
   const a = APP.slice(APP.indexOf("document.getElementById('fcAnalizar')"), APP.indexOf('// ---- Los paneles'));
   check('se pide con accion cliente', /accion: 'cliente'/.test(a));
-  check('y se le mandan las métricas', /metricas: METRICAS/.test(a));
+  // VAN RESUMIDAS, no en crudo. El servidor las mete en el prompt cortadas
+  // a 6.000 caracteres, y desde que la ficha trae noventa pesajes con fecha
+  // el paquete entero pasaba de 6.300: el corte caía a media serie y se
+  // perdía todo lo que venía detrás —la cintura, la comida, el entreno—.
+  // `metricasParaLaIa` cambia las series por su tendencia, que además es
+  // mejor entrada para el modelo que noventa pares de números.
+  check('y se le mandan las métricas', /metricas: metricasParaLaIa\(METRICAS\)/.test(a));
   // El servidor comprueba con este id que quien pide puede ver a esa
   // persona. Sin mandarlo, la funcion responde 400 y el boton no hace nada.
   check('y el id de quien es', /cliente: fichaDe\.id/.test(a),
@@ -299,7 +305,12 @@ console.log('\n— El editor no corta el texto —');
   // Con `rows=3` fijo, una comida de cuatro renglones se queda con scroll
   // DENTRO del recuadro: se ve cortada arriba y abajo.
   check('los campos crecen con el texto', /scrollHeight/.test(e));
-  check('y al escribir también', /addEventListener\('input', function\(\)\{ crecer\(t\); \}\)/.test(e));
+  // Se pide `crecer(t)` dentro del `input`, no la línea entera: al mismo
+  // manejador se le añadió borrar la cuenta de calorías de esa comida
+  // —tocar el texto la invalida— y la comprobación, que fijaba la línea
+  // completa con sus llaves, se puso roja sin que el crecer se tocara.
+  const alEscribir = e.slice(e.indexOf("addEventListener('input'"));
+  check('y al escribir también', /crecer\(t\);/.test(alEscribir));
 }
 
 console.log('\n— El entrenador ve QUÉ calorías se cambiaron y POR QUÉ —');

@@ -72,17 +72,21 @@ const hace = (n) => {
 // Se dibuja con `svgDeSerie`, que aquí se cambia por un espía: lo que importa
 // comprobar no es la geometría del dibujo —eso ya lo usa media app— sino QUÉ
 // puntos se le mandan.
-function pintar(METRICAS) {
+function pintar(METRICAS, gasto) {
   const dibujos = [];
   const caja = { innerHTML: '' };
   new Function(
     'METRICAS', 'document', 'svgDeSerie', 'fmtFecha', 'escapar', 'mil', 'dibujos',
+    'gastoMedidoDe', 'GM',
     FUENTE + '; pintarMetricas();'
   )(
     METRICAS, { getElementById: (id) => (id === 'fcMetricas' ? caja : null) },
     (pts) => { dibujos.push(pts); return '<svg data-n="' + pts.length + '"></svg>'; },
     (d) => d.getDate() + ' nov', (s) => String(s),
-    (n) => String(n), dibujos
+    (n) => String(n), dibujos,
+    // La medición se prueba de verdad más abajo, con el cálculo del fuente.
+    // Aquí se le da el estado y se mira lo que la tarjeta dice de él.
+    () => gasto || null, { SEMANAS: 3, DIAS: 5, PESAJES: 2 }
   );
   return { html: caja.innerHTML, dibujos };
 }
@@ -189,6 +193,105 @@ console.log('\nY el volumen, que no estaba en ninguna parte');
   const conBarra = pintar(con({ volumen: { kg_30: 10500, kg_30_antes: 8000, libres_30: 0 } }));
   ok(!/Repeticiones sin peso/.test(conBarra.html),
      'y si no hay ninguna, la fila no sale');
+}
+
+// ------------------------------------------------------------------
+console.log('\nY su gasto medido, que es lo que de verdad mueve las calorías');
+{
+  const medido = pintar(con({}), {
+    estado: 'ok', gasto: 2420, estimado: 2740, kg_por_semana: -0.35,
+    media_cal: 2180, semanas: 9, dias: 58, margen: 0.3,
+  });
+  ok(/Gasto medido/.test(medido.html), 'sale su tarjeta');
+  ok(/2420 cal/.test(medido.html), 'con el número medido',
+     'el de la fórmula acierta de media y falla en cada persona concreta');
+  ok(/2740 cal/.test(medido.html), 'y el de la fórmula al lado, para ver la diferencia');
+  ok(/9 semanas completas/.test(medido.html), 'y con cuántas semanas se midió',
+     'es lo que dice cuánto creerse el número');
+  ok(/-0\.35 kg por semana/.test(medido.html), 'y hacia dónde va su peso');
+
+  // CUANDO NO SE PUEDE, SE DICE POR QUÉ, y en algo que esa persona pueda
+  // hacer: apuntar y pesarse. Una tarjeta vacía no es accionable.
+  const faltan = pintar(con({}), { estado: 'faltan_semanas', semanas: 1, faltan: 2 });
+  ok(/todavía no/.test(faltan.html), 'si no se puede medir, se dice');
+  ok(/hacen falta 3/.test(faltan.html), 'y cuántas semanas faltan', faltan.html.slice(-400));
+  ok(/5 días apuntados y 2 pesajes/.test(faltan.html),
+     'y qué hace que una semana cuente',
+     'es lo único accionable: sin esto, «faltan semanas» no dice qué hacer');
+
+  const raro = pintar(con({}), {
+    estado: 'fuera_de_rango', gasto: 1400, estimado: 2740, semanas: 4, margen: 0.25,
+  });
+  ok(/no cuadra/.test(raro.html), 'y si el número no es creíble, no se enseña como bueno',
+     'un gasto medido que está mal es PEOR que una estimación floja, porque ' +
+     'se deja de dudar de él');
+  ok(/1400 contra 2740/.test(raro.html), 'pero se enseñan los dos para poder mirarlo');
+
+  // Sin nada que medir no se enseña una tarjeta vacía.
+  ok(!/Gasto medido/.test(pintar(con({})).html), 'y sin medición no sale la tarjeta');
+}
+
+console.log('\nY lo que el cierre aprendió de ella');
+{
+  const r = pintar(con({ aprendido: 'Responde mejor a subidas pequeñas que a recortes.' }));
+  ok(/Lo que aprendió su cierre/.test(r.html), 'sale en su tarjeta');
+  ok(/subidas pequeñas/.test(r.html), 'con lo que escribió el modelo',
+     'lo leía solo el propio cierre: el entrenador veía decisiones tomadas ' +
+     'sin saber con qué');
+  ok(!/Lo que aprendió/.test(pintar(con({ aprendido: '   ' })).html),
+     'y en blanco no se enseña el rótulo solo');
+}
+
+console.log('\nY lo que viaja a la IA cabe en el prompt');
+{
+  // EL FALLO QUE ESTO ARREGLA: el servidor mete estos números en el prompt
+  // cortados a 6.000 caracteres, y con noventa pesajes con fecha el paquete
+  // pasaba de 6.300. El corte caía a media serie, el JSON llegaba partido y
+  // se perdía TODO lo que venía detrás: cintura, comida, entreno, volumen.
+  const serie = [], cint = [];
+  for (let i = 89; i >= 0; i--) serie.push({ d: hace(i), kg: 85 + (i % 7) * 0.1 });
+  for (let i = 360; i >= 0; i -= 15) cint.push({ d: hace(i), cm: 90 - (360 - i) * 0.01 });
+  const gordo = con({
+    peso: Object.assign({}, base.peso, { serie }),
+    cintura: { cm: 86, dia: hace(0), serie: cint },
+    semanas: Array.from({ length: 16 }, (_, i) => ({
+      semana: hace(112 - i * 7), media_cal: 2380, peso_medio: 85 - i * 0.1,
+      dias_apuntados: 7, dias_con_peso: 5,
+    })),
+    cuerpo: { peso: 85, altura: 175, edad: 35, sexo: 'h' },
+    aprendido: 'Responde mejor a subidas pequeñas.',
+  });
+
+  const enCrudo = JSON.stringify(gordo, null, 1).length;
+  ok(enCrudo > 6000, 'en crudo no cabría', enCrudo + ' caracteres, tope 6000');
+
+  const armar = new Function('m', 'tendenciaDePeso', 'lapso', 'gastoMedidoDe',
+    sinC(fn('function metricasParaLaIa(m){')) + '; return metricasParaLaIa(m);');
+  const flaco = armar(gordo,
+    new Function('pts', SUELO + '\n' + fn('function tendenciaDePeso(pts){') +
+                 '; return tendenciaDePeso(pts);'),
+    () => '', () => ({ estado: 'ok', gasto: 2420, estimado: 2740, semanas: 9 }));
+  const n = JSON.stringify(flaco, null, 1).length;
+  ok(n < 6000, 'y resumido sí', n + ' caracteres');
+
+  // Y NO SE PIERDE LO QUE IMPORTA: la tendencia sustituye a la serie, no la
+  // borra. El modelo lee mejor «bajó 1,2 kg en 89 días» que noventa pares.
+  ok(!flaco.peso.serie && flaco.peso.tendencia, 'la serie del peso se cambia por su tendencia',
+     JSON.stringify(flaco.peso));
+  ok(flaco.peso.tendencia.medidas === 90, 'diciendo cuántos pesajes hay detrás',
+     JSON.stringify(flaco.peso.tendencia));
+  ok(flaco.peso.tendencia.cambio != null && flaco.peso.tendencia.dias != null,
+     'y cuánto se movió y en cuántos días', JSON.stringify(flaco.peso.tendencia));
+  ok(!flaco.cintura.serie && flaco.cintura.tendencia, 'la cintura igual',
+     JSON.stringify(flaco.cintura));
+  ok(!flaco.semanas, 'las semanas sueltas no viajan',
+     'de ellas sale un solo número, su gasto, y es ese el que hay que juzgar');
+  ok(flaco.gasto && flaco.gasto.estado === 'ok', 'pero sí su gasto medido',
+     JSON.stringify(flaco.gasto));
+  ok(flaco.aprendido === gordo.aprendido, 'y lo que aprendió su cierre');
+  ok(flaco.volumen && flaco.entreno && flaco.diario,
+     'y lo de siempre sigue entero',
+     'esto es justo lo que el corte se llevaba por delante');
 }
 
 console.log('\nY «subió o bajó» se decide igual que en el cierre del lunes');

@@ -135,11 +135,18 @@ console.log('\nY al ponerlo, se respeta lo que la columna acepta');
 
 console.log('\nY el campo que se actualiza es el que usa la fórmula');
 {
-  const g = sacar('function gastoEstimado(){');
+  // Lleva un argumento desde que la ficha del entrenador estima el gasto de
+  // otra persona con esta misma función —para no copiarse la fórmula—. Sin
+  // argumento sigue leyendo la pantalla de registro, que es lo que esta
+  // comprobación mira.
+  const g = sacar('function gastoEstimado(de){');
   ok(/getElementById\('regPeso'\)/.test(g),
      'el basal sale de `regPeso`, que es justo lo que se pone al día',
      'si la fórmula leyera otro sitio, el perfil diría la verdad y la ' +
      'proteína seguiría saliendo del peso del registro');
+  ok(/de \? Number\(de\.peso\) \|\| 0 :/.test(g),
+     'y con otra persona delante, el suyo',
+     'sin eso, medir el gasto de un cliente usaría MI peso como tope de cordura');
   const m = sacar('function calcularMacros(){');
   ok(/Math\.round\(peso \* 2\)/.test(m), 'y la proteína es dos gramos por kilo de ese peso');
 }

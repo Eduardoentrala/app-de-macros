@@ -146,6 +146,23 @@
 .plan-armar button:active{opacity:.6;}
 .plan-armar button:disabled{opacity:.5;cursor:default;}
 
+/* Lo que suma el día que armó la IA, contra la meta de esa persona. Va
+   DEBAJO de las pestañas de los días y encima de las comidas, que es donde
+   se mira antes de leerlas.
+
+   Discreta mientras cuadra y en rojo cuando no: es una comprobación, no un
+   dato del plan. Quien revisa quiere poder ignorarla de un vistazo si todo
+   está bien, y no poder ignorarla si no lo está. */
+.plan-suma{
+  margin:2px 16px 10px;padding:8px 12px;border-radius:12px;
+  background:var(--pill-bg);color:var(--ink-faint);
+  font:600 12.5px/1.35 sans-serif;font-variant-numeric:tabular-nums;
+}
+.plan-suma.fuera{
+  background:color-mix(in srgb, var(--red) 12%, transparent);
+  color:var(--red);
+}
+
 /* Quitar el plan: texto pequeño en rojo al final del todo, como las acciones
    destructivas de iOS. Es lo único de esta pantalla que no se deshace. */
 .plan-quitar{display:flex;justify-content:center;margin:2px 16px 0;}
