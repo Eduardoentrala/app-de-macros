@@ -5562,7 +5562,13 @@
       // Un día que no ha llegado NO es un día fallado. Antes las dos cosas
       // se pintaban con el mismo «—»: el martes, con la semana recién
       // empezada, cinco filas se leían como cinco días saltados.
-      var marca = hizo     ? '<span class="pill-si">SÍ</span>'
+      // EL «SÍ» SE PUEDE TOCAR, y es lo único de esta tabla que hace algo.
+      //  Detrás está lo que faltaba: quitar una sesión guardada. Hasta ahora
+      //  no se podía —`workout_sessions` no tenía un solo borrado en toda la
+      //  app— y darle a Guardar sin querer dejaba una sesión entera, con el
+      //  volumen de toda la rutina, contando para siempre.
+      var marca = hizo     ? '<button class="pill-si" data-ver-sesion="' + k +
+                             '" aria-label="Ver la sesión de este día">SÍ</button>'
                 : esFuturo ? '<span class="pill-futuro">·</span>'
                            : '<span class="pill-dash">—</span>';
 
@@ -5593,6 +5599,121 @@
     document.getElementById('ejWeekRange').textContent = rangoCorto(iso(ini));
 
   }
+
+  // ---- QUITAR UNA SESIÓN GUARDADA ----
+  //
+  //  Lo que no existía. `workout_sessions` no tenía un solo borrado en toda
+  //  la app —«son historial: se leen, no se editan», decía el comentario de
+  //  la carga— y por eso un toque de más era para siempre.
+  //
+  //  Y el toque de más es fácil: las series vienen rellenas con lo que dice
+  //  la rutina, así que «Guardar sesión» funciona igual antes de empezar que
+  //  al terminar. Si además la pestaña estaba en otro día de rutina, el
+  //  guardado de verdad NO la pisa —la clave para actualizar es fecha + día
+  //  de rutina, y dos días distintos son dos sesiones a propósito—, así que
+  //  quedan dos filas y el volumen del día cuenta las dos.
+  //
+  //  Ese número es el que lee la regla más cara del cierre: «peso plano y
+  //  volumen SUBIENDO → está funcionando, no le toques nada».
+  // Delegado en la tabla: se repinta entera en cada cambio, así que un
+  // escuchador por botón se perdería en el primer repintado.
+  document.getElementById('ejFilas').addEventListener('click', function(e){
+    var b = e.target.closest('[data-ver-sesion]');
+    if(b) abrirSesionesDe(b.dataset.verSesion);
+  });
+
+  var sesionQuitarSheet = document.getElementById('sesionQuitarSheet');
+  var sesionesDelDia = [];
+
+  function cerrarSesionQuitar(){
+    sesionQuitarSheet.classList.remove('open');
+    sesionesDelDia = [];
+  }
+  document.getElementById('sesionQuitarNo').addEventListener('click', cerrarSesionQuitar);
+  sesionQuitarSheet.addEventListener('click', function(e){
+    if(e.target === sesionQuitarSheet) cerrarSesionQuitar();
+  });
+
+  function abrirSesionesDe(fechaIso){
+    if(!sesion || !sesion.user) return;
+    var cuando = fmtFecha(new Date(fechaIso + 'T12:00:00'));
+    document.getElementById('sesionQuitarDia').textContent = cuando;
+    document.getElementById('sesionQuitarLista').innerHTML =
+      '<p class="calc-note">Cargando…</p>';
+    sesionQuitarSheet.classList.add('open');
+
+    sbFetch('/rest/v1/workout_sessions?select=id,day_name,total_volume,routine_day_id' +
+            '&user_id=eq.' + sesion.user.id +
+            '&session_date=eq.' + fechaIso + '&order=created_at.asc')
+      .then(function(filas){
+        sesionesDelDia = (filas || []).map(function(f){
+          return { id: f.id, dia: f.day_name, vol: Number(f.total_volume) || 0,
+                   rutina: f.routine_day_id || '', fecha: fechaIso };
+        });
+        pintarSesionesDelDia();
+      })['catch'](function(e){
+        document.getElementById('sesionQuitarLista').innerHTML =
+          '<p class="calc-note">' + escapar('No pude traerlas: ' + traducirError(e.message)) + '</p>';
+      });
+  }
+
+  function pintarSesionesDelDia(){
+    var caja = document.getElementById('sesionQuitarLista');
+    if(!caja) return;
+    if(!sesionesDelDia.length){
+      // Puede pasar: se quita la única y la hoja se queda abierta.
+      caja.innerHTML = '<p class="calc-note">Ya no queda ninguna de ese día.</p>';
+      return;
+    }
+    caja.innerHTML = sesionesDelDia.map(function(s, i){
+      return '<div class="medida-fila">' +
+        '<div><div class="mf-val">' + escapar(s.dia || 'Sesión') + '</div>' +
+        '<div class="mf-fecha">' + mil(Math.round(s.vol)) + ' kg·rep</div></div>' +
+        '<button class="borrar-discreto" data-quitar-sesion="' + i + '">Quitar</button>' +
+      '</div>';
+    }).join('');
+  }
+
+  document.getElementById('sesionQuitarLista').addEventListener('click', function(e){
+    var b = e.target.closest('[data-quitar-sesion]');
+    if(!b) return;
+    var s = sesionesDelDia[Number(b.dataset.quitarSesion)];
+    if(!s) return;
+    b.disabled = true;
+    b.textContent = 'Quitando…';
+
+    // Se borra y SE COMPRUEBA, como «Empezar de cero»: un DELETE que no
+    // encaja con ninguna fila sale bien sin tocar nada, y un borrado que no
+    // borró se ve idéntico a uno que sí.
+    var quien = '&user_id=eq.' + sesion.user.id;
+    sbFetch('/rest/v1/workout_sessions?id=eq.' + s.id + quien, { method:'DELETE' })
+      .then(function(){
+        return sbFetch('/rest/v1/workout_sessions?select=id&limit=1&id=eq.' + s.id + quien);
+      })
+      .then(function(quedan){
+        if(quedan && quedan.length) throw new Error('la sesión sigue ahí');
+        // Si todavía esperaba subir, fuera de la cola también: si no,
+        // vuelve a aparecer en cuanto haya señal.
+        quitarDeLaCola('sesion:' + s.fecha + ':' + s.rutina);
+        sesionesDelDia = sesionesDelDia.filter(function(x){ return x.id !== s.id; });
+        pintarSesionesDelDia();
+        // Y se recarga el historial entero en vez de parchear a mano:
+        // `SESIONES`, `HISTORIAL` y las gráficas salen todos de ahí.
+        return sbCargarSesiones();
+      })
+      .then(function(){
+        pintarEjercicio();
+        if(typeof ponerReferencias === 'function') ponerReferencias();
+        toast('toastRutina', 'Sesión quitada');
+      })
+      ['catch'](function(e){
+        b.disabled = false;
+        b.textContent = 'Quitar';
+        toast('toastRutina', sinConexion(e)
+          ? 'Sin señal: para quitar una sesión hace falta conexión.'
+          : 'No se pudo quitar: ' + traducirError(e.message));
+      });
+  });
 
   // Guardar sesión = queda registrado el día de hoy como día de fuerza
   // Mientras una sesión se está guardando, el botón no vuelve a disparar.

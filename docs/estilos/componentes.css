@@ -120,7 +120,14 @@ table.week-table th{font:700 11.5px/1 sans-serif;color:var(--ink-faint);text-ali
 table.week-table td{padding:11px 12px;font:600 13px/1 sans-serif;border-bottom:1px solid var(--line);}
 table.week-table tr:last-child td{border-bottom:none;}
 table.week-table tr.today td{font-weight:800;}
-.pill-si{background:var(--green-soft);color:var(--green);font:800 11px/1 sans-serif;padding:4px 9px;border-radius:8px;}
+/* Es un `button` desde que se puede tocar para quitar una sesión guardada
+   —un guardado por error no tenía forma de deshacerse—. Los reinicios son
+   para que siga viéndose exactamente igual que cuando era un `span`. */
+.pill-si{
+  background:var(--green-soft);color:var(--green);font:800 11px/1 sans-serif;
+  padding:4px 9px;border-radius:8px;border:none;cursor:pointer;
+}
+.pill-si:active{opacity:.6;}
 /* El día que pasó sin entrenar. */
 .pill-dash{color:var(--ink-faint);}
 /* Y el que TODAVÍA NO HA LLEGADO, que no es lo mismo. Un punto y no una

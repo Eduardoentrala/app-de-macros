@@ -112,7 +112,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = 'f038d8fe05';
+    var SELLO = '7c6ef5022f';
     // Y a la vista de app.js, que lo manda con cada fallo que apunta. Sin
     // la versión, un error de hace una semana y uno de ahora se leen igual
     // y «eso ya lo arreglé» no se puede comprobar.
@@ -2492,6 +2492,27 @@
         </div>
       </div>
 
+      <!-- LAS SESIONES DE UN DÍA, PARA PODER QUITAR UNA.
+           Darle a «Guardar sesión» sin querer —antes de empezar, o con la
+           pestaña puesta en otro día de rutina— dejaba una sesión entera
+           guardada, con el volumen de toda la rutina rellenada, y no había
+           forma de deshacerlo: `workout_sessions` no tenía un solo borrado
+           en toda la app. Y ese volumen alimenta la regla más cara del
+           cierre del lunes.
+
+           Van listadas y no una sola pregunta porque un día puede tener dos
+           de verdad —empuje por la mañana, tirón por la tarde— y hay que
+           poder decir CUÁL sobra. -->
+      <div class="sheet-backdrop" id="sesionQuitarSheet">
+        <div class="sheet">
+          <h4>Sesiones de este día</h4>
+          <p class="hint" id="sesionQuitarDia">—</p>
+          <div id="sesionQuitarLista"></div>
+          <p class="wc-warn">⚠ Quitar una no se puede deshacer.</p>
+          <button class="btn-ghost-text" id="sesionQuitarNo">Cerrar</button>
+        </div>
+      </div>
+
       <!-- Quitar un pesaje suelto. Pregunta por lo mismo que «Empezar de
            cero»: aquí el borrado es de verdad, y en Peso solo se escribe el
            día de hoy, así que no se puede volver a poner. -->
@@ -2649,7 +2670,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = 'f038d8fe05';
+    var SELLO = '7c6ef5022f';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que
