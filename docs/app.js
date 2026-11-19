@@ -5737,7 +5737,54 @@
   //  El `finally` no sustituye a los `guardandoSesion = false` de la promesa:
   //  aquellos sueltan el candado cuando TERMINA la escritura, que es de lo
   //  que protege. Este suelta el candado si nunca se llegó a empezar.
+  // ---- ¿HAY ALGUNA SEÑAL DE QUE ESTO PASÓ? ----
+  //
+  //  Tres, y basta con una:
+  //
+  //    · el cronómetro ha corrido —arranca al marcar la primera serie o al
+  //      poner un descanso, o sea al hacer algo—;
+  //    · hay alguna serie marcada;
+  //    · se tocó algún peso o alguna repetición —`data-tocado`, el mismo
+  //      que enciende el porcentaje en vivo—.
+  //
+  //  Sin ninguna de las tres, lo que hay en pantalla es la rutina tal y como
+  //  vino rellenada: lo que esa persona PIENSA hacer. Guardarlo es apuntar
+  //  un entrenamiento que no ocurrió, con su volumen entero.
+  //
+  //  NO SE BLOQUEA, SE PREGUNTA. Hay quien no usa las palomitas ni el
+  //  cronómetro y hace su rutina exacta sin cambiar un número; a esa persona
+  //  le cuesta un toque más y la pregunta le dice la verdad.
+  function hayRastroDeEntreno(){
+    if(sesionInicio) return true;
+    if(exList.querySelector('.set-check.done')) return true;
+    if(exList.querySelector('.exercise-card[data-tocado]')) return true;
+    return false;
+  }
+
+  var sesionVaciaSheet = document.getElementById('sesionVaciaSheet');
+  function cerrarSesionVacia(){ sesionVaciaSheet.classList.remove('open'); }
+  document.getElementById('sesionVaciaNo').addEventListener('click', cerrarSesionVacia);
+  sesionVaciaSheet.addEventListener('click', function(e){
+    if(e.target === sesionVaciaSheet) cerrarSesionVacia();
+  });
+  document.getElementById('sesionVaciaOk').addEventListener('click', function(){
+    cerrarSesionVacia();
+    guardarSesionConRed();
+  });
+
+  function guardarSesionConRed(){
+    try { guardarSesionAhora(); }
+    catch(e){
+      guardandoSesion = false;
+      toast('toastRutina', 'No se pudo guardar: ' + traducirError(e && e.message));
+      apuntarFallo('guardar_sesion', e);
+    }
+  }
+
   document.getElementById('saveSessionBtn').addEventListener('click', function(){
+    // La pregunta va ANTES del candado y de leer el DOM: si saliera después,
+    // «Todavía no» dejaría `guardandoSesion` puesto y el botón muerto.
+    if(!hayRastroDeEntreno()){ sesionVaciaSheet.classList.add('open'); return; }
     try { guardarSesionAhora(); }
     catch(e){
       guardandoSesion = false;

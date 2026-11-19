@@ -91,8 +91,15 @@ function montar({ filasQueYaHay = [], fallaLaConsulta = false,
     setAttribute(k, v) { this._attrs[k] = v; },
     removeAttribute(k) { delete this._attrs[k]; },
   };
+  // `querySelector` además de `querySelectorAll`: desde que existe la
+  // pregunta de «¿seguro que quieres guardar ya?», el manejador le pide a la
+  // lista si hay alguna serie marcada o algún peso tocado. Aquí se contesta
+  // que sí a lo tocado —esta prueba va de dos toques seguidos, no de si hubo
+  // entrenamiento—, así que no sale ninguna hoja y el camino es el de
+  // siempre. La pregunta tiene su propia prueba.
   const exList = {
     querySelectorAll: (s) => (s === '.exercise-card' ? [tarjeta] : []),
+    querySelector: (s) => (s === '.exercise-card[data-tocado]' ? tarjeta : null),
   };
 
   const ctx = {

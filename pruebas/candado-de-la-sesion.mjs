@@ -71,9 +71,18 @@ console.log('\nEl candado se suelta aunque algo reviente');
   // llama ahora para dejar constancia del fallo. Sin el doble, lo que
   // saldría del `catch` sería un ReferenceError suyo y no el error de
   // verdad — y esta prueba existe justo para vigilar cuál sale.
+  // `sesionInicio` entra con valor: desde que existe la pregunta de «¿seguro
+  // que quieres guardar ya?», el manejador mira si hay rastro del
+  // entrenamiento ANTES de guardar. Con el cronómetro corriendo hay rastro,
+  // así que no sale ninguna hoja y lo que se prueba aquí —el candado— es lo
+  // mismo de siempre. Esa pregunta tiene su propia prueba.
   const api = new Function('document', 'toast', 'traducirError', 'apuntarFallo', `
     var guardandoSesion = false;
     var intentos = 0;
+    var sesionInicio = 1763300000000;
+    var exList = { querySelector: function(){ return null; } };
+    var sesionVaciaSheet = { classList: { add: function(){} } };
+    function hayRastroDeEntreno(){ return true; }
     function guardarSesionAhora(opciones){
       if(guardandoSesion) return;
       guardandoSesion = true;

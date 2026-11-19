@@ -112,7 +112,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '7c6ef5022f';
+    var SELLO = '5cbaf04a66';
     // Y a la vista de app.js, que lo manda con cada fallo que apunta. Sin
     // la versión, un error de hace una semana y uno de ahora se leen igual
     // y «eso ya lo arreglé» no se puede comprobar.
@@ -2492,6 +2492,26 @@
         </div>
       </div>
 
+      <!-- ANTES DE GUARDAR UNA SESIÓN QUE NO PARECE HABER PASADO.
+           Las series vienen rellenas con lo que dice la rutina, así que el
+           botón funciona igual antes de empezar que al terminar, y un toque
+           de más guarda la rutina entera como si se hubiera levantado.
+
+           NO SALE SIEMPRE, y esa es la idea: una pregunta que aparece todos
+           los días se contesta sin leerla, y entonces no protege de nada.
+           Sale solo cuando no hay ni una señal de que el entrenamiento
+           ocurrió. -->
+      <div class="sheet-backdrop" id="sesionVaciaSheet">
+        <div class="sheet">
+          <h4>¿Guardar la sesión ya?</h4>
+          <p class="hint">No marcaste ninguna serie, no cambiaste ningún peso
+            y el cronómetro no ha corrido. Si le das a guardar, se apunta la
+            rutina entera como si la hubieras hecho.</p>
+          <button class="btn-primary" id="sesionVaciaOk">Sí, guardar</button>
+          <button class="btn-ghost-text" id="sesionVaciaNo">Todavía no</button>
+        </div>
+      </div>
+
       <!-- LAS SESIONES DE UN DÍA, PARA PODER QUITAR UNA.
            Darle a «Guardar sesión» sin querer —antes de empezar, o con la
            pestaña puesta en otro día de rutina— dejaba una sesión entera
@@ -2670,7 +2690,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '7c6ef5022f';
+    var SELLO = '5cbaf04a66';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que
