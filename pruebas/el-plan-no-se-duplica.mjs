@@ -94,15 +94,18 @@ console.log('\nGuardar sin saber si ya tenía plan: no');
     const peticiones = [], avisos = [];
     new Function(
       'planEditando', 'sesion', 'document', 'toast', 'leerEditorPlan',
-      'sbFetch', 'traducirError', 'back', 'cargarPlan', 'peticiones',
+      'sbFetch', 'traducirError', 'back', 'cargarPlan', 'planMetaCal', 'peticiones',
       cuerpoDelBoton('peGuardar')
     )(
       editando, { user: { id: 'coach' } },
       { getElementById: (id) => campos[id] || null },
       (donde, msg) => avisos.push(msg),
       () => comidas,
-      (ruta, op) => { peticiones.push({ ruta: ruta, metodo: op.method }); return Promise.resolve(); },
-      (m) => m, () => {}, () => Promise.resolve(), peticiones
+      (ruta, op) => {
+        peticiones.push({ ruta: ruta, metodo: op.method, cuerpo: JSON.parse(op.body) });
+        return Promise.resolve();
+      },
+      (m) => m, () => {}, () => Promise.resolve(), 2001, peticiones
     );
     return { peticiones, avisos };
   };
@@ -142,6 +145,42 @@ console.log('\nGuardar sin saber si ya tenía plan: no');
   ok(g.indexOf('creado_por') > corte && corte > 0,
      'y «creado por» solo viaja en el alta',
      'la columna se llama «creado por», no «tocado por»');
+
+  // PARA CUÁNTAS CALORÍAS SE ESCRIBIÓ. El plan es texto y no dice a qué
+  // apuntaba: sin guardarlo, el día que el cierre le mueva las calorías no
+  // hay forma de saber que se quedó viejo.
+  ok(conPlan.peticiones[0].cuerpo.cal_objetivo === 2001,
+     'y se guarda para cuántas calorías se escribió',
+     JSON.stringify(conPlan.peticiones[0].cuerpo));
+}
+
+console.log('\nY un plan escrito para otras calorías se avisa');
+{
+  const dime = new Function('plan', 'metaCal',
+    sinC(fn('function planDesfasado(plan, metaCal){')) +
+    '; return planDesfasado(plan, metaCal);');
+
+  // El caso: el cierre del lunes le bajó de 2.001 a 1.850 y el plan sigue
+  // siendo el de 2.001. Su pantalla enseña arriba las nuevas y debajo la
+  // comida de las viejas, y ella se come la comida.
+  const v = dime({ cal_objetivo: 2001 }, 1850);
+  ok(v && v.antes === 2001 && v.ahora === 1850, 'se ve el desfase',
+     JSON.stringify(v));
+
+  ok(dime({ cal_objetivo: 2001 }, 2001) === null, 'si no se movieron, nada que decir');
+  ok(dime({ cal_objetivo: 2001 }, 1950) === null,
+     'ni por un 2,5%: el plan sigue cuadrando',
+     'es el mismo margen que se le exige a la IA al armarlo; avisar por ' +
+     'menos sería ruido en cada ficha');
+  ok(dime({ cal_objetivo: 2001 }, 2150) !== null, 'pero por un 7% sí, y hacia arriba también');
+
+  // LOS PLANES DE ANTES NO GUARDAN PARA CUÁNTO SE HICIERON. De esos no se
+  // inventa una comparación.
+  ok(dime({ cal_objetivo: null }, 1850) === null, 'de un plan viejo no se dice nada',
+     'sin saber con qué número se escribió, cualquier aviso sería inventado');
+  ok(dime(null, 1850) === null, 'ni sin plan');
+  ok(dime({ cal_objetivo: 2001 }, null) === null,
+     'ni de quien todavía no tiene macros calculados');
 }
 
 console.log('\nY quitar el plan tampoco se hace a ciegas');

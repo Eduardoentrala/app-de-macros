@@ -59,6 +59,7 @@ const FUENTE = SUELO + '\n' +
   fn('function tarjetaVacia(titulo, frase){') +
   fn('function diaCorto(iso){') +
   fn('function tarjetaDeSerie(titulo, pts, unidad, vacia){') +
+  fn('function planDesfasado(plan, metaCal){') +
   fn('function comparado(ahora, antes){') +
   fn('function pintarMetricas(){');
 
@@ -229,6 +230,24 @@ console.log('\nY su gasto medido, que es lo que de verdad mueve las calorías');
 
   // Sin nada que medir no se enseña una tarjeta vacía.
   ok(!/Gasto medido/.test(pintar(con({})).html), 'y sin medición no sale la tarjeta');
+}
+
+console.log('\nY que su plan se quedó viejo, que es lo único accionable hoy');
+{
+  const r = pintar(con({ meta_cal: 1850, plan: { nombre: 'Plan', cal_objetivo: 2001 } }));
+  ok(/Su plan se quedó viejo/.test(r.html), 'sale el aviso');
+  ok(/2001/.test(r.html) && /1850/.test(r.html), 'con los dos números',
+     r.html.slice(0, 300));
+  // ARRIBA DEL TODO: es lo único de la ficha que pide hacer algo hoy.
+  // Mientras no se rearme, esa persona come las calorías de antes.
+  ok(r.html.indexOf('Su plan se quedó viejo') < r.html.indexOf('Está apuntando'),
+     'y antes que lo demás');
+
+  ok(!/quedó viejo/.test(pintar(con({ meta_cal: 2001, plan: { cal_objetivo: 2001 } })).html),
+     'si cuadra, no se dice nada');
+  ok(!/quedó viejo/.test(pintar(con({ meta_cal: 1850, plan: { cal_objetivo: null } })).html),
+     'y de un plan escrito antes de guardar esto, tampoco',
+     'no se sabe con qué número se hizo: inventarlo sería peor');
 }
 
 console.log('\nY lo que el cierre aprendió de ella');

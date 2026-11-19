@@ -102,8 +102,8 @@ await como(CLI, `insert into public.chequeos_semanales
   -- Y una a medias, de las que NO cuentan: tres dias apuntados no dicen lo
   -- que comio esa semana, dicen lo que comio tres dias de ella.
   ('${CLI}',current_date-28,2200,85.9,3,1)`);
-await como(COACH, `insert into public.planes(user_id,nombre,comidas,activo,creado_por)
-  values ('${CLI}','Plan de Ana','[{"momento":"Cena","texto":"sopa"}]'::jsonb,true,'${COACH}')`);
+await como(COACH, `insert into public.planes(user_id,nombre,comidas,activo,creado_por,cal_objetivo)
+  values ('${CLI}','Plan de Ana','[{"momento":"Cena","texto":"sopa"}]'::jsonb,true,'${COACH}',2001)`);
 
 const m = (await como(COACH, `select public.plan_metricas('${CLI}') j`)).r.rows[0].j;
 
@@ -272,6 +272,12 @@ console.log('\n— Fotos, chequeo y plan —');
     m.chequeo.hambre === 3 && m.chequeo.energia === 4 && m.chequeo.sueno === 4);
   check('y su plan, con cuantas comidas tiene',
     m.plan.nombre === 'Plan de Ana' && m.plan.comidas === 1, JSON.stringify(m.plan));
+  // PARA CUANTAS CALORIAS SE ESCRIBIO. El plan es texto y no dice a que
+  // apuntaba: sin esto, el dia que el cierre del lunes le mueva las calorias
+  // nadie puede saber que se quedo viejo, y esa persona sigue comiendo lo de
+  // antes porque su pantalla le ensena el plan, no sus calorias.
+  check('y para cuantas calorias se escribio',
+    Number(m.plan.cal_objetivo) === 2001, JSON.stringify(m.plan));
 }
 
 console.log('\n— Donde se guarda lo que escribe la IA —');

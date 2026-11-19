@@ -10890,7 +10890,7 @@
   // guarda a ciegas— pero hace que, si ya hay duplicados de antes, gane
   // siempre el último escrito.
   function sbPlanDe(userId){
-    return sbFetch('/rest/v1/planes?select=id,nombre,nota,comidas,user_id' +
+    return sbFetch('/rest/v1/planes?select=id,nombre,nota,comidas,user_id,cal_objetivo' +
                    '&user_id=eq.' + userId + '&activo=is.true' +
                    '&order=created_at.desc&limit=1')
       .then(function(r){ return (r || [])[0] || null; });
@@ -11770,6 +11770,16 @@
       planComidas = ((p && p.comidas) || []).slice();
       ponerDiaALosViejos();
       pintarEditorComidas();
+
+      // Y SI SE ESCRIBIÓ PARA OTRAS CALORÍAS, SE DICE AQUÍ. Es donde se
+      // arregla: abres el plan de alguien, lees que se hizo para 2.001 y que
+      // hoy come 1.850, y rearmas sin tener que acordarte de comprobarlo.
+      var viejo = planDesfasado(p, planMetaCal);
+      if(viejo && caja){
+        caja.innerHTML += '<div class="plan-suma fuera">Este plan se escribió ' +
+          'para ' + escapar(mil(viejo.antes)) + ' cal y ahora come ' +
+          escapar(mil(viejo.ahora)) + '. Rearma o ajústalo a mano.</div>';
+      }
     })['catch'](function(e){
       // Este es el peor de callar. El editor se queda vacío, parece que esa
       // persona no tiene plan, y lo que se guarde encima BORRA el que sí
@@ -11834,7 +11844,14 @@
       nombre: document.getElementById('peNombre').value.trim() || 'Mi plan',
       nota: document.getElementById('peNota').value.trim() || null,
       comidas: comidas,
-      activo: true
+      activo: true,
+      // PARA CUÁNTAS CALORÍAS SE ESTÁ ESCRIBIENDO. Sin esto, el día que el
+      // cierre del lunes le mueva las calorías nadie puede saber que el
+      // plan se quedó viejo: es texto, y el texto no dice a qué apuntaba.
+      //
+      // Null si esa persona todavía no tiene macros calculados. Mejor no
+      // saberlo que apuntar un número inventado: de un null no se avisa.
+      cal_objetivo: planMetaCal || null
     };
     // `creado_por` SOLO AL CREARLO. Iba también en el PATCH, así que el
     // segundo entrenador que le tocara una coma al plan pasaba a figurar
@@ -12120,6 +12137,28 @@
       '<div class="peso-resumen">' + escapar(resumen) + '</div></div>';
   }
 
+  // ---- ¿SIGUE VALIENDO SU PLAN? ----
+  //
+  //  Un plan se escribe para unas calorías concretas y luego el cierre del
+  //  lunes se las mueve —100 o 200 cada vez—. El plan es texto: no se entera,
+  //  no se recalcula y no se queja. Esa persona abre su pantalla, ve arriba
+  //  sus calorías nuevas y debajo la comida de las viejas, y se come la
+  //  comida: para eso está el plan.
+  //
+  //  El 5% es el mismo margen que se le exige a la IA al armarlo. Por debajo
+  //  de eso el plan sigue cuadrando y avisar sería ruido.
+  //
+  //  Devuelve null si no hay con qué comparar: los planes escritos antes de
+  //  que esto existiera no guardan para cuánto se hicieron, y de esos no se
+  //  dice nada en vez de inventar una diferencia.
+  function planDesfasado(plan, metaCal){
+    var antes = plan && Number(plan.cal_objetivo);
+    var ahora = Number(metaCal);
+    if(!(antes > 0) || !(ahora > 0)) return null;
+    if(Math.abs(ahora - antes) / antes <= 0.05) return null;
+    return { antes: Math.round(antes), ahora: Math.round(ahora) };
+  }
+
   // «Subió, se mantuvo o bajó», que es la pregunta de verdad.
   //
   //  La banda del 2 % es la misma con la que el asistente juzga el volumen de
@@ -12202,6 +12241,25 @@
     }
 
     var html = '';
+
+    // SU PLAN SE QUEDÓ VIEJO, Y ESO VA ARRIBA DEL TODO.
+    //
+    //  Es lo único de esta ficha que pide hacer algo HOY: mientras no se
+    //  rearme, esa persona está comiendo las calorías de antes todos los
+    //  días, y su pantalla se lo enseña sin una palabra de aviso —arriba las
+    //  nuevas, debajo la comida de las viejas—.
+    //
+    //  Por eso no es una fila más dentro de una tarjeta: va antes que la
+    //  adherencia, que es lo primero que se mira.
+    var viejo = planDesfasado(m.plan, m.meta_cal);
+    if(viejo){
+      html += '<div class="card"><div class="field-label" style="margin-top:0;">' +
+        'Su plan se quedó viejo</div>' +
+        '<div class="fc-motivo">Se escribió para ' + escapar(mil(viejo.antes)) +
+        ' cal y ahora come ' + escapar(mil(viejo.ahora)) + '. Mientras no lo ' +
+        'rearmes, come lo de antes: su pantalla le enseña el plan, no sus ' +
+        'calorías.</div></div>';
+    }
 
     // Adherencia primero: es la señal más honesta que hay. Quien deja de
     // apuntar suele haber dejado el plan una semana antes.
