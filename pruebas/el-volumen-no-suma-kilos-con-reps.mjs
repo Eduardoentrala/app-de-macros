@@ -15,18 +15,30 @@
 // Mismo esfuerzo, puede que más, y el número dice «-98 %». Basta cambiar
 // un ejercicio con barra por uno con el peso del cuerpo.
 //
-// Y LO SEGUNDO, que se ve al mirar las series una por una: las filas
-// vienen RELLENAS con lo que dice la rutina —reps y peso ya puestos— y
-// el volumen las sumaba todas, marcadas o no. O sea que contaba lo que
-// pensabas hacer, no lo que hiciste.
-//
-// Eso el código ya lo sabía: el peso máximo de cada ejercicio solo mira
-// las series marcadas, y lo explica —«se puede teclear un peso para la
-// próxima sin llegar a levantarlo; contándolo, una intención se
-// convierte en un récord»—. El volumen no hacía esa distinción.
-//
 // Ahora son dos números que no se mezclan: los kilos levantados y las
 // repeticiones sin peso. Cada uno se compara con el suyo.
+//
+// Y LAS PALOMITAS NO DECIDEN NADA AQUÍ, que fue un ida y vuelta.
+//
+// La primera versión de este arreglo contaba solo las series MARCADAS, con
+// un argumento que suena bien: las filas vienen rellenas con lo que dice la
+// rutina, así que contarlas todas es contar lo que pensabas hacer. Para el
+// RÉCORD DE PESO ese argumento sigue valiendo y la regla sigue puesta —se
+// puede teclear un peso «para la próxima» sin llegar a levantarlo—.
+//
+// Para el volumen no valía, y lo dijo quien usa la app: «a veces no marco
+// la paloma pero sí hago el ejercicio». Con una serie marcada de tres, el
+// lunes contaba 200 donde se habían levantado 600, y encima decía que había
+// bajado.
+//
+// EL PROBLEMA NO ERA EQUIVOCARSE, ERA EQUIVOCARSE DISTINTO CADA SEMANA.
+// Este número solo sirve para ver una tendencia, y una tendencia aguanta un
+// sesgo constante pero no uno que depende de lo cuidadoso que estuviera
+// alguien con las palomitas ese día: una semana marcando todo contra otra
+// marcando una se leen como un +200% sin haber entrenado distinto.
+//
+// Para la serie que de verdad no se hizo hay un botón que lo dice sin
+// ambigüedad —la `×` de la fila—. La palomita no lo dice.
 
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -106,24 +118,42 @@ console.log('\nCambiar barra por dominadas no es un derrumbe');
 }
 
 // ------------------------------------------------------------------
-console.log('\nY solo cuenta lo que marcaste como hecho');
+console.log('\nY las palomitas no deciden cuánto levantaste');
 {
-  // Cuatro series puestas por la rutina, dos hechas.
-  const mitad = [ej('Sentadilla', [s(10, 60), s(10, 60), s(10, 60, false), s(10, 60, false)])];
-  const r = await correr([ses('2026-11-03', mitad, 2400)]);
-  ok(r.volumen === 1200,
-     'dos series de diez a 60 kg son 1.200, no 2.400',
-     'salió ' + r.volumen + '. Las filas vienen rellenas con lo que dice ' +
-     'la rutina: contarlas todas es contar lo que pensabas hacer');
+  // EL CASO QUE LO DECIDIÓ: tres series hechas, una sola marcada. Es lo
+  // normal de quien marca la primera, se mete en la serie y ya no vuelve a
+  // tocar la pantalla.
+  const unaMarcada = [ej('Sentadilla', [s(10, 60), s(10, 60, false), s(10, 60, false)])];
+  const r = await correr([ses('2026-11-03', unaMarcada, 1800)]);
+  ok(r.volumen === 1800,
+     'con una marcada de tres, cuentan las tres',
+     'salió ' + r.volumen + '. Contando solo la marcada serían 600 de los ' +
+     '1.800 que se levantaron, y el lunes diría que bajó');
 
-  // NINGUNA MARCADA: se cuentan todas. Mucha gente no usa las palomitas,
-  // y dejar su semana en cero sería peor. Es la misma regla que ya usa el
-  // peso máximo, no una inventada aquí.
-  const sinMarcar = [ej('Sentadilla', [s(10, 60, false), s(10, 60, false)])];
-  const r2 = await correr([ses('2026-11-03', sinMarcar, 1200)]);
-  ok(r2.volumen === 1200,
-     'y si no marcaste ninguna, se cuentan todas',
-     'salió ' + r2.volumen);
+  const todas = [ej('Sentadilla', [s(10, 60), s(10, 60), s(10, 60)])];
+  const r2 = await correr([ses('2026-11-03', todas, 1800)]);
+  ok(r2.volumen === 1800, 'y marcándolas todas, lo mismo',
+     'la misma tarde no puede dar dos números según cuántas palomitas se ' +
+     'pusieran: eso es ruido metido en la tendencia, que es lo único que ' +
+     'este número sirve para ver');
+
+  const ninguna = [ej('Sentadilla', [s(10, 60, false), s(10, 60, false)])];
+  const r3 = await correr([ses('2026-11-03', ninguna, 1200)]);
+  ok(r3.volumen === 1200, 'y sin marcar ninguna, igual', 'salió ' + r3.volumen);
+
+  // LO QUE SÍ SIGUE MIRANDO LA PALOMITA: el récord de peso. Un récord es
+  // una afirmación, no una tendencia, y se puede teclear un peso para la
+  // próxima sin llegar a levantarlo. Inflar un récord es peor que perderlo.
+  const conIntencion = [ej('Press', [s(10, 40), s(10, 80, false)])];
+  const r4 = await correr([ses('2026-11-03', conIntencion, 1200)]);
+  const press = (r4.ejercicios || []).filter((x) => x.nombre === 'Press')[0];
+  ok(press && press.peso === 40,
+     'pero el récord de peso sigue siendo solo de las marcadas',
+     JSON.stringify(press) + ' — los 80 están tecleados para la próxima, no ' +
+     'levantados: contarlos le diría «subiste a 80» a quien no los movió');
+  ok(r4.volumen === 1200, 'aunque esos kilos sí cuenten para el volumen',
+     'salió ' + r4.volumen + ': las dos reglas conviven porque miden cosas ' +
+     'distintas');
 }
 
 // ------------------------------------------------------------------
@@ -150,9 +180,11 @@ console.log('\nY las cuatro semanas de la tendencia cuentan igual');
     ses('2026-11-03', [ej('A', [s(10, 10)])], 100),
   ]);
   const v = (r.por_semana || []).map((x) => x.volumen);
-  ok(v[0] === 100, 'la del 12 de octubre cuenta solo la serie hecha',
-     'salió ' + v[0] + ' de ' + JSON.stringify(v));
-  ok(v[3] === 100, 'y la cerrada igual', JSON.stringify(v));
+  ok(v[0] === 200, 'la del 12 de octubre cuenta sus dos series',
+     'salió ' + v[0] + ' de ' + JSON.stringify(v) + '. La tendencia y la ' +
+     'cabecera tienen que contar igual: si no, dos sitios de la misma ' +
+     'pantalla dicen cosas distintas de la misma tarde');
+  ok(v[3] === 100, 'y la cerrada la suya', JSON.stringify(v));
 }
 
 console.log('\n' + pasan + ' bien, ' + fallan + ' mal');

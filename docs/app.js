@@ -15809,17 +15809,44 @@
         //  Y si la sesión no trae series —las de antes de que se guardara
         //  el detalle— se usa el total que quedó escrito: tirarlas sería
         //  borrarle semanas del historial.
+        // CUENTA TODAS LAS SERIES, MARCADAS O NO. Y esto fue un ida y vuelta
+        // que conviene dejar escrito, porque la primera versión parecía la
+        // correcta y no lo era.
+        //
+        //  Nació contando todas. Se cambió a contar SOLO las marcadas, con
+        //  el argumento de que las filas vienen rellenas con lo que dice la
+        //  rutina y contarlas todas es contar lo que esa persona pensaba
+        //  hacer. El argumento es bueno, y para el RÉCORD DE PESO sigue
+        //  valiendo —ahí sí solo cuentan las marcadas—.
+        //
+        //  Para el volumen no vale, y lo dijo quien usa la app: «a veces no
+        //  marco la paloma pero sí hago el ejercicio». Con una serie marcada
+        //  de tres, el lunes contaba 200 donde se levantaron 600, y encima
+        //  decía que había bajado.
+        //
+        //  EL PROBLEMA NO ES QUE SE EQUIVOQUE, ES QUE SE EQUIVOCA DISTINTO
+        //  CADA SEMANA. Este número solo sirve para ver una tendencia, y una
+        //  tendencia aguanta un sesgo constante —contar de más si se
+        //  abandona un ejercicio— pero no aguanta uno que depende de lo
+        //  cuidadoso que estuviera alguien con las palomitas ese día: una
+        //  semana marcando todo contra otra marcando una se leen como un
+        //  +200% sin haber entrenado distinto.
+        //
+        //  Para la serie que de verdad NO se hizo hay un botón que lo dice
+        //  sin ambigüedad: la `×` de la fila. La palomita no lo dice.
+        //
+        //  Y así cuentan lo mismo los cuatro sitios: la tarjeta del
+        //  ejercicio, lo que se guarda, su gráfica y esto.
         function volumenDeSesion(f){
           var kg = 0, libres = 0, hubo = false;
           ((f && f.exercises) || []).forEach(function(ejer){
-            var todas = (ejer && ejer.series) || [];
-            var hechas = todas.filter(function(x){ return x && x.hecho; });
-            (hechas.length ? hechas : todas).forEach(function(x){
+            ((ejer && ejer.series) || []).forEach(function(x){
               hubo = true;
               var r = Number(x.reps) || 0, pe = Number(x.peso) || 0;
               if(pe > 0) kg += r * pe; else libres += r;
             });
           });
+          // Las sesiones viejas no guardaban el detalle: les queda su total.
           return hubo ? { kg: kg, libres: libres }
                       : { kg: Number(f.total_volume) || 0, libres: 0 };
         }
