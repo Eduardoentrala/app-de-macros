@@ -11055,7 +11055,12 @@
     // consulta a media semana quiere ver lo de hoy, no buscarlo.
     if(semanal && !MI_PLAN.diaVisto){
       var hoyN = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'][new Date().getDay()];
-      MI_PLAN.diaVisto = comidas.some(function(c){ return c.dia === hoyN; }) ? hoyN : 'Lunes';
+      var conComida = function(d){ return comidas.some(function(c){ return c.dia === d; }); };
+      // Y SI HOY NO TIENE NADA, EL PRIMER DÍA QUE SÍ. Caía siempre en lunes,
+      // y un plan escrito de martes a jueves se abría en un lunes vacío: la
+      // pantalla salía en blanco debajo de las pestañas y parecía rota.
+      MI_PLAN.diaVisto = conComida(hoyN) ? hoyN
+        : (DIAS_SEMANA.filter(conComida)[0] || 'Lunes');
     }
 
     var tabs = semanal
@@ -11075,12 +11080,22 @@
       : comidas.slice()
     ).sort(function(a, b){ return ordenMomento(a.momento) - ordenMomento(b.momento); });
 
-    cont.innerHTML = tiraDeMetas(leerMetas()) + tabs + delDia.map(function(c){
-      var m = MOMENTOS.filter(function(x){ return x.k === c.momento; })[0];
-      return '<div class="plan-comida">' +
-        '<div class="plan-momento">' + iconoMomento(m) + c.momento + '</div>' +
-        '<div class="plan-texto">' + escapar(c.texto) + '</div></div>';
-    }).join('') +
+    // UN DÍA SIN COMIDAS SE DICE. Las pestañas salen siempre las siete, así
+    // que se puede tocar un día que el entrenador no escribió: debajo no
+    // había nada —ni una línea— y una pantalla en blanco se lee como que la
+    // app se rompió, no como «para el sábado no te puso nada».
+    var platos = delDia.length
+      ? delDia.map(function(c){
+          var m = MOMENTOS.filter(function(x){ return x.k === c.momento; })[0];
+          return '<div class="plan-comida">' +
+            '<div class="plan-momento">' + iconoMomento(m) + c.momento + '</div>' +
+            '<div class="plan-texto">' + escapar(c.texto) + '</div></div>';
+        }).join('')
+      : '<div class="plan-comida"><div class="plan-texto">' +
+        'Para el ' + escapar(String(MI_PLAN.diaVisto || '').toLowerCase()) +
+        ' no te escribió nada. Come como los demás días.</div></div>';
+
+    cont.innerHTML = tiraDeMetas(leerMetas()) + tabs + platos +
     (MI_PLAN.nota ? '<div class="plan-nota">' + escapar(MI_PLAN.nota) + '</div>' : '');
   }
 

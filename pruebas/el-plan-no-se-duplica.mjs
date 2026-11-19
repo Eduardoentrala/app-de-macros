@@ -224,6 +224,59 @@ console.log('\nY las comidas se guardan en orden, no en el que se tecleó');
      JSON.stringify(raro.map((c) => c.momento)));
 }
 
+console.log('\nY un día sin comidas no la deja mirando una pantalla en blanco');
+{
+  const pintar = (comidas, diaVisto) => {
+    const cont = { innerHTML: '' };
+    const campos = { planMio: cont, planSub: { textContent: '' } };
+    const MI_PLAN = { nombre: 'Plan', nota: null, comidas: comidas, diaVisto: diaVisto };
+    new Function(
+      'MI_PLAN', 'document', 'tengoPlan', 'tiraDeMetas', 'leerMetas', 'MOMENTOS',
+      'iconoMomento', 'escapar', 'DIAS_SEMANA',
+      sinC(fn('function ordenMomento(k){')) +
+      sinC(fn('function pintarMiPlan(sinRed){')) + '; pintarMiPlan(false); return MI_PLAN;'
+    )(
+      MI_PLAN, { getElementById: (id) => campos[id] || null },
+      () => true, () => '', () => ({}), MOMENTOS, () => '', (s) => String(s),
+      DIAS_SEMANA
+    );
+    return { html: cont.innerHTML, MI_PLAN };
+  };
+
+  // LOS DÍAS SE ELIGEN SEGÚN HOY. Si el plan incluye el día en que se corre
+  // la prueba, abrir cae en hoy —que es lo correcto— y la comprobación de
+  // «el primero que tenga algo» no mediría nada. Así es el mismo caso
+  // cualquier día del año.
+  const HOY_N = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'][new Date().getDay()];
+  const otros = DIAS_SEMANA.filter((d) => d !== HOY_N);
+  const primero = otros[1], segundo = otros[2];   // ni hoy, ni el primero de la lista
+  const semana = [
+    { dia: primero, momento: 'Comida', texto: 'pollo' },
+    { dia: segundo, momento: 'Comida', texto: 'pescado' },
+  ];
+
+  // Las pestañas salen las siete, así que se puede tocar un día que el
+  // entrenador no escribió.
+  const hueco = otros[4];
+  const vacio = pintar(semana, hueco);
+  ok(/no te escribió nada/.test(vacio.html),
+     'se dice que ese día no le escribieron nada',
+     'debajo de las pestañas no había NADA, y eso se lee como que la app se ' +
+     'rompió: ' + vacio.html.slice(-120));
+  ok(vacio.html.indexOf(hueco.toLowerCase()) > 0, 'y se nombra el día',
+     vacio.html.slice(-130));
+
+  // Y AL ABRIR, no se cae en un día vacío: un plan de martes a jueves se
+  // abría en lunes y la primera pantalla era la del hueco.
+  const alAbrir = pintar(semana, null);
+  const esperado = DIAS_SEMANA.filter((d) => d === primero || d === segundo)[0];
+  ok(alAbrir.MI_PLAN.diaVisto === esperado,
+     'y al abrir se va al primer día que sí tiene algo',
+     'eligió ' + alAbrir.MI_PLAN.diaVisto + ' y tocaba ' + esperado +
+     ': caía siempre en lunes');
+  ok(/pollo/.test(alAbrir.html), 'con su comida puesta', alAbrir.html.slice(-120));
+}
+
 console.log('\nY a ella se le enseñan en orden aunque estén guardadas al revés');
 {
   // Los planes escritos ANTES de esto ya están en la base desordenados, y
