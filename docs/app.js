@@ -10879,9 +10879,20 @@
   var PLAN_CLIENTES = [];    // a quiénes les escribo yo
   var planEditando = null;   // { userId, nombre, plan }
 
+  // EL MÁS NUEVO, Y NO «UNO CUALQUIERA». La tabla dice «un solo plan vigente
+  // por persona» pero nada lo impide —el índice de `activo` no es único—, y
+  // guardar sin saber si ya había uno crea un segundo. Con `limit 1` y sin
+  // orden, cuál de los dos se lee lo decide Postgres: la misma persona podía
+  // ver un día el plan nuevo y otro el viejo, y su entrenador creer que lo
+  // que escribió se perdió.
+  //
+  // Esto no evita que se dupliquen —de eso se encarga `peGuardar`, que ya no
+  // guarda a ciegas— pero hace que, si ya hay duplicados de antes, gane
+  // siempre el último escrito.
   function sbPlanDe(userId){
     return sbFetch('/rest/v1/planes?select=id,nombre,nota,comidas,user_id' +
-                   '&user_id=eq.' + userId + '&activo=is.true&limit=1')
+                   '&user_id=eq.' + userId + '&activo=is.true' +
+                   '&order=created_at.desc&limit=1')
       .then(function(r){ return (r || [])[0] || null; });
   }
 
@@ -11054,9 +11065,15 @@
         }).join('') + '</div>'
       : '';
 
-    var delDia = semanal
+    // ORDENADAS AUNQUE LLEGUEN DESORDENADAS. Desde ahora se guardan en
+    // orden, pero los planes escritos antes pueden tener la cena arriba del
+    // desayuno —el array se llenaba según se tecleaba—, y esos ya están en
+    // la base. Esto no duplica la regla de ordenar: la de guardar deja los
+    // datos limpios, esta protege a quien tiene los de antes.
+    var delDia = (semanal
       ? comidas.filter(function(c){ return c.dia === MI_PLAN.diaVisto; })
-      : comidas;
+      : comidas.slice()
+    ).sort(function(a, b){ return ordenMomento(a.momento) - ordenMomento(b.momento); });
 
     cont.innerHTML = tiraDeMetas(leerMetas()) + tabs + delDia.map(function(c){
       var m = MOMENTOS.filter(function(x){ return x.k === c.momento; })[0];
@@ -11705,12 +11722,34 @@
     pintarEditorComidas();
     document.getElementById('peNombre').value = '';
     document.getElementById('peNota').value = '';
-    planEditando = { userId: cliente.id, nombre: cliente.nombre, plan: null };
+    // `cargado` es lo que distingue «no tiene plan» de «todavía no sé si
+    // tiene». Sin esa diferencia, guardar antes de que llegue la respuesta
+    // —o después de que falle— hacía un POST y le dejaba DOS planes activos
+    // a la misma persona, con el suyo elegido a suertes entre los dos.
+    planEditando = { userId: cliente.id, nombre: cliente.nombre, plan: null, cargado: false };
     goto('planedit', true);
 
     sbPlanDe(cliente.id).then(function(p){
       if(!planEditando || planEditando.userId !== cliente.id) return;
       planEditando.plan = p;
+      planEditando.cargado = true;
+
+      // LO QUE YA HAYA ESCRITO O ARMADO NO SE PISA. Esto llega un segundo
+      // después de abrir, y en ese segundo se puede teclear una comida o
+      // darle a «Armar la semana» —que tarda, pero puede acabar antes si
+      // esta consulta se atascó—. Volcar el plan guardado encima borraba
+      // ese trabajo sin decir nada.
+      //
+      // Se vuelca el día que está en pantalla ANTES de mirar: lo tecleado
+      // vive en los `textarea` hasta que se cambia de día o se guarda.
+      volcarDiaActual();
+      if(planComidas.length){
+        // Pero sí nos quedamos con el id, que es lo que hace que al guardar
+        // se ACTUALICE su plan en vez de crearle otro.
+        pintarEditorComidas();
+        return;
+      }
+
       document.getElementById('peNombre').value = (p && p.nombre) || ('Plan de ' + cliente.nombre);
       document.getElementById('peNota').value = (p && p.nota) || '';
       planComidas = ((p && p.comidas) || []).slice();
@@ -11726,15 +11765,52 @@
     });
   }
 
+  // El orden canónico de una comida dentro de su día. `MOMENTOS` ya lo
+  // define para pintar el editor; esto lo deja usable para ordenar.
+  function ordenMomento(k){
+    for(var i = 0; i < MOMENTOS.length; i++) if(MOMENTOS[i].k === k) return i;
+    return MOMENTOS.length;           // algo desconocido, al final
+  }
+
   function leerEditorPlan(){
     volcarDiaActual();
     // Solo lo que tiene texto: un plan de dos comidas no debe enseñar dos
     // tarjetas vacías.
-    return planComidas.filter(function(c){ return c.texto && c.texto.trim(); });
+    var con = planComidas.filter(function(c){ return c.texto && c.texto.trim(); });
+
+    // Y EN ORDEN. La columna dice «el orden del array es el orden en que se
+    // muestra», y el array se llenaba en el orden en que se TECLEÓ: quien
+    // escribía la cena del martes antes que el desayuno le dejaba a esa
+    // persona la cena arriba. `volcarDiaActual` recorre los campos en orden,
+    // pero solo añade los que tienen texto, así que rellenar un hueco
+    // después lo manda al final.
+    return con.sort(function(a, b){
+      var da = DIAS_SEMANA.indexOf(a.dia), db = DIAS_SEMANA.indexOf(b.dia);
+      if(da !== db) return da - db;
+      return ordenMomento(a.momento) - ordenMomento(b.momento);
+    });
   }
 
   document.getElementById('peGuardar').addEventListener('click', function(){
     if(!planEditando || !sesion) return;
+
+    // NO SE GUARDA SIN SABER SI YA TENÍA PLAN.
+    //
+    //  Guardar es un PATCH si ya hay uno y un POST si no, y eso se decide
+    //  con `planEditando.plan`. Mientras la consulta no vuelve —o si falló,
+    //  que es cuando el editor sale vacío y más ganas dan de escribir— ese
+    //  campo es `null`, que aquí significaba «no tiene» cuando en realidad
+    //  era «no sé». El POST le dejaba DOS planes activos a la misma
+    //  persona, y cuál de los dos ve lo decidía el orden de la base.
+    //
+    //  La tabla dice «un solo plan vigente por persona» y nada lo impide:
+    //  el índice de `activo` no es único. Así que lo impide esto.
+    if(!planEditando.cargado){
+      toast('toastPlan', 'Espera: todavía no sé si ya tiene un plan. ' +
+                         'Si no carga, sal y vuelve a entrar.');
+      return;
+    }
+
     var comidas = leerEditorPlan();
     if(!comidas.length){ toast('toastPlan', 'Escribe al menos una comida'); return; }
 
@@ -11743,14 +11819,18 @@
       nombre: document.getElementById('peNombre').value.trim() || 'Mi plan',
       nota: document.getElementById('peNota').value.trim() || null,
       comidas: comidas,
-      activo: true,
-      creado_por: sesion.user.id
+      activo: true
     };
+    // `creado_por` SOLO AL CREARLO. Iba también en el PATCH, así que el
+    // segundo entrenador que le tocara una coma al plan pasaba a figurar
+    // como quien lo escribió. La columna se llama «creado por», no «tocado
+    // por»: quién lo editó y cuándo ya lo lleva `updated_at` y la auditoría.
     var p = planEditando.plan
       ? sbFetch('/rest/v1/planes?id=eq.' + planEditando.plan.id, {
           method:'PATCH', headers:{ 'Prefer':'return=minimal' }, body: JSON.stringify(cuerpo) })
       : sbFetch('/rest/v1/planes', {
-          method:'POST', headers:{ 'Prefer':'return=minimal' }, body: JSON.stringify(cuerpo) });
+          method:'POST', headers:{ 'Prefer':'return=minimal' },
+          body: JSON.stringify(Object.assign({ creado_por: sesion.user.id }, cuerpo)) });
 
     p.then(function(){
       toast('toastPlan', 'Plan guardado');
@@ -11820,8 +11900,13 @@
 
         // Se vuelca en los campos, no se guarda: quien firma el plan es
         // el entrenador, y tiene que poder corregirlo antes.
-        if(r.nombre) document.getElementById('peNombre').value = r.nombre;
-        if(r.nota)   document.getElementById('peNota').value = r.nota;
+        // EL NOMBRE Y LA NOTA, SOLO SI ARMÓ LA SEMANA O SI ESTABAN VACÍOS.
+        //  Rearmar el jueves no es motivo para renombrarle el plan ni para
+        //  pisar la nota que escribió el entrenador a mano.
+        var campoN = document.getElementById('peNombre');
+        var campoNota = document.getElementById('peNota');
+        if(r.nombre && (semana || !campoN.value.trim()))   campoN.value = r.nombre;
+        if(r.nota   && (semana || !campoNota.value.trim())) campoNota.value = r.nota;
 
         // LAS CUENTAS SE SEPARAN DE LAS COMIDAS, y no es un capricho de
         // orden: `planComidas` es lo que se guarda en su plan tal cual, y
@@ -11829,16 +11914,37 @@
         // tú puedes reescribir cinco segundos después. Se queda en memoria
         // y solo para esta revisión.
         var crudas = (r.comidas || []).slice();
-        planComidas = crudas.map(function(c){
-          return { dia: c.dia, momento: c.momento, texto: c.texto };
+
+        // «ARMAR UN DÍA» ESCRIBE EN EL DÍA QUE ESTÁS MIRANDO, y no se lleva
+        // el resto de la semana por delante.
+        //
+        //  Hacía las dos cosas mal a la vez: la respuesta de un día viene
+        //  SIN `dia`, y `ponerDiaALosViejos()` manda al lunes todo lo que no
+        //  lo trae. Así que estando en el jueves, el plan salía escrito en
+        //  el lunes —encima de lo que hubiera— y el jueves se quedaba vacío.
+        //  Y como `planComidas` se sustituía entera, los otros seis días
+        //  desaparecían sin aviso.
+        //
+        //  La semana sí sustituye todo: eso es lo que se le pidió.
+        var nuevas = crudas.map(function(c){
+          return { dia: semana ? c.dia : planDia, momento: c.momento, texto: c.texto };
         });
-        // El día se pone ANTES de guardar las cuentas: el plan de un día
-        // llega sin `dia` y `ponerDiaALosViejos()` lo manda al lunes. Con la
-        // clave armada antes, las cuentas quedarían colgadas de un día que
-        // no es y la suma saldría vacía justo cuando acaba de armarse.
-        ponerDiaALosViejos();
-        planKcal = {};
-        planComidas.forEach(function(c, i){
+        // Por si el modelo devolviera una semana con algún día sin poner.
+        nuevas.forEach(function(c){ if(!c.dia) c.dia = DIAS_SEMANA[0]; });
+
+        if(semana){
+          planComidas = nuevas;
+          planKcal = {};
+        } else {
+          // Fuera lo que hubiera ESE día, y lo de los demás se queda.
+          planComidas = planComidas.filter(function(c){ return c.dia !== planDia; })
+                                   .concat(nuevas);
+          Object.keys(planKcal).forEach(function(k){
+            if(k.indexOf(planDia + '|') === 0) delete planKcal[k];
+          });
+        }
+
+        nuevas.forEach(function(c, i){
           var k = crudas[i] && crudas[i].kcal;
           if(k != null) planKcal[clavePlan(c.dia, c.momento)] = Number(k) || 0;
         });
@@ -11860,7 +11966,17 @@
   document.getElementById('peGenerarSemana').addEventListener('click', function(){ generarPlan(true); });
 
   document.getElementById('peQuitar').addEventListener('click', function(){
-    if(!planEditando || !planEditando.plan){ back(); return; }
+    if(!planEditando) return;
+    // Lo mismo que al guardar: `plan: null` puede ser «no tiene» o «no sé
+    // todavía». Sin distinguirlo, quitar el plan de alguien mientras carga
+    // —o después de que la consulta falle— cerraba el editor sin quitar
+    // nada y sin decirlo, y esa persona se quedaba con su plan puesto.
+    if(!planEditando.cargado){
+      toast('toastPlan', 'Espera: todavía no sé si tiene un plan. ' +
+                         'Si no carga, sal y vuelve a entrar.');
+      return;
+    }
+    if(!planEditando.plan){ back(); return; }
     // No se borra de verdad: la 0007 lo archiva y se puede recuperar
     sbFetch('/rest/v1/planes?id=eq.' + planEditando.plan.id, { method:'DELETE' })
       .then(function(){

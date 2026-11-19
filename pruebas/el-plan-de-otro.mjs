@@ -71,13 +71,21 @@ function montar() {
 
 // Devuelve { generar, verEditando, verComidas, cambiarA }
 function preparar(ctx, { tardaLaIA = 0 } = {}) {
+  // `planDia`, `planKcal` y los días hacen falta desde que «Armar un día»
+  // escribe en el día que se está mirando en vez de mandarlo todo al lunes,
+  // y desde que la IA devuelve lo que suma cada comida.
   const fuente =
     'var planEditando = __editando;\n' +
-    'var planComidas = [];\n' +
+    'var planComidas = __comidas;\n' +
+    'var planDia = __dia;\n' +
+    'var planKcal = {};\n' +
+    "var DIAS_SEMANA = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];\n" +
+    'function clavePlan(d, m){ return d + "|" + m; }\n' +
     sacar('function generarPlan(semana){') + '\n' +
     'return {\n' +
     '  generar: function(s){ return generarPlan(s); },\n' +
     '  verComidas: function(){ return planComidas; },\n' +
+    '  verKcal: function(){ return planKcal; },\n' +
     '  cambiarA: function(e){ planEditando = e; },\n' +
     '};';
 
@@ -92,9 +100,12 @@ function preparar(ctx, { tardaLaIA = 0 } = {}) {
     return new Promise((res) => setTimeout(() => res(r), tardaLaIA));
   };
 
-  return new Function('__editando', 'document', 'sesion', 'sbFetch', 'iaLlamar',
-    'toast', 'traducirError', 'ponerDiaALosViejos', 'pintarEditorComidas', fuente)(
-      { userId: 'ana', nombre: 'Ana', plan: null }, ctx.document, ctx.sesion,
+  return new Function('__editando', '__comidas', '__dia', 'document', 'sesion',
+    'sbFetch', 'iaLlamar', 'toast', 'traducirError', 'ponerDiaALosViejos',
+    'pintarEditorComidas', fuente)(
+      { userId: 'ana', nombre: 'Ana', plan: null },
+      (ctx.comidasYa || []).slice(), ctx.dia || 'Lunes',
+      ctx.document, ctx.sesion,
       sbFetch, iaLlamar, ctx.toast, ctx.traducirError,
       ctx.ponerDiaALosViejos, ctx.pintarEditorComidas);
 }
@@ -109,14 +120,72 @@ console.log('\nEl plan cae en el editor de quien se pidió');
   api.generar(false);
   await esperar();
 
-  ok(ctx.campos.peNombre.value === 'Plan de Ana', 'el nombre se vuelca',
-     'quedó: ' + ctx.campos.peNombre.value);
   ok(api.verComidas().length === 1 && /de Ana/.test(api.verComidas()[0].texto),
-     'y sus comidas', JSON.stringify(api.verComidas()));
+     'sus comidas se vuelcan', JSON.stringify(api.verComidas()));
+  // EL NOMBRE NO, SI YA HABÍA UNO. Rearmar un día no es motivo para
+  // renombrarle el plan ni para pisar la nota del entrenador.
+  ok(ctx.campos.peNombre.value === 'Plan de Beto',
+     'y armando UN DÍA no se le renombra el plan',
+     'quedó: ' + ctx.campos.peNombre.value);
+  ok(ctx.campos.peNota.value === 'sin cacahuate', 'ni se pisa su nota',
+     'quedó: ' + ctx.campos.peNota.value);
   ok(ctx.llamadas[0] && ctx.llamadas[0].cliente === 'ana', 'y se pidió para Ana');
   ok(ctx.llamadas[0] && ctx.llamadas[0].calorias === 2315,
      'con sus calorías, sacadas de sus macros',
      'salió ' + (ctx.llamadas[0] || {}).calorias);
+}
+
+// ------------------------------------------------------------------
+console.log('\n«Armar un día» escribe en el día que estás mirando');
+{
+  // EL FALLO: la respuesta de un día viene SIN `dia`, y lo que no trae día
+  // se mandaba al lunes. Estando en el jueves, el plan salía escrito en el
+  // lunes —encima de lo que hubiera— y el jueves se quedaba vacío.
+  const ctx = montar();
+  ctx.dia = 'Jueves';
+  ctx.comidasYa = [
+    { dia: 'Lunes',  momento: 'Desayuno', texto: 'lo del lunes' },
+    { dia: 'Martes', momento: 'Comida',   texto: 'lo del martes' },
+    { dia: 'Jueves', momento: 'Cena',     texto: 'lo viejo del jueves' },
+  ];
+  const api = preparar(ctx);
+  api.generar(false);
+  await esperar();
+
+  const c = api.verComidas();
+  ok(c.some((x) => x.dia === 'Jueves' && /de Ana/.test(x.texto)),
+     'lo armado cae en el jueves', JSON.stringify(c));
+  ok(!c.some((x) => x.dia === 'Lunes' && /de Ana/.test(x.texto)),
+     'y no en el lunes', JSON.stringify(c));
+
+  // Y NO SE LLEVA LA SEMANA POR DELANTE. `planComidas` se sustituía entera,
+  // así que armar un día borraba los otros seis sin decir nada.
+  ok(c.some((x) => x.dia === 'Lunes' && x.texto === 'lo del lunes'),
+     'el lunes que ya estaba escrito sigue ahí', JSON.stringify(c));
+  ok(c.some((x) => x.dia === 'Martes' && x.texto === 'lo del martes'),
+     'y el martes también');
+  ok(!c.some((x) => x.texto === 'lo viejo del jueves'),
+     'pero lo que había ESE día se sustituye',
+     'armar el jueves es rehacer el jueves: ' + JSON.stringify(c));
+}
+
+console.log('\nY armar la semana sí sustituye los siete días');
+{
+  const ctx = montar();
+  ctx.dia = 'Jueves';
+  ctx.comidasYa = [{ dia: 'Lunes', momento: 'Desayuno', texto: 'lo del lunes' }];
+  const api = preparar(ctx);
+  api.generar(true);
+  await esperar();
+
+  const c = api.verComidas();
+  ok(!c.some((x) => x.texto === 'lo del lunes'),
+     'lo de antes se va', 'es lo que se le pidió: ' + JSON.stringify(c));
+  ok(c.length === 1 && c[0].dia === 'lunes',
+     'y queda lo que armó, con el día que ella misma puso',
+     JSON.stringify(c));
+  ok(ctx.campos.peNombre.value === 'Plan de Ana',
+     'y la semana sí renombra el plan', ctx.campos.peNombre.value);
 }
 
 console.log('\nY si te vas a otra persona mientras llega, NO se escribe encima');

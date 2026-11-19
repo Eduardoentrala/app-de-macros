@@ -178,11 +178,10 @@ console.log('\nY el número no llega a su plan');
     { momento: 'Desayuno', texto: 'Huevos', kcal: 480 },
     { momento: 'Comida',   texto: 'Pollo',  kcal: 900 },
   ] };
-  const caja = new Function('r', 'planDia', 'DIAS_SEMANA', 'clavePlan',
+  const caja = new Function('r', 'planDia', 'DIAS_SEMANA', 'clavePlan', 'semana',
     'var planComidas = [], planKcal = {};\n' +
-    'function ponerDiaALosViejos(){ planComidas.forEach(function(c){ if(!c.dia) c.dia = DIAS_SEMANA[0]; }); }\n' +
     trozo + '; return { planComidas: planComidas, planKcal: planKcal };'
-  )(r, 'Miércoles', ['Lunes', 'Martes'], (d, m) => d + '|' + m);
+  )(r, 'Miércoles', ['Lunes', 'Martes'], (d, m) => d + '|' + m, false);
 
   ok(caja.planComidas.every((c) => c.kcal === undefined),
      'lo que se guarda no lleva la cuenta',
@@ -191,12 +190,16 @@ console.log('\nY el número no llega a su plan');
   ok(caja.planComidas.every((c) => c.texto && c.momento), 'pero sí el plan entero',
      JSON.stringify(caja.planComidas));
 
-  // LA CLAVE SE ARMA CON EL DÍA YA PUESTO. El plan de un día llega sin
-  // `dia` y se manda al lunes; con la clave hecha antes, las cuentas
-  // quedarían colgadas de otro día y la suma saldría vacía justo al armarlo.
-  ok(caja.planKcal['Lunes|Desayuno'] === 480 && caja.planKcal['Lunes|Comida'] === 900,
-     'y la cuenta queda guardada con el día que de verdad le tocó',
+  // LA CLAVE SE ARMA CON EL DÍA QUE DE VERDAD LE TOCÓ. El plan de un día
+  // llega sin `dia`, y ahora se escribe en el día que se está mirando
+  // —antes se mandaba al lunes, estuvieras donde estuvieras—. Con la clave
+  // hecha sobre el día equivocado, la suma saldría vacía justo al armarlo.
+  ok(caja.planKcal['Miércoles|Desayuno'] === 480 &&
+     caja.planKcal['Miércoles|Comida'] === 900,
+     'y la cuenta queda guardada con el día que se está editando',
      JSON.stringify(caja.planKcal));
+  ok(caja.planComidas.every((c) => c.dia === 'Miércoles'),
+     'igual que las comidas', JSON.stringify(caja.planComidas));
 }
 
 console.log('\nY tocar una comida le quita su cuenta');
