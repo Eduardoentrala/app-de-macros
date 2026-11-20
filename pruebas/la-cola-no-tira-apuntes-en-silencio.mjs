@@ -124,15 +124,64 @@ console.log('\nY cuando no cabe se tira LO MENOS POSIBLE');
 function nApiezas() { return nApuntes(100); }
 
 // ------------------------------------------------------------------
-console.log('\nY si no cabe ni uno, la cola se deja como estaba');
+console.log('\nY si no cabe ni uno, se dice que NO SE GUARDÓ');
 {
+  // AQUÍ HABÍA UN CERO, Y EL CERO ES LA RESPUESTA DE QUE TODO FUE BIEN.
+  //
+  //  Esta rama es la contraria: no se tiró nada porque no se pudo guardar
+  //  nada. Devolviendo el mismo número que un guardado limpio, quien
+  //  llamaba no tenía forma de distinguirlos, y `encolar` seguía adelante
+  //  sin decir ni una palabra. O sea: la cola en memoria con el apunte
+  //  dentro, el teléfono con la cola de antes, y la app diciendo «se
+  //  subirá cuando vuelva la señal» sobre algo que al cerrar se va.
+  //
+  //  Ahora devuelve -1. Sigue sin tirar nada —vaciar la cola sin haber
+  //  guardado dejaría la memoria diciendo una cosa y el teléfono otra—,
+  //  pero ya se puede decir la verdad.
   const c = montar(nApuntes(10), 0);
-  const tirados = c.colaGuardar();
-  ok(tirados === 0, 'no se dice que se tiró nada');
+  const cabido = c.colaGuardar();
+  ok(cabido === -1, 'contesta -1, no cero',
+     'contestó ' + cabido + ', que es lo que contesta un guardado que fue ' +
+     'bien:\n         quien llama no puede distinguirlos');
+  ok(cabido !== 0, 'y no se confunde con «no hubo que tirar nada»');
   ok(c.cola().length === 10,
      'y la cola no se queda vacía',
      'vaciarla sin haber guardado nada deja la memoria diciendo una cosa ' +
      'y el teléfono otra: al recargar vuelven los diez igual');
+  ok(c.guardado() === null,
+     'y en el teléfono no quedó nada escrito',
+     'es justo lo que hay que poder decir en voz alta');
+}
+
+// ------------------------------------------------------------------
+console.log('\nY entonces NO se promete que se subirá');
+{
+  // El caso de verdad: el teléfono lleno y alguien apuntando su comida.
+  // La app ya le dijo «sin señal, se sube luego» por otro lado; esto es lo
+  // único que puede corregirlo.
+  const c = montar(nApuntes(3), 0);
+  c.encolar({ ruta: '/x', op: {}, n: 'nuevo' });
+
+  ok(c.avisos.length === 1, 'sale un aviso', JSON.stringify(c.avisos));
+  const m = c.avisos[0] || '';
+  ok(/sitio/i.test(m), 'y habla del sitio del teléfono', m);
+  ok(!/se perdieron \d+ apuntes? viejos?/.test(m),
+     'y NO del aviso de los viejos, que es otra cosa',
+     'quedó: ' + m + '\n         ahí no se tiró ningún apunte viejo: no se ' +
+     'pudo guardar ninguno');
+  ok(/cierras|cerrar|memoria|pierde/i.test(m),
+     'y dice que se pierde al cerrar la app',
+     'quedó: ' + m + '\n         sin eso, el aviso no es accionable: no hay ' +
+     'nada que hacer con «no hay sitio»');
+  ok(c.fallos.some((f) => /cola_sin_sitio/.test(f)),
+     'y queda apuntado en el registro de errores',
+     JSON.stringify(c.fallos));
+
+  // Y se queda en memoria: si la señal vuelve en este rato, sube. Tirarlo
+  // sería garantizar la pérdida que el aviso solo advierte.
+  ok(c.cola().some((x) => x.n === 'nuevo'),
+     'y el apunte sigue en memoria, por si vuelve la señal',
+     JSON.stringify(c.cola().map((x) => x.n)));
 }
 
 // ------------------------------------------------------------------

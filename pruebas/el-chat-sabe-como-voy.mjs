@@ -216,6 +216,74 @@ console.log('\nLo que no se sabe se dice, no se inventa un cero');
   const vacio = comoVa({});
   ok(vacio === '' || vacio.length < 120, 'y sin datos no se infla el prompt',
      'salió ' + vacio.length + ' caracteres');
+
+  // ----------------------------------------------------------------
+  // UNA SEMANA SIN PESARSE NO PESÓ CERO KILOS.
+  //
+  //  `n()` devuelve `null` para lo que no es un número, y de ahí salía el
+  //  filtro: `sem.filter((s) => n(s.peso_medio) != null)`. Pero
+  //  `Number(null)` es CERO, y cero es finito, así que una semana con
+  //  `peso_medio: null` pasaba el filtro y se imprimía tal cual:
+  //
+  //      - Peso medio por semana (…): 83.5 → 0 → 82.9 → 82.4 kg.
+  //
+  //  Un bajón de ochenta y tres kilos y su recuperación en mitad de su
+  //  tendencia de cuatro semanas. Y el mismo `null`, en la línea de las
+  //  calorías, hacía lo contrario: `filter((x) => x)` sí tira el cero, así
+  //  que salían TRES números para CUATRO semanas, sin nada que dijera cuál
+  //  faltaba. El modelo los alinea a ojo y le atribuye el hueco a la semana
+  //  equivocada.
+  //
+  //  El cierre de los lunes ya lo dice bien —una línea por semana, con «sin
+  //  pesos» donde no hay— y este bloque decía lo mismo de otra forma. Son
+  //  los mismos datos: no pueden tener dos formatos.
+  const conHueco = comoVa({
+    objetivo: 'bajar',
+    semanas: [
+      { semana: '2026-10-19', dias_apuntados: 6, media_cal: 2283, peso_medio: 83.5 },
+      { semana: '2026-10-26', dias_apuntados: 0, media_cal: null, peso_medio: null },
+      { semana: '2026-11-02', dias_apuntados: 7, media_cal: 2210, peso_medio: 82.9 },
+      { semana: '2026-11-09', dias_apuntados: 5, media_cal: 2250, peso_medio: 82.4 },
+    ],
+  });
+
+  ok(!/\b0 kg|→ 0 |: 0 kg|medio 0\b/.test(conHueco),
+     'una semana sin pesarse NO sale como 0 kg',
+     'salió:\n         ' + conHueco.split('\n').join('\n         '));
+  ok(/2026-10-26/.test(conHueco),
+     'la semana del hueco aparece con su fecha',
+     'si no se nombra, no hay forma de saber cuál es la que falta');
+  ok(/sin pes/i.test(conHueco),
+     'y se dice que ahí no se pesó',
+     'salió:\n         ' + conHueco.split('\n').join('\n         '));
+  ok(/sin datos de comida|sin apuntar/i.test(conHueco),
+     'y que tampoco apuntó comida');
+
+  // LAS CUATRO SEMANAS, CADA UNA CON SU FECHA. Es lo que impide que tres
+  // números tengan que representar a cuatro.
+  for (const f of ['2026-10-19', '2026-10-26', '2026-11-02', '2026-11-09']) {
+    ok(conHueco.includes(f), 'está la semana del ' + f);
+  }
+  const conPeso = (conHueco.match(/peso medio [\d.]+ kg/g) || []);
+  ok(conPeso.length === 3,
+     'y los tres pesos que hay van cada uno en su semana',
+     'salieron ' + conPeso.length + ': ' + JSON.stringify(conPeso) +
+     '\n         pegados en una fila de flechas, el modelo tiene que ' +
+     'adivinar a qué\n         semana corresponde cada uno');
+
+  // Y LA ADHERENCIA SIGUE RESUMIDA. Es lo que se lee de un vistazo, y el
+  // detalle por semana no lo sustituye.
+  ok(/18 d[íi]as apuntados de 28|\(18 de 28\)/.test(conHueco),
+     'y el total de días apuntados sigue dicho',
+     'salió:\n         ' + conHueco.split('\n').join('\n         '));
+  ok(/no se apunta no est[áa]/i.test(conHueco),
+     'con el aviso de que lo que no se apunta no está en esos números');
+
+  // Y NO SE DISPARA EL PROMPT. Cuatro líneas cortas en vez de tres: esto
+  // viaja en CADA mensaje del chat, sin caché.
+  ok(conHueco.length < 700,
+     'y el bloque sigue siendo corto (' + conHueco.length + ' caracteres)',
+     'va en el bloque sin cachear: se paga entero en cada mensaje');
 }
 
 // ------------------------------------------------------------------

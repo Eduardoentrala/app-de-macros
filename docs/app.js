@@ -6228,7 +6228,35 @@
     if(max - min < 1){ var c = (max + min) / 2; min = c - 0.5; max = c + 0.5; }
     var pad = (max - min) * 0.15; min -= pad; max += pad;
 
-    function x(i){ return vista.length === 1 ? L : L + i * (R - L) / (vista.length - 1); }
+    // EL EJE DE ABAJO ES EL TIEMPO, NO LA POSICIÓN EN LA LISTA.
+    //
+    //  Esto repartía los puntos a pasos iguales, así que dos pesajes de días
+    //  seguidos y dos separados por once meses se dibujaban con el mismo
+    //  ancho entre ellos. Donde se ve es en «el año»: cinco pesajes de enero
+    //  y uno de diciembre salían como seis puntos parejos, con «ene ene ene
+    //  dic» debajo, y la línea bajaba suave todo el año. La de verdad baja de
+    //  golpe en enero y se queda plana once meses: son dos historias
+    //  distintas y la segunda es la que pasó.
+    //
+    //  Es lo mismo que `tendenciaDePeso` ya se arregló unas líneas arriba
+    //  —«con los DÍAS de verdad en el eje y no la posición en la lista»—. Se
+    //  corrigió el titular y el dibujo que tiene justo debajo se quedó atrás,
+    //  así que la cifra y la línea contaban cosas distintas de los mismos
+    //  datos.
+    //
+    //  `hueco` es el tiempo que cubre la gráfica. Si vale cero —todas las
+    //  medidas del mismo día— se vuelve al reparto por posición, que es lo
+    //  único que queda: dividir por él daría NaN y no se dibujaría nada.
+    var t0 = vista.length ? vista[0].d.getTime() : 0;
+    var hueco = vista.length ? vista[vista.length - 1].d.getTime() - t0 : 0;
+    function x(i){
+      if(vista.length === 1) return L;
+      if(!(hueco > 0)) return L + i * (R - L) / (vista.length - 1);
+      // Acotado: una serie que llegara desordenada daría una x fuera del
+      // recuadro, y eso dibuja la línea por encima de los rótulos.
+      var f = Math.min(1, Math.max(0, (vista[i].d.getTime() - t0) / hueco));
+      return L + f * (R - L);
+    }
     function y(v){ return B - (v - min) / (max - min) * (B - T); }
 
     var svg = '<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="175" role="img">';
@@ -6247,9 +6275,36 @@
       if(!mostrarPuntos && !esUltimo) return '';
       return '<circle cx="'+x(i)+'" cy="'+y(p.v)+'" r="'+(esUltimo ? 4.2 : 3.2)+'"/>';
     }).join('') + '</g>';
-    // Fechas del eje X
-    var marcas = [0, Math.floor(vista.length/3), Math.floor(vista.length*2/3), vista.length-1]
-      .filter(function(v,i,a){ return a.indexOf(v) === i; });
+    // Fechas del eje X. POR TIEMPO TAMBIÉN, desde que la línea va por
+    // tiempo: cogidas por posición se amontonaban encima de los días que
+    // tienen pesajes —tres etiquetas sobre la misma pulgada de pantalla y la
+    // mitad del eje en blanco—. Se coge el punto más cercano a cada cuarto
+    // del periodo, así que cada rótulo sigue estando sobre su propio punto.
+    var crudas = [0, 1/3, 2/3, 1].map(function(f){
+      if(!(hueco > 0)) return Math.round(f * (vista.length - 1));
+      var meta = t0 + f * hueco, cual = 0, cerca = Infinity;
+      vista.forEach(function(p, i){
+        var d = Math.abs(p.d.getTime() - meta);
+        if(d < cerca){ cerca = d; cual = i; }
+      });
+      return cual;
+    }).filter(function(v,i,a){ return a.indexOf(v) === i; });
+
+    // Y SE TIRAN LAS QUE SE PISAN. Coger el punto más cercano a cada cuarto
+    // no basta cuando los pesajes están apelotonados: con tres de enero y
+    // uno de abril, dos rótulos caían a un 2 % el uno del otro. Si los datos
+    // solo existen en dos sitios del calendario, salen dos fechas y no
+    // cuatro; inventar las otras dos es escribir una encima de otra.
+    var MIN_SEP = (R - L) * 0.18;     // un rótulo de cinco cifras y su aire
+    var ultima = crudas[crudas.length - 1];
+    var marcas = [];
+    crudas.forEach(function(i){
+      if(i === ultima) return;        // la última se pone al final, siempre
+      if(!marcas.length || x(i) - x(marcas[marcas.length - 1]) >= MIN_SEP) marcas.push(i);
+    });
+    // La del final manda sobre la anterior: es la fecha del último dato.
+    while(marcas.length && x(ultima) - x(marcas[marcas.length - 1]) < MIN_SEP) marcas.pop();
+    if(ultima != null) marcas.push(ultima);
     svg += marcas.map(function(i){
       var anchor = i === 0 ? 'start' : (i === vista.length-1 ? 'end' : 'middle');
       return '<text x="'+x(i)+'" y="'+(H-14)+'" font-size="9.5" fill="var(--ink-faint)" text-anchor="'+anchor+'">'+
@@ -8150,6 +8205,14 @@
   }
   // Devuelve CUÁNTOS APUNTES HUBO QUE TIRAR para que cupiera, que casi
   // siempre son cero. Quien llama decide si eso se dice.
+  //
+  // Y -1 CUANDO NO CUPO NI UNO, que no es lo mismo y se estaba diciendo con
+  // el mismo número. Cero es la respuesta de que todo fue bien; la rama de
+  // abajo no tiró nada porque no pudo guardar nada. Con los dos casos
+  // devolviendo cero, `encolar` seguía adelante sin decir una palabra: el
+  // apunte en memoria, el teléfono con la cola de antes, y la app
+  // prometiendo «se subirá cuando vuelva la señal» sobre algo que al cerrar
+  // se va.
   function colaGuardar(){
     try{ localStorage.setItem(COLA_KEY, JSON.stringify(COLA)); return 0; }
     catch(e){
@@ -8163,8 +8226,8 @@
       //
       // Ahora se tira por tandas y se para en cuanto cabe, así se pierde lo
       // menos posible. Y si al final no cabe ni uno, se deja la cola como
-      // estaba en vez de dejar la memoria diciendo una cosa y el teléfono
-      // otra.
+      // estaba —vaciarla sin haber guardado dejaría la memoria diciendo una
+      // cosa y el teléfono otra— y se contesta -1 para poder decirlo.
       var original = COLA.slice();
       var tirados = 0;
       while(COLA.length > 1){
@@ -8175,7 +8238,7 @@
         catch(e2){}
       }
       COLA = original;
-      return 0;
+      return -1;
     }
   }
 
@@ -8194,7 +8257,7 @@
     COLA.push(item);
     var porElTope = Math.max(0, COLA.length - COLA_TOPE);
     if(porElTope) COLA = COLA.slice(-COLA_TOPE);
-    var tirados = porElTope + colaGuardar();
+    var cabido = colaGuardar();
     pintarPendientes();
 
     // Y SE DICE. Acabamos de prometerle a esta persona «se subirá cuando
@@ -8202,7 +8265,26 @@
     // mismo razonamiento que ya está escrito en `avisarSubidos`: si se
     // callan, desaparecen de la pantalla en la siguiente recarga sin
     // explicación y esa persona cree que su comida está guardada.
-    if(tirados){
+    //
+    // Y EL CASO PEOR VA PRIMERO: el teléfono tan lleno que no cabe ni este
+    // apunte. Ahí no se perdió nada viejo —no se pudo guardar nada—, así que
+    // el aviso de los viejos diría otra cosa. Lo que hay que decir es que
+    // esto solo está en memoria, porque eso sí se puede hacer algo: buscar
+    // señal antes de cerrar la app.
+    //
+    // Se queda en la cola de memoria a propósito: si la señal vuelve en este
+    // rato, sube. Tirarlo sería garantizar la pérdida que el aviso advierte.
+    if(cabido < 0){
+      apuntarFallo('cola_sin_sitio', new Error('no cupo ni un apunte' +
+        (porElTope ? ' · y ' + porElTope + ' se fueron por el tope' : '')));
+      toast('toastComida', 'No hay sitio en el teléfono: esto no se pudo ' +
+        'guardar y se pierde si cierras la app. Busca señal para subirlo.');
+    } else if(porElTope + cabido){
+      // La cuenta se hace AQUÍ y no arriba: en la otra rama `cabido` vale
+      // -1, y -1 no es un apunte tirado, es que no se guardó ninguno.
+      // Sumándolo antes hacía falta un `Math.max(0, …)` que solo servía para
+      // tapar una resta que no debía existir.
+      var tirados = porElTope + cabido;
       apuntarFallo('cola_sin_sitio', new Error('se tiraron ' + tirados + ' de ' + COLA_TOPE));
       toast('toastComida', 'No cabe más sin señal: se perdieron ' + tirados +
         (tirados === 1 ? ' apunte viejo' : ' apuntes viejos') + ' sin subir');

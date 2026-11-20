@@ -78,7 +78,7 @@ const CORS = {
 //
 // Ahora lo dice: un GET sin sesión devuelve este sello y nada más.
 // `pruebas/funciones-vivas.mjs` lo compara con el del repo.
-const SELLO = '757fea6eb0';
+const SELLO = 'd3bd9b6408';
 
 // Tope diario por persona. Es la única defensa contra que un solo usuario
 // -o un token robado- vacíe la cuenta en una noche con un bucle.
@@ -217,24 +217,47 @@ function comoVa(p: Record<string, unknown>): string {
            `apuntadas y pesadas. No supongas uno.`);
   }
 
-  // Las semanas: peso y adherencia. De la más vieja a la más nueva.
+  // Las semanas: peso y adherencia. UNA LÍNEA CADA UNA Y CON SU FECHA.
+  //
+  //  ESTO IBA EN FILAS DE FLECHAS y una semana sin pesarse salía como que
+  //  pesó CERO KILOS:
+  //
+  //      - Peso medio por semana (…): 83.5 → 0 → 82.9 → 82.4 kg.
+  //
+  //  El filtro era `sem.filter((s) => n(s.peso_medio) != null)` y parecía
+  //  bastar, pero `Number(null)` es 0 y el cero es finito: `n()` lo deja
+  //  pasar como número bueno. Un bajón de ochenta y tres kilos y su
+  //  recuperación en mitad de la tendencia de cuatro semanas, justo en el
+  //  bloque que contesta «¿cómo voy?».
+  //
+  //  Y EL MISMO `null`, EN LAS CALORÍAS, HACÍA LO CONTRARIO: ahí el filtro
+  //  era `filter((x) => x)`, que sí tira el cero, así que salían tres
+  //  números para cuatro semanas sin nada que dijera cuál faltaba. El modelo
+  //  los alinea a ojo y le atribuye el hueco a la semana equivocada. Dos
+  //  comportamientos distintos del mismo dato que falta, y los dos malos.
+  //
+  //  Se arregla con la forma que YA USA EL CIERRE DE LOS LUNES —una línea
+  //  por semana, con su fecha y con «sin pesos» donde no hay—, y no con otro
+  //  filtro: son los mismos datos y hablaban de ellos de dos maneras. Cuesta
+  //  una línea más de prompt; el hueco deja de poder atribuirse mal.
   const sem = Array.isArray(p.semanas) ? p.semanas as Record<string, unknown>[] : [];
-  const conPeso = sem.filter((s) => n(s.peso_medio) != null);
-  if (conPeso.length) {
-    const pesos = conPeso.map((s) => uno(s.peso_medio)!);
-    l.push(`- Peso medio por semana, de la más vieja a la de ahora: ` +
-           `${pesos.join(' → ')} kg.`);
-  }
   if (sem.length) {
     const dias = sem.map((s) => n(s.dias_apuntados) ?? 0);
     const total = dias.reduce((a, b) => a + b, 0);
-    l.push(`- Apuntó ${dias.join(', ')} días en esas ${sem.length} semanas ` +
-           `(${total} de ${sem.length * 7}). Lo que no se apunta no está en esos números.`);
-    const cals = sem.map((s) => n(s.media_cal)).filter((x) => x) as number[];
-    if (cals.length) {
-      l.push(`- Media de lo que comió esas semanas: ` +
-             `${cals.map((c) => Math.round(c)).join(' → ')} cal al día.`);
-    }
+    l.push(`- Sus últimas ${sem.length} semanas, de la más vieja a la de ahora ` +
+           `(${total} días apuntados de ${sem.length * 7}; lo que no se apunta ` +
+           `no está en estos números):`);
+    sem.forEach((s, i) => {
+      // `tiene()` y no `n()` a secas: lo que hace falta aquí es distinguir
+      // «no hay dato» de «el dato es cero», y para eso hay que mirar el
+      // valor crudo antes de que `Number()` convierta el null en 0.
+      const tiene = (v: unknown) => v != null && v !== '' && n(v) != null;
+      const cal = tiene(s.media_cal) ? Math.round(n(s.media_cal)!) : null;
+      const peso = tiene(s.peso_medio) ? uno(s.peso_medio)! : null;
+      l.push(`  · Semana del ${String(s.semana ?? '?')}: ${dias[i]} días apuntados` +
+             (cal != null ? `, ${cal} cal de media` : ', sin datos de comida') +
+             (peso != null ? `, peso medio ${peso} kg` : ', sin pesos'));
+    });
   }
 
   // Los nombres son los que YA devuelve `datosDeEntreno()` en la app
