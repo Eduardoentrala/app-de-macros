@@ -148,7 +148,10 @@ console.log('\nY lo que se ve cuando no hay nada que guardar');
   ok(/No hay series con peso que guardar/.test(f),
      'se dice que no hay series, en vez de no hacer nada',
      'un botón que no responde y no explica por qué es indistinguible de uno roto');
-  ok(/if\(!detalle\.length\)\{ guardandoSesion = false;/.test(f),
+  // En varias líneas desde que ese camino además deshace la marca del día.
+  // Lo que se mira es que el candado se suelte DENTRO de la rama, no que la
+  // rama siga cabiendo en un renglón.
+  ok(/if\(!detalle\.length\)\{\s+guardandoSesion = false;/.test(f),
      'y ahí también se suelta el candado');
 }
 

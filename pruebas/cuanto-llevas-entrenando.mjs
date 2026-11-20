@@ -174,6 +174,14 @@ console.log('\nA las dos horas se cierra sola, GUARDANDO');
       // su propia copia. Se vio mutando.
       (APP.match(/var TOPE_AUTO = [^;]+;/) || ['var TOPE_AUTO = 0;'])[0] +
       'var cerrandoSola = false;' +
+      // LA RUTINA, EN PANTALLA. El cierre ya no salta sobre una lista
+      // vacía: en el arranque `recuperarCrono()` llama a `pintarCrono()`
+      // antes de que la rutina haya llegado del servidor, y cerrar ahí
+      // guardaba cero series y tiraba el entrenamiento. Aquí se le pone
+      // una tarjeta porque lo que esta prueba mide es el UMBRAL —a las dos
+      // horas, con los datos delante—; que no salte sin ellos tiene su
+      // propia prueba.
+      'var exList = { querySelector: function(){ return {}; } };' +
       'var CLAVE_SESION = "k";' +
       'var localStorage = { removeItem: function(){}, setItem: function(){}, getItem: function(){ return ""; } };' +
       'var ahora = inicio + segundos * 1000;' +

@@ -1701,7 +1701,24 @@
     //  Se guarda con la fecha del ARRANQUE, no la de hoy: empezar a las
     //  23:40, cerrar la app y abrirla a las 10:00 salta este cierre, y esa
     //  sesion es del dia en que se entreno.
-    if(seg * 1000 >= TOPE_AUTO){ cerrarSesionSola(seg); return; }
+    //  PERO NO SOBRE UNA PANTALLA SIN RUTINA, y esto es la mitad del
+    //  arreglo. `recuperarCrono()` corre en el arranque y llama aquí de
+    //  inmediato; la rutina llega de `sbCargarRutina()`, que es una
+    //  petición, y todavía no está. Cerrando ahí, `guardarSesionAhora`
+    //  leía cero series y se iba por «no hay series con peso»: el
+    //  cronómetro desaparecía, la llave del teléfono se borraba —así que
+    //  ni reabriendo se reintentaba— y el entrenamiento no se guardaba.
+    //  Justo lo contrario de lo que promete el párrafo de arriba.
+    //
+    //  Es el mismo razonamiento que la búsqueda de la fila dos pantallas
+    //  más allá: una pantalla vacía no es «no hay nada que guardar», es
+    //  «todavía no sé qué hay». Así que el cronómetro sigue corriendo
+    //  —esa sesión sigue abierta, y eso es la verdad— y en cuanto la
+    //  rutina aparece, al segundo siguiente, el cierre hace su trabajo
+    //  con los datos puestos.
+    if(seg * 1000 >= TOPE_AUTO && exList && exList.querySelector('.exercise-card')){
+      cerrarSesionSola(seg); return;
+    }
 
     // NO HAY TOPE QUE LA TIRE. Aquí había uno de seis horas que retiraba el cronómetro
     // solo, y eso es cortar el tiempo de un entrenamiento que todavía no se
@@ -2388,7 +2405,12 @@
 
   // Suma solo lo registrado desde el ancla hasta hoy (nunca días anteriores al reinicio)
   function sumaDesde(ancla){
-    var tot = {P:0, C:0, G:0};
+    // CON `A:0`, y no por simetría. Sin él, `tot.A += (reg.A||0)` es
+    // `undefined + 30`: NaN. Y `calDe` escribe `(m.A || 0)` para no
+    // tragarse un undefined, así que ese NaN salía como un CERO limpio y
+    // callado: el anillo de la semana valía 210 calorías menos que el
+    // único día que tenía dentro, y los dos están en la misma pantalla.
+    var tot = {P:0, C:0, G:0, A:0};
     var d = new Date(ancla);
     while(d <= HOY){
       var reg = REGISTRO[iso(d)];
@@ -5810,6 +5832,12 @@
     if(guardandoSesion) return;
     guardandoSesion = true;
     var fecha = (opciones && opciones.fecha) || iso(HOY);
+    // SI YA HABÍA UNA DE ESE DÍA, NO SE DESHACE. Marcar el día es
+    // optimista a propósito, pero los dos caminos que vuelven atrás
+    // borraban la marca a ciegas: un segundo intento fallido le quitaba el
+    // «SÍ» a la sesión que SÍ se había guardado esa mañana, con su fila
+    // intacta en la base.
+    var habiaSesion = !!SESIONES[fecha];
     SESIONES[fecha] = true;
 
     // La rutina es la PLANTILLA, que se sigue editando. Esto es el
@@ -5873,7 +5901,17 @@
     // PRIMERO si hay algo que guardar, y después con quién. Al revés, sin
     // sesión se decía «Sesión guardada» y se paraba el cronómetro sobre una
     // rutina vacía, mientras que con sesión se decía la verdad.
-    if(!detalle.length){ guardandoSesion = false; toast('toastRutina', 'No hay series con peso que guardar'); return; }
+    //  Y EL DÍA NO QUEDA MARCADO COMO ENTRENADO. La marca se puso arriba,
+    //  antes de saber si había algo; dejarla pinta un «SÍ» en la tabla de
+    //  la semana por un día sin fila, y ese «SÍ» es un botón que le pide al
+    //  servidor una sesión que no existe. Se repinta, que si no la marca se
+    //  queda en pantalla hasta que algo más la toque.
+    if(!detalle.length){
+      guardandoSesion = false;
+      if(!habiaSesion){ delete SESIONES[fecha]; pintarEjercicio(); }
+      toast('toastRutina', 'No hay series con peso que guardar');
+      return;
+    }
     if(!sesion || !sesion.user){ guardandoSesion = false; pararCrono(); toast('toastRutina', 'Sesión guardada'); return; }
 
     // CUANTO DURO, que la columna existe desde la 0001 y no la llenaba
@@ -5999,8 +6037,10 @@
       }
 
       // Se deshace lo local: si no se guardó, la racha y las gráficas no
-      // deben contarla.
-      delete SESIONES[fecha];
+      // deben contarla. Pero solo lo que ESTA llamada puso: si ese día ya
+      // tenía sesión guardada, la fila sigue en la base y quitarle la marca
+      // sería mentir al revés.
+      if(!habiaSesion) delete SESIONES[fecha];
       detalle.forEach(function(d){
         if(HISTORIAL[d.nombre]) HISTORIAL[d.nombre].pop();
       });
@@ -14478,7 +14518,24 @@
     IA_FOTOS = [];
     pintarFotoIA();
 
-    IA_MSGS.push({ rol:'el', texto:'…', pensando:true });
+    // LA BURBUJA DEL «…», POR REFERENCIA Y NO POR POSICIÓN.
+    //
+    //  Los dos caminos de abajo la quitaban con un `IA_MSGS.pop()`, o sea
+    //  «el último». Y el `catch` cubre todo el bloque de la respuesta, que
+    //  sigue haciendo cosas DESPUÉS de haberla puesto —guardar el evento
+    //  que entendió el modelo, su memoria, cerrar el aviso del coach—: un
+    //  tropiezo ahí llegaba al `catch` con la respuesta ya de último
+    //  mensaje y se la llevaba, dejando un error en su sitio. Una respuesta
+    //  que ya se pagó y ya se descontó de las consultas del día.
+    //
+    //  Buscándola por referencia, quitarla es la misma operación se haya
+    //  quitado ya o no, y no puede alcanzar a otro mensaje.
+    var pensando = { rol:'el', texto:'…', pensando:true };
+    IA_MSGS.push(pensando);
+    var quitarPensando = function(){
+      var i = IA_MSGS.indexOf(pensando);
+      if(i >= 0) IA_MSGS.splice(i, 1);
+    };
     pintarChat();
     iaOcupado = true;
     document.getElementById('iaEnviar').disabled = true;
@@ -14515,7 +14572,7 @@
       if(p) pedido.progreso = p;
       return iaLlamar(pedido);
     }).then(function(r){
-      IA_MSGS.pop();                       // quitar el "pensando"
+      quitarPensando();
       IA_MSGS.push({
         rol: 'el',
         texto: r.respuesta || '',
@@ -14530,40 +14587,52 @@
           });
         })
       });
-      // El plan lo pinta pintarQuedanIA: la cabecera dice qué tienes y
-      // cuánto te queda, y las dos cosas salen del mismo sitio.
-      if(typeof r.quedan === 'number'){ iaQuedanNum = r.quedan; }
-      if(r.nivel){ MI_NIVEL_IA = r.nivel; }
-      pintarQuedanIA();
-      // Solo se guarda cuando ya no falta nada por preguntar. Mientras el
-      // asistente siga conversando, `falta` trae algo y aquí no pasa nada:
-      // en pantalla solo se ve su pregunta, que es lo que se quería.
-      guardarEventoSiEstaCompleto(r.evento);
-      guardarMemoriaIA(r.memoria);
+      // LO QUE VIENE DESPUÉS NO PUEDE COSTAR LA RESPUESTA. Guardar el
+      // evento repinta la semana entera, y eso es mucho código para que un
+      // tropiezo suyo acabe en el `catch` de abajo con la respuesta ya en
+      // pantalla. Es el mismo arreglo que ya lleva el guardado del peso,
+      // donde `ponerPesoDeLaBascula()` dentro del `.then` deshacía un
+      // guardado que había salido bien.
+      //
+      // Se apunta en vez de avisar: la respuesta está delante y es lo que
+      // esa persona vino a leer. Pero no callado del todo —si esto falla
+      // siempre, sus eventos dejan de guardarse y nadie se entera.
+      try{
+        // El plan lo pinta pintarQuedanIA: la cabecera dice qué tienes y
+        // cuánto te queda, y las dos cosas salen del mismo sitio.
+        if(typeof r.quedan === 'number'){ iaQuedanNum = r.quedan; }
+        if(r.nivel){ MI_NIVEL_IA = r.nivel; }
+        pintarQuedanIA();
+        // Solo se guarda cuando ya no falta nada por preguntar. Mientras el
+        // asistente siga conversando, `falta` trae algo y aquí no pasa nada:
+        // en pantalla solo se ve su pregunta, que es lo que se quería.
+        guardarEventoSiEstaCompleto(r.evento);
+        guardarMemoriaIA(r.memoria);
 
-      // ---- Y EL AVISO QUEDA CONTESTADO ----
-      //
-      //  Hasta ahora, contestar no lo cerraba: la tarjeta seguía en el
-      //  Diario preguntando lo mismo después de haberle respondido y de
-      //  haber tenido la conversación entera. Se comprobó en su base —
-      //  `avisos_sin_ver = 1` con la charla ya hecha.
-      //
-      //  Se marca AL MANDAR y no al pulsar «Contestar», que es lo que lo
-      //  hace verdad: abrir el chat y cerrarlo sin escribir no es haber
-      //  contestado, y ahí la pregunta tiene que seguir esperando.
-      if(avisoEsperandoRespuesta){
-        var cualAviso = avisoEsperandoRespuesta;
-        avisoEsperandoRespuesta = null;
-        marcarAvisoVisto(cualAviso);
-        // Y SE DICE QUÉ PASA CON LO QUE ACABA DE CONTAR, pero solo si de
-        // verdad pasó algo: `r.memoria` es el modelo diciendo que lo
-        // guardó, y lo guardado es lo que el cierre del lunes lee. Sin
-        // eso, decir «anotado» sería otra promesa sin puerta.
-        if(r.memoria) toast('toastIA2', 'Anotado para el cierre del lunes');
-      }
+        // ---- Y EL AVISO QUEDA CONTESTADO ----
+        //
+        //  Hasta ahora, contestar no lo cerraba: la tarjeta seguía en el
+        //  Diario preguntando lo mismo después de haberle respondido y de
+        //  haber tenido la conversación entera. Se comprobó en su base —
+        //  `avisos_sin_ver = 1` con la charla ya hecha.
+        //
+        //  Se marca AL MANDAR y no al pulsar «Contestar», que es lo que lo
+        //  hace verdad: abrir el chat y cerrarlo sin escribir no es haber
+        //  contestado, y ahí la pregunta tiene que seguir esperando.
+        if(avisoEsperandoRespuesta){
+          var cualAviso = avisoEsperandoRespuesta;
+          avisoEsperandoRespuesta = null;
+          marcarAvisoVisto(cualAviso);
+          // Y SE DICE QUÉ PASA CON LO QUE ACABA DE CONTAR, pero solo si de
+          // verdad pasó algo: `r.memoria` es el modelo diciendo que lo
+          // guardó, y lo guardado es lo que el cierre del lunes lee. Sin
+          // eso, decir «anotado» sería otra promesa sin puerta.
+          if(r.memoria) toast('toastIA2', 'Anotado para el cierre del lunes');
+        }
+      }catch(err){ apuntarFallo('tras_responder', err); }
       pintarChat();
     })['catch'](function(e){
-      IA_MSGS.pop();
+      quitarPensando();
       IA_MSGS.push({ rol:'el', texto: traducirError(e.message) });
 
       // LAS FOTOS VUELVEN. Se vacían antes de llamar para que la pantalla
