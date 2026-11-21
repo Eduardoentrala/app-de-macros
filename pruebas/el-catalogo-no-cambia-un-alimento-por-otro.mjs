@@ -155,6 +155,56 @@ console.log('\nY el nombre tiene que ser el mismo alimento');
      'y «PLÁTANO» encuentra a «Platano»',
      'salió C' + p.carbos + ', esperaba 23');
 
+  // EL PLURAL NO ES OTRO ALIMENTO, y este casi se me escapa. El catálogo
+  // guarda «Uva» y «Fresa» en singular; el modelo escribe lo que se dice
+  // al hablar. Comprobado contra todo lo que él lleva apuntado: de los
+  // alimentos suyos que SÍ tienen fila en el catálogo, el plural era la
+  // única diferencia. Sin esto, exigir el nombre entero deja la fruta
+  // fuera del afinado y nadie se entera.
+  const UVA = [{ nombre: 'Uva', unidad: 'Gramos', macros_por: '100g',
+                 porcion_g: 92, proteina: 0.7, carbos: 18.1, grasas: 0.2,
+                 estado: 'unico' }];
+  const uvas = (await afinar(buscador({ uvas: UVA }),
+    [{ nombre: 'Uvas', cantidad: 200, unidad: 'Gramos',
+       proteina: 9, carbos: 9, grasas: 9, seguridad: 'media' }]))[0];
+  ok(Math.abs(uvas.carbos - 36.2) < 0.05,
+     '«Uvas» encuentra la fila «Uva»',
+     'salió C' + uvas.carbos + ', esperaba 36.2 (18.1 × 2)');
+
+  // Y al revés, que el catálogo también tiene nombres en plural.
+  const FRIJOL = [{ nombre: 'Frijoles', unidad: 'Gramos', macros_por: '100g',
+                    porcion_g: 172, proteina: 8.9, carbos: 23.7, grasas: 0.5,
+                    estado: 'cocido' }];
+  const frijol = (await afinar(buscador({ frijol: FRIJOL }),
+    [{ nombre: 'Frijol', cantidad: 100, unidad: 'Gramos',
+       proteina: 1, carbos: 1, grasas: 1, seguridad: 'media' }]))[0];
+  ok(Math.abs(frijol.proteina - 8.9) < 0.05,
+     'y «Frijol» encuentra «Frijoles»', 'salió P' + frijol.proteina);
+
+  // PERO LA ESE NO SE QUITA DE CUALQUIER PALABRA. «Arroz» acaba en zeta y
+  // las de tres letras se quedan enteras: recortar a lo bruto junta
+  // alimentos que no tienen nada que ver.
+  const ARROZ_SOLO = [{ nombre: 'Arroz', unidad: 'Gramos', macros_por: '100g',
+                        porcion_g: 158, proteina: 2.7, carbos: 28, grasas: 0.3,
+                        estado: 'unico' }];
+  const arroz = (await afinar(buscador({ arroz: ARROZ_SOLO }),
+    [{ nombre: 'Arroz', cantidad: 100, unidad: 'Gramos',
+       proteina: 1, carbos: 1, grasas: 1, seguridad: 'media' }]))[0];
+  ok(Math.abs(arroz.carbos - 28) < 0.05,
+     'y «Arroz» sigue siendo arroz, no «arro»', 'salió C' + arroz.carbos);
+
+  // Y EL PLURAL NO PUEDE JUNTAR DOS ALIMENTOS DISTINTOS. Si algún día la
+  // regla se afloja, esto lo dice.
+  const PAPA = [
+    { nombre: 'Papa',  unidad: 'Gramos', macros_por: '100g', porcion_g: 173, proteina: 2.0, carbos: 17.5, grasas: 0.1, estado: 'cocido' },
+    { nombre: 'Papaya', unidad: 'Gramos', macros_por: '100g', porcion_g: 145, proteina: 0.5, carbos: 10.8, grasas: 0.3, estado: 'unico' },
+  ];
+  const papa = (await afinar(buscador({ papas: PAPA }),
+    [{ nombre: 'Papas', cantidad: 100, unidad: 'Gramos',
+       proteina: 1, carbos: 1, grasas: 1, seguridad: 'media' }]))[0];
+  ok(Math.abs(papa.carbos - 17.5) < 0.05,
+     'y «Papas» es papa, no papaya', 'salió C' + papa.carbos);
+
   // Y EL RESPALDO, cuando ninguna fila encaja el estado que pidió el
   // modelo. Ahí la función se queda con la primera de las que SÍ se
   // llaman igual; con la primera de la BÚSQUEDA volvería a escribir otro

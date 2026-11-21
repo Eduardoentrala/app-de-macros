@@ -78,7 +78,7 @@ const CORS = {
 //
 // Ahora lo dice: un GET sin sesión devuelve este sello y nada más.
 // `pruebas/funciones-vivas.mjs` lo compara con el del repo.
-const SELLO = 'e80ad8d48d';
+const SELLO = '1acd890fa6';
 
 // Tope diario por persona. Es la única defensa contra que un solo usuario
 // -o un token robado- vacíe la cuenta en una noche con un bucle.
@@ -3550,6 +3550,38 @@ function nombreLlano(t: unknown): string {
     .trim();
 }
 
+// EL PLURAL NO ES OTRO ALIMENTO. El catálogo guarda «Uva», «Fresa» y
+// «Frijoles»; el modelo escribe lo que se dice al hablar. Se comprobó
+// contra todo lo que hay apuntado en la base: de los alimentos que SÍ
+// tienen fila en el catálogo, el plural era la única diferencia. Sin esto,
+// exigir el nombre entero deja la fruta fuera del afinado en silencio.
+//
+// Palabra por palabra y SIN CANONIZAR A UNA FORMA. Recortar la ese de
+// todos deja «frijoles» en «frijole» y no encuentra a «frijol»; recortar
+// además el «es» deja «carnes» en «carn» y pierde a «carne». Comparando de
+// dos en dos se aceptan las dos formas sin romper ninguna.
+//
+// AQUÍ HUBO UN SUELO DE TRES LETRAS y se quitó: no protegía de nada.
+// Ninguna mutación lo tumbaba, y al buscar en el catálogo qué nombres
+// tienen palabras de una o dos letras salieron solo conectores —«de»,
+// «a», «en», «la»—, que casan exactos y nunca llegan a esta regla. Su
+// único caso alcanzable sería una fila que alguien diera de alta como
+// «Te», y ahí el suelo haría justo lo contrario de lo que se quiere:
+// negarse a ver que «tes» es lo mismo.
+function mismaPalabra(a: string, b: string): boolean {
+  if (a === b) return true;
+  const corta = a.length < b.length ? a : b;
+  const larga = a.length < b.length ? b : a;
+  return larga === corta + 's' || larga === corta + 'es';
+}
+
+// Y con las MISMAS palabras y las mismas de largo: «Crema» no es «Crema de
+// cacahuate» ni «Leche light».
+function mismoNombre(a: string, b: string): boolean {
+  const pa = a.split(' '), pb = b.split(' ');
+  return pa.length === pb.length && pa.every((p, i) => mismaPalabra(p, pb[i]));
+}
+
 async function afinarConCatalogo(
   admin: { rpc: (f: string, p: Record<string, unknown>) => Promise<{ data: unknown }> },
   alimentos: Array<Record<string, unknown>>,
@@ -3583,7 +3615,7 @@ async function afinarConCatalogo(
     //  cacahuate» empiezan igual y son 2 g de proteína contra 22. Si no
     //  está, se deja la estimación del modelo, que para eso viene marcada.
     const pedido = nombreLlano(nombre);
-    const iguales = filas.filter((f) => nombreLlano(f.nombre) === pedido);
+    const iguales = filas.filter((f) => mismoNombre(nombreLlano(f.nombre), pedido));
     if (!iguales.length) continue;
 
     // El modelo ya dijo si estaba crudo o cocido dentro del nombre; se
