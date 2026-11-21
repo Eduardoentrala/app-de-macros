@@ -78,7 +78,7 @@ const CORS = {
 //
 // Ahora lo dice: un GET sin sesión devuelve este sello y nada más.
 // `pruebas/funciones-vivas.mjs` lo compara con el del repo.
-const SELLO = 'd3bd9b6408';
+const SELLO = 'e80ad8d48d';
 
 // Tope diario por persona. Es la única defensa contra que un solo usuario
 // -o un token robado- vacíe la cuenta en una noche con un bucle.
@@ -3527,6 +3527,29 @@ Deno.serve(async (req) => {
 //  de la abuela", no hay entrada de catálogo que valga y se queda la
 //  estimación, marcada como tal.
 // ---------------------------------------------------------------------
+// CÓMO SE COMPARAN DOS NOMBRES. Sin tildes, sin mayúsculas, sin signos y
+// sin espacios de más: «Crema» y «crema.» son el mismo alimento.
+//
+// Y SIN LA PALABRA DEL ESTADO, que es lo que hace que esto no rompa lo que
+// ya funcionaba: el catálogo guarda cocido o crudo en SU COLUMNA y no en el
+// nombre —la fila es «Arroz» con `estado = cocido`— mientras que el modelo
+// escribe «Arroz cocido». Comparando en crudo, ese dejaría de afinarse y
+// pasaría a contarse con la estimación, que es justo lo que no queremos.
+// Cuál de las dos filas de arroz se coge sigue decidiéndolo el `estado`,
+// unas líneas más abajo.
+const PALABRAS_DE_ESTADO =
+  /\b(cocid[oa]s?|crud[oa]s?|hervid[oa]s?|asad[oa]s?|frit[oa]s?|guisad[oa]s?|fresc[oa]s?|a la plancha|al horno)\b/g;
+
+function nombreLlano(t: unknown): string {
+  return String(t ?? '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(PALABRAS_DE_ESTADO, ' ')
+    .replace(/[^a-z0-9 ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 async function afinarConCatalogo(
   admin: { rpc: (f: string, p: Record<string, unknown>) => Promise<{ data: unknown }> },
   alimentos: Array<Record<string, unknown>>,
@@ -3542,6 +3565,27 @@ async function afinarConCatalogo(
     } catch { continue; }
     if (!filas.length) continue;
 
+    // EL NOMBRE TIENE QUE SER EL MISMO ALIMENTO, Y ESTO FALTABA.
+    //
+    //  El comentario de arriba lo promete desde el primer día —«solo
+    //  cuando el nombre coincide de verdad»— y el código no lo comprobaba
+    //  en ningún sitio: cogía `filas[0]`, o sea lo primero que devolviera
+    //  el buscador, fuera lo que fuera.
+    //
+    //  Y el buscador no siempre pone lo evidente primero. Buscar «Crema»
+    //  devuelve, de verdad y por este orden: Leche light, Leche
+    //  descremada, Queso crema, Crema. La buena es la CUARTA. El 20 de
+    //  noviembre de 2026 una ensalada de fruta acabó con los macros de
+    //  488 g de leche light —P16.6 C24.4 G4.9— y marcados como dato de
+    //  tabla, que es lo que les quita el aviso de «aprox».
+    //
+    //  SE EXIGE EL NOMBRE ENTERO, no que se parezca: «Crema» y «Crema de
+    //  cacahuate» empiezan igual y son 2 g de proteína contra 22. Si no
+    //  está, se deja la estimación del modelo, que para eso viene marcada.
+    const pedido = nombreLlano(nombre);
+    const iguales = filas.filter((f) => nombreLlano(f.nombre) === pedido);
+    if (!iguales.length) continue;
+
     // El modelo ya dijo si estaba crudo o cocido dentro del nombre; se
     // usa para elegir la fila correcta. Sin esto, "arroz cocido" podría
     // acabar con los macros del crudo, que son casi el triple.
@@ -3549,11 +3593,11 @@ async function afinarConCatalogo(
     const quiereCocido = /cocid|hervid|asad|frit|guisad|a la plancha|al horno/.test(n);
     const quiereCrudo  = /crud|fresc/.test(n);
 
-    const mejor = filas.find((f) =>
+    const mejor = iguales.find((f) =>
         (quiereCocido && f.estado === 'cocido') ||
         (quiereCrudo  && f.estado === 'crudo')  ||
         (!quiereCocido && !quiereCrudo && f.estado === 'unico'))
-      ?? filas[0];
+      ?? iguales[0];
 
     // Los macros del catálogo son por 100 g SALVO que la fila diga otra cosa
     // -`macros_por`-. En el caso normal se llevan a la cantidad que dijo el
@@ -3578,9 +3622,17 @@ async function afinarConCatalogo(
       k = cant;
     } else {
       const porG = Number(mejor.porcion_g) || 0;
+      // `porcion_g` ES LO QUE PESA UNA PORCIÓN DE ESTA FILA, no lo que pesa
+      // una cucharada. Multiplicarlo por la cantidad del modelo solo vale si
+      // las dos hablan de la MISMA unidad: con la fila en gramos y el modelo
+      // en cucharadas, «2» se convertía en dos porciones —medio litro de
+      // leche— sin que nada chirriara. Si no coinciden no hay conversión
+      // honesta, y una estimación marcada como tal es mejor que una cifra
+      // exacta de otra cosa.
+      const mismaUnidad = String(mejor.unidad ?? 'Gramos') === String(a.unidad ?? 'Gramos');
       const gramos = a.unidad === 'Gramos' ? cant
                    : a.unidad === 'Onzas'  ? cant * 28.35
-                   : porG ? cant * porG
+                   : (porG && mismaUnidad) ? cant * porG
                    : 0;
       if (!gramos) continue;
       k = gramos / 100;
