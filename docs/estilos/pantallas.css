@@ -249,6 +249,14 @@
   color:var(--ink-faint);padding:2px 4px;
 }
 
+/* A la derecha del todo, separada del ✕ por el `margin-left:auto`: una
+   es la salida y la otra borra: no pueden estar pegadas ni parecerse. */
+.ia-borrar{
+  margin-left:auto;background:none;border:none;cursor:pointer;
+  font:700 12px/1 sans-serif;color:var(--ink-faint);padding:8px 4px;
+}
+.ia-borrar[hidden]{display:none;}
+
 #iaChat{padding:16px 0 8px;}
 .ia-msg{margin:0 16px 10px;max-width:86%;}
 .ia-msg .burbuja{
@@ -260,6 +268,9 @@
      Se midió aquí: la burbuja da 359 px y un correo largo pedía 451. */
   overflow-wrap:break-word;
 }
+/* La foto que no sobrevivió a la recarga. En cursiva y apagada para que
+   no se lea como algo que alguien escribió: es un hueco con nombre. */
+.ia-msg .burbuja.ida{font-style:italic;opacity:.65;}
 .ia-msg.de-el .burbuja{background:var(--card-bg);color:var(--ink);box-shadow:var(--shadow);}
 .ia-msg.de-mi{margin-left:auto;}
 .ia-msg.de-mi .burbuja{background:var(--ink);color:var(--card-bg);}

@@ -112,7 +112,7 @@
      que no hay parpadeo. -->
 <script>
   (function(){
-    var SELLO = '277d72c22b';
+    var SELLO = '49d0cbc578';
     // Y a la vista de app.js, que lo manda con cada fallo que apunta. Sin
     // la versión, un error de hace una semana y uno de ahora se leen igual
     // y «eso ya lo arreglé» no se puede comprobar.
@@ -870,6 +870,13 @@
             <b>Asistente</b>
             <span id="iaQuedan">&nbsp;</span>
           </div>
+          <!-- Borrar la conversación. A la derecha del todo y en texto, no
+               como icono: el ✕ de la izquierda es la SALIDA y dos cruces en
+               la misma fila se confunden. Sale solo cuando hay algo que
+               borrar, y pregunta antes: cada respuesta costó una consulta
+               del tope diario y no vuelve. -->
+          <button class="ia-borrar" id="iaBorrar" hidden
+            title="Borrar la conversación" aria-label="Borrar la conversación">Borrar</button>
         </div>
 
         <div class="scroll" id="iaChat"></div>
@@ -2702,7 +2709,7 @@
   // consulta en la dirección no encuentran el archivo. Abrir el index sin
   // servidor tiene que seguir funcionando.
   (function(){
-    var SELLO = '277d72c22b';
+    var SELLO = '49d0cbc578';
     var s = document.createElement('script');
     s.src = 'app.js' + (location.protocol === 'file:' ? '' : '?v=' + SELLO);
     // Al final del body: cuando esto corre, la página ya está montada, que

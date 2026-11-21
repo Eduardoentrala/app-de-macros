@@ -9200,6 +9200,14 @@
       // fallo: es no dejar la lista de comidas de alguien en un teléfono
       // que puede no ser suyo.
       try{ localStorage.removeItem(DESPENSA_KEY); }catch(e){}
+      // Y la conversación, por lo mismo: ahí dentro va su peso, sus dudas y
+      // lo que come.
+      try{ localStorage.removeItem(CHAT_KEY); }catch(e){}
+      // DE LA MEMORIA TAMBIÉN, y esto ya fallaba antes de que se guardara
+      // nada: salir NO recarga la app, así que `IA_MSGS` se quedaba entero.
+      // La siguiente cuenta que entrara en este teléfono abría el chat y
+      // leía la conversación de la anterior.
+      IA_MSGS.length = 0;
       try{ localStorage.removeItem(PLAN_KEY); }catch(e){}
       goto('registro', false);
     });
@@ -13854,6 +13862,12 @@
   function cargarDatos(){
     if(!sesion || !sesion.user) return Promise.resolve();
 
+    // La conversación guardada, por el mismo motivo que la despensa de
+    // abajo: el arranque no es el único camino. Quien entra por el
+    // formulario no recarga la app, así que el `cargarChat()` del arranque
+    // ya pasó sin sesión y no restauró nada. Es idempotente.
+    if(typeof cargarChat === 'function') cargarChat();
+
     // La despensa guardada, ANTES de pedir nada.
     //
     // Va aquí y no solo en el arranque porque hay más caminos que llegan a
@@ -14297,6 +14311,118 @@
   var IA_FOTOS = [];
   var TOPE_FOTOS_IA = 4;
   var IA_MSGS = [];           // { rol:'yo'|'el', texto, foto?, alimentos? }
+
+  // ---- LA CONVERSACIÓN SE GUARDA ----
+  //
+  //  `IA_MSGS` vivía solo aquí, en memoria, así que una recarga se llevaba
+  //  el chat entero. Y la app se recarga SOLA al cambiar el día, o sea una
+  //  vez cada veinticuatro horas como poco.
+  //
+  //  Duele porque cada respuesta cuesta una consulta del tope diario:
+  //  volver a preguntar lo mismo se paga otra vez. Se gastaron tres
+  //  preguntando por el progreso, se cerró la app, y al volver no estaban.
+  //
+  //  LAS FOTOS NO SE GUARDAN. Son data-URL de cientos de KB, y este cajón
+  //  es el MISMO donde espera la comida apuntada sin señal: si el chat lo
+  //  llena, `colaGuardar` empieza a tirar apuntes de verdad. De los dos, el
+  //  que tiene que ceder es el chat. Queda solo la marca de que hubo foto,
+  //  para que un mensaje que era únicamente una foto no vuelva como una
+  //  burbuja vacía.
+  //
+  //  NI LAS PROPUESTAS DE COMIDA. Un «Desayuno» tocable sobre una propuesta
+  //  de hace dos días, restaurada tras una recarga, es una forma nueva de
+  //  meter comida en el día equivocado. Lo que hacía falta es VER las
+  //  respuestas, no volver a actuar sobre ellas.
+  //
+  //  Y CON DUEÑO, por lo mismo que la despensa: una conversación lleva
+  //  dentro su peso, sus dudas y lo que come. No se queda en un teléfono
+  //  para la siguiente cuenta que entre.
+  var CHAT_KEY = 'macros.chat';
+  var CHAT_TOPE = 40;          // mensajes
+  var CHAT_LETRAS = 60000;     // y un techo de tamaño: el número solo no basta
+
+  function guardarChat(){
+    var vivos = IA_MSGS.filter(function(m){ return !m.pensando; });
+
+    // SIN NADA QUE GUARDAR, LA CLAVE SE VA. Y esto va ANTES de mirar la
+    // sesión, que es donde estaba y donde fallaba: con la sesión caducada
+    // —que es justo cuando más se toca «Borrar», porque la app acaba de
+    // echarte— se limpiaba la pantalla y lo guardado se quedaba intacto.
+    // Al volver a entrar reaparecía lo que esa persona acababa de borrar.
+    //
+    // Dejar un `{"msgs":[]}` tampoco vale: es basura que no dice nada.
+    if(!vivos.length){ try{ localStorage.removeItem(CHAT_KEY); }catch(e){} return; }
+
+    var yo = (sesion && sesion.user && sesion.user.id) || null;
+    if(!yo) return;
+
+    // CUÁNDO SE DIJO CADA COSA. Hace falta para no mandarle al modelo
+    // frases suyas de hace tres días: ahí dentro hay números —«pasaste de
+    // 82.5 a 82.1»— que él leería como actuales. Sus números de hoy se los
+    // manda la app en cada mensaje; lo viejo solo puede estorbar.
+    //
+    // Se sella UNA vez y se conserva: volver a guardar un mensaje
+    // restaurado no puede rejuvenecerlo, o nunca llegaría a ser viejo.
+    vivos.forEach(function(m){ if(!m.c) m.c = Date.now(); });
+
+    var msgs = vivos
+      .map(function(m){
+        var x = { r: m.rol, t: String(m.texto || '').slice(0, 2000), c: m.c };
+        if(m.foto || m.fotoIda) x.f = 1;
+        return x;
+      })
+      .slice(-CHAT_TOPE);
+
+    // Por tamaño además de por número: cuarenta mensajes no dicen nada del
+    // sitio que ocupan, y uno solo puede traer dos mil letras.
+    while(msgs.length && JSON.stringify(msgs).length > CHAT_LETRAS) msgs.shift();
+
+    try{ localStorage.setItem(CHAT_KEY, JSON.stringify({ dueno: yo, msgs: msgs })); }
+    catch(e){
+      // SIN SITIO, EL CHAT CEDE. No se insiste: lo que no puede pasar es
+      // que por guardar una conversación se tire la comida que espera a
+      // subir, que vive en este mismo cajón. Se prueba con la mitad y, si
+      // tampoco cabe, no queda nada.
+      var mitad = Math.floor(msgs.length / 2);
+      if(mitad > 0){
+        try{
+          localStorage.setItem(CHAT_KEY,
+            JSON.stringify({ dueno: yo, msgs: msgs.slice(-mitad) }));
+          return;
+        }catch(e2){}
+      }
+      try{ localStorage.removeItem(CHAT_KEY); }catch(e3){}
+    }
+  }
+
+  function cargarChat(){
+    // CON ALGO DENTRO NO SE TOCA. Esto se llama desde dos sitios —el
+    // arranque y `cargarDatos()`, que es por donde pasan entrar, registrarse
+    // y volver de una sesión caducada— y llamarlo dos veces duplicaría la
+    // conversación entera. Y si ya hay algo escrito, meterle historia por
+    // debajo es peor que no restaurar nada.
+    if(IA_MSGS.length) return;
+    var yo = (sesion && sesion.user && sesion.user.id) || null;
+    if(!yo) return;
+    var g = null;
+    try{ g = JSON.parse(localStorage.getItem(CHAT_KEY) || 'null'); }catch(e){}
+    if(!g || g.dueno !== yo || !Array.isArray(g.msgs)) return;
+    var hoy = isoDe(HOY);
+    g.msgs.forEach(function(x){
+      if(!x || (x.r !== 'yo' && x.r !== 'el')) return;
+      // LO DE OTRO DÍA SE VE PERO NO VIAJA. Se guarda para poder leerlo,
+      // que es para lo que se pidió; al modelo no se le manda, porque una
+      // frase suya de hace tres días diciendo un peso es justo lo que le
+      // haría repetir un número que ya no es. Sin fecha, viejo: el lado
+      // seguro.
+      var cuando = Number(x.c) || 0;
+      IA_MSGS.push({
+        rol: x.r, texto: String(x.t || ''), fotoIda: !!x.f, c: cuando,
+        viejo: isoDe(new Date(cuando)) !== hoy
+      });
+    });
+  }
+  cargarChat();
   var iaOcupado = false;
 
   // Los dos atajos del asistente apuntan al mismo almacén de dibujos que
@@ -14591,6 +14717,18 @@
 
   // ---- La conversación ----
   function pintarChat(){
+    // AQUÍ ARRIBA, y no al final. `pintarChat` se va por el `return` de
+    // abajo cuando no hay mensajes, y por ahí se pasa justo al BORRAR la
+    // conversación: puesto después, la pantalla quedaría limpia y el
+    // teléfono seguiría con todo dentro.
+    //
+    // Y aquí y no en los ocho sitios que tocan `IA_MSGS` —enviar, la
+    // respuesta, el error, el aviso del coach, apuntar una propuesta—:
+    // todos pasan por este repintado, así que no hay que acordarse.
+    guardarChat();
+    var btnBorrar = document.getElementById('iaBorrar');
+    if(btnBorrar) btnBorrar.hidden = !IA_MSGS.length;
+
     if(!IA_MSGS.length){
       iaChat.innerHTML =
         '<div class="ia-msg de-el"><div class="burbuja">' +
@@ -14609,6 +14747,11 @@
 
     iaChat.innerHTML = IA_MSGS.map(function(m, i){
       var cuerpo = (m.foto ? '<img src="' + m.foto + '" alt="">' : '') +
+        // La foto no sobrevive a la recarga —pesa demasiado para el cajón
+        // que comparte con la comida sin subir— así que al volver queda su
+        // marca. Sin esto, un mensaje que solo era una foto vuelve como una
+        // burbuja vacía: un hueco en blanco en mitad de la charla.
+        (!m.foto && m.fotoIda ? '<div class="burbuja ida">foto</div>' : '') +
         (m.texto ? '<div class="burbuja">' + escapar(m.texto) + '</div>' : '');
       var tarjetas = (m.alimentos && m.alimentos.length)
         ? pintarAlimentosPropuestos(m, i) : '';
@@ -14716,7 +14859,10 @@
 
     var pedido = {
       accion: 'chat',
-      mensajes: IA_MSGS.filter(function(m){ return !m.pensando; })
+      // Sin la burbuja del «…» y sin lo restaurado de otro día: eso se
+      // guarda para poder LEERLO, no para que el modelo razone sobre
+      // números que ya no son. Los de hoy se los manda `progreso`.
+      mensajes: IA_MSGS.filter(function(m){ return !m.pensando && !m.viejo; })
                        .map(function(m){ return { rol:m.rol, texto:m.texto }; }),
       // Las dos formas a la vez, y no por gusto. La app y la funcion se
       // despliegan por separado; entre un despliegue y el otro hay minutos
@@ -18046,6 +18192,26 @@
     setTimeout(function(){ iaTexto.focus(); }, 200);
   });
   document.getElementById('iaCerrar').addEventListener('click', function(){ back(); });
+
+  // BORRAR LA CONVERSACIÓN, Y PREGUNTANDO. Cada respuesta de ahí dentro
+  // costó una consulta del tope diario y no se puede recuperar: un toque
+  // por error en la cabecera las borraría todas para siempre. Se usa la
+  // misma hoja de confirmación que el resto de la app.
+  document.getElementById('iaBorrar').addEventListener('click', function(){
+    preguntar('¿Borrar la conversación?',
+              'Se va entera y no se puede recuperar. Las consultas que ya ' +
+              'gastaste no vuelven.',
+              'Sí, borrar').then(function(si){
+      if(!si) return;
+      // En el sitio y no reasignando: `apuntarPropuesta` y el envío guardan
+      // referencias a este mismo array.
+      IA_MSGS.length = 0;
+      // Y lo guardado se va solo: `guardarChat` quita la clave cuando no
+      // queda nada, y lo llama este repintado.
+      pintarChat();
+      toast('toastIA2', 'Conversación borrada');
+    });
+  });
 
 
   // Único sitio donde se cambia el tema: el sol de arriba del Perfil. El
