@@ -863,6 +863,12 @@
      haga falta para que el botón no quede bajo la barra de gestos. */
   padding-bottom:calc(14px + max(8px, var(--sab)));
 }
+/* La píldora de día del Diario, reutilizada en la barra de abajo para
+   elegir a qué día va la sesión. Es el mismo control y tiene que verse
+   igual; lo único suyo es que aquí la barra ya pone el margen lateral,
+   así que el de la píldora sobraría y la dejaría descuadrada. */
+.bottom-bar .apunte-dia{padding:0;}
+.bottom-bar .apunte-dia input{right:0;}
 .btn-primary{background:var(--ink);color:var(--card-bg);border:none;border-radius:14px;padding:15px;font:800 15px/1 sans-serif;cursor:pointer;}
 .btn-ghost-text{background:none;border:none;color:var(--ink-faint);font:600 13px/1 sans-serif;cursor:pointer;padding:4px;}
 

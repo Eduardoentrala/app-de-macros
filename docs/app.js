@@ -2481,6 +2481,10 @@
 
     refrescarFlechas();
     if(typeof pintarEjercicio === 'function') pintarEjercicio();  // el progreso sigue la misma semana
+    // Su tope de abajo es `anclaSemana`, que cambia cuando llega el perfil
+    // con su día de inicio: pintado solo al arrancar se quedaría con el de
+    // por defecto.
+    if(typeof pintarSelectorDiaSesion === 'function') pintarSelectorDiaSesion();
     if(typeof pintarGastoReal === 'function') pintarGastoReal();
     actualizarMetas(); // recalcula anillos, barras y el resumen del Diario
   }
@@ -5794,6 +5798,81 @@
     guardarSesionConRed();
   });
 
+  // ---- EL DÍA AL QUE VA LA SESIÓN ----
+  //
+  //  «Guardar sesión» escribía siempre hoy y no había forma de decirle otra
+  //  cosa. Pasó el 19 de noviembre de 2026: entrenó, no guardó a propósito,
+  //  y al día siguiente abrió la app con sus series todavía marcadas en
+  //  pantalla y le dio a guardar. La sesión entró entera —5.480 kg, los
+  //  cuatro ejercicios— con fecha del 20.
+  //
+  //  Y eso no es un detalle de etiqueta: el cierre cuenta FECHAS DISTINTAS
+  //  (`diasEsta[f.session_date] = true`), así que el 19 quedó como día sin
+  //  entrenar y el 20 con dos sesiones contando como una. El volumen de la
+  //  semana estaba entero; el reparto, no. Un día de gimnasio menos de los
+  //  que hizo.
+  //
+  //  Es la misma píldora del Diario y el mismo límite —de su lunes a hoy—,
+  //  porque es el mismo problema: más atrás son semanas que la app ya cerró
+  //  y sobre las que quizá ya le ajustó las calorías. Y aquí hace más falta
+  //  que en la comida: la comida se apunta mientras se come; la sesión se
+  //  guarda al terminar, que es cuando uno se va a la ducha.
+  var DIA_SESION = null;                      // null = hoy
+  function diaDeLaSesion(){ return DIA_SESION || HOY; }
+
+  function pintarSelectorDiaSesion(){
+    var inp = document.getElementById('sesionFecha');
+    var btn = document.getElementById('sesionFechaBtn');
+    var txt = document.getElementById('sesionFechaTxt');
+    if(!inp || !btn || !txt) return;
+    inp.max = isoDe(HOY);
+    inp.min = isoDe(anclaSemana);
+    inp.value = isoDe(diaDeLaSesion());
+    // "Hoy" en vez de la fecha cuando es hoy, igual que en el Diario: una
+    // fecha completa ahí obliga a comprobarla cada vez.
+    var fuera = isoDe(diaDeLaSesion()) !== isoDe(HOY);
+    txt.textContent = fuera ? fmtFecha(diaDeLaSesion()) : 'Hoy';
+    btn.classList.toggle('otro-dia', fuera);
+  }
+
+  // AL GUARDAR SE VUELVE A HOY. Un día pasado que se queda puesto manda ahí
+  // la sesión siguiente, y de eso no se entera nadie: la píldora vive abajo
+  // y la próxima vez que se mira es al terminar de entrenar, con prisa.
+  function volverAHoyLaSesion(){
+    DIA_SESION = null;
+    pintarSelectorDiaSesion();
+  }
+
+  (function(){
+    var inp = document.getElementById('sesionFecha');
+    if(!inp) return;
+    inp.addEventListener('change', function(){
+      if(!this.value){ volverAHoyLaSesion(); return; }
+      // Mediodía y no medianoche: con las horas a cero, una zona horaria por
+      // detrás de UTC convierte la fecha en el día anterior.
+      var d = new Date(this.value + 'T12:00:00');
+      d.setHours(0, 0, 0, 0);
+
+      // `min` y `max` solo mandan en el calendario que abre el teléfono: en
+      // el ordenador la fecha se teclea y `change` salta igual con lo que se
+      // haya escrito. Es la misma guarda que el selector de la comida.
+      if(isoDe(d) > isoDe(HOY) || isoDe(d) < isoDe(anclaSemana)){
+        pintarSelectorDiaSesion();        // devuelve el input a lo que había
+        toast('toastRutina', 'Solo puedes guardar en esta semana, hasta hoy.');
+        return;
+      }
+
+      DIA_SESION = isoDe(d) === isoDe(HOY) ? null : d;
+      pintarSelectorDiaSesion();
+    });
+    // El input está encima de la píldora y transparente, así que el toque ya
+    // cae en él. Esto es para cuando el foco llega por teclado.
+    document.getElementById('sesionFechaBtn').addEventListener('click', function(){
+      try{ inp.showPicker ? inp.showPicker() : inp.focus(); }catch(e){ inp.focus(); }
+    });
+    pintarSelectorDiaSesion();
+  })();
+
   function guardarSesionConRed(){
     try { guardarSesionAhora(); }
     catch(e){
@@ -5831,7 +5910,12 @@
   function guardarSesionAhora(opciones){
     if(guardandoSesion) return;
     guardandoSesion = true;
-    var fecha = (opciones && opciones.fecha) || iso(HOY);
+    // DEL DÍA ELEGIDO, y leído aquí dentro a propósito. Hay dos caminos
+    // manuales —el botón y el «Sí, guardar» de la hoja de «esto no parece
+    // haber pasado»—; pasar la fecha por cada uno es dejar que el tercero que
+    // se añada se olvide. El cierre de las dos horas sí manda la suya, que es
+    // la del arranque del cronómetro.
+    var fecha = (opciones && opciones.fecha) || iso(diaDeLaSesion());
     // SI YA HABÍA UNA DE ESE DÍA, NO SE DESHACE. Marcar el día es
     // optimista a propósito, pero los dos caminos que vuelven atrás
     // borraban la marca a ciegas: un segundo intento fallido le quitaba el
@@ -5924,6 +6008,12 @@
       : (sesionInicio ? Math.round((Date.now() - sesionInicio) / 60000) : null);
     minutos = (minutos != null && isFinite(minutos))
       ? Math.min(600, Math.max(0, Math.round(minutos))) : null;
+    //  Y SI LA SESIÓN NO ES DE HOY, EL CRONÓMETRO NO ES SUYO. Lo que corre
+    //  ahora empezó hoy; colgárselo a la de ayer sería inventarle una
+    //  duración, y de ese número sale la regla de «las sesiones se están
+    //  acortando» del cierre del lunes. «No lo sé» es un dato; un 45
+    //  prestado de otro día, no.
+    if(fecha !== iso(HOY)) minutos = null;
 
     var tab = activeTab();
     var diaId = (tab && tab.dataset.id) || null;
@@ -5997,6 +6087,7 @@
       }).then(function(){
       guardandoSesion = false;
       pararCrono();
+      volverAHoyLaSesion();
       toast('toastRutina', (opciones && opciones.sola
         ? 'Llevabas dos horas: guardé tu sesión sola · '
         : 'Sesión guardada · ') + mil(total) + ' kg de volumen');
@@ -6032,6 +6123,7 @@
           tipo: 'sesion'
         });
         pararCrono();
+        volverAHoyLaSesion();
         toast('toastRutina', 'Sesión guardada · se sube cuando haya señal');
         return;
       }

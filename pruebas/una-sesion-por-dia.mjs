@@ -79,6 +79,13 @@ function guardar({ busca: comoResponde }) {
   const correr = new Function(
     'sbFetch', 'sesion', 'fila', 'busca', 'encolar', 'toast', 'pararCrono',
     'sinConexion', 'esperaMejorMomento', 'traducirError', 'SESIONES', 'HISTORIAL',
+    // `habiaSesion` y `volverAHoyLaSesion` entran como dobles porque viven
+    // fuera del trozo que se corta: la primera recuerda si ese día ya tenía
+    // sesión antes de esta llamada —para no borrar la marca de una ajena— y
+    // la segunda devuelve a «hoy» el selector de día al guardar.
+    // Sin ellas, lo que salía era un ReferenceError del propio `catch`
+    // tapando el error de verdad, que es justo lo que esta prueba vigila.
+    'habiaSesion', 'volverAHoyLaSesion',
     'detalle', 'palomitasAntes', 'refsAntes', 'opciones', 'total', 'fecha',
     'mil', 'pintarEjercicio', 'recalcAll', 'programarGuardado', 'diaId', 'JSON',
     'var guardandoSesion = true;\n' + GUARDADO + '\nreturn null;');
@@ -88,7 +95,10 @@ function guardar({ busca: comoResponde }) {
     (x) => encolados.push(x), (c, t) => avisos.push(t), () => {},
     (e) => /sin red/.test(String(e && e.message)),
     (e) => /503/.test(String(e && e.message)),
-    (m) => String(m), {}, {}, [{}], [], [], null, 21500, '2026-10-29',
+    // `habiaSesion: false` = ese día NO tenía sesión antes de esta llamada,
+    // que es el caso de estas comprobaciones: así el camino del fallo sí
+    // deshace la marca, que es lo que se mira.
+    (m) => String(m), {}, {}, false, () => {}, [{}], [], [], null, 21500, '2026-10-29',
     (n) => String(n), () => {}, () => {}, () => {}, null, JSON);
   // El encadenado es asíncrono: se deja correr antes de mirar.
   return new Promise((r) => setTimeout(() => r({ salidas, encolados, avisos }), 0));

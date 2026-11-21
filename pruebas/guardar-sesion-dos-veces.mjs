@@ -127,6 +127,19 @@ function montar({ filasQueYaHay = [], fallaLaConsulta = false,
     // null significa «sin cronometro», que es lo que pasa si se guarda sin
     // haber marcado ninguna serie.
     sesionInicio: null,
+    // El día al que va la sesión. Por defecto hoy, que es lo que hacía
+    // siempre antes de que se pudiera elegir: esta prueba va de dos toques
+    // seguidos, no del día. `volverAHoyLaSesion` lo devuelve a hoy al
+    // guardar, y aquí no hay nada que devolver.
+    diaDeLaSesion: () => ctx.HOY,
+    volverAHoyLaSesion: () => {},
+    // Lo que pide el selector de día, que vive en el mismo trozo que se
+    // corta y se evalúa al registrarse los manejadores. No es parte de lo
+    // que esta prueba mira; es el precio de cortar por bloques y no por
+    // funciones sueltas.
+    isoDe: (d) => ctx.iso(d),
+    fmtFecha: () => 'x',
+    anclaSemana: new Date('2026-08-25T12:00:00'),
     sinConexion: () => false,
     esperaMejorMomento: () => false,
     pararCrono: () => {},
@@ -147,6 +160,11 @@ function pulsar(ctx) {
     getElementById: (id) => ({
       addEventListener: (_ev, fn) => { escucha = fn; },
       set textContent(v) {}, set disabled(v) { ctx.deshabilitado = v; },
+      // `classList` y los campos de fecha: el selector de día de la sesión
+      // se pinta al registrarse los manejadores, y sin esto revienta antes
+      // de llegar a lo que esta prueba mira.
+      classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+      set max(v) {}, set min(v) {}, set value(v) {}, focus() {},
     }),
   };
   // El manejador se registra al evaluarse: el `document` de mentira se

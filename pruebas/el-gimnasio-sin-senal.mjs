@@ -65,7 +65,14 @@ console.log('\nSin señal se encola en vez de deshacerse');
      'una por día y día de rutina',
      'volver a darle al botón sin señal reemplaza la que esperaba; dos días ' +
      'de rutina distintos el mismo día siguen siendo dos');
-  ok(/pararCrono\(\);\n        toast\('toastRutina', 'Sesión guardada · se sube/.test(guardar),
+  // En el mismo bloque, no pegados: entre medias va ahora la vuelta del
+  // selector de día a «hoy». Lo que no puede pasar es que parar el
+  // cronómetro se vaya a otro camino.
+  ok((function () {
+    const iT = guardar.indexOf("toast('toastRutina', 'Sesión guardada · se sube");
+    const iP = guardar.lastIndexOf('pararCrono();', iT);
+    return iP > 0 && !/[{}]/.test(guardar.slice(iP + 'pararCrono();'.length, iT));
+  })(),
      'el cronómetro se para y se dice la verdad',
      '«Sesión guardada» a secas sería mentir a medias; callarlo, del todo');
   ok(/return;\n      \}/.test(guardar.slice(iQueue)), 'y no se sigue al camino de deshacer');

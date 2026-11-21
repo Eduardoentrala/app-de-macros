@@ -76,13 +76,49 @@ console.log('\nArranca al marcar la primera serie, no al entrar');
 }
 
 // ------------------------------------------------------------------
+// El bloque de la barra de abajo, de su `<div>` al que lo cierra. Los
+// comentarios se quitan antes: uno podría llevar un `<div>` escrito dentro
+// y descuadrar la cuenta.
+// LA DE LA RUTINA, que no es la única: el Registro tiene la suya con el
+// botón de «Entrar». Se busca la que lleva dentro «Guardar sesión».
+function barraDeAbajo() {
+  const h = HTML.replace(/<!--[\s\S]*?-->/g, '');
+  for (let i = h.indexOf('<div class="bottom-bar">'); i >= 0;
+       i = h.indexOf('<div class="bottom-bar">', i + 1)) {
+    let n = 0;
+    for (let j = i; j < h.length; j++) {
+      if (h.startsWith('<div', j)) n++;
+      else if (h.startsWith('</div>', j)) {
+        n--;
+        if (!n) {
+          const bloque = h.slice(i, j + 6);
+          if (bloque.includes('id="saveSessionBtn"')) return bloque;
+          break;
+        }
+      }
+    }
+  }
+  throw new Error('no encuentro la barra de abajo de la rutina');
+}
+
 console.log('\nY se para al guardar la sesión');
 {
   ok((APP.match(/pararCrono\(\);/g) || []).length >= 2,
      'por los dos caminos del guardado',
      'hay una salida temprana cuando no hay sesión, y es la que más se olvida');
-  ok(/pararCrono\(\);\n      toast\('toastRutina', \(opciones && opciones\.sola/.test(APP),
-     'y en el camino bueno, justo antes de avisar');
+  // EN EL MISMO BLOQUE, no pegados. Esto exigía que el `toast` fuera la
+  // línea siguiente exacta, y lo rompió meter entre medias la vuelta del
+  // selector de día a «hoy». Lo que importa no es que no haya nada en
+  // medio: es que parar el cronómetro no se haya ido a otro camino.
+  {
+    const iT = APP.indexOf("toast('toastRutina', (opciones && opciones.sola");
+    const iP = APP.lastIndexOf('pararCrono();', iT);
+    const entre = iP > 0 ? APP.slice(iP + 'pararCrono();'.length, iT) : '{';
+    ok(iP > 0 && !/[{}]/.test(entre),
+       'y en el camino bueno, justo antes de avisar',
+       'hay una llave entre los dos, así que no están en el mismo bloque: ' +
+       JSON.stringify(entre));
+  }
   ok(/'Llevabas dos horas: guardé tu sesión sola · '/.test(APP),
      'y el aviso dice si la cerró la app',
      '«Sesión guardada» a secas, sin haberla pulsado, se lee como un fallo');
@@ -344,7 +380,10 @@ console.log('\nY no satura la cabecera: vive debajo de «Guardar sesión»');
   ok(!/<div class="back-header[\s\S]{0,900}?id="cronoSesion"/.test(HTML),
      'no está en la cabecera',
      'ahí eran dos relojes y un título peleando por la misma fila');
-  ok(/<div class="bottom-bar">[\s\S]{0,1400}?id="cronoSesion"/.test(HTML),
+  // DENTRO DE LA BARRA, no «a menos de 1.400 caracteres de ella». Esa
+  // ventana la rompió un comentario nuevo en el HTML, y un trozo de texto
+  // que crece no puede decir que el cronómetro se ha mudado de sitio.
+  ok(barraDeAbajo().includes('id="cronoSesion"'),
      'está en la barra de abajo');
   ok(/id="saveSessionBtn"[\s\S]{0,900}?id="cronoSesion"/.test(HTML),
      'y debajo de «Guardar sesión», no encima',
