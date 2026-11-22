@@ -3652,6 +3652,35 @@
            Math.round(calAlim(a)) + 'kcal · ' + a.u;
   }
 
+  // ---- LO QUE SE LEE IGUAL NO SE PINTA DOS VECES ----
+  //
+  //  La franja «Tus alimentos» no sale de un sitio, sale de DOS: lo que
+  //  hay guardado en la despensa y lo que se dio de alta en el catálogo
+  //  desde el panel. Se juntan con un `concat` bajo un solo rótulo, y
+  //  buscar «chicharrón» devolvía TRES tarjetas con la misma letra —dos
+  //  del catálogo, una de la despensa— sin forma de saber cuál tocar.
+  //
+  //  OJO, NO ES LA REGLA DE «EL DEL CATÁLOGO NO SE ESCONDE DETRÁS DEL
+  //  TUYO», que está unas líneas más abajo y es buena: su «Bolillo» de 148
+  //  la pieza y el de la app de 293 por 100 g son dos panes distintos, y
+  //  cada uno sale bajo SU rótulo diciendo de quién es. Eso informa.
+  //  Dentro de una misma franja, no: ahí dos tarjetas idénticas solo
+  //  obligan a elegir a ciegas.
+  //
+  //  Y la regla es «SE LEEN IGUAL», no «se llaman igual»: mismo nombre y
+  //  misma línea de macros. Dos fichas que comparten nombre y dicen cosas
+  //  distintas se quedan las dos, que es justo lo que hay que ver —una de
+  //  ellas tendrá un número mal—.
+  function sinRepetidos(arr){
+    var vistos = {};
+    return arr.filter(function(a){
+      var k = normalizarBusqueda(a.n) + ' // ' + lineaMacros(a);
+      if(vistos[k]) return false;
+      vistos[k] = true;
+      return true;
+    });
+  }
+
   // ---- Cantidad de un alimento ya apuntado ----
   // Para poder cambiar "me comí 150 g y no 100" hacen falta dos cosas que
   // antes no se guardaban: cuánto se comió (cant) y los macros de UNA
@@ -4922,7 +4951,8 @@
     var delCatalogo = lista.filter(function(a){ return a.fuente === 'catalogo'; });
     var deLaApp     = delCatalogo.filter(function(a){ return a.delaApp; });
     var aMano       = delCatalogo.filter(function(a){ return !a.delaApp; });
-    var deMios      = lista.filter(function(a){ return a.fuente === 'mio'; }).concat(aMano);
+    var deMios      = sinRepetidos(
+                        lista.filter(function(a){ return a.fuente === 'mio'; }).concat(aMano));
     var deGente     = lista.filter(function(a){ return a.fuente === 'gente'; });
 
     // Si no hay alimentos pero SI una receta tuya, no es «no encontre

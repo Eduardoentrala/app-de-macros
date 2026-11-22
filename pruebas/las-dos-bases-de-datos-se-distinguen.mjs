@@ -77,13 +77,20 @@ function montar() {
   // Así, ver el estado que se espera solo puede ser cosa del código.
   const correr = (lista, texto, empiezaEscondida) => {
     sugeridos.innerHTML = ''; comida.hidden = !!empiezaEscondida;
+    // `sinRepetidos` entra como doble que NO quita nada. Lo usa la franja
+    // de «Tus alimentos», que junta la despensa con lo dado de alta en el
+    // catálogo y por eso puede traer lo mismo dos veces. Aquí se prueba
+    // otra cosa —que las franjas se distingan— y un doble que filtrara
+    // escondería justo los casos que estas comprobaciones ponen a
+    // propósito: el mismo nombre arriba y abajo. Quitar repetidos tiene su
+    // propia prueba.
     new Function('mealSugeridos', 'document', 'escapar', 'filtrar', 'RECETAS',
-      'mil', 'lineaMacros', 'lista', 'texto', 'sinRed',
+      'mil', 'lineaMacros', 'sinRepetidos', 'lista', 'texto', 'sinRed',
       cuerpo + '; pintarSugerencias(lista, texto, sinRed);')(
       sugeridos,
       { getElementById: (id) => (id === 'mealList' ? comida : null) },
       (s) => String(s), () => [], [], (n) => String(n),
-      (a) => 'P' + a.P, lista, texto, false);
+      (a) => 'P' + a.P, (arr) => arr, lista, texto, false);
     return { html: sugeridos.innerHTML, comidaEscondida: comida.hidden };
   };
   return correr;
