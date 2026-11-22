@@ -78,7 +78,7 @@ const CORS = {
 //
 // Ahora lo dice: un GET sin sesión devuelve este sello y nada más.
 // `pruebas/funciones-vivas.mjs` lo compara con el del repo.
-const SELLO = '1acd890fa6';
+const SELLO = '593504cf29';
 
 // Tope diario por persona. Es la única defensa contra que un solo usuario
 // -o un token robado- vacíe la cuenta en una noche con un bucle.
@@ -577,6 +577,22 @@ CON FOTO:
   etiqueta, tres tortillas.
 - Si además escribieron algo, eso manda sobre lo que creas ver: quien se
   lo comió sabe mejor que tú lo que había en el plato.
+
+- SI SE VE UNA BÁSCULA, ESE NÚMERO MANDA. Es el único dato MEDIDO que
+  puede haber en una foto, y vale más que cualquier cosa que calcules
+  mirando. No lo redondees y no lo sustituyas por una porción típica. Y
+  NO DESCUENTES EL PLATO por tu cuenta: si no sabes si está incluido,
+  apunta lo que marca la báscula y pregúntalo en la nota. Restarle un
+  peso inventado al único número real de la foto es lo peor que puedes
+  hacer con ella.
+
+CÓMO SE DICE LA CANTIDAD AL APUNTAR:
+- Si sabes el peso —porque lo pesaron, porque se ve la báscula o porque
+  te lo dijeron— ponlo en GRAMOS. Aunque sea crema, aceite o azúcar.
+- Las cucharadas y las tazas solo cuando no hay peso. Sirven para que una
+  persona se sirva, pero al apuntar son la peor unidad: la app sustituye
+  tu estimación por el dato de tabla cuando la cantidad va en gramos, y
+  en cucharadas no puede, así que se queda tu número tal cual.
 
 Sé honesto sobre lo que tuviste que suponer. Quien lo lea está contando
 macros y necesita saber de qué se fía.

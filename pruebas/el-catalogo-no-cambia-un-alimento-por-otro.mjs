@@ -290,5 +290,53 @@ console.log('\nY una porción no es una cucharada');
   ok(m.seguridad !== 'alta', 'y marcada como estimación');
 }
 
+// ------------------------------------------------------------------
+console.log('\nY al modelo se le pide lo que habría evitado todo esto');
+{
+  // Las dos reglas salen del mismo postre. En la foto se veía una báscula
+  // marcando 717 g y el modelo contestó «calculé la fruta en unos 250 g»:
+  // le restó a ojo un plato que nadie había dicho que estuviera, y tiró el
+  // único dato medido que había en la imagen.
+  //
+  // Y pidió «2 cucharadas» de crema, que es justo la unidad con la que el
+  // catálogo no puede ayudar: el afinado solo convierte gramos, onzas, o
+  // la misma unidad que tenga la fila.
+  const i = FN.indexOf('const SISTEMA_APUNTAR_REGLAS');
+  if (i < 0) throw new Error('no encuentro `SISTEMA_APUNTAR_REGLAS`');
+  const p = FN.slice(i, FN.indexOf('`;', i));
+
+  // LA FRASE, no la palabra: «báscula» sale dos veces en este prompt y
+  // buscarla suelta deja pasar que se borre la regla entera. Se vio
+  // mutando: quitar el encabezado no tumbaba nada.
+  ok(/B[ÁA]SCULA, ESE N[ÚU]MERO MANDA/.test(p),
+     'se le dice que el número de la báscula manda',
+     'es el único dato MEDIDO que puede traer una foto');
+  ok(/no descuentes el plato|descuentes el plato/i.test(p),
+     'y que NO descuente el plato por su cuenta',
+     'restarle un peso inventado al único número real de la foto es lo ' +
+     'peor que\n         se puede hacer con ella');
+  ok(/en la nota/i.test(p),
+     'sino que lo pregunte en la nota',
+     'la nota es donde ya avisa de lo que tuvo que suponer');
+
+  ok(/ponlo en GRAMOS/.test(p),
+     'y se le pide el peso en gramos cuando lo sabe',
+     'es la única unidad con la que el catálogo siempre puede sustituir su ' +
+     'estimación');
+  ok(/cucharadas y las tazas solo cuando no hay peso/i.test(p),
+     'y que las cucharadas son el último recurso al apuntar',
+     'son buenas para servirse y malas para medir: con ellas el afinado no ' +
+     'entra');
+
+  // Y ESTO NO PUEDE CONTAGIAR AL PLAN. Ahí las cucharadas son correctas a
+  // propósito: nadie pesa una cucharada de aceite para seguir un menú.
+  const j = FN.indexOf('const SISTEMA_PLAN');
+  const plan = FN.slice(j, FN.indexOf('`;', j));
+  ok(/Cucharadas para aceite/.test(plan),
+     'pero el prompt del PLAN conserva sus cucharadas',
+     'son dos trabajos distintos: uno apunta lo que ya se comió y el otro ' +
+     'escribe\n         un menú que alguien va a seguir en su cocina');
+}
+
 console.log('\n' + pasan + ' bien, ' + fallan + ' mal');
 process.exit(fallan ? 1 : 0);
