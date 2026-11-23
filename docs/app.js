@@ -8893,18 +8893,31 @@
         dias_entreno: reg.dias,
         goal_protein_g: m.P, goal_carbs_g: m.C, goal_fat_g: m.G,
         condiciones: condicionesElegidas(),
-        nota_salud: document.getElementById('regNotaSalud').value.trim() || null
-      }, {
-        // La constancia. La versión va con la fecha porque el texto va a
-        // cambiar, y "aceptó" sin decir qué aceptó no sirve de nada.
+        nota_salud: document.getElementById('regNotaSalud').value.trim() || null,
+
+        // LA CONSTANCIA, Y VA EN EL PRIMER GRUPO. La versión acompaña a la
+        // fecha porque el texto va a cambiar, y «aceptó» sin decir qué
+        // aceptó no sirve de nada.
         //
-        // Va en el segundo grupo —el que se puede caer— solo mientras la
-        // migración 0031 no esté aplicada. En cuanto lo esté, sube al
-        // primero: un consentimiento que se pierde en silencio no vale.
+        // Estuvo en el segundo —el que se cae entero ante un 42703—
+        // mientras la 0031 no estuviera aplicada, con esta nota al lado:
+        // «en cuanto lo esté, sube al primero: un consentimiento que se
+        // pierde en silencio no vale». El 23 de noviembre de 2026 se
+        // comprobó contra la base: las tres columnas están. Sube.
+        //
+        // Y no es una formalidad. Mientras estuviera abajo, el día que
+        // alguien añada OTRA columna opcional antes que su migración, el
+        // 42703 de esa se llevaría por delante también el consentimiento:
+        // el reintento no mira qué columna faltaba, tira el grupo entero.
         consentimiento_en: new Date().toISOString(),
         consentimiento_version: VERSION_LEGAL,
         consentimiento_salud_en: condicionesElegidas().length
           ? new Date().toISOString() : null
+      }, {
+        // Aquí abajo ya no queda nada. Se deja el grupo —y no se cambia la
+        // firma— porque la próxima columna que la app estrene antes que su
+        // migración tiene que poder entrar por aquí: ése es el único sitio
+        // donde una columna que falta no cuesta el registro entero.
       });
   }
 

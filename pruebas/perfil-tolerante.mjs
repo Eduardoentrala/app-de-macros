@@ -92,16 +92,28 @@ console.log('\n— Pero no se traga cualquier error —');
   }
 }
 
-console.log('\n— El consentimiento vuelve a lo obligatorio cuando toque —');
+console.log('\n— El consentimiento ya volvio a lo obligatorio —');
 {
-  // Recordatorio con dientes: esto esta en el grupo "puede fallar" SOLO
-  // mientras la 0031 no este aplicada. Un consentimiento que se pierde en
-  // silencio no vale como consentimiento.
+  // Aqui habia un recordatorio con dientes: el consentimiento estaba en el
+  // grupo "puede fallar" SOLO mientras la 0031 no estuviera aplicada, y
+  // esta comprobacion exigia que la nota siguiera escrita para que nadie se
+  // olvidara. El 23 de noviembre de 2026 se miro la base y las tres
+  // columnas estaban, asi que subio.
+  //
+  // El recordatorio se cambia por lo que recordaba: que este arriba. Dejar
+  // el de antes seria pedir una nota sobre algo que ya se hizo, y la nota
+  // acabaria volviendo a ponerse sin mover el codigo.
   const g = APP.slice(APP.indexOf('function sbGuardarPerfil('),
                       APP.indexOf('function traducirError('));
-  check('el comentario avisa de que es temporal',
-    /En cuanto lo est[eé], sube al[\s\S]{0,60}primero/.test(g),
-    'sin la nota, esto se queda asi para siempre');
+  const i = g.indexOf('patchPerfilTolerante(');
+  const corte = g.indexOf('}, {', i);
+  const primero = corte > 0 ? g.slice(i, corte) : '';
+  check('va en el grupo que el reintento NO tira',
+    corte > 0 && /consentimiento_en/.test(primero) &&
+                 /consentimiento_version/.test(primero) &&
+                 /consentimiento_salud_en/.test(primero),
+    'un consentimiento que se pierde en silencio no vale como consentimiento; ' +
+    'lo mide entero `el-consentimiento-no-se-cae`');
 }
 
 console.log(`\n${ok} pasan · ${mal} fallan`);
