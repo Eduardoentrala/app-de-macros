@@ -18088,14 +18088,51 @@
   //  sesiones guardadas— se manda el chat sin progreso, que es exactamente
   //  como funcionaba antes. Preguntar la cena no puede romperse porque no se
   //  pudo leer el gimnasio.
+  // ---- LA SEMANA QUE VA CORRIENDO ----
+  //
+  //  `resumenDeSemanas` devuelve solo semanas CERRADAS: cuenta desde
+  //  `anclaSemana - 7·i`, así que por construcción nunca llega a la de
+  //  hoy. Y hace bien —de esa misma función sale la medición del gasto, y
+  //  media semana contada como entera corrompería el número con el que se
+  //  mueven sus calorías cada lunes—.
+  //
+  //  PERO ENTONCES EL CHAT SE QUEDABA CON UN HUECO. Sabía «hoy» y «las
+  //  cuatro semanas de antes», y nada de los días de en medio. El 23 de
+  //  noviembre preguntó «esta semana ya me pasé, ¿no pasa nada?» y se le
+  //  contestó con la semana anterior, que iba bien: «la más reciente quedó
+  //  por debajo de tu meta, hoy no es el caso». La suya iba por 2085 con
+  //  seis días apuntados, 138 por encima. Tenía razón y se le dijo que no.
+  //
+  //  Va APARTE y no dentro del array de cerradas: metida ahí, el modelo la
+  //  promediaría con las demás como si estuviera terminada.
+  function semanaEnCurso(){
+    var dias = 0, suma = 0;
+    for(var d = new Date(anclaSemana); d <= HOY; d.setDate(d.getDate() + 1)){
+      var r = REGISTRO[isoDe(d)];
+      if(r){ dias++; suma += calDe(r); }
+    }
+    // Sin nada apuntado no se manda: una media de cero se leería como que
+    // no ha comido, y lo que pasa es que todavía no ha apuntado.
+    if(!dias) return null;
+    return {
+      semana: isoDe(anclaSemana),
+      dias_apuntados: dias,
+      dias_transcurridos: Math.round((HOY - anclaSemana) / 86400000) + 1,
+      // Entre los días APUNTADOS, la misma regla que el cierre: dividir
+      // entre siete a quien lleva tres le inventa un déficit que no hubo.
+      media_cal: Math.round(suma / dias)
+    };
+  }
+
   function progresoDelChat(){
     var base = {
       objetivo: (reg && reg.objetivo) || undefined,
-      gasto: null, semanas: [], entreno: null, cinturas: []
+      gasto: null, semanas: [], en_curso: null, entreno: null, cinturas: []
     };
     try{
       base.gasto = gastoMedido();
       base.semanas = resumenDeSemanas(4);
+      base.en_curso = semanaEnCurso();
     }catch(e){ /* lo que se pueda; el resto va vacío */ }
 
     return Promise.all([

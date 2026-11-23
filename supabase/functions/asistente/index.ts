@@ -78,7 +78,7 @@ const CORS = {
 //
 // Ahora lo dice: un GET sin sesión devuelve este sello y nada más.
 // `pruebas/funciones-vivas.mjs` lo compara con el del repo.
-const SELLO = '593504cf29';
+const SELLO = 'a4ec21f490';
 
 // Tope diario por persona. Es la única defensa contra que un solo usuario
 // -o un token robado- vacíe la cuenta en una noche con un bucle.
@@ -215,6 +215,28 @@ function comoVa(p: Record<string, unknown>): string {
   } else if (g) {
     l.push(`- Gasto medido: todavía no se puede. Faltan semanas completas ` +
            `apuntadas y pesadas. No supongas uno.`);
+  }
+
+  // LA SEMANA DE AHORA, Y LA PRIMERA DE TODAS.
+  //
+  //  Faltaba entera. Aquí solo llegaban las semanas CERRADAS, así que a
+  //  «¿esta semana ya me pasé?» se contestaba con la anterior: «la más
+  //  reciente quedó por debajo de tu meta, hoy no es el caso», cuando la
+  //  suya iba 138 por encima. Los cuatro números eran exactos y ninguno
+  //  era el que preguntaba.
+  //
+  //  Va delante porque es la que contesta «¿cómo voy?», y se dice SIN
+  //  TERMINAR y con los días que lleva: una media de dos días no es una
+  //  semana, y sin decirlo el modelo la promedia con las cerradas.
+  const ec = (p.en_curso ?? null) as Record<string, unknown> | null;
+  if (ec && ec.media_cal != null) {
+    const apt = n(ec.dias_apuntados) ?? 0;
+    const van = n(ec.dias_transcurridos) ?? apt;
+    l.push(`- LA SEMANA DE AHORA, sin terminar: lleva ` +
+           `${Math.round(n(ec.media_cal)!)} cal al día de media, con ${apt} ` +
+           `${apt === 1 ? 'día apuntado' : 'días apuntados'} de los ${van} que ` +
+           `van. ESTA es la de «¿cómo voy esta semana?»; las de abajo ya ` +
+           `están cerradas y no incluyen estos días.`);
   }
 
   // Las semanas: peso y adherencia. UNA LÍNEA CADA UNA Y CON SU FECHA.
