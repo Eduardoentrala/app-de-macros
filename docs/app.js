@@ -14933,6 +14933,13 @@
             P: Number(x.proteina) || 0,
             C: Number(x.carbos)   || 0,
             G: Number(x.grasas)   || 0,
+            // EL CUARTO. El modelo no lo estima —no se le pide— pero el
+            // afinado con el catálogo sí lo pone cuando la fila lo
+            // tiene, y hasta aquí llegaba para morir a tres líneas del
+            // diario. Un caballito de tequila son 0 de proteína, 0 de
+            // carbohidrato, 0 de grasa y 14 g de alcohol: sin esta línea
+            // el apunte es un cero perfectamente calculado.
+            A: Number(x.alcohol)  || 0,
             seguridad: x.seguridad || 'media'
           });
         })

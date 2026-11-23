@@ -249,10 +249,22 @@ console.log('\nY lo que YA funcionaba sigue funcionando');
   ok(Math.abs(crudo.carbos - 80) < 0.05, 'y el crudo con la cruda',
      'salió C' + crudo.carbos);
 
-  // POR PIEZAS, con la MISMA unidad en el catálogo: ahí `porcion_g` sí es
-  // lo que pesa una, y la conversión es honesta.
+  // POR PIEZAS, con la MISMA unidad en el catálogo. Y CON LOS DOS PESOS
+  // QUE TRAE LA FILA DE VERDAD, que no valen lo mismo:
+  //
+  //   · `pieza_g`   50 — lo que pesa un huevo.
+  //   · `porcion_g` 136 — la ración de USDA, que es «cup, chopped». La
+  //     0023 lo dice con todas las letras: «eso no es un huevo, es una
+  //     taza de huevo picado».
+  //
+  // Antes aquí había un huevo de mentira con `porcion_g: 50` y sin
+  // `pieza_g`, o sea con las dos columnas valiendo lo mismo. Con ese
+  // huevo daba igual cuál de las dos leyera el afinado, y la que leía
+  // era la equivocada: en producción dos huevos salían por 34 g de
+  // proteína en vez de 12,6.
   const HUEVO = [{ nombre: 'Huevo', unidad: 'Pieza', macros_por: '100g',
-                   porcion_g: 50, proteina: 12.6, carbos: 0.7, grasas: 9.5, estado: 'unico' }];
+                   pieza_g: 50, porcion_g: 136,
+                   proteina: 12.6, carbos: 0.7, grasas: 9.5, estado: 'unico' }];
   const huevo = (await afinar(buscador({ huevo: HUEVO }),
     [{ nombre: 'Huevo', cantidad: 2, unidad: 'Pieza',
        proteina: 9, carbos: 9, grasas: 9, seguridad: 'media' }]))[0];

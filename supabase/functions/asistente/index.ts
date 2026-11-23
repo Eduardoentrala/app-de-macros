@@ -78,7 +78,7 @@ const CORS = {
 //
 // Ahora lo dice: un GET sin sesión devuelve este sello y nada más.
 // `pruebas/funciones-vivas.mjs` lo compara con el del repo.
-const SELLO = 'a4ec21f490';
+const SELLO = '06feab97d2';
 
 // Tope diario por persona. Es la única defensa contra que un solo usuario
 // -o un token robado- vacíe la cuenta en una noche con un bucle.
@@ -3578,9 +3578,28 @@ Deno.serve(async (req) => {
 const PALABRAS_DE_ESTADO =
   /\b(cocid[oa]s?|crud[oa]s?|hervid[oa]s?|asad[oa]s?|frit[oa]s?|guisad[oa]s?|fresc[oa]s?|a la plancha|al horno)\b/g;
 
+// EL PARÉNTESIS DICE CÓMO SE MIDE, NO QUÉ ES.
+//
+//  La 0076 pasó las bebidas a medidas y de paso les cambió el nombre:
+//  «Tequila» se convirtió en «Tequila (caballito)», y lo mismo la copa,
+//  la lata y el bolillo. Desde entonces ninguna coincide con lo que pide
+//  el modelo: `mismoNombre` exige el mismo número de palabras, y
+//  «tequila» es una contra las dos de «tequila caballito». O sea que las
+//  diez bebidas con alcohol y el bolillo llevaban desde la 0076 fuera
+//  del catálogo para el asistente, sin que nada fallara ni se notara.
+//
+//  LA LISTA ES EXPLÍCITA Y NO «CUALQUIER PARÉNTESIS». El día que haya un
+//  «Atún (en agua)» y un «Atún (en aceite)», tirar el paréntesis los
+//  volvería el mismo alimento y se cogería el primero — que es
+//  exactamente el fallo del 20 de noviembre con la crema. Las medidas se
+//  quitan; lo que distingue un alimento de otro, no.
+const MEDIDA_ENTRE_PARENTESIS =
+  /\s*\((?:caballito|copa|lata|pieza|taza|vaso|botella|rebanada|porcion|porción)\)/gi;
+
 function nombreLlano(t: unknown): string {
   return String(t ?? '')
     .toLowerCase()
+    .replace(MEDIDA_ENTRE_PARENTESIS, ' ')
     .normalize('NFD').replace(/[̀-ͯ]/g, '')
     .replace(PALABRAS_DE_ESTADO, ' ')
     .replace(/[^a-z0-9 ]+/g, ' ')
@@ -3691,23 +3710,43 @@ async function afinarConCatalogo(
     if (porUnidad) {
       k = cant;
     } else {
-      const porG = Number(mejor.porcion_g) || 0;
-      // `porcion_g` ES LO QUE PESA UNA PORCIÓN DE ESTA FILA, no lo que pesa
-      // una cucharada. Multiplicarlo por la cantidad del modelo solo vale si
-      // las dos hablan de la MISMA unidad: con la fila en gramos y el modelo
-      // en cucharadas, «2» se convertía en dos porciones —medio litro de
-      // leche— sin que nada chirriara. Si no coinciden no hay conversión
-      // honesta, y una estimación marcada como tal es mejor que una cifra
-      // exacta de otra cosa.
+      // EL PESO DE UNA ES `pieza_g`, Y AQUÍ SE USABA `porcion_g`.
+      //
+      //  Son dos columnas distintas y dicen cosas distintas:
+      //
+      //    · `porcion_g` — lo que pesa la ración de USDA. Para la
+      //      cerveza son 30 g, porque la ficha original venía en «fl oz».
+      //    · `pieza_g`   — lo que pesa UNA de verdad. Lo puso la 0076 al
+      //      pasar las bebidas a medidas: la lata, 360.
+      //
+      //  La app usa `pieza_g` desde entonces y lo tiene escrito al lado:
+      //  «el peso sigue saliendo de `pieza_g`, un peso medido, y nunca
+      //  del texto de la porción». Aquí se quedó la otra, así que una
+      //  lata de cerveza entraba al diario como treinta gramos de
+      //  cerveza y un bolillo como media pieza.
+      const pz = Number(mejor.pieza_g) || 0;
+      // Y SOLO SI LAS DOS HABLAN DE LA MISMA UNIDAD: con la fila en
+      // gramos y el modelo en cucharadas, «2» se convertía en dos
+      // porciones —medio litro de leche— sin que nada chirriara. Si no
+      // coinciden no hay conversión honesta, y una estimación marcada
+      // como tal es mejor que una cifra exacta de otra cosa.
       const mismaUnidad = String(mejor.unidad ?? 'Gramos') === String(a.unidad ?? 'Gramos');
       const gramos = a.unidad === 'Gramos' ? cant
                    : a.unidad === 'Onzas'  ? cant * 28.35
-                   : (porG && mismaUnidad) ? cant * porG
+                   : (pz && mismaUnidad) ? cant * pz
                    : 0;
       if (!gramos) continue;
       k = gramos / 100;
     }
 
+    // EL CUARTO MACRO, QUE AQUÍ NO ESTABA. La 0074 se hizo justo para
+    // esto —«la búsqueda también tiene que devolver el alcohol»— y
+    // `buscar_catalogo` lo devuelve desde entonces. La app se arregló
+    // aquel día; esta función nunca lo leyó. De un destilado el alcohol
+    // son TODAS las calorías: P, C y G valen cero y lo que queda son
+    // 33,4 g de etanol, así que un caballito entraba en cero y encima
+    // marcado como dato de tabla.
+    a.alcohol  = Math.round(Number(mejor.alcohol ?? 0) * k * 10) / 10;
     a.proteina = Math.round(Number(mejor.proteina) * k * 10) / 10;
     a.carbos   = Math.round(Number(mejor.carbos)   * k * 10) / 10;
     a.grasas   = Math.round(Number(mejor.grasas)   * k * 10) / 10;
