@@ -5324,8 +5324,33 @@
   //
   // Sale como función suya, y no dentro del manejador del botón, para poder
   // ejecutarla en una prueba con números y sin pantalla.
-  function alimentoDelFormulario(nombre, P, C, G, unidad, cantidad){
-    var a = { n: nombre, u: unidad, porBase: { P:P, C:C, G:G }, P:P, C:C, G:G };
+  // El alcohol de una ficha de la despensa, POR PORCIÓN BASE.
+  //
+  //  `f.A` ya está en esa escala y no hay que mirar ningún `porBase`:
+  //  las fichas se escriben con los macros de una porción base
+  //  —`sbGuardarAlimento` manda `a.porBase.A`— y se vuelven a leer
+  //  planas desde `saved_foods`. Aquí llegó a haber un ternario por si
+  //  acaso; no se ejecutaba nunca y una rama que nadie recorre es una
+  //  rama que nadie arregla cuando se rompe.
+  //
+  //  Sin ficha, cero: no hay dato que arrastrar, y cero es la verdad.
+  function alcoholDeFicha(f){ return (f && Number(f.A)) || 0; }
+
+  // EL CUARTO MACRO NO SE TECLEA: SE ARRASTRA.
+  //
+  //  El formulario tiene tres casillas y así se queda — nadie sabe
+  //  cuántos gramos de etanol lleva lo que va a comer. Pero cuando lo
+  //  que se escribe YA ESTÁ en la despensa, el dato existe: entró con la
+  //  ficha desde el catálogo. `aplicarCantidad` lo sabe escalar y lo
+  //  buscaba en `porBase.A`, que aquí no se ponía nunca, así que una
+  //  lata de cerveza se apuntaba por 59 calorías en vez de 157.
+  //
+  //  Y el aviso de «ya lo tienes guardado» enseñaba el agujero en
+  //  pantalla: «43 cal» contra «16» es exactamente esta resta.
+  function alimentoDelFormulario(nombre, P, C, G, unidad, cantidad, A){
+    var a = { n: nombre, u: unidad,
+              porBase: { P:P, C:C, G:G, A: Number(A) || 0 },
+              P:P, C:C, G:G };
     a.base = baseDeUnidad(unidad);
     var cant = Number(cantidad);
     // Vacío, cero o un disparate: una porción, que es lo que ya hacía antes.
@@ -5341,9 +5366,14 @@
     var caja = document.getElementById('nfTotal');
     if(!caja) return;
     var q = document.getElementById('nfQty');
+    // CON EL MISMO ALCOHOL CON EL QUE SE VA A APUNTAR. Si el apunte lo
+    // arrastra de la ficha guardada y esta línea no, se cambia una
+    // mentira por otra: diría «se apunta 59 cal» y entrarían 157.
+    var nom = document.getElementById('nfName');
+    var ficha = guardadoIgual((nom ? nom.value : '').trim(), unidadActual);
     var a = alimentoDelFormulario('x',
       Number(nfP.value)||0, Number(nfC.value)||0, Number(nfG.value)||0,
-      unidadActual, q ? q.value : '');
+      unidadActual, q ? q.value : '', alcoholDeFicha(ficha));
     var cal = Math.round(calAlim(a));
     if(!cal){ caja.textContent = ' '; return; }
     caja.textContent = 'Se apunta ' + un(a.cant) + ' ' + textoUnidad(a.cant, a.u) +
@@ -5522,8 +5552,15 @@
         if(cambiar) actualizarGuardado(yaLoTiene, P, C, G);
         // Apuntar la comida de hoy con lo que se acaba de escribir, se haya
         // actualizado la ficha o no: es lo que la persona vino a hacer.
+        //
+        // CON EL ALCOHOL DE LA FICHA, que es el único que hay. Diga que sí
+        // o que no, la ficha conserva el suyo —`actualizarGuardado` manda
+        // los tres macros y no toca `alcohol_g`—, así que lo que se apunta
+        // tiene que llevarlo también o el diario y la despensa dejan de
+        // decir lo mismo.
         var conCantidad = alimentoDelFormulario(nombre, P, C, G, unidadActual,
-                                                document.getElementById('nfQty').value);
+                                                document.getElementById('nfQty').value,
+                                                alcoholDeFicha(yaLoTiene));
         conCantidad.id = yaLoTiene.id;
         apuntarYLimpiar(conCantidad);
       });
