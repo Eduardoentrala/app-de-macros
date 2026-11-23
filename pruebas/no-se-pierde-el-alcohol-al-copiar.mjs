@@ -43,8 +43,20 @@ const SIN_ALCOHOL = [
   { trozo: 'var vacio = { P:meta.P', por: 'el reparto cuando no queda reserva' },
   { trozo: 'if(!(reserva > 0)) return { P:meta.P', por: 'el reparto sin reserva' },
   { trozo: 'P:base.P, C:base.C, G:base.G, cal: base.cal', por: 'las metas del cliente, en la hoja de calorías' },
-  { trozo: 'P: (P*diasCuenta - antes.P) / diasRestantes',
-    por: 'la meta de hoy, que es la de la semana menos lo comido' },
+  // LA META DE HOY. Aquí el alcohol SÍ cuenta, pero no como cuarto
+  // campo: no hay meta de etanol a la que sumarlo. Entra como calorías
+  // en la misma expresión, por `quitarCalorias`, que es la línea de
+  // debajo. Si alguien le quita esa llamada, lo que cae es
+  // `el-alcohol-de-ayer-tambien-se-compensa`, no esta prueba.
+  { trozo: 'P: (meta.P * diasCuenta - antes.P) / n',
+    por: 'la meta de hoy, que descuenta el alcohol como calorías' },
+  // Y LOS DOS DE `quitarCalorias`, que es justo quien lo descuenta. El
+  // que devuelve la meta intacta cuando no hay nada que quitar, y el que
+  // reempaqueta lo que ella devolvió para la reserva de un evento.
+  { trozo: 'var igual = { P: meta.P, C: meta.C, G: meta.G }',
+    por: 'la meta sin tocar cuando no hay calorías que quitar' },
+  { trozo: 'P: r.P, C: r.C, G: r.G,',
+    por: 'lo que `apartarParaEvento` devuelve de `quitarCalorias`' },
 
   // --- LAS MEDIAS DE LA SEMANA. Los tres macros se promedian porque son
   // los que tienen meta; las calorías NO se recalculan aquí, se suman de

@@ -3263,6 +3263,31 @@
     }, SEGUNDOS_AVISO * 1000);
   }
 
+  // LA META DE HOY: la de la semana menos lo que ya se comió, repartido
+  // entre los días que quedan.
+  //
+  //  Y EL ALCOHOL TAMBIÉN, QUE ES LO QUE FALTABA. Es el único de los
+  //  cuatro macros sin meta propia —nadie se pone un objetivo de
+  //  etanol— y por eso no aparece en la cuenta de arriba. Pero sus
+  //  calorías son calorías: el anillo del día las suma desde la 0073.
+  //  Sin descontarlas aquí, tres cervezas el martes —unas 330 de puro
+  //  alcohol— no le quitaban nada al miércoles, y la semana acababa por
+  //  encima mientras la pantalla decía que iba bien.
+  //
+  //  `antes.A` ya se venía sumando y no lo leía nadie. Un acumulador
+  //  muerto es casi siempre un arreglo a medio hacer.
+  //
+  //  No tiene macro al que restarse, así que se resta como calorías con
+  //  la regla de siempre: `quitarCalorias`.
+  function metaDelDia(meta, antes, diasCuenta, diasRestantes){
+    var n = Math.max(1, diasRestantes);
+    return quitarCalorias({
+      P: (meta.P * diasCuenta - antes.P) / n,
+      C: (meta.C * diasCuenta - antes.C) / n,
+      G: (meta.G * diasCuenta - antes.G) / n
+    }, ((antes.A || 0) * 7) / n);
+  }
+
   function actualizarMetas(){
     var P = num(goalP, 600), C = num(goalC, 900), G = num(goalG, 400);
     var calDia = P*4 + C*4 + G*9;
@@ -3296,11 +3321,9 @@
     // los que no se usó la app no ponen ni quitan nada.
     var diasCuenta = diasUsados + diasRestantes;
     var hayHistorialSemana = diasUsados > 0;
-    var metaHoy = hayHistorialSemana ? {
-      P: (P*diasCuenta - antes.P) / diasRestantes,
-      C: (C*diasCuenta - antes.C) / diasRestantes,
-      G: (G*diasCuenta - antes.G) / diasRestantes
-    } : {P:P, C:C, G:G};
+    var metaHoy = hayHistorialSemana
+      ? metaDelDia({P:P, C:C, G:G}, antes, diasCuenta, diasRestantes)
+      : {P:P, C:C, G:G};
 
     // Lo apartado para un evento sale de los días de ANTES. En el día del
     // evento no se recorta: ese día es el que se está protegiendo.
@@ -7260,22 +7283,35 @@
     if(apartado <= 0) return vacio;
 
     var porDia = apartado / n;
+    if(meta.C * 4 + meta.G * 9 <= 0) return vacio;   // nada fuera de proteína
 
-    // Se reparte entre carbo y grasa según lo que cada uno aporta hoy. Si
-    // alguien ya come poca grasa, no se le quita casi nada de ahí.
-    var calC = meta.C * 4, calG = meta.G * 9;
-    var base = calC + calG;
-    if(base <= 0) return vacio;      // sin nada que recortar fuera de proteína
-
-    var quitaC = porDia * (calC / base);
-    var quitaG = porDia * (calG / base);
-
+    var r = quitarCalorias(meta, porDia);
     return {
-      P: meta.P,
-      C: Math.max(0, meta.C - quitaC / 4),
-      G: Math.max(0, meta.G - quitaG / 9),
+      P: r.P, C: r.C, G: r.G,
       apartado: apartado,
       sinSitio: reserva - apartado
+    };
+  }
+
+  // QUITARLE CALORÍAS A UNA META, SIN TOCAR LA PROTEÍNA.
+  //
+  //  Se reparte entre carbo y grasa según lo que cada uno aporta, así que
+  //  a quien ya come poca grasa no se le quita casi nada de ahí. Y la
+  //  proteína no se recorta nunca: es lo que se protege.
+  //
+  //  Esta cuenta estaba escrita tres veces —la reserva de un evento, el
+  //  suelo del día y, desde hoy, el alcohol de los días de antes—. Tres
+  //  copias de una regla son tres sitios donde cambiarla y dos que se
+  //  quedan atrás.
+  function quitarCalorias(meta, cal){
+    var igual = { P: meta.P, C: meta.C, G: meta.G };
+    if(!(cal > 0)) return igual;
+    var calC = meta.C * 4, calG = meta.G * 9, base = calC + calG;
+    if(base <= 0) return igual;      // sin nada que recortar fuera de proteína
+    return {
+      P: meta.P,
+      C: Math.max(0, meta.C - (cal * (calC / base)) / 4),
+      G: Math.max(0, meta.G - (cal * (calG / base)) / 9)
     };
   }
 
