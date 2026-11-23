@@ -16483,6 +16483,24 @@
   //  habría dejado dos mediciones que se separan en cuanto se toque una, y
   //  entonces él vería un número y esa persona otro distinto del mismo
   //  cuerpo.
+  // CUÁNTAS SEMANAS DE CALENDARIO HAN PASADO DESDE LA PRIMERA.
+  //
+  //  La serie solo lleva las semanas que CUENTAN —cinco días apuntados y
+  //  dos pesajes, mínimo—, así que una semana floja no entra y la
+  //  siguiente ocupa su sitio. Usar la posición en la lista como eje de
+  //  la recta convierte un mes sin apuntar en un hueco de una semana, y
+  //  toda la bajada de ese mes se le carga a los siete días siguientes.
+  //
+  //  Si alguna semana no trae fecha se cuenta todo por posición, como se
+  //  hacía antes. Mezclar las dos escalas en la misma recta sería peor
+  //  que cualquiera de las dos.
+  function posicionesEnSemanas(s){
+    var t = s.map(function(x){ return Date.parse(String(x && x.semana) + 'T00:00:00Z'); });
+    if(t.some(function(v){ return !isFinite(v); }))
+      return s.map(function(_, i){ return i; });
+    return t.map(function(v){ return Math.round((v - t[0]) / 604800000); });
+  }
+
   function medirGasto(s, est){
     s = s || [];
     if(s.length < GM.SEMANAS)
@@ -16500,10 +16518,17 @@
     // Y dentro de cada semana sigue contando cuántos días apuntó, que es lo
     // que ya se hacía: de una semana de siete días se sabe más que de una
     // de cinco.
+    // Y LA ANTIGÜEDAD TAMBIÉN EN SEMANAS. Era `(n - 1) - i`, o sea
+    // cuántas FILAS atrás está, cuando lo que el párrafo de arriba
+    // promete —y lo que tiene sentido— es cuántas semanas. Tres semanas
+    // de hace diez meses, con un hueco en medio, pesaban como si fueran
+    // de hace tres.
     var n = s.length;
-    var w = s.map(function(x, i){
-      var edad = (n - 1) - i;                 // 0 = la más reciente
-      return Math.pow(0.5, edad / GM.VIDA_MEDIA) * (x.dias_apuntados / 7);
+    var x = posicionesEnSemanas(s);
+    var ultima = x[n - 1];
+    var w = s.map(function(z, i){
+      var edad = ultima - x[i];               // 0 = la más reciente
+      return Math.pow(0.5, edad / GM.VIDA_MEDIA) * (z.dias_apuntados / 7);
     });
 
     // Recta de mínimos cuadrados PONDERADA sobre las MEDIAS semanales, no
@@ -16513,10 +16538,10 @@
     var S = 0, Sx = 0, Sy = 0, Sxy = 0, Sxx = 0, Scal = 0, totalDias = 0;
     for(var i = 0; i < n; i++){
       S    += w[i];
-      Sx   += w[i] * i;
+      Sx   += w[i] * x[i];
       Sy   += w[i] * s[i].peso_medio;
-      Sxy  += w[i] * i * s[i].peso_medio;
-      Sxx  += w[i] * i * i;
+      Sxy  += w[i] * x[i] * s[i].peso_medio;
+      Sxx  += w[i] * x[i] * x[i];
       Scal += w[i] * s[i].media_cal;
       totalDias += s[i].dias_apuntados;
     }
