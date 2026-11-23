@@ -13123,11 +13123,13 @@
     // 400 de grasa. Con 6000 calorias y poca grasa el reparto pide 1071 g de
     // carbos y el servidor lo rechaza; sin esto, la pantalla ensenaria unos
     // numeros que no se pueden guardar.
-    if(C > 900){
-      G = Math.min(400, G + Math.floor((C - 900) * 4 / 9));
-      C = 900;
-    }
-    return { P:P, C:C, G:G, cal: Math.round(P * 4 + C * 4 + G * 9) };
+    //
+    // La cuenta vive en `conTopesDeColumna`: la comparten este reparto y el
+    // cierre de los lunes, y el tercer sitio que escribe estas columnas
+    // —la hoja del entrenador— la tiene en SQL, en la 0047.
+    var t = conTopesDeColumna(P, C, G);
+    return { P:t.P, C:t.C, G:t.G,
+             cal: Math.round(t.P * 4 + t.C * 4 + t.G * 9) };
   }
 
   function abrirCalorias(){
@@ -17143,6 +17145,34 @@
   //  donde decidió es lo conservador. Y se dice, que es la otra mitad.
   var PASO_MAXIMO = 250;
 
+  // LOS TOPES DE LAS COLUMNAS DEL PERFIL: 0-600 de proteína, 0-900 de
+  // carbohidrato, 0-400 de grasa, puestos desde la 0001.
+  //
+  //  Hay TRES sitios que escriben esas tres columnas —el reparto de la
+  //  pantalla, la hoja del entrenador y el cierre de los lunes— y el
+  //  tercero era el único que no los ponía. La 0047 ya dejó escrito lo
+  //  que pasa cuando faltan: «el `update` choca con
+  //  `profiles_goal_carbs_g_check` y a quien pulsó le sale un error de
+  //  Postgres en crudo».
+  //
+  //  Y en el cierre es peor que un error feo. La pantalla se queda con
+  //  las calorías nuevas y la base con las viejas: al recargar vuelven
+  //  las de antes y el lunes siguiente se decide sobre una meta que
+  //  nunca llegó a existir.
+  //
+  //  LO QUE NO CABE EN CARBO SE PASA A LA GRASA, igual que en los otros
+  //  dos. Recortar a secas le quitaría calorías sin decir por qué.
+  function conTopesDeColumna(P, C, G){
+    P = Math.max(0, Math.min(600, Math.round(Number(P) || 0)));
+    G = Math.max(0, Math.min(400, Math.round(Number(G) || 0)));
+    C = Math.max(0, Math.round(Number(C) || 0));
+    if(C > 900){
+      G = Math.min(400, G + Math.floor((C - 900) * 4 / 9));
+      C = 900;
+    }
+    return { P:P, C:C, G:G };
+  }
+
   function conPaso(nuevas, antes){
     var cal = Number(nuevas), base = Number(antes);
     if(!(cal > 0)) return { cal: cal, recortado: false };
@@ -17218,6 +17248,12 @@
         conds, { soloTopes: true });
       P = salud.P; C = salud.C; G = salud.G;
     }
+
+    // Y los topes de las columnas, al final de todo: la salud también
+    // mueve los tres, así que ponerlos antes dejaría que un tope renal
+    // volviera a sacar el carbohidrato de rango.
+    var topes = conTopesDeColumna(P, C, G);
+    P = topes.P; C = topes.C; G = topes.G;
 
     goalP.value = P;
     goalC.value = C;

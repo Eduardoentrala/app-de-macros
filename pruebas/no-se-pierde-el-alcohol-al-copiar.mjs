@@ -57,6 +57,10 @@ const SIN_ALCOHOL = [
     por: 'la meta sin tocar cuando no hay calorías que quitar' },
   { trozo: 'P: r.P, C: r.C, G: r.G,',
     por: 'lo que `apartarParaEvento` devuelve de `quitarCalorias`' },
+  // Y EL REPARTO DE METAS, que ahora devuelve lo que le dio
+  // `conTopesDeColumna`. Tres números de objetivo, sin cuarto macro.
+  { trozo: 'return { P:t.P, C:t.C, G:t.G,',
+    por: 'el reparto de metas, ya topado a lo que admiten las columnas' },
 
   // --- LAS MEDIAS DE LA SEMANA. Los tres macros se promedian porque son
   // los que tienen meta; las calorías NO se recalculan aquí, se suman de

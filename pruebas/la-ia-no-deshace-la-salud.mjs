@@ -157,7 +157,11 @@ console.log('\nY el cierre llama a la salud de verdad');
       // basal— y lo que hay que ver es que el de la salud sigue mandando:
       // a una embarazada el recorte del salto la deja en 2.290 y la regla
       // de salud la sube igual por encima de 2.500.
+      // Y LOS TOPES DE LAS COLUMNAS, el cuarto freno. Van de verdad
+      // también: son los que impiden que de aquí salga una meta que la
+      // base rechaza, y el orden importa —después de la salud, no antes—.
       ['var PASO_MAXIMO = ' + (APP.match(/var PASO_MAXIMO = (\d+);/) || [])[1] + ';',
+       sacar('function conTopesDeColumna('),
        sacar('function conPaso('),
        sacar('function sueloDeCalorias('),
        sacar('function sueloDeAhora('),
