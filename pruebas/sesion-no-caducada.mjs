@@ -84,6 +84,10 @@ function montar({ auth, cuantas = 1, sinRefresh = false }) {
     'localStorage', 'goto', 'avisarLogin', 'visto', 'sinRefresh', `
     var sesion = { access_token: 'viejo', user: { id: 'yo' } };
     if(!sinRefresh) sesion.refresh_token = 'r1';
+    // Al abrir sesión se sueltan los fallos que esperaban desde el
+    // arranque. Vive arriba del todo del fichero, fuera de este corte,
+    // y lo que aquí se mide es el canje del token: basta con que exista.
+    function soltarFallosEnEspera(){ visto.soltados = (visto.soltados || 0) + 1; }
     ${FUENTE}
     return {
       pedir: function(){ return sbFetch('/rest/v1/diary_entries'); },

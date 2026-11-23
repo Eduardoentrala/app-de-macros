@@ -1,5 +1,93 @@
 // Mockup de diseño — Fase −1. Datos de ejemplo; solo se recuerda la cuenta registrada.
 (function(){
+  // ================= LO QUE NADIE ENVOLVIÓ EN UN `catch` =================
+  //
+  //  `apuntarFallo` —ahí abajo, con sus tres reglas— solo ve lo que
+  //  alguien se acordó de capturar. Son veinticuatro sitios, y los
+  //  veinticuatro son fallos que ya se estaban esperando.
+  //
+  //  Un `TypeError` suelto a media función no lo veía nadie. Y es
+  //  justo el que nunca se reporta: la app no se cierra ni enseña
+  //  ningún error, se queda media lista sin pintar y desde fuera
+  //  parece «que va lenta». La tabla de `errores` llevaba meses vacía
+  //  con la función de la base funcionando perfectamente.
+  //
+  //  VA AQUÍ ARRIBA, antes que nada. Un manejador registrado al final
+  //  del fichero no ve romperse nada de lo que va antes, que es
+  //  precisamente donde se monta la pantalla.
+
+  // SIN DATOS DE NADIE, que es la regla 3 de `apuntarFallo`, y aquí
+  // importa MÁS que en los otros veinticuatro: esos mensajes los
+  // escribimos nosotros, y el de un error suelto lo escribe el motor
+  // arrastrando lo que hubiera en la variable. `JSON.parse` cita el
+  // texto que no pudo leer, y ese texto puede ser la comida de alguien.
+  //
+  // Así que fuera lo que va entre comillas y fuera los números de tres
+  // cifras o más. Lo que queda —el tipo de error y dónde pasó— es lo
+  // que sirve para arreglarlo.
+  function sinDatosDeNadie(t){
+    try{
+      return String(t == null ? '' : t)
+        .replace(/"(?:[^"\\]|\\.)*"/g, '"…"')
+        .replace(/'(?:[^'\\]|\\.)*'/g, "'…'")
+        // CUALQUIER NÚMERO DE DOS CIFRAS O MÁS, decimales incluidos. El
+        // primer intento tachaba de tres en adelante y dejaba pasar «peso
+        // 82.4 kg», que son dos dígitos, un punto y otro: exactamente el
+        // dato que no puede salir de aquí. Un dígito suelto se queda,
+        // porque aparece en mensajes del motor y no dice nada de nadie.
+        .replace(/\d[\d.,]*\d/g, '#')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 200);
+    }catch(x){ return ''; }
+  }
+
+  // Los del arranque se guardan: sin sesión la base los rechaza, y si la
+  // app se rompe al cargar no hay segunda oportunidad. Con tope, que una
+  // pantalla repintando en bucle no llene la memoria con su propio fallo.
+  var FALLOS_EN_ESPERA = [];
+  var ESPERA_TOPE = 5;
+
+  function apuntarSuelto(donde, texto){
+    try{
+      var t = sinDatosDeNadie(texto);
+      if(!t) return;
+      if(typeof sesion !== 'undefined' && sesion && sesion.user){
+        apuntarFallo(donde, new Error(t));
+        return;
+      }
+      if(FALLOS_EN_ESPERA.length < ESPERA_TOPE) FALLOS_EN_ESPERA.push([donde, t]);
+    }catch(x){}   // regla 1: esto corre dentro del manejador de un error
+  }
+
+  function soltarFallosEnEspera(){
+    try{
+      var cola = FALLOS_EN_ESPERA.splice(0, FALLOS_EN_ESPERA.length);
+      for(var i = 0; i < cola.length; i++){
+        try{ apuntarFallo(cola[i][0], new Error(cola[i][1])); }catch(x){}
+      }
+    }catch(x){}
+  }
+
+  // El sitio va en el `donde` y no en el mensaje: es lo más útil para
+  // arreglarlo y no dice nada de nadie. Solo el nombre del fichero, que
+  // la ruta entera lleva el dominio y no cabe en los 60 de la columna.
+  window.addEventListener('error', function(ev){
+    var archivo = (ev && ev.filename) ? String(ev.filename).split('/').pop() : 'suelto';
+    apuntarSuelto('js:' + archivo.slice(0, 30) + ':' + ((ev && ev.lineno) || 0),
+      ((ev && ev.error && ev.error.name) ? ev.error.name + ': ' : '') +
+      ((ev && ev.message) || 'sin mensaje'));
+  });
+
+  // Y la promesa que nadie atrapó. Media app son promesas: un `.then` sin
+  // su `.catch` se pierde exactamente igual de callado.
+  window.addEventListener('unhandledrejection', function(ev){
+    var r = ev && ev.reason;
+    apuntarSuelto('promesa',
+      ((r && r.name) ? r.name + ': ' : '') +
+      ((r && r.message) || String(r || 'sin motivo')));
+  });
+
   var views = Array.from(document.querySelectorAll('.app-view'));
   var stack = ['registro'];
 
@@ -8075,6 +8163,10 @@
       if(s) localStorage.setItem(SESION_KEY, JSON.stringify(s));
       else localStorage.removeItem(SESION_KEY);
     }catch(e){}
+    // Y lo que se rompió antes de entrar ya tiene a quién apuntárselo.
+    // Son los peores de perder: si la app se parte al cargar, no hay una
+    // segunda vez en la que contarlo.
+    if(s) soltarFallosEnEspera();
   }
 
   // El token de acceso caduca en una hora. Cuando eso pasa, la API responde
