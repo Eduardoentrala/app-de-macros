@@ -43,6 +43,10 @@ const SIN_ALCOHOL = [
   // carbohidrato y grasa. No hay meta de alcohol ni la va a haber, así
   // que sumarle un cuarto macro sería inventarse un objetivo.
   { trozo: 'var calDia = P*4 + C*4 + G*9;', por: 'la meta diaria del perfil' },
+  // Las mismas tres metas, sumadas para guardar de dónde venía el cierre.
+  // No hay meta de alcohol que sumar aquí tampoco.
+  { trozo: 'return Math.round(f.meta_p * 4 + f.meta_c * 4 + f.meta_g * 9) || null;',
+    por: 'las calorías de la semana que se cierra, desde sus metas' },
   { trozo: 'cal: Math.round(t.P * 4 + t.C * 4 + t.G * 9) };', por: 'el reparto de metas del coach' },
   { trozo: 'base.cal = Math.round(base.P * 4 + base.C * 4 + base.G * 9);', por: 'las metas del cliente' },
   { trozo: 'var cal = Math.round(m.P * 4 + m.C * 4 + m.G * 9);', por: 'la tira de metas de un plan' },

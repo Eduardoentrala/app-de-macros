@@ -18231,6 +18231,35 @@
     return corte.replace(/[\s,;:(«¿¡]+$/, '') + '…';
   }
 
+  // DE DÓNDE VENÍA, SACADO DE LA MISMA FOTO.
+  //
+  //  Esto se leía con `datosDeLaSemana().meta_cal` dentro de
+  //  `guardarChequeo`, y para entonces ya era tarde: en el mismo `then`,
+  //  la línea de antes es `aplicarCaloriasNuevas(r.cal_nueva)`. Las
+  //  metas ya estaban cambiadas cuando se preguntaba de dónde venían,
+  //  así que `cal_antes` guardaba el valor de DESPUÉS y las dos
+  //  columnas salían casi iguales. En su historial, seis de seis
+  //  semanas ajustadas: «de 1947 a 1950» por lo que fue un +99, «de
+  //  2253 a 2250» por lo que fue un −201.
+  //
+  //  Y lo leen dos sitios: la tarjeta de «Mis semanas» —que pintaba
+  //  «1958 / 2046» al lado de unos macros que suman 1947— y el cierre
+  //  del lunes, que le manda al modelo «AJUSTES QUE YA SE LE HICIERON»
+  //  para decidir el siguiente.
+  //
+  //  NO SE ARREGLA ADELANTANDO LA LECTURA: eso volvería a depender del
+  //  orden de dos líneas, que es lo que falló. Sale de `foto`, que se
+  //  toma antes de hablar con el modelo y ya lleva `meta_p/c/g`. Así
+  //  las dos mitades de la tarjeta son el mismo número calculado una
+  //  vez y no se pueden volver a separar.
+  //
+  //  Sin foto, vacío. Un hueco se lee como «no se sabe»; una cifra de
+  //  otro momento se lee como un dato.
+  function calDeLaFoto(f){
+    if(!f || f.meta_p == null || f.meta_c == null || f.meta_g == null) return null;
+    return Math.round(f.meta_p * 4 + f.meta_c * 4 + f.meta_g * 9) || null;
+  }
+
   function guardarChequeo(r, foto){
     if(!sesion || !sesion.user) return;
     var q = respuestasChequeo();
@@ -18251,7 +18280,7 @@
         nota: document.getElementById('chqNota').value.trim() || null,
         ajusto: !!r.ajusto,
         motivo: recortarTexto(r.motivo, tope),
-        cal_antes: Math.round(datosDeLaSemana().meta_cal) || null,
+        cal_antes: calDeLaFoto(foto),
         cal_despues: r.ajusto && r.cal_nueva ? Math.round(r.cal_nueva) : null
       }, foto || {}));
     };
