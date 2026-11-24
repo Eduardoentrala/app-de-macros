@@ -148,7 +148,7 @@ console.log('\n— Se puede leer antes de aceptar —');
   check('y desde Perfil', /enlace-legal[^>]*data-ver-legal/.test(HTML));
   // El texto se trae de legal.md: un solo sitio que editar, y el que se
   // revisa es el que se enseña.
-  check('el texto sale del mismo archivo', APP.includes("fetch('legal.md'"));
+  check('el texto sale del mismo archivo', APP.includes("fetch('legal.md?v='"));
   check('se abre apilada, con boton de regresar', /goto\('legal', true\)/.test(APP));
 }
 

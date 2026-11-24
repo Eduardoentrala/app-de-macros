@@ -38,7 +38,11 @@ console.log('\nLo que se lee es lo que hay en el fichero');
 {
   // Si un día dejara de enseñarse tal cual, esta prueba habría que
   // repensarla: lo que la hace importar es que no hay nada en medio.
-  ok(/fetch\('legal\.md'/.test(APP), 'el aviso se trae del fichero');
+  // Con su `?v=` detrás: sin él el service worker sirve la copia
+  // guardada para siempre y lo que se lee deja de ser lo que hay en el
+  // fichero, que es justo lo que esta prueba defiende. Lo mide entero
+  // `el-aviso-legal-no-se-queda-pegado`.
+  ok(/fetch\('legal\.md\?v='/.test(APP), 'el aviso se trae del fichero');
   ok(/textoLegal'\)\.innerHTML = comoHtml\(md\)/.test(APP),
      'y se mete en la pantalla sin pasar por ningún filtro',
      'lo que esté a medias en el fichero se ve a medias en el teléfono');

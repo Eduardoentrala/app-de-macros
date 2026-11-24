@@ -15853,7 +15853,28 @@
     // Perfil, y hay que poder volver a donde se estaba.
     goto('legal', true);
     if(legalCargado) return;
-    fetch('legal.md', { cache: 'no-cache' })
+    // CON EL SELLO DENTRO, como `app.js` y las hojas de estilo.
+    //
+    //  El `cache: 'no-cache'` de aquí no servía de nada: antes de llegar
+    //  a la caché del navegador, la petición pasa por el service worker,
+    //  y para todo lo que no es navegación el worker hace caché primero
+    //  y sin revalidar. La primera vez se guardaba y a partir de ahí se
+    //  servía esa copia, para siempre.
+    //
+    //  Y el barrido del arranque tampoco la quitaba: borra lo que tenga
+    //  un `?v=` distinto del sello, y esto se pedía sin `?v=`.
+    //
+    //  Importa más que un texto viejo. Dos líneas más arriba está
+    //  `VERSION_LEGAL` con su nota: la versión viaja con el
+    //  consentimiento para poder decir QUÉ texto aceptó alguien. Con la
+    //  copia pegada pasaba lo contrario de lo que se buscaba: se cambia
+    //  `legal.md`, se sube la versión a 3, y quien ya lo había abierto
+    //  lee la 2 y firma la 3.
+    //
+    //  Sin sello se pone algo que no va a coincidir nunca, para que el
+    //  barrido se la lleve. Equivocarse hacia «se vuelve a bajar» es
+    //  gratis; hacia «se queda el texto viejo», no.
+    fetch('legal.md?v=' + (window.SELLO_APP || 'sin-sello'), { cache: 'no-cache' })
       .then(function(r){ return r.text(); })
       .then(function(md){
         document.getElementById('textoLegal').innerHTML = comoHtml(md);
