@@ -3419,8 +3419,7 @@
     // El suelo se calcula sobre la meta base y no sobre la de hoy: si
     // alguien ya viene compensando, el margen que queda es menor, y
     // apartar sobre un suelo inflado dejaría días por debajo de lo sano.
-    var hoyEsEvento = !!EVENTOS[isoDe(HOY)];
-    var reserva = hoyEsEvento ? 0 : reservaDeLaSemana();
+    var reserva = reservaDeHoy();
     var pisoDia = Math.max(1200, calDe({P:P, C:C, G:G}) * 0.65);
     if(reserva > 0){
       var conEvento = apartarParaEvento(metaHoy, diasRestantes, reserva, pisoDia);
@@ -15736,9 +15735,39 @@
     var fin = new Date(anclaSemana);
     fin.setDate(fin.getDate() + 7);
     Object.keys(EVENTOS).forEach(function(f){
-      if(f >= isoDe(HOY) && f < isoDe(fin)) total += EVENTOS[f].calorias;
+      // `Number(...) || 0` y no el valor crudo: un evento sin calorías
+      // —una fila a medias, o un modelo que devolvió el título y no el
+      // número— convierte el total en NaN, y de ahí sale un `metaHoy`
+      // entero en NaN. Un evento sin cifra es un evento que no aparta.
+      if(f >= isoDe(HOY) && f < isoDe(fin)) total += Number(EVENTOS[f].calorias) || 0;
     });
     return total;
+  }
+
+  // LO QUE HAY QUE APARTAR HOY: la reserva de la semana MENOS el evento
+  // de hoy, si hoy es el día de uno.
+  //
+  //  La regla es la de siempre —«el día del evento no se recorta: ese
+  //  día es el que se está protegiendo»— pero se aplicaba así:
+  //
+  //      var reserva = hoyEsEvento ? 0 : reservaDeLaSemana();
+  //
+  //  y eso apaga la reserva ENTERA. Con un solo evento da igual, porque
+  //  lo único que hay que apagar es el suyo, y por eso no se notaba.
+  //  Con dos en la misma semana —una comida el miércoles y una boda el
+  //  sábado— el miércoles dejaba de apartar también para la boda: un
+  //  día de ahorro que no pone nadie y que el sábado echa en falta.
+  //
+  //  Lo que se protege es el evento DE HOY, no el calendario entero.
+  //
+  //  Y sale como función suya, no como un ternario dentro de
+  //  `actualizarMetas`: igual que `conPaso` y `conSuelo`, para poder
+  //  ejecutarla en una prueba con fechas de mentira en vez de mirar
+  //  cómo está escrita la línea.
+  function reservaDeHoy(){
+    var deHoy = EVENTOS[isoDe(HOY)];
+    var suyo = deHoy ? (Number(deHoy.calorias) || 0) : 0;
+    return Math.max(0, reservaDeLaSemana() - suyo);
   }
 
   // ---- Aviso de privacidad y términos ----

@@ -36,7 +36,7 @@ const check = (n, cond, extra = '') => {
 
 console.log('\n— El suelo cubre TODOS los caminos —');
 {
-  const i = APP.indexOf('var hoyEsEvento = !!EVENTOS[isoDe(HOY)];');
+  const i = APP.indexOf('var reserva = reservaDeHoy();');
   const fn = APP.slice(i, i + 2200);
   check('el trozo existe', i > 0);
 

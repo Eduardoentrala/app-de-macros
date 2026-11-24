@@ -146,8 +146,13 @@ console.log('\n— Y todo eso esta enchufado a la app —');
 
   // El dia del evento NO se recorta: es el que se esta protegiendo. Sin
   // esto, la persona llega a la boda con la meta ya rebajada.
+  // Y SOLO POR EL SUYO. Era `hoyEsEvento ? 0 : reservaDeLaSemana()`, que
+  // apaga la reserva entera: con dos eventos en la semana, el dia del
+  // primero dejaba de ahorrar para el segundo. Lo mide entero
+  // `dos-eventos-en-la-misma-semana`; aqui basta con que la cuenta sea
+  // una resta y no un apagon.
   check('el dia del evento no se recorta a si mismo',
-    /hoyEsEvento\s*\?\s*0\s*:\s*reservaDeLaSemana\(\)/.test(APP));
+    /reservaDeLaSemana\(\)\s*-\s*suyo/.test(APP));
 
   check('el evento se guarda en la base', APP.includes("'/rest/v1/eventos"));
   check('y con upsert, para no sumar dos veces el mismo dia',
@@ -236,7 +241,7 @@ console.log('\n— El estado se declara antes de usarse —');
   // declaracion, tienen que ir despues de ella EN ORDEN DE EJECUCION. Como
   // aqui no hay orden de ejecucion, se usa el criterio duro: que se declare
   // antes que el balance diario, que es lo que corre al arrancar.
-  const balance = APP.indexOf('var hoyEsEvento');
+  const balance = APP.indexOf('var reserva = reservaDeHoy();');
   check('se declara antes del balance diario', declara >= 0 && declara < balance,
     `declaracion en ${declara}, balance en ${balance}`);
 
