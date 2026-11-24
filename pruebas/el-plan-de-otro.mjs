@@ -100,14 +100,26 @@ function preparar(ctx, { tardaLaIA = 0 } = {}) {
     return new Promise((res) => setTimeout(() => res(r), tardaLaIA));
   };
 
+  // `juntarPorMomento` y `clavePlan` van DE VERDAD, sacadas de app.js:
+  // son las que deciden qué cuenta como el mismo hueco, y un doble haría
+  // que esta prueba midiera otra cosa.
+  const trozoDe = (cab) => {
+    const d = APP.slice(APP.indexOf(cab));
+    return d.slice(0, d.indexOf('\n  }') + 4);
+  };
+  const ayudas = new Function(
+    trozoDe('  function clavePlan(') + '\n' + trozoDe('  function juntarPorMomento(') +
+    '; return { clavePlan: clavePlan, juntarPorMomento: juntarPorMomento };')();
+
   return new Function('__editando', '__comidas', '__dia', 'document', 'sesion',
     'sbFetch', 'iaLlamar', 'toast', 'traducirError', 'ponerDiaALosViejos',
-    'pintarEditorComidas', fuente)(
+    'pintarEditorComidas', 'juntarPorMomento', 'clavePlan', fuente)(
       { userId: 'ana', nombre: 'Ana', plan: null },
       (ctx.comidasYa || []).slice(), ctx.dia || 'Lunes',
       ctx.document, ctx.sesion,
       sbFetch, iaLlamar, ctx.toast, ctx.traducirError,
-      ctx.ponerDiaALosViejos, ctx.pintarEditorComidas);
+      ctx.ponerDiaALosViejos, ctx.pintarEditorComidas,
+      ayudas.juntarPorMomento, ayudas.clavePlan);
 }
 
 const esperar = (ms = 40) => new Promise((r) => setTimeout(r, ms));

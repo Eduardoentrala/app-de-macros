@@ -178,7 +178,12 @@ console.log('\nY el número no llega a su plan');
     { momento: 'Desayuno', texto: 'Huevos', kcal: 480 },
     { momento: 'Comida',   texto: 'Pollo',  kcal: 900 },
   ] };
+  // `juntarPorMomento` va de verdad: es quien colapsa dos comidas con el
+  // mismo hueco, y de él depende con qué se arma `planKcal`.
+  const desdeJuntar = LIMPIO.slice(LIMPIO.indexOf('function juntarPorMomento('));
+  const juntarFn = desdeJuntar.slice(0, desdeJuntar.indexOf('\n  }') + 4);
   const caja = new Function('r', 'planDia', 'DIAS_SEMANA', 'clavePlan', 'semana',
+    juntarFn + ';\n' +
     'var planComidas = [], planKcal = {};\n' +
     trozo + '; return { planComidas: planComidas, planKcal: planKcal };'
   )(r, 'Miércoles', ['Lunes', 'Martes'], (d, m) => d + '|' + m, false);

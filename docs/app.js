@@ -12189,6 +12189,54 @@
 
   function clavePlan(dia, momento){ return (dia || '') + '|' + momento; }
 
+  // DOS COMIDAS CON EL MISMO MOMENTO SON UNA.
+  //
+  //  El editor tiene cuatro huecos por día y de los que coincidan pinta
+  //  el primero; las cuentas, en cambio, van por una tabla indexada por
+  //  `día|momento`. Con dos «Snack» el mismo lunes —lo más normal que
+  //  puede devolver un plan: media mañana y media tarde— fallaban tres
+  //  cosas a la vez:
+  //
+  //    · el segundo no se veía, se quedaba en la lista y ya;
+  //    · las calorías que se enseñaban eran las SUYAS —la tabla se
+  //      escribe en bucle y gana la última— al lado del texto del
+  //      primero;
+  //    · y la suma del día contaba ese número DOS VECES, porque recorre
+  //      las comidas y las dos buscan la misma clave.
+  //
+  //  Ni el esquema del modelo ni el prompt lo impiden. Y «el prompt lo
+  //  pide» no es una garantía: eso ya costó una vez con el tope del
+  //  motivo del cierre. Lo único que obliga es el código.
+  //
+  //  SE JUNTAN, NO SE DESCARTA NINGUNA: dos snacks son dos cosas que esa
+  //  persona se va a comer. Los textos se pegan y las calorías se suman.
+  //
+  //  Y NO SE REORDENA: el editor ya coloca cada una en su hueco, así que
+  //  ordenar aquí solo serviría para que un plan cambie de forma al
+  //  abrirlo. Tampoco se tocan los objetos que llegan —se copia el
+  //  primero— porque quien llama puede estar mirando la misma lista.
+  function juntarPorMomento(lista){
+    var fuera = [], porClave = {};
+    (lista || []).forEach(function(c){
+      if(!c) return;
+      var k = clavePlan(c.dia, c.momento);
+      var ya = porClave[k];
+      if(!ya){
+        ya = porClave[k] = {};
+        for(var campo in c) if(Object.prototype.hasOwnProperty.call(c, campo)) ya[campo] = c[campo];
+        fuera.push(ya);
+        return;
+      }
+      var t = String(c.texto == null ? '' : c.texto).trim();
+      if(t){
+        var tenia = String(ya.texto == null ? '' : ya.texto).trim();
+        ya.texto = tenia ? (tenia + '\n' + t) : t;
+      }
+      if(c.kcal != null) ya.kcal = (Number(ya.kcal) || 0) + (Number(c.kcal) || 0);
+    });
+    return fuera;
+  }
+
   function pintarSumaDelDia(){
     var caja = document.getElementById('peSuma');
     if(!caja) return;
@@ -12366,6 +12414,11 @@
       document.getElementById('peNota').value = (p && p.nota) || '';
       planComidas = ((p && p.comidas) || []).slice();
       ponerDiaALosViejos();
+      // Y los que ya estén torcidos se arreglan al abrirlos, en vez de
+      // esperar a que alguien los vuelva a generar. Después de poner el
+      // día: el respaldo manda al lunes lo que no lo tenga, y eso puede
+      // juntar dos que antes no coincidían.
+      planComidas = juntarPorMomento(planComidas);
       pintarEditorComidas();
 
       // Y SI SE ESCRIBIÓ PARA OTRAS CALORÍAS, SE DICE AQUÍ. Es donde se
@@ -12555,11 +12608,20 @@
         //  desaparecían sin aviso.
         //
         //  La semana sí sustituye todo: eso es lo que se le pidió.
-        var nuevas = crudas.map(function(c){
-          return { dia: semana ? c.dia : planDia, momento: c.momento, texto: c.texto };
+        // El día se pone ANTES de juntar: si no, dos comidas sin día y
+        // una del lunes con el mismo momento no coincidirían aquí y sí
+        // después, cuando el respaldo las manda a todas al lunes.
+        var juntadas = juntarPorMomento(crudas.map(function(c){
+          return { dia: (semana ? c.dia : planDia) || DIAS_SEMANA[0],
+                   momento: c.momento, texto: c.texto, kcal: c.kcal };
+        }));
+        // Y LA CUENTA NO VIAJA CON LA COMIDA. `planComidas` se manda tal
+        // cual a la base; con el `kcal` dentro, el número sobreviviría a
+        // reescribir el texto, que es justo lo que el editor borra en
+        // cuanto alguien teclea. Las calorías van por su tabla aparte.
+        var nuevas = juntadas.map(function(c){
+          return { dia: c.dia, momento: c.momento, texto: c.texto };
         });
-        // Por si el modelo devolviera una semana con algún día sin poner.
-        nuevas.forEach(function(c){ if(!c.dia) c.dia = DIAS_SEMANA[0]; });
 
         if(semana){
           planComidas = nuevas;
@@ -12573,9 +12635,11 @@
           });
         }
 
-        nuevas.forEach(function(c, i){
-          var k = crudas[i] && crudas[i].kcal;
-          if(k != null) planKcal[clavePlan(c.dia, c.momento)] = Number(k) || 0;
+        // De `juntadas` y no de `crudas[i]`: al juntar los momentos
+        // repetidos las dos listas dejan de ir en paralelo, y emparejar
+        // por posición pondría las calorías de una comida en otra.
+        juntadas.forEach(function(c){
+          if(c.kcal != null) planKcal[clavePlan(c.dia, c.momento)] = Number(c.kcal) || 0;
         });
         pintarEditorComidas();
         toast('toastPlan', semana
